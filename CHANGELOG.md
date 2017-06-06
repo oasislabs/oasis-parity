@@ -1,5 +1,6 @@
 ## Parity [v1.6.7](https://github.com/paritytech/parity/releases/tag/v1.6.7) (2017-05-18)
 
+
 This release addresses:
 
 - potential usability issues with [import and recovery of existing accounts](https://blog.parity.io/restoring-blank-seed-phrase/).
