@@ -2,6 +2,7 @@
 
 
 
+
 This release addresses:
 
 - potential usability issues with [import and recovery of existing accounts](https://blog.parity.io/restoring-blank-seed-phrase/).
