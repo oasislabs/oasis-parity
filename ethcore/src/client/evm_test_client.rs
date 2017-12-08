@@ -22,7 +22,7 @@ use ethereum_types::{H256, U256};
 use journaldb;
 use {trie, kvdb_memorydb, bytes};
 use kvdb::{self, KeyValueDB};
-use {state, state_db, client, executive, trace, transaction, db, spec, pod_state, log_entry};
+use {state, state_db, client, executive, trace, transaction, db, spec, pod_state, log_entry, receipt};
 use factory::Factories;
 use evm::{self, VMType, FinalizationResult};
 use vm::{self, ActionParams};
@@ -235,6 +235,7 @@ impl<'a> EvmTestClient<'a> {
 				TransactResult::Ok {
 					state_root: *self.state.root(),
 					gas_left: initial_gas - result.receipt.gas_used,
+					outcome: result.receipt.outcome,
 					output: result.output,
 					trace: result.trace,
 					vm_trace: result.vm_trace,
@@ -273,6 +274,8 @@ pub enum TransactResult<T, V> {
 		contract_address: Option<H160>,
 		/// Generated logs
 		logs: Vec<log_entry::LogEntry>,
+		/// outcome
+		outcome: receipt::TransactionOutcome,
 	},
 	/// Transaction failed to run
 	Err {
