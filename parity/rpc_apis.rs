@@ -300,6 +300,7 @@ impl FullDependencies {
 				},
 				Api::Signer => {
 					handler.extend_with(SignerClient::new(&self.secret_store, dispatcher.clone(), &self.signer_service, self.remote.clone()).to_delegate());
+					handler.extend_with(ParityAccountsClient::new(&self.secret_store).to_delegate());
 				},
 				Api::Parity => {
 					let signer = match self.signer_service.is_enabled() {
@@ -503,8 +504,10 @@ impl<C: LightChainClient + 'static> LightDependencies<C> {
 					handler.extend_with(PersonalClient::new(secret_store, dispatcher.clone(), self.geth_compatibility).to_delegate());
 				},
 				Api::Signer => {
-					let secret_store = Some(self.secret_store.clone());
-					handler.extend_with(SignerClient::new(&secret_store, dispatcher.clone(), &self.signer_service, self.remote.clone()).to_delegate());
+					let secret_store_sc = Some(self.secret_store.clone());
+					let secret_store_pac = Some(self.secret_store.clone());
+					handler.extend_with(SignerClient::new(&secret_store_sc, dispatcher.clone(), &self.signer_service, self.remote.clone()).to_delegate());
+					handler.extend_with(ParityAccountsClient::new(&secret_store_pac).to_delegate());
 				},
 				Api::Parity => {
 					let signer = match self.signer_service.is_enabled() {
