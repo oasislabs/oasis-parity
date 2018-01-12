@@ -30,6 +30,8 @@ use std::collections::HashMap;
 use bigint::hash::H256;
 use bigint::prelude::U256;
 use util::Address;
+use journaldb::overlaydb::OverlayDB;
+use kvdb::KeyValueDB;
 use hash::keccak;
 use rlp::*;
 use parking_lot::{Mutex, RwLock};
@@ -216,6 +218,7 @@ pub struct Provider {
 	notify: RwLock<Vec<Weak<ChainNotify>>>,
 	transactions_for_signing: Mutex<SigningStore>,
 	transactions_for_verification: Mutex<VerificationStore>,
+	private_state: OverlayDB,
 	client: RwLock<Option<Weak<Client>>>,
 	accounts: RwLock<Option<Weak<AccountProvider>>>,
 }
@@ -227,14 +230,15 @@ struct PrivateExecutionResult<T, V> where T: Tracer, V: VMTracer {
 	result: Executed<T::Output, V::Output>,
 }
 
-impl Provider where {
+impl Provider {
 	/// Create a new provider.
-	pub fn new(encryptor: Arc<Encryptor>) -> Self {
+	pub fn new(encryptor: Arc<Encryptor>, db: Arc<KeyValueDB>) -> Self {
 		Provider {
 			config: RwLock::new(ProviderConfig::default()),
 			notify: RwLock::new(Vec::new()),
 			transactions_for_signing: Mutex::new(SigningStore::new()),
 			transactions_for_verification: Mutex::new(VerificationStore::new()),
+			private_state: OverlayDB::new(db, ::db::COL_PRIVATE_TRANSACTIONS_STATE),
 			client: RwLock::new(None),
 			accounts: RwLock::new(None),
 			encryptor: RwLock::new(encryptor.clone()),

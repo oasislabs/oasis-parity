@@ -232,7 +232,7 @@ impl Client {
 
 		let awake = match config.mode { Mode::Dark(..) | Mode::Off => false, _ => true };
 
-		let provider = Arc::new(PrivateTransactionsProvider::new(Arc::new(SecretStoreEncryptor::new()?)));
+		let provider = Arc::new(PrivateTransactionsProvider::new(Arc::new(SecretStoreEncryptor::new()?), db.clone()));
 
 		let client = Arc::new(Client {
 			enabled: AtomicBool::new(true),
