@@ -44,3 +44,11 @@ pub const TO_V12: ChangeColumns = ChangeColumns {
 	post_columns: Some(8),
 	version: 12,
 };
+
+/// The migration from v12 to v13.
+/// Adds a column for private transactions state storage.
+pub const TO_V13: ChangeColumns = ChangeColumns {
+	pre_columns: Some(8),
+	post_columns: Some(9),
+	version: 13,
+};
