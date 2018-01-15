@@ -18,7 +18,6 @@ use account_provider::AccountProvider;
 use bigint::hash::H256;
 use bigint::prelude::U256;
 use block::{OpenBlock, Drain};
-use std::collections::BTreeMap;
 use util::*;
 use blockchain::{BlockChain, Config as BlockChainConfig};
 use bytes::Bytes;

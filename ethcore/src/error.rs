@@ -137,7 +137,7 @@ pub enum PrivateTransactionError {
 	/// State is incorrect.
 	StateIncorrect,
 	/// Wrong private transaction type.
-	BadTransactonType,
+	BadTransactionType,
 	/// Contract does not exist or was not created.
 	ContractDoesNotExist,
 	/// Reference to the client is corrupted.
@@ -152,6 +152,8 @@ pub enum PrivateTransactionError {
 	PrivateTransactionNotFound,
 	/// Account for signing public transactions not set
 	SignerAccountNotSet,
+	/// Private state DB write failed
+	DatabaseWriteError,
 }
 
 impl fmt::Display for PrivateTransactionError {
@@ -160,12 +162,12 @@ impl fmt::Display for PrivateTransactionError {
 		match *self {
 			Encrypt(ref msg) => f.write_fmt(format_args!("Encryption error. ({})", msg)),
 			Decrypt(ref msg) => f.write_fmt(format_args!("Decryption error. ({})", msg)),
-			NotAuthorised(address) => f.write_fmt(format_args!("Private trsnaction execution is not authorised for {}.", address)),
+			NotAuthorised(address) => f.write_fmt(format_args!("Private transaction execution is not authorised for {}.", address)),
 			TooManyContracts => f.write_str("Private transaction created too many contracts."),
 			Call(ref msg) => f.write_fmt(format_args!("Contract call error. ({})", msg)),
 			StatePruned => f.write_str("State is not available."),
 			StateIncorrect => f.write_str("State is incorrect."),
-			BadTransactonType => f.write_str("Bad transaction type."),
+			BadTransactionType => f.write_str("Bad transaction type."),
 			ContractDoesNotExist => f.write_str("Private contract does not exist."),
 			ClientIsMalformed => f.write_str("Client is not registered."),
 			AccountProviderIsMalformed => f.write_str("Account provider is not registered."),
@@ -173,6 +175,7 @@ impl fmt::Display for PrivateTransactionError {
 			PrivateTransactionAlreadyImported => f.write_str("Private transactions already imported."),
 			PrivateTransactionNotFound => f.write_str("Private transactions is not found in the store."),
 			SignerAccountNotSet => f.write_str("Account for signing public transactions not set."),
+			DatabaseWriteError => f.write_str("Error occurred while writing transaction on disk."),
 		}
 	}
 }

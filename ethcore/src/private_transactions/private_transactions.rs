@@ -17,7 +17,6 @@
 use error::{Error, PrivateTransactionError};
 use util::Address;
 use ethkey::Signature;
-use bytes::Bytes;
 use std::collections::HashMap;
 use bigint::prelude::U256;
 use bigint::hash::H256;
@@ -119,8 +118,9 @@ pub struct PrivateTransactionSigningDesc {
 	pub validators: Vec<Address>,
 	/// Already obtained signatures
 	pub received_signatures: Vec<Signature>,
-	/// State after transaction execution to compare further with received from validators
-	pub state: Bytes,
+	/// State hash after transaction execution to compare further with received from validators
+	/// Actual state is stored in KeyValueDB, and is extracted by Provider as needed
+	pub state_hash: H256,
 }
 
 /// Storage for private transactions for signing
@@ -143,7 +143,7 @@ impl SigningStore {
 		private_hash: H256,
 		transaction: SignedTransaction,
 		validators: Vec<Address>,
-		state: Bytes,
+		state_hash: H256,
 	) -> Result<(), Error> {
 		if self.transactions.len() > MAX_QUEUE_LEN {
 			return Err(PrivateTransactionError::QueueIsFull.into());
@@ -153,7 +153,7 @@ impl SigningStore {
 			original_transaction: transaction.clone(),
 			validators: validators.clone(),
 			received_signatures: Vec::new(),
-			state: state,
+			state_hash,
 		});
 		Ok(())
 	}

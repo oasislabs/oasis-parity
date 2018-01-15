@@ -27,11 +27,11 @@ pub use self::private_transactions::*;
 
 use std::sync::{Arc, Weak};
 use std::collections::HashMap;
-use bigint::hash::H256;
-use bigint::prelude::U256;
+use bigint::prelude::{H256, U256};
 use util::Address;
 use journaldb::overlaydb::OverlayDB;
-use kvdb::KeyValueDB;
+use kvdb::{KeyValueDB, DBTransaction};
+use hashdb::HashDB;
 use hash::keccak;
 use rlp::*;
 use parking_lot::{Mutex, RwLock};
@@ -218,7 +218,8 @@ pub struct Provider {
 	notify: RwLock<Vec<Weak<ChainNotify>>>,
 	transactions_for_signing: Mutex<SigningStore>,
 	transactions_for_verification: Mutex<VerificationStore>,
-	private_state: OverlayDB,
+	private_state: RwLock<OverlayDB>,
+	db: Arc<KeyValueDB>,
 	client: RwLock<Option<Weak<Client>>>,
 	accounts: RwLock<Option<Weak<AccountProvider>>>,
 }
@@ -226,7 +227,7 @@ pub struct Provider {
 #[derive(Debug)]
 struct PrivateExecutionResult<T, V> where T: Tracer, V: VMTracer {
 	code: Option<Bytes>,
-	state: Bytes,
+	state_hash: H256,
 	result: Executed<T::Output, V::Output>,
 }
 
@@ -238,7 +239,8 @@ impl Provider {
 			notify: RwLock::new(Vec::new()),
 			transactions_for_signing: Mutex::new(SigningStore::new()),
 			transactions_for_verification: Mutex::new(VerificationStore::new()),
-			private_state: OverlayDB::new(db, ::db::COL_PRIVATE_TRANSACTIONS_STATE),
+			private_state: RwLock::new(OverlayDB::new(db.clone(), ::db::COL_PRIVATE_TRANSACTIONS_STATE)),
+			db,
 			client: RwLock::new(None),
 			accounts: RwLock::new(None),
 			encryptor: RwLock::new(encryptor.clone()),
@@ -291,7 +293,7 @@ impl Provider {
 		let tx_hash = signed_transaction.hash();
 		match signed_transaction.action {
 			Action::Create => {
-				return Err(PrivateTransactionError::BadTransactonType.into());
+				return Err(PrivateTransactionError::BadTransactionType.into());
 			}
 			Action::Call(contract) => {
 				let data = signed_transaction.rlp_bytes();
@@ -306,7 +308,7 @@ impl Provider {
 				trace!("Required validators: {:?}", contract_validators);
 				let private_state_hash = keccak(&private_state);
 				trace!("Hashed effective private state for sender: {:?}", private_state_hash);
-				self.transactions_for_signing.lock().add_transaction(private.hash(), signed_transaction, contract_validators, private_state)?;
+				self.transactions_for_signing.lock().add_transaction(private.hash(), signed_transaction, contract_validators, private_state_hash)?;
 				self.broadcast_private_transaction(private.rlp_bytes().into_vec());
 				Ok(Receipt {
 					hash: tx_hash,
@@ -447,7 +449,7 @@ impl Provider {
 			let rsv: Vec<Signature> = signatures.into_iter().map(|sign| sign.into_electrum().into()).collect();
 			//Create public transaction
 			let public_tx = self.public_transaction(
-				desc.state.clone(),
+				desc.state_hash.clone(),
 				&desc.original_transaction.clone(),
 				&rsv,
 				desc.original_transaction.nonce,
@@ -491,7 +493,7 @@ impl Provider {
 		if desc.received_signatures.contains(&sign) {
 			return Ok(false);
 		}
-		let state_hash = keccak(&desc.state);
+		let state_hash = &desc.state_hash;
 		match recover(&sign, &state_hash) {
 			Ok(public) => {
 				let sender = public_to_address(&public);
@@ -532,14 +534,27 @@ impl Provider {
 		self.encryptor.read().decrypt(requester.secret(), contract_address, data)
 	}
 
-	fn get_decrypted_state(&self, address: &Address, block: BlockId) -> Result<Bytes, EthcoreError> {
+	fn get_private_state(&self, address: &Address, block: BlockId) -> Result<HashMap<H256, H256>, EthcoreError> {
 		let client = self.client.read().clone().ok_or_else(|| PrivateTransactionError::ClientIsMalformed)?;
 		let client = client.upgrade().ok_or_else(|| PrivateTransactionError::ClientIsMalformed)?;
 		let contract = Contract::new(*address);
-		let state = contract.get_state(|addr, data| futures::done(client.call_contract(block, addr, data))).wait()
+		let state_hash: Bytes = contract.get_state(|addr, data| futures::done(client.call_contract(block, addr, data))).wait()
 			.map_err(|e| PrivateTransactionError::Call(e))?;
-		self.decrypt(address, &state)
+		let private_state = self.private_state.read();
+		private_state.get(&H256::from_slice(&state_hash)).ok_or(PrivateTransactionError::StatePruned)
+			.map(|state| Self::snapshot_to_storage(state.to_vec()))
+			.map_err(EthcoreError::PrivateTransaction)
 	}
+
+	fn save_private_state(&self, storage: HashMap<H256, H256>) -> Result<H256, EthcoreError> {
+		let mut private_state = self.private_state.write();
+		let state_hash = private_state.insert(&Self::snapshot_from_storage(&storage));
+		// TODO We might want to commit only in the confirmation block hook, not here
+		let mut transaction = DBTransaction::new();
+		private_state.commit_to_batch(&mut transaction)?;
+		self.db.write(transaction).map_err(|_| PrivateTransactionError::DatabaseWriteError)?;
+		Ok(state_hash)
+ 	}
 
 	fn get_decrypted_code(&self, address: &Address, block: BlockId) -> Result<Bytes, EthcoreError> {
 		let client = self.client.read().clone().ok_or_else(|| PrivateTransactionError::ClientIsMalformed)?;
@@ -584,9 +599,9 @@ impl Provider {
 		let contract_address = match &transaction.action {
 			&Action::Call(ref contract_address) => {
 				let contract_code = Arc::new(self.get_decrypted_code(contract_address, block)?);
-				let contract_state = self.get_decrypted_state(contract_address, block)?;
+				let contract_state = self.get_private_state(contract_address, block)?;
 				trace!("Patching contract at {:?}, code: {:?}, state: {:?}", contract_address, contract_code, contract_state);
-				state.patch_account(contract_address, contract_code.clone(), Self::snapshot_to_storage(contract_state))?;
+				state.patch_account(contract_address, contract_code.clone(), contract_state)?;
 				Some(contract_address.clone())
 			},
 			&Action::Create => None,
@@ -595,26 +610,27 @@ impl Provider {
 		let engine = client.engine();
 		let result = Executive::new(&mut state, &env_info, engine.machine()).transact_virtual(transaction, options)?;
 		let contract_address = contract_address.or(result.contracts_created.first().cloned());
-		let (encrypted_code, encrypted_storage) = match contract_address {
+		let (encrypted_code, state_hash) = match contract_address {
 			Some(address) => {
 				let (code, storage) = state.into_account(&address)?;
 				let enc_code = match code {
 					Some(c) => Some(self.encrypt(&address, &c)?),
 					None => None,
 				};
-				(enc_code, self.encrypt(&address, &Self::snapshot_from_storage(&storage))?)
+				let state_hash = self.save_private_state(storage)?;
+				(enc_code, state_hash)
 			},
 			None => return Err(PrivateTransactionError::ContractDoesNotExist.into())
 		};
-		trace!("Private contract executed. code: {:?}, state: {:?}, result: {:?}", encrypted_code, encrypted_storage, result.output);
+		trace!("Private contract executed. code: {:?}, state_hash: {:?}, result: {:?}", encrypted_code, state_hash, result.output);
 		Ok(PrivateExecutionResult {
 			code: encrypted_code,
-			state: encrypted_storage,
-			result: result,
+			state_hash,
+			result,
 		})
 	}
 
-	fn generate_constructor(validators: &[Address], code: Bytes, storage: Bytes) -> Bytes {
+	fn generate_constructor(validators: &[Address], code: Bytes, state_hash: H256) -> Bytes {
 		let constructor_code = DEFAULT_STUB_CONTRACT.from_hex().expect("Default contract code is valid");
 		let constructor = ethabi::Constructor { inputs: vec![
 			ethabi::Param { name: "v".into(), kind: ethabi::ParamType::Array(Box::new(ethabi::ParamType::Address)) },
@@ -625,13 +641,13 @@ impl Provider {
 		let tokens = [
 			ethabi::Token::Array(validators.iter().map(|a| ethabi::Token::Address(a.clone().0)).collect()),
 			ethabi::Token::Bytes(code),
-			ethabi::Token::Bytes(storage),
+			ethabi::Token::Bytes((&state_hash as &[u8]).into()),
 		];
 
 		constructor.encode_input(constructor_code, &tokens).expect("Input is always valid")
 	}
 
-	fn generate_set_state_call(signatures: &[Signature], storage: Bytes) -> Bytes {
+	fn generate_set_state_call(signatures: &[Signature], state_hash: H256) -> Bytes {
 		let function = ethabi::Function { name: "setState".into(), constant:false, outputs: vec![], inputs: vec![
 			ethabi::Param { name: "ns".into(), kind: ethabi::ParamType::Bytes },
 			ethabi::Param { name: "v".into(), kind: ethabi::ParamType::Array(Box::new(ethabi::ParamType::Uint(8))) },
@@ -640,7 +656,7 @@ impl Provider {
 		]};
 
 		let tokens = [
-			ethabi::Token::Bytes(storage),
+			ethabi::Token::Bytes((&state_hash as &[u8]).into()),
 			ethabi::Token::Array(signatures.iter().map(|s| {
 				let mut v: [u8; 32] = [0; 32];
 				v[31] = s.v();
@@ -656,42 +672,41 @@ impl Provider {
 	/// Create encrypted public contract deployment transaction.
 	pub fn public_creation_transaction(&self, block: BlockId, source: &SignedTransaction, validators: &[Address], nonce: U256, gas_price: U256) -> Result<Transaction, EthcoreError> {
 		if let &Action::Call(_) = &source.action {
-			return Err(PrivateTransactionError::BadTransactonType.into());
+			return Err(PrivateTransactionError::BadTransactionType.into());
 		}
 		let executed = self.execute_private(source, TransactOptions::with_no_tracing(), block)?;
-		let gas: u64 = 650000 +
+		let gas: u64 = 653000 +
 			validators.len() as u64 * 30000 +
-			executed.code.as_ref().map_or(0, |c| c.len() as u64) * 8000 +
-			executed.state.len() as u64 * 8000;
+			executed.code.as_ref().map_or(0, |c| c.len() as u64) * 8000;
 		Ok(Transaction {
 			nonce: nonce,
 			action: Action::Create,
 			gas: gas.into(),
 			gas_price: gas_price,
 			value: source.value,
-			data: Self::generate_constructor(validators, executed.code.unwrap_or_default(), executed.state)
+			data: Self::generate_constructor(validators, executed.code.unwrap_or_default(), executed.state_hash)
 		})
 	}
 
 	/// Create encrypted public contract deployment transaction. Returns updated encrypted state.
-	fn execute_private_transaction(&self, block: BlockId, source: &SignedTransaction) -> Result<Bytes, EthcoreError> {
+	fn execute_private_transaction(&self, block: BlockId, source: &SignedTransaction) -> Result<H256, EthcoreError> {
 		if let &Action::Create = &source.action {
-			return Err(PrivateTransactionError::BadTransactonType.into());
+			return Err(PrivateTransactionError::BadTransactionType.into());
 		}
 		let result = self.execute_private(source, TransactOptions::with_no_tracing(), block)?;
-		Ok(result.state)
+		Ok(result.state_hash)
 	}
 
 	/// Create encrypted public contract deployment transaction.
-	pub fn public_transaction(&self, state: Bytes, source: &SignedTransaction, signatures: &[Signature], nonce: U256, gas_price: U256) -> Result<Transaction, EthcoreError> {
-		let gas: u64 = 650000 + state.len() as u64 * 8000 + signatures.len() as u64 * 50000;
+	pub fn public_transaction(&self, state_hash: H256, source: &SignedTransaction, signatures: &[Signature], nonce: U256, gas_price: U256) -> Result<Transaction, EthcoreError> {
+		let gas: u64 = 653000 + signatures.len() as u64 * 50000;
 		Ok(Transaction {
 			nonce: nonce,
 			action: source.action.clone(),
 			gas: gas.into(),
 			gas_price: gas_price,
 			value: 0.into(),
-			data: Self::generate_set_state_call(signatures, state)
+			data: Self::generate_set_state_call(signatures, state_hash)
 		})
 	}
 
@@ -728,6 +743,7 @@ mod test {
 	use rustc_hex::FromHex;
 	use client::{BlockChainClient, BlockId};
 	use hash::keccak;
+	use hashdb::HashDB;
 	use ethkey::{Secret, KeyPair, Signature};
 	use transaction::{Transaction, Action};
 	use executive::{contract_address};
@@ -790,11 +806,16 @@ mod test {
 		assert_eq!(&result.output[..], &("2a00000000000000000000000000000000000000000000000000000000000000".from_hex().unwrap()[..]));
 		assert_eq!(pm.get_validators(BlockId::Latest, &address).unwrap(), validators);
 
+		trace!("Private state storage should contain decrypted state");
+		let expected_state_hash = keccak("00000000000000000000000000000000000000000000000000000000000000002a00000000000000000000000000000000000000000000000000000000000000".from_hex().unwrap());
+		let decrypted_state = pm.private_state.read().get(&expected_state_hash).unwrap();
+		assert_eq!(decrypted_state, "00000000000000000000000000000000000000000000000000000000000000002a00000000000000000000000000000000000000000000000000000000000000".from_hex().unwrap());
+
 		// Now try modification with just one signature
 		trace!("Modifying private state");
 		let mut private_tx = Transaction::default();
 		private_tx.action = Action::Call(address.clone());
-		private_tx.data = "bc64b76d2b00000000000000000000000000000000000000000000000000000000000000".from_hex().unwrap(); //setX(42)
+		private_tx.data = "bc64b76d2b00000000000000000000000000000000000000000000000000000000000000".from_hex().unwrap(); //setX(43)
 		private_tx.gas = 120000.into();
 		private_tx.nonce = 2.into();
 		let private_tx = private_tx.sign(&key1.secret(), None);
@@ -806,7 +827,7 @@ mod test {
 		let public_tx = public_tx.sign(&key1.secret(), chain_id);
 		push_block_with_transactions(&client, &[public_tx]);
 
-		trace!("Querying private state");
+		trace!("Querying private state; should be unchanged");
 		let mut query_tx = Transaction::default();
 		query_tx.action = Action::Call(address.clone());
 		query_tx.data = "0c55699c".from_hex().unwrap();  // getX
