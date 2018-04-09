@@ -1,0 +1,25 @@
+[package]
+description = "Parity Sharding Client Implementation"
+homepage = "http://parity.io"
+license = "GPL-3.0"
+name = "sharding-client"
+version = "1.11.0"
+authors = ["Nikolay Volf <nikvolf@gmail.com>"]
+
+[dependencies]
+log = "0.3"
+ethcore = { path = "../ethcore" }
+futures = "0.2"
+ethcore-network = { path = "../util/network" }
+ethsync = { path = "../sync" }
+parking_lot = "0.5"
+rlp = { path = "../util/rlp" }
+ethereum-types = "0.3"
+ethcore-bytes = { path = "../util/bytes" }
+
+[dev-dependencies]
+assert_matches = "1.1"
+
+[features]
+default = []
+strict = []
