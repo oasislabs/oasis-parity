@@ -29,7 +29,7 @@ use url::percent_encoding::percent_decode;
 
 use traits::KeyServer;
 use serialization::{SerializableEncryptedDocumentKeyShadow, SerializableBytes, SerializablePublic};
-use types::all::{Error, Public, MessageHash, NodeAddress, RequestSignature, ServerKeyId,
+use types::{Error, Public, MessageHash, NodeAddress, RequestSignature, ServerKeyId,
 	EncryptedDocumentKey, EncryptedDocumentKeyShadow, NodeId};
 
 /// Key server http-requests listener. Available requests:
@@ -257,13 +257,14 @@ fn return_bytes<T: Serialize>(req: HttpRequest, mut res: HttpResponse, result: R
 
 fn return_error(mut res: HttpResponse, err: Error) {
 	match err {
-		Error::InsufficientRequesterData(_) => *res.status_mut() = HttpStatusCode::BadRequest,
-		Error::AccessDenied => *res.status_mut() = HttpStatusCode::Forbidden,
-		Error::DocumentNotFound => *res.status_mut() = HttpStatusCode::NotFound,
-		Error::Hyper(_) => *res.status_mut() = HttpStatusCode::BadRequest,
-		Error::Serde(_) => *res.status_mut() = HttpStatusCode::BadRequest,
-		Error::Database(_) => *res.status_mut() = HttpStatusCode::InternalServerError,
-		Error::Internal(_) => *res.status_mut() = HttpStatusCode::InternalServerError,
+		Error::AccessDenied | Error::ConsensusUnreachable | Error::ConsensusTemporaryUnreachable =>
+			*res.status_mut() = HttpStatusCode::Forbidden,
+		Error::ServerKeyIsNotFound | Error::DocumentKeyIsNotFound =>
+			*res.status_mut() = HttpStatusCode::NotFound,
+		Error::InsufficientRequesterData(_) | Error::Hyper(_) | Error::Serde(_)
+			| Error::DocumentKeyAlreadyStored | Error::ServerKeyAlreadyGenerated =>
+			*res.status_mut() = HttpStatusCode::BadRequest,
+		_ => *res.status_mut() = HttpStatusCode::InternalServerError,
 	}
 
 	// return error text. ignore errors when returning error
@@ -360,7 +361,7 @@ mod tests {
 	use ethkey::Public;
 	use traits::KeyServer;
 	use key_server::tests::DummyKeyServer;
-	use types::all::NodeAddress;
+	use types::NodeAddress;
 	use super::{parse_request, Request, KeyServerHttpListener};
 
 	#[test]
