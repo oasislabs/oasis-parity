@@ -25,7 +25,8 @@ extern crate parking_lot;
 
 #[macro_use] extern crate log;
 
-#[cfg(test)] extern crate tokio_core;
+#[cfg(test)] extern crate tokio;
+#[cfg(test)] extern crate tokio_timer;
 #[cfg(test)] extern crate tokio_io;
 #[cfg(test)] extern crate ethcore_logger;
 
@@ -326,8 +327,8 @@ mod tests {
 	use std::net::SocketAddr;
 	use std::sync::Arc;
 
-	use tokio_core::reactor::{Core, Timeout};
-	use tokio_core::net::TcpStream;
+	use tokio::net::TcpStream;
+	use tokio_timer::{Timeout, Timer};
 	use tokio_io::io;
 	use jsonrpc_core::futures::{Future, future};
 
@@ -342,13 +343,12 @@ mod tests {
 	}
 
 	fn dummy_request(addr: &SocketAddr, data: &str) -> Vec<u8> {
-		let mut core = Core::new().expect("Tokio Core should be created with no errors");
 		let mut buffer = vec![0u8; 2048];
 
 		let mut data_vec = data.as_bytes().to_vec();
 		data_vec.extend(b"\n");
 
-		let stream = TcpStream::connect(addr, &core.handle())
+		let stream = TcpStream::connect(addr)
 			.and_then(|stream| {
 				io::write_all(stream, &data_vec)
 			})
@@ -356,11 +356,10 @@ mod tests {
 				io::read(stream, &mut buffer)
 			})
 			.and_then(|(_, read_buf, len)| {
-				future::ok(read_buf[0..len].to_vec())
+				future::ok(read_buf[..len].to_vec())
 			});
-			let result = core.run(stream).expect("Core should run with no errors");
-
-			result
+			
+			tokio::executor::current_thread::block_on_all(stream).expect("should run with no errors")
 	}
 
 	#[test]
@@ -455,19 +454,17 @@ mod tests {
 		).expect("There should be no error starting stratum");
 
 		let mut auth_request =
-			r#"{"jsonrpc": "2.0", "method": "mining.authorize", "params": ["miner1", ""], "id": 1}"#
-			.as_bytes()
-			.to_vec();
-		auth_request.extend(b"\n");
+			br#"{"jsonrpc": "2.0", "method": "mining.authorize", "params": ["miner1", ""], "id": 1}\n"#
+		 	.to_vec();
 
-		let mut core = Core::new().expect("Tokio Core should be created with no errors");
-		let timeout1 = Timeout::new(::std::time::Duration::from_millis(100), &core.handle())
-			.expect("There should be a timeout produced in message test");
-		let timeout2 = Timeout::new(::std::time::Duration::from_millis(100), &core.handle())
-			.expect("There should be a timeout produced in message test");
+		let timer = Timer::default();
+
+		let timeout1 = timer.sleep(::std::time::Duration::from_millis(100));
+		let timeout2 = timer.sleep(::std::time::Duration::from_millis(100));
+		
 		let mut buffer = vec![0u8; 2048];
 		let mut buffer2 = vec![0u8; 2048];
-		let stream = TcpStream::connect(&addr, &core.handle())
+		let stream = TcpStream::connect(&addr)
 			.and_then(|stream| {
 				io::write_all(stream, &auth_request)
 			})
@@ -476,13 +473,13 @@ mod tests {
 			})
 			.and_then(|(stream, _, _)| {
 				trace!(target: "stratum", "Received authorization confirmation");
-				timeout1.join(future::ok(stream))
+				timeout1.from_err().join(future::ok(stream))
 			})
 			.and_then(|(_, stream)| {
-				trace!(target: "stratum", "Pusing work to peers");
+				trace!(target: "stratum", "Pushing work to peers");
 				stratum.push_work_all(r#"{ "00040008", "100500" }"#.to_owned())
 					.expect("Pushing work should produce no errors");
-				timeout2.join(future::ok(stream))
+				timeout2.from_err().join(future::ok(stream))
 			})
 			.and_then(|(_, stream)| {
 				trace!(target: "stratum", "Ready to read work from server");
@@ -492,8 +489,9 @@ mod tests {
 				trace!(target: "stratum", "Received work from server");
 				future::ok(read_buf[0..len].to_vec())
 			});
+		
 		let response = String::from_utf8(
-			core.run(stream).expect("Core should run with no errors")
+			tokio::executor::current_thread::block_on_all(stream).expect("should run with no errors")
 		).expect("Response should be utf-8");
 
 		assert_eq!(

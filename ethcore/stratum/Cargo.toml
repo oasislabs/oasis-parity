@@ -16,6 +16,7 @@ parking_lot = "0.5"
 
 [dev-dependencies]
 env_logger = "0.4"
-tokio-core = "0.1"
-tokio-io = "0.1"
+tokio = "^0.1"
+tokio-timer = "^0.1"
+tokio-io = "^0.1"
 ethcore-logger = { path = "../../logger" }
