@@ -48,6 +48,8 @@ pub struct ShareChangeSession {
 	key_storage: Arc<KeyStorage>,
 	/// Key version.
 	key_version: H256,
+	/// Nodes that have reported version ownership.
+	version_holders: Option<BTreeSet<NodeId>>,
 	/// Consensus group to use in ShareAdd session.
 	consensus_group: Option<BTreeSet<NodeId>>,
 	/// Nodes to add shares for.
@@ -63,6 +65,8 @@ pub struct ShareChangeSession {
 pub struct ShareChangeSessionPlan {
 	/// Key version that plan is valid for.
 	pub key_version: H256,
+	/// Nodes that have reported version ownership.
+	pub version_holders: BTreeSet<NodeId>,
 	/// Consensus group to use in ShareAdd session.
 	pub consensus_group: BTreeSet<NodeId>,
 	/// Nodes to add shares for.
@@ -102,6 +106,7 @@ impl ShareChangeSession {
 		// we can't create sessions right now, because key share is read when session is created, but it can change in previous session
 		let key_version = params.plan.key_version;
 		let consensus_group = if !params.plan.consensus_group.is_empty() { Some(params.plan.consensus_group) } else { None };
+		let version_holders = if !params.plan.version_holders.is_empty() { Some(params.plan.version_holders) } else { None };
 		let new_nodes_map = if !params.plan.new_nodes_map.is_empty() { Some(params.plan.new_nodes_map) } else { None };
 		debug_assert!(new_nodes_map.is_some());
 
@@ -113,6 +118,7 @@ impl ShareChangeSession {
 			cluster: params.cluster,
 			key_storage: params.key_storage,
 			key_version: key_version,
+			version_holders: version_holders,
 			consensus_group: consensus_group,
 			new_nodes_map: new_nodes_map,
 			share_add_session: None,
@@ -158,6 +164,7 @@ impl ShareChangeSession {
 	/// Create new share add session.
 	fn create_share_add_session(&mut self) -> Result<(), Error> {
 		let consensus_group = self.consensus_group.take().ok_or(Error::InvalidStateForRequest)?;
+		let version_holders = self.version_holders.take().ok_or(Error::InvalidStateForRequest)?;
 		let new_nodes_map = self.new_nodes_map.take().ok_or(Error::InvalidStateForRequest)?;
 		let share_add_session = ShareAddSessionImpl::new(ShareAddSessionParams {
 			meta: self.meta.clone(),
@@ -166,7 +173,7 @@ impl ShareChangeSession {
 			key_storage: self.key_storage.clone(),
 			admin_public: None,
 		})?;
-		share_add_session.set_consensus_output(&self.key_version, consensus_group, new_nodes_map)?;
+		share_add_session.set_consensus_output(&self.key_version, consensus_group, version_holders, new_nodes_map)?;
 		self.share_add_session = Some(share_add_session);
 		Ok(())
 	}
@@ -221,7 +228,7 @@ impl ShareAddSessionTransport for ShareChangeTransport {
 		self.cluster.nodes()
 	}
 
-	fn set_master_data(&mut self, _consensus_group: BTreeSet<NodeId>, _id_numbers: BTreeMap<NodeId, Option<Secret>>) {
+	fn set_master_data(&mut self, _consensus_group: BTreeSet<NodeId>, _version_holders: BTreeSet<NodeId>, _id_numbers: BTreeMap<NodeId, Option<Secret>>) {
 		unreachable!("only called when establishing consensus; this transport is never used for establishing consensus; qed")
 	}
 
@@ -242,6 +249,7 @@ pub fn prepare_share_change_session_plan(cluster_nodes: &BTreeSet<NodeId>, thres
 			key_id, threshold, old_key_version_owners.len());
 		return Ok(ShareChangeSessionPlan {
 			key_version: key_version,
+			version_holders: Default::default(),
 			consensus_group: Default::default(),
 			new_nodes_map: Default::default(),
 		});
@@ -279,9 +287,35 @@ pub fn prepare_share_change_session_plan(cluster_nodes: &BTreeSet<NodeId>, thres
 
 	Ok(ShareChangeSessionPlan {
 		key_version: key_version,
+		version_holders: old_key_version_owners.clone(),
 		consensus_group: consensus_group,
 		new_nodes_map: new_nodes_map,
 	})
+
+/*
+
+=== GENERATING PLAN FOR 0x0000<E2><80><A6>0003
+=== new_nodes_set = {
+	0x09057f29d75ae45c52aa8d631316feb0df59e8339cfeacb7cbfd2be68fc4d547ba253a320fea8c2bcebd7ac8cf76f90a52163da3c2c907e5fdfc3a4f1bb93dbd,
+	0xa8fcbe6c0334e2953b516090af49c2395e4ee05e2a76d6ecaa4e9bc6766261857e0934cd76b753aa4abfdca675b52bc6fe218cc02dc1e419e68a3257d1f9a712,
+	0xdc5e8f5c9c3c8025c42d7f6047b4c0372164ed4b1d8125b3487828751320bdf7c446c96f9ea2b6b871482f6a069ed1bf4b4dc100a9afae5b3bb8a90c9f77161d
+}
+=== old_key_version_owners = {
+	0xa8fcbe6c0334e2953b516090af49c2395e4ee05e2a76d6ecaa4e9bc6766261857e0934cd76b753aa4abfdca675b52bc6fe218cc02dc1e419e68a3257d1f9a712,
+	0xdc5e8f5c9c3c8025c42d7f6047b4c0372164ed4b1d8125b3487828751320bdf7c446c96f9ea2b6b871482f6a069ed1bf4b4dc100a9afae5b3bb8a90c9f77161d
+}
+=== new_nodes_map = {
+	0x09057f29d75ae45c52aa8d631316feb0df59e8339cfeacb7cbfd2be68fc4d547ba253a320fea8c2bcebd7ac8cf76f90a52163da3c2c907e5fdfc3a4f1bb93dbd: Some(0x729bf5abfb81c9d9c481d5eb73f9a502c2fe33a8576f033b3dce9cb6bc7e25b6),
+	0xa8fcbe6c0334e2953b516090af49c2395e4ee05e2a76d6ecaa4e9bc6766261857e0934cd76b753aa4abfdca675b52bc6fe218cc02dc1e419e68a3257d1f9a712: None,
+	0xdc5e8f5c9c3c8025c42d7f6047b4c0372164ed4b1d8125b3487828751320bdf7c446c96f9ea2b6b871482f6a069ed1bf4b4dc100a9afae5b3bb8a90c9f77161d: None
+}
+=== consensus_group = {0xa8fcbe6c0334e2953b516090af49c2395e4ee05e2a76d6ecaa4e9bc6766261857e0934cd76b753aa4abfdca675b52bc6fe218cc02dc1e419e68a3257d1f9a712, 0xdc5e8f5c9c3c8025c42d7f6047b4c0372164ed4b1d8125b3487828751320bdf7c446c96f9ea2b6b871482f6a069ed1bf4b4dc100a9afae5b3bb8a90c9f77161d}
+2018-04-17 10:04:02 UTC  TRACE secretstore_net  0xa8fc<E2><80><A6>a712: sent message ServersSetChange.InitializeShareChangeSession to 0x0905<E2><80><A6>3dbd
+2018-04-17 10:04:02 UTC  TRACE secretstore_net  0xa8fc<E2><80><A6>a712: sent message ServersSetChange.InitializeShareChangeSession to 0xdc5e<E2><80><A6>161d
+2018-04-17 10:04:02 UTC  TRACE secretstore_net  0xa8fc<E2><80><A6>a712: received message ServersSetChange.ShareChangeKeyVersionNegotiation.KeyVersions from 0x0905<E2><80><A6>3dbd
+
+
+*/
 }
 
 impl ShareChangeSessionPlan {

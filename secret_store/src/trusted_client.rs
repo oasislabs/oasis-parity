@@ -20,7 +20,7 @@ use ethereum_types::Address;
 use ethcore::client::{Client, BlockChainClient, ChainInfo, Nonce};
 use ethcore::miner::{Miner, MinerService};
 use ethsync::SyncProvider;
-use transaction::{Transaction, SignedTransaction, Action};
+use transaction::{Transaction, SignedTransaction, Action, ImportResult};
 use {Error, NodeKeyPair};
 
 #[derive(Clone)]
@@ -67,7 +67,7 @@ impl TrustedClient {
 	}
 
 	/// Transact contract.
-	pub fn transact_contract(&self, contract: Address, tx_data: Bytes) -> Result<(), Error> {
+	pub fn transact_contract(&self, contract: Address, tx_data: Bytes) -> Result<bool, Error> {
 		let client = self.client.upgrade().ok_or_else(|| Error::Internal("cannot submit tx when client is offline".into()))?;
 		let miner = self.miner.upgrade().ok_or_else(|| Error::Internal("cannot submit tx when miner is offline".into()))?;
 		let engine = client.engine();
@@ -84,6 +84,6 @@ impl TrustedClient {
 		let signed = SignedTransaction::new(transaction.with_signature(signature, chain_id))?;
 		miner.import_own_transaction(&*client, signed.into())
 			.map_err(|e| Error::Internal(format!("failed to import tx: {}", e)))
-			.map(|_| ())
+			.map(|r| r == ImportResult::Current)
 	}
 }
