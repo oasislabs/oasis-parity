@@ -778,6 +778,7 @@ impl ChainSync {
 				self.deactivate_peer(io, peer_id);
 			},
 			Err(DownloaderImportError::Invalid) => {
+				trace!(target: "sync", "Received invalid header data from a peer. Disabling peer and continuing");
 				io.disable_peer(peer_id);
 				self.deactivate_peer(io, peer_id);
 				self.continue_sync(io);
@@ -838,6 +839,7 @@ impl ChainSync {
 
 			match result {
 				Err(DownloaderImportError::Invalid) => {
+					trace!(target: "sync", "Received invalid body data from a peer. Disabling peer and continuing");
 					io.disable_peer(peer_id);
 					self.deactivate_peer(io, peer_id);
 					self.continue_sync(io);
@@ -892,6 +894,7 @@ impl ChainSync {
 
 			match result {
 				Err(DownloaderImportError::Invalid) => {
+					trace!(target: "sync", "Received invalid receipts data from a peer. Disabling peer and continuing");
 					io.disable_peer(peer_id);
 					self.deactivate_peer(io, peer_id);
 					self.continue_sync(io);
@@ -1201,6 +1204,8 @@ impl ChainSync {
 		if
 			self.state != SyncState::WaitingPeers &&
 			self.state != SyncState::SnapshotWaiting &&
+			self.state != SyncState::SnapshotData &&
+			self.state != SyncState::SnapshotManifest &&
 			self.state != SyncState::Waiting &&
 			self.state != SyncState::Idle &&
 			!self.peers.values().any(|p| p.asking != PeerAsking::Nothing && p.block_set != Some(BlockSet::OldBlocks) && p.can_sync())
@@ -1257,10 +1262,11 @@ impl ChainSync {
 				SyncState::WaitingPeers => {
 					trace!(
 						target: "sync",
-						"Checking snapshot sync: {} vs {} (peer: {})",
+						"Checking snapshot sync (peer: {}): (snapshot block) {} vs {} (local block), {}",
+						peer_id,
 						peer_snapshot_number,
 						chain_info.best_block_number,
-						peer_id
+						self.warp_sync
 					);
 					self.maybe_start_snapshot_sync(io);
 				},

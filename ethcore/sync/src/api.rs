@@ -16,7 +16,7 @@
 
 use std::sync::Arc;
 use std::collections::{HashMap, BTreeMap};
-use std::io;
+use std::{io, fmt};
 use std::time::Duration;
 use bytes::Bytes;
 use devp2p::{NetworkService, ConnectionFilter};
@@ -58,6 +58,16 @@ pub enum WarpSync {
 	Disabled,
 	/// Only warp sync is allowed (no regular sync) and only after given block number.
 	OnlyAndAfter(BlockNumber),
+}
+
+impl fmt::Display for WarpSync {
+	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+		match *self {
+			WarpSync::Enabled => write!(fmt, "warp: enabled"),
+			WarpSync::Disabled => write!(fmt, "warp: disabled"),
+			WarpSync::OnlyAndAfter(block) => write!(fmt, "warp: barrier at {}", block),
+		}
+	}
 }
 
 impl WarpSync {
