@@ -479,7 +479,7 @@ pub mod tests {
 			service_contract_srv_retr_address: None,
 			service_contract_doc_store_address: None,
 			service_contract_doc_sretr_address: None,
-			acl_check_enabled: true,
+			acl_check_contract_address: None,
 			data_path: tempdir.path().display().to_string(),
 			cluster_config: ClusterConfiguration {
 				threads: 1,
@@ -488,6 +488,7 @@ pub mod tests {
 					port: 8083,
 				},
 				nodes: BTreeMap::new(),
+				key_server_set_contract_address: None,
 				allow_connecting_to_higher_nodes: false,
 				admin_public: None,
 				auto_migrate_enabled: false,
