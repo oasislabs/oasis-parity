@@ -24,23 +24,21 @@ use std::net::{TcpListener};
 use ansi_term::{Colour, Style};
 use ctrlc::CtrlC;
 use ethcore::account_provider::{AccountProvider, AccountProviderSettings};
-use ethcore::client::{Client, Mode, DatabaseCompactionProfile, VMType, BlockChainClient};
-use ethcore::db::NUM_COLUMNS;
+use ethcore::client::{Client, Mode, DatabaseCompactionProfile, VMType, BlockChainClient, BlockInfo};
 use ethcore::ethstore::ethkey;
-use ethcore::miner::{Miner, MinerService, MinerOptions};
-use ethcore::miner::{StratumOptions, Stratum};
+use ethcore::miner::{stratum, Miner, MinerService, MinerOptions};
 use ethcore::snapshot;
 use ethcore::spec::{SpecParams, OptimizeFor};
 use ethcore::verification::queue::VerifierSettings;
 use ethcore_logger::{Config as LogConfig, RotatingLogger};
 use ethcore_service::ClientService;
-use ethsync::{self, SyncConfig};
+use sync::{self, SyncConfig};
+use miner::work_notify::WorkPoster;
 use fdlimit::raise_fd_limit;
 use futures_cpupool::CpuPool;
 use hash_fetch::{self, fetch};
 use informant::{Informant, LightNodeInformantData, FullNodeInformantData};
 use journaldb::Algorithm;
-use kvdb_rocksdb::{Database, DatabaseConfig};
 use light::Cache as LightDataCache;
 use miner::external::ExternalMiner;
 use node_filter::NodeFilter;
@@ -50,12 +48,12 @@ use parity_rpc::{NetworkSettings, informant, is_major_importing};
 use parking_lot::{Condvar, Mutex};
 use updater::{UpdatePolicy, Updater};
 use parity_version::version;
-
+use ethcore_private_tx::{ProviderConfig, EncryptorConfig, SecretStoreEncryptor};
 use params::{
 	SpecType, Pruning, AccountsConfig, GasPricerConfig, MinerExtras, Switch,
 	tracing_switch_to_bool, fatdb_switch_to_bool, mode_switch_to_bool
 };
-use helpers::{to_client_config, execute_upgrades, passwords_from_files, client_db_config, open_client_db, restoration_db_handler, compaction_profile};
+use helpers::{to_client_config, execute_upgrades, passwords_from_files};
 use upgrade::upgrade_key_location;
 use dir::{Directories, DatabaseDirectories};
 use cache::CacheConfig;
@@ -68,6 +66,7 @@ use rpc_apis;
 use secretstore;
 use signer;
 use url;
+use db;
 
 // how often to take periodic snapshots.
 const SNAPSHOT_PERIOD: u64 = 5000;
@@ -99,7 +98,7 @@ pub struct RunCmd {
 	pub ws_conf: rpc::WsConfiguration,
 	pub http_conf: rpc::HttpConfiguration,
 	pub ipc_conf: rpc::IpcConfiguration,
-	pub net_conf: ethsync::NetworkConfiguration,
+	pub net_conf: sync::NetworkConfiguration,
 	pub network_id: Option<u64>,
 	pub warp_sync: bool,
 	pub warp_barrier: Option<u64>,
@@ -120,11 +119,14 @@ pub struct RunCmd {
 	pub ipfs_conf: ipfs::Configuration,
 	pub ui_conf: rpc::UiConfiguration,
 	pub secretstore_conf: secretstore::Configuration,
+	pub private_provider_conf: ProviderConfig,
+	pub private_encryptor_conf: EncryptorConfig,
+	pub private_tx_enabled: bool,
 	pub dapp: Option<String>,
 	pub ui: bool,
 	pub name: String,
 	pub custom_bootnodes: bool,
-	pub stratum: Option<StratumOptions>,
+	pub stratum: Option<stratum::Options>,
 	pub no_periodic_snapshot: bool,
 	pub check_seal: bool,
 	pub download_old_blocks: bool,
@@ -171,11 +173,12 @@ impl ::local_store::NodeInfo for FullNodeInfo {
 			None => return Vec::new(),
 		};
 
-		let local_txs = miner.local_transactions();
-		miner.pending_transactions()
-			.into_iter()
-			.chain(miner.future_transactions())
-			.filter(|tx| local_txs.contains_key(&tx.hash()))
+		miner.local_transactions()
+			.values()
+			.filter_map(|status| match *status {
+				::miner::pool::local_transactions::Status::Pending(ref tx) => Some(tx.pending().clone()),
+				_ => None,
+			})
 			.collect()
 	}
 }
@@ -185,7 +188,7 @@ type LightClient = ::light::client::Client<::light_helpers::EpochFetch>;
 // helper for light execution.
 fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<RunningClient, String> {
 	use light::client as light_client;
-	use ethsync::{LightSyncParams, LightSync, ManageNetwork};
+	use sync::{LightSyncParams, LightSync, ManageNetwork};
 	use parking_lot::{Mutex, RwLock};
 
 	// load spec
@@ -206,10 +209,8 @@ fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<Runnin
 	// select pruning algorithm
 	let algorithm = cmd.pruning.to_algorithm(&user_defaults);
 
-	let compaction = compaction_profile(&cmd.compaction, db_dirs.db_root_path().as_path());
-
 	// execute upgrades
-	execute_upgrades(&cmd.dirs.base, &db_dirs, algorithm, compaction.clone())?;
+	execute_upgrades(&cmd.dirs.base, &db_dirs, algorithm, &cmd.compaction)?;
 
 	// create dirs used by parity
 	cmd.dirs.create_dirs(cmd.dapps_conf.enabled, cmd.ui_conf.enabled, cmd.secretstore_conf.enabled)?;
@@ -245,19 +246,10 @@ fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<Runnin
 	};
 
 	// initialize database.
-	let db = {
-		let db_config = DatabaseConfig {
-			memory_budget: Some(cmd.cache_config.blockchain() as usize * 1024 * 1024),
-			compaction: compaction,
-			wal: cmd.wal,
-			.. DatabaseConfig::with_columns(NUM_COLUMNS)
-		};
-
-		Arc::new(Database::open(
-			&db_config,
-			&db_dirs.client_path(algorithm).to_str().expect("DB path could not be converted to string.")
-		).map_err(|e| format!("Error opening database: {}", e))?)
-	};
+	let db = db::open_db(&db_dirs.client_path(algorithm).to_str().expect("DB path could not be converted to string."),
+						 &cmd.cache_config,
+						 &cmd.compaction,
+						 cmd.wal)?;
 
 	let service = light_client::Service::start(config, &spec, fetch, db, cache.clone())
 		.map_err(|e| format!("Error starting light client: {}", e))?;
@@ -287,7 +279,7 @@ fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<Runnin
 		network_config: net_conf.into_basic().map_err(|e| format!("Failed to produce network config: {}", e))?,
 		client: Arc::new(provider),
 		network_id: cmd.network_id.unwrap_or(spec.network_id()),
-		subprotocol_name: ethsync::LIGHT_PROTOCOL,
+		subprotocol_name: sync::LIGHT_PROTOCOL,
 		handlers: vec![on_demand.clone()],
 		attached_protos: attached_protos,
 	};
@@ -340,7 +332,7 @@ fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<Runnin
 		impl node_health::SyncStatus for LightSyncStatus {
 			fn is_major_importing(&self) -> bool { self.0.is_major_importing() }
 			fn peers(&self) -> (usize, usize) {
-				let peers = ethsync::LightSyncProvider::peer_numbers(&*self.0);
+				let peers = sync::LightSyncProvider::peer_numbers(&*self.0);
 				(peers.connected, peers.max)
 			}
 		}
@@ -360,6 +352,7 @@ fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<Runnin
 			pool: cpu_pool.clone(),
 			signer: signer_service.clone(),
 			ui_address: cmd.ui_conf.redirection_address(),
+			info_page_only: cmd.ui_conf.info_page_only,
 		})
 	};
 
@@ -388,6 +381,7 @@ fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<Runnin
 		geth_compatibility: cmd.geth_compatibility,
 		remote: event_loop.remote(),
 		whisper_rpc: whisper_factory,
+		private_tx_service: None, //TODO: add this to client.
 		gas_price_percentile: cmd.gas_price_percentile,
 	});
 
@@ -471,7 +465,7 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 	let snapshot_path = db_dirs.snapshot_path();
 
 	// execute upgrades
-	execute_upgrades(&cmd.dirs.base, &db_dirs, algorithm, compaction_profile(&cmd.compaction, db_dirs.db_root_path().as_path()))?;
+	execute_upgrades(&cmd.dirs.base, &db_dirs, algorithm, &cmd.compaction)?;
 
 	// create dirs used by parity
 	cmd.dirs.create_dirs(cmd.dapps_conf.enabled, cmd.ui_conf.enabled, cmd.secretstore_conf.enabled)?;
@@ -531,9 +525,9 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 		}
 	}
 	sync_config.warp_sync = match (warp_sync, cmd.warp_barrier) {
-		(true, Some(block)) => ethsync::WarpSync::OnlyAndAfter(block),
-		(true, _) => ethsync::WarpSync::Enabled,
-		_ => ethsync::WarpSync::Disabled,
+		(true, Some(block)) => sync::WarpSync::OnlyAndAfter(block),
+		(true, _) => sync::WarpSync::Enabled,
+		_ => sync::WarpSync::Disabled,
 	};
 	sync_config.download_old_blocks = cmd.download_old_blocks;
 	sync_config.serve_light = cmd.serve_light;
@@ -545,20 +539,28 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 
 	let cpu_pool = CpuPool::new(4);
 
+	// spin up event loop
+	let event_loop = EventLoop::spawn();
+
 	// fetch service
 	let fetch = fetch::Client::new().map_err(|e| format!("Error starting fetch client: {:?}", e))?;
 
 	// create miner
-	let initial_min_gas_price = cmd.gas_pricer_conf.initial_min();
-	let miner = Miner::new(cmd.miner_options, cmd.gas_pricer_conf.to_gas_pricer(fetch.clone(), cpu_pool.clone()), &spec, Some(account_provider.clone()));
-	miner.set_author(cmd.miner_extras.author);
-	miner.set_gas_floor_target(cmd.miner_extras.gas_floor_target);
-	miner.set_gas_ceil_target(cmd.miner_extras.gas_ceil_target);
+	let miner = Arc::new(Miner::new(
+		cmd.miner_options,
+		cmd.gas_pricer_conf.to_gas_pricer(fetch.clone(), cpu_pool.clone()),
+		&spec,
+		Some(account_provider.clone())
+	));
+	miner.set_author(cmd.miner_extras.author, None).expect("Fails only if password is Some; password is None; qed");
+	miner.set_gas_range_target(cmd.miner_extras.gas_range_target);
 	miner.set_extra_data(cmd.miner_extras.extra_data);
-	miner.set_minimal_gas_price(initial_min_gas_price);
-	miner.recalibrate_minimal_gas_price();
+	if !cmd.miner_extras.work_notify.is_empty() {
+		miner.add_work_listener(Box::new(
+			WorkPoster::new(&cmd.miner_extras.work_notify, fetch.clone(), event_loop.remote())
+		));
+	}
 	let engine_signer = cmd.miner_extras.engine_signer;
-
 	if engine_signer != Default::default() {
 		// Check if engine signer exists
 		if !account_provider.has_account(engine_signer).unwrap_or(false) {
@@ -571,7 +573,7 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 		}
 
 		// Attempt to sign in the engine signer.
-		if !passwords.iter().any(|p| miner.set_engine_signer(engine_signer, (*p).clone()).is_ok()) {
+		if !passwords.iter().any(|p| miner.set_author(engine_signer, Some(p.to_owned())).is_ok()) {
 			return Err(format!("No valid password for the consensus signer {}. {}", engine_signer, VERIFY_PASSWORD_HINT));
 		}
 	}
@@ -609,9 +611,8 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 	// set network path.
 	net_conf.net_config_path = Some(db_dirs.network_path().to_string_lossy().into_owned());
 
-	let client_db_config = client_db_config(&client_path, &client_config);
-	let client_db = open_client_db(&client_path, &client_db_config)?;
-	let restoration_db_handler = restoration_db_handler(client_db_config);
+	let client_db = db::open_client_db(&client_path, &client_config)?;
+	let restoration_db_handler = db::restoration_db_handler(&client_path, &client_config);
 
 	// create client service.
 	let service = ClientService::start(
@@ -622,6 +623,9 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 		restoration_db_handler,
 		&cmd.dirs.ipc_path(),
 		miner.clone(),
+		account_provider.clone(),
+		Box::new(SecretStoreEncryptor::new(cmd.private_encryptor_conf, fetch.clone()).map_err(|e| e.to_string())?),
+		cmd.private_provider_conf,
 	).map_err(|e| format!("Client service error: {:?}", e))?;
 
 	let connection_filter_address = spec.params().node_permission_contract;
@@ -630,6 +634,12 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 
 	// take handle to client
 	let client = service.client();
+	// Update miners block gas limit
+	miner.update_transaction_queue_limits(*client.best_block_header().gas_limit());
+
+	// take handle to private transactions service
+	let private_tx_service = service.private_tx_service();
+	let private_tx_provider = private_tx_service.provider();
 	let connection_filter = connection_filter_address.map(|a| Arc::new(NodeFilter::new(Arc::downgrade(&client) as Weak<BlockChainClient>, a)));
 	let snapshot_service = service.snapshot_service();
 
@@ -676,7 +686,7 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 
 	// start stratum
 	if let Some(ref stratum_config) = cmd.stratum {
-		Stratum::register(stratum_config, miner.clone(), Arc::downgrade(&client))
+		stratum::Stratum::register(stratum_config, miner.clone(), Arc::downgrade(&client))
 			.map_err(|e| format!("Stratum start error: {:?}", e))?;
 	}
 
@@ -697,21 +707,28 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 		net_conf.clone().into(),
 		client.clone(),
 		snapshot_service.clone(),
+		private_tx_service.clone(),
 		client.clone(),
 		&cmd.logger_config,
 		attached_protos,
-		connection_filter.clone().map(|f| f as Arc<::ethsync::ConnectionFilter + 'static>),
+		connection_filter.clone().map(|f| f as Arc<::sync::ConnectionFilter + 'static>),
 	).map_err(|e| format!("Sync error: {}", e))?;
 
 	service.add_notify(chain_notify.clone());
+
+	// provider not added to a notification center is effectively disabled
+	// TODO [debris] refactor it later on
+	if cmd.private_tx_enabled {
+		service.add_notify(private_tx_provider.clone());
+		// TODO [ToDr] PrivateTX should use separate notifications
+		// re-using ChainNotify for this is a bit abusive.
+		private_tx_provider.add_notify(chain_notify.clone());
+	}
 
 	// start network
 	if network_enabled {
 		chain_notify.start();
 	}
-
-	// spin up event loop
-	let event_loop = EventLoop::spawn();
 
 	let contract_client = Arc::new(::dapps::FullRegistrar::new(client.clone()));
 
@@ -738,7 +755,7 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 	let (node_health, dapps_deps) = {
 		let (sync, client) = (sync_provider.clone(), client.clone());
 
-		struct SyncStatus(Arc<ethsync::SyncProvider>, Arc<Client>, ethsync::NetworkConfiguration);
+		struct SyncStatus(Arc<sync::SyncProvider>, Arc<Client>, sync::NetworkConfiguration);
 		impl fmt::Debug for SyncStatus {
 			fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
 				write!(fmt, "Dapps Sync Status")
@@ -768,6 +785,7 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 			pool: cpu_pool.clone(),
 			signer: signer_service.clone(),
 			ui_address: cmd.ui_conf.redirection_address(),
+			info_page_only: cmd.ui_conf.info_page_only,
 		})
 	};
 	let dapps_middleware = dapps::new(cmd.dapps_conf.clone(), dapps_deps.clone())?;
@@ -796,6 +814,7 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 		pool: cpu_pool.clone(),
 		remote: event_loop.remote(),
 		whisper_rpc: whisper_factory,
+		private_tx_service: Some(private_tx_service.clone()),
 		gas_price_percentile: cmd.gas_price_percentile,
 	});
 
@@ -944,7 +963,7 @@ impl RunningClient {
 }
 
 pub fn execute(cmd: RunCmd, can_restart: bool, logger: Arc<RotatingLogger>) -> Result<(bool, Option<String>), String> {
-	if cmd.ui_conf.enabled {
+	if cmd.ui_conf.enabled && !cmd.ui_conf.info_page_only {
 		warn!("{}", Style::new().bold().paint("Parity browser interface is deprecated. It's going to be removed in the next version, use standalone Parity UI instead."));
 		warn!("{}", Style::new().bold().paint("Standalone Parity UI: https://github.com/Parity-JS/shell/releases"));
 	}

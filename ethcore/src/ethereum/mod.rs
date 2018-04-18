@@ -76,6 +76,11 @@ pub fn new_easthub<'a, T: Into<SpecParams<'a>>>(params: T) -> Spec {
 	load(params.into(), include_bytes!("../../res/ethereum/easthub.json"))
 }
 
+/// Create a new Ethereum Social mainnet chain spec ¯\_(ツ)_/¯ .
+pub fn new_social<'a, T: Into<SpecParams<'a>>>(params: T) -> Spec {
+	load(params.into(), include_bytes!("../../res/ethereum/social.json"))
+}
+
 /// Create a new Kovan testnet chain spec.
 pub fn new_kovan<'a, T: Into<SpecParams<'a>>>(params: T) -> Spec {
 	load(params.into(), include_bytes!("../../res/ethereum/kovan.json"))
@@ -145,7 +150,7 @@ mod tests {
 	use ethereum_types::U256;
 	use state::*;
 	use super::*;
-	use tests::helpers::get_temp_state_db;
+	use test_helpers::get_temp_state_db;
 	use views::BlockView;
 
 	#[test]
@@ -169,7 +174,7 @@ mod tests {
 
 		assert_eq!(morden.state_root(), "f3f4696bbf3b3b07775128eb7a3763279a394e382130f27c21e70233e04946a9".into());
 		let genesis = morden.genesis_block();
-		assert_eq!(BlockView::new(&genesis).header_view().hash(), "0cd786a2425d16f152c658316c423e6ce1181e15c3295826d7c9904cba9ce303".into());
+		assert_eq!(view!(BlockView, &genesis).header_view().hash(), "0cd786a2425d16f152c658316c423e6ce1181e15c3295826d7c9904cba9ce303".into());
 
 		let _ = morden.engine;
 	}
@@ -180,7 +185,7 @@ mod tests {
 
 		assert_eq!(frontier.state_root(), "d7f8974fb5ac78d9ac099b9ad5018bedc2ce0a72dad1827a1709da30580f0544".into());
 		let genesis = frontier.genesis_block();
-		assert_eq!(BlockView::new(&genesis).header_view().hash(), "d4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3".into());
+		assert_eq!(view!(BlockView, &genesis).header_view().hash(), "d4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3".into());
 
 		let _ = frontier.engine;
 	}

@@ -176,13 +176,13 @@ impl OnChainServiceContract {
 		let transaction_data = prepare_tx(&*client, origin, &self.contract)?;
 
 		// send transaction
-		let is_current = self.client.transact_contract(
+		self.client.transact_contract(
 			origin.clone(),
 			transaction_data
 		).map_err(|e| format!("{}", e))?;
 
-		trace!(target: "secretstore", "{}: transaction {} sent to service contract ({})",
-			self.self_key_pair.public(), tx_name, is_current);
+		trace!(target: "secretstore", "{}: transaction {} sent to service contract",
+			self.self_key_pair.public(), tx_name);
 
 		Ok(())
 	}

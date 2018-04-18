@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ethcore::client::ClientIoMessage;
-use ethsync::LightSync;
+use sync::LightSync;
 use io::{IoContext, IoHandler, TimerToken};
 
 use light::client::LightChainClient;
@@ -35,10 +35,10 @@ use parking_lot::RwLock;
 
 // Attepmt to cull once every 10 minutes.
 const TOKEN: TimerToken = 1;
-const TIMEOUT_MS: u64 = 1000 * 60 * 10;
+const TIMEOUT: Duration = Duration::from_secs(60 * 10);
 
 // But make each attempt last only 9 minutes
-const PURGE_TIMEOUT: Duration = Duration::from_millis(1000 * 60 * 9);
+const PURGE_TIMEOUT: Duration = Duration::from_secs(60 * 9);
 
 /// Periodically culls the transaction queue of mined transactions.
 pub struct QueueCull<T> {
@@ -56,7 +56,7 @@ pub struct QueueCull<T> {
 
 impl<T: LightChainClient + 'static> IoHandler<ClientIoMessage> for QueueCull<T> {
 	fn initialize(&self, io: &IoContext<ClientIoMessage>) {
-		io.register_timer(TOKEN, TIMEOUT_MS).expect("Error registering timer");
+		io.register_timer(TOKEN, TIMEOUT).expect("Error registering timer");
 	}
 
 	fn timeout(&self, _io: &IoContext<ClientIoMessage>, timer: TimerToken) {
@@ -70,7 +70,7 @@ impl<T: LightChainClient + 'static> IoHandler<ClientIoMessage> for QueueCull<T> 
 		let start_nonce = self.client.engine().account_start_nonce(best_header.number());
 
 		info!(target: "cull", "Attempting to cull queued transactions from {} senders.", senders.len());
-		self.remote.spawn_with_timeout(move || {
+		self.remote.spawn_with_timeout(move |_| {
 			let maybe_fetching = sync.with_context(move |ctx| {
 				// fetch the nonce of each sender in the queue.
 				let nonce_reqs = senders.iter()

@@ -21,6 +21,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use hash::keccak;
+use ethcore::account_provider::AccountProvider;
 use ethcore::snapshot::{Progress, RestorationStatus, SnapshotService as SS};
 use ethcore::snapshot::io::{SnapshotReader, PackedReader, PackedWriter};
 use ethcore::snapshot::service::Service as SnapshotService;
@@ -31,10 +32,12 @@ use ethcore_service::ClientService;
 
 use cache::CacheConfig;
 use params::{SpecType, Pruning, Switch, tracing_switch_to_bool, fatdb_switch_to_bool};
-use helpers::{to_client_config, execute_upgrades, client_db_config, open_client_db, restoration_db_handler, compaction_profile};
+use helpers::{to_client_config, execute_upgrades};
 use dir::Directories;
 use user_defaults::UserDefaults;
 use fdlimit;
+use ethcore_private_tx;
+use db;
 
 /// Kinds of snapshot commands.
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -162,7 +165,7 @@ impl SnapshotCommand {
 		let snapshot_path = db_dirs.snapshot_path();
 
 		// execute upgrades
-		execute_upgrades(&self.dirs.base, &db_dirs, algorithm, compaction_profile(&self.compaction, db_dirs.db_root_path().as_path()))?;
+		execute_upgrades(&self.dirs.base, &db_dirs, algorithm, &self.compaction)?;
 
 		// prepare client config
 		let client_config = to_client_config(
@@ -181,9 +184,8 @@ impl SnapshotCommand {
 			true
 		);
 
-		let client_db_config = client_db_config(&client_path, &client_config);
-		let client_db = open_client_db(&client_path, &client_db_config)?;
-		let restoration_db_handler = restoration_db_handler(client_db_config);
+		let client_db = db::open_client_db(&client_path, &client_config)?;
+		let restoration_db_handler = db::restoration_db_handler(&client_path, &client_config);
 
 		let service = ClientService::start(
 			client_config,
@@ -192,7 +194,12 @@ impl SnapshotCommand {
 			&snapshot_path,
 			restoration_db_handler,
 			&self.dirs.ipc_path(),
-			Arc::new(Miner::with_spec(&spec))
+			// TODO [ToDr] don't use test miner here
+			// (actually don't require miner at all)
+			Arc::new(Miner::new_for_tests(&spec, None)),
+			Arc::new(AccountProvider::transient_provider()),
+			Box::new(ethcore_private_tx::NoopEncryptor),
+			Default::default(),
 		).map_err(|e| format!("Client service error: {:?}", e))?;
 
 		Ok(service)

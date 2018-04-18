@@ -315,8 +315,8 @@ impl CachedContract {
 
 			// send transaction
 			match self.client.transact_contract(*contract_address, transaction_data) {
-				Ok(is_current) => trace!(target: "secretstore_net", "{}: sent auto-migration start transaction ({})",
-					self.self_key_pair.public(), is_current),
+				Ok(_) => trace!(target: "secretstore_net", "{}: sent auto-migration start transaction",
+					self.self_key_pair.public()),
 				Err(error) => warn!(target: "secretstore_net", "{}: failed to submit auto-migration start transaction: {}",
 					self.self_key_pair.public(), error),
 			}
@@ -336,8 +336,8 @@ impl CachedContract {
 
 			// send transaction
 			match self.client.transact_contract(contract_address, transaction_data) {
-				Ok(is_current) => trace!(target: "secretstore_net", "{}: sent auto-migration confirm transaction ({})",
-					self.self_key_pair.public(), is_current),
+				Ok(_) => trace!(target: "secretstore_net", "{}: sent auto-migration confirm transaction",
+					self.self_key_pair.public()),
 				Err(error) => warn!(target: "secretstore_net", "{}: failed to submit auto-migration confirmation transaction: {}",
 					self.self_key_pair.public(), error),
 			}

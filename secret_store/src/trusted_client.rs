@@ -19,8 +19,8 @@ use bytes::Bytes;
 use ethereum_types::Address;
 use ethcore::client::{Client, BlockChainClient, ChainInfo, Nonce, BlockId, RegistryInfo};
 use ethcore::miner::{Miner, MinerService};
-use ethsync::SyncProvider;
-use transaction::{Transaction, SignedTransaction, Action, ImportResult};
+use sync::SyncProvider;
+use transaction::{Transaction, SignedTransaction, Action};
 use helpers::{get_confirmed_block_hash, REQUEST_CONFIRMATIONS_REQUIRED};
 use {Error, NodeKeyPair, ContractAddress};
 
@@ -68,14 +68,14 @@ impl TrustedClient {
 	}
 
 	/// Transact contract.
-	pub fn transact_contract(&self, contract: Address, tx_data: Bytes) -> Result<bool, Error> {
+	pub fn transact_contract(&self, contract: Address, tx_data: Bytes) -> Result<(), Error> {
 		let client = self.client.upgrade().ok_or_else(|| Error::Internal("cannot submit tx when client is offline".into()))?;
 		let miner = self.miner.upgrade().ok_or_else(|| Error::Internal("cannot submit tx when miner is offline".into()))?;
 		let engine = client.engine();
 		let transaction = Transaction {
 			nonce: client.latest_nonce(&self.self_key_pair.address()),
 			action: Action::Call(contract),
-			gas: miner.gas_floor_target(),
+			gas: miner.authoring_params().gas_range_target.0,
 			gas_price: miner.sensible_gas_price(),
 			value: Default::default(),
 			data: tx_data,
@@ -85,7 +85,6 @@ impl TrustedClient {
 		let signed = SignedTransaction::new(transaction.with_signature(signature, chain_id))?;
 		miner.import_own_transaction(&*client, signed.into())
 			.map_err(|e| Error::Internal(format!("failed to import tx: {}", e)))
-			.map(|r| r == ImportResult::Current)
 	}
 
 	/// Read contract address. If address source is registry, address only returned if current client state is

@@ -71,7 +71,6 @@ extern crate ethcore_transaction as transaction;
 extern crate ethereum_types;
 extern crate ethjson;
 extern crate ethkey;
-extern crate futures_cpupool;
 extern crate hardware_wallet;
 extern crate hashdb;
 extern crate itertools;
@@ -80,7 +79,6 @@ extern crate num_cpus;
 extern crate num;
 extern crate parity_machine;
 extern crate parking_lot;
-extern crate price_info;
 extern crate rand;
 extern crate rayon;
 extern crate rlp;
@@ -98,18 +96,10 @@ extern crate util_error;
 extern crate snappy;
 
 extern crate ethabi;
-#[macro_use]
-extern crate ethabi_derive;
-#[macro_use]
-extern crate ethabi_contract;
-
-#[macro_use]
-extern crate rlp_derive;
 extern crate rustc_hex;
 extern crate stats;
 extern crate stop_guard;
 extern crate using_queue;
-extern crate table;
 extern crate vm;
 extern crate wasm;
 extern crate memory_cache;
@@ -118,20 +108,30 @@ extern crate journaldb;
 extern crate tempdir;
 
 #[macro_use]
-extern crate macros;
+extern crate ethabi_derive;
+#[macro_use]
+extern crate ethabi_contract;
 #[macro_use]
 extern crate log;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
+extern crate macros;
+#[macro_use]
+extern crate rlp_derive;
+#[macro_use]
 extern crate trace_time;
+
 #[cfg_attr(test, macro_use)]
 extern crate evm;
 
+pub extern crate ethstore;
+
+#[macro_use]
+pub mod views;
+
 #[cfg(test)]
 extern crate kvdb_rocksdb;
-
-pub extern crate ethstore;
 
 pub mod account_provider;
 pub mod block;
@@ -142,6 +142,7 @@ pub mod engines;
 pub mod error;
 pub mod ethereum;
 pub mod executed;
+pub mod executive;
 pub mod header;
 pub mod machine;
 pub mod miner;
@@ -150,16 +151,16 @@ pub mod snapshot;
 pub mod spec;
 pub mod state;
 pub mod state_db;
+// Test helpers made public for usage outside ethcore
+pub mod test_helpers;
 pub mod trace;
 pub mod verification;
-pub mod views;
 
 mod cache_manager;
 mod blooms;
 mod pod_account;
 mod account_db;
 mod builtin;
-mod executive;
 mod externalities;
 mod blockchain;
 mod factory;
@@ -170,6 +171,8 @@ mod tests;
 #[cfg(test)]
 #[cfg(feature="json-tests")]
 mod json_tests;
+#[cfg(test)]
+mod test_helpers_internal;
 
 pub use types::*;
 pub use executive::contract_address;

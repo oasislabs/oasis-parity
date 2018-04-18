@@ -27,7 +27,7 @@ use error::{BlockError, Error};
 use header::{Header, BlockNumber};
 use engines::{self, Engine};
 use ethjson;
-use rlp::UntrustedRlp;
+use rlp::Rlp;
 use machine::EthereumMachine;
 
 /// Number of blocks in an ethash snapshot.
@@ -59,8 +59,8 @@ impl Seal {
 			).into());
 		}
 
-		let mix_hash = UntrustedRlp::new(seal[0].as_ref()).as_val::<H256>()?;
-		let nonce = UntrustedRlp::new(seal[1].as_ref()).as_val::<H64>()?;
+		let mix_hash = Rlp::new(seal[0].as_ref()).as_val::<H256>()?;
+		let nonce = Rlp::new(seal[1].as_ref()).as_val::<H64>()?;
 		let seal = Seal {
 			mix_hash,
 			nonce,
@@ -487,7 +487,7 @@ mod tests {
 	use std::sync::Arc;
 	use ethereum_types::{H64, H256, U256, Address};
 	use block::*;
-	use tests::helpers::get_temp_state_db;
+	use test_helpers::get_temp_state_db;
 	use error::{BlockError, Error};
 	use header::Header;
 	use spec::Spec;

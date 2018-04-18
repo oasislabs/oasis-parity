@@ -19,8 +19,8 @@ use std::sync::{atomic, mpsc, Arc};
 use parking_lot::Mutex;
 use hyper;
 
-use futures::{self, Future};
-use fetch::{self, Fetch, Url};
+use futures::{self, future, Future};
+use fetch::{self, Fetch, Url, Request, Abort};
 
 pub struct FetchControl {
 	sender: mpsc::Sender<()>,
@@ -34,8 +34,8 @@ impl FetchControl {
 	}
 
 	pub fn wait_for_requests(&self, len: usize) {
-		const MAX_TIMEOUT_MS: u64 = 5000;
-		const ATTEMPTS: u64 = 10;
+		const MAX_TIMEOUT: time::Duration = time::Duration::from_millis(5000);
+		const ATTEMPTS: u32 = 10;
 		let mut attempts_left = ATTEMPTS;
 		loop {
 			let current = self.fetch.requested.lock().len();
@@ -50,7 +50,7 @@ impl FetchControl {
 			} else {
 				attempts_left -= 1;
 				// Should we handle spurious timeouts better?
-				thread::park_timeout(time::Duration::from_millis(MAX_TIMEOUT_MS / ATTEMPTS));
+				thread::park_timeout(MAX_TIMEOUT / ATTEMPTS);
 			}
 		}
 	}
@@ -97,9 +97,9 @@ impl FakeFetch {
 impl Fetch for FakeFetch {
 	type Result = Box<Future<Item = fetch::Response, Error = fetch::Error> + Send>;
 
-	fn fetch(&self, url: &str, abort: fetch::Abort) -> Self::Result {
-		let u = Url::parse(url).unwrap();
-		self.requested.lock().push(url.into());
+	fn fetch(&self, request: Request, abort: fetch::Abort) -> Self::Result {
+		let u = request.url().clone();
+		self.requested.lock().push(u.as_str().into());
 		let manual = self.manual.clone();
 		let response = self.response.clone();
 
@@ -114,5 +114,21 @@ impl Fetch for FakeFetch {
 		});
 
 		Box::new(rx.map_err(|_| fetch::Error::Aborted))
+	}
+
+	fn get(&self, url: &str, abort: Abort) -> Self::Result {
+		let url: Url = match url.parse() {
+			Ok(u) => u,
+			Err(e) => return Box::new(future::err(e.into()))
+		};
+		self.fetch(Request::get(url), abort)
+	}
+
+	fn post(&self, url: &str, abort: Abort) -> Self::Result {
+		let url: Url = match url.parse() {
+			Ok(u) => u,
+			Err(e) => return Box::new(future::err(e.into()))
+		};
+		self.fetch(Request::post(url), abort)
 	}
 }

@@ -66,8 +66,6 @@ pub struct ServiceConfiguration {
 	pub service_contract_doc_store_address: Option<ContractAddress>,
 	/// Document key shadow retrieval service contract address.
 	pub service_contract_doc_sretr_address: Option<ContractAddress>,
-	/// Data directory path for secret store
-	pub data_path: String,
 	/// ACL check contract address. If None, everyone has access to all keys. Useful for tests only.
 	pub acl_check_contract_address: Option<ContractAddress>,
 	/// Cluster configuration.

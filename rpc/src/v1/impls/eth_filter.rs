@@ -19,7 +19,7 @@
 use std::sync::Arc;
 use std::collections::HashSet;
 
-use ethcore::miner::MinerService;
+use ethcore::miner::{self, MinerService};
 use ethcore::filter::Filter as EthcoreFilter;
 use ethcore::client::{BlockChainClient, BlockId};
 use ethereum_types::H256;
@@ -30,7 +30,7 @@ use jsonrpc_core::futures::{future, Future};
 use jsonrpc_core::futures::future::Either;
 use v1::traits::EthFilter;
 use v1::types::{BlockNumber, Index, Filter, FilterChanges, Log, H256 as RpcH256, U256 as RpcU256};
-use v1::helpers::{PollFilter, PollManager, limit_logs};
+use v1::helpers::{errors, PollFilter, PollManager, limit_logs};
 use v1::impls::eth::pending_logs;
 
 /// Something which provides data that can be filtered over.
@@ -42,7 +42,7 @@ pub trait Filterable {
 	fn block_hash(&self, id: BlockId) -> Option<RpcH256>;
 
 	/// pending transaction hashes at the given block.
-	fn pending_transactions_hashes(&self, block_number: u64) -> Vec<H256>;
+	fn pending_transactions_hashes(&self) -> Vec<H256>;
 
 	/// Get logs that match the given filter.
 	fn logs(&self, filter: EthcoreFilter) -> BoxFuture<Vec<Log>>;
@@ -55,16 +55,13 @@ pub trait Filterable {
 }
 
 /// Eth filter rpc implementation for a full node.
-pub struct EthFilterClient<C, M> where
-	C: BlockChainClient,
-	M: MinerService {
-
+pub struct EthFilterClient<C, M> {
 	client: Arc<C>,
 	miner: Arc<M>,
 	polls: Mutex<PollManager<PollFilter>>,
 }
 
-impl<C, M> EthFilterClient<C, M> where C: BlockChainClient, M: MinerService {
+impl<C, M> EthFilterClient<C, M> {
 	/// Creates new Eth filter client.
 	pub fn new(client: Arc<C>, miner: Arc<M>) -> Self {
 		EthFilterClient {
@@ -75,7 +72,10 @@ impl<C, M> EthFilterClient<C, M> where C: BlockChainClient, M: MinerService {
 	}
 }
 
-impl<C, M> Filterable for EthFilterClient<C, M> where C: BlockChainClient, M: MinerService {
+impl<C, M> Filterable for EthFilterClient<C, M> where
+	C: miner::BlockChainClient + BlockChainClient,
+	M: MinerService,
+{
 	fn best_block_number(&self) -> u64 {
 		self.client.chain_info().best_block_number
 	}
@@ -84,8 +84,11 @@ impl<C, M> Filterable for EthFilterClient<C, M> where C: BlockChainClient, M: Mi
 		self.client.block_hash(id).map(Into::into)
 	}
 
-	fn pending_transactions_hashes(&self, best: u64) -> Vec<H256> {
-		self.miner.pending_transactions_hashes(best)
+	fn pending_transactions_hashes(&self) -> Vec<H256> {
+		self.miner.ready_transactions(&*self.client)
+			.into_iter()
+			.map(|tx| tx.signed().hash())
+			.collect()
 	}
 
 	fn logs(&self, filter: EthcoreFilter) -> BoxFuture<Vec<Log>> {
@@ -118,8 +121,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
 
 	fn new_pending_transaction_filter(&self) -> Result<RpcU256> {
 		let mut polls = self.polls().lock();
-		let best_block = self.best_block_number();
-		let pending_transactions = self.pending_transactions_hashes(best_block);
+		let pending_transactions = self.pending_transactions_hashes();
 		let id = polls.create_poll(PollFilter::PendingTransaction(pending_transactions));
 		Ok(id.into())
 	}
@@ -127,7 +129,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
 	fn filter_changes(&self, index: Index) -> BoxFuture<FilterChanges> {
 		let mut polls = self.polls().lock();
 		Box::new(match polls.poll_mut(&index.value()) {
-			None => Either::A(future::ok(FilterChanges::Empty)),
+			None => Either::A(future::err(errors::filter_not_found())),
 			Some(filter) => match *filter {
 				PollFilter::Block(ref mut block_number) => {
 					// +1, cause we want to return hashes including current block hash.
@@ -143,8 +145,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
 				},
 				PollFilter::PendingTransaction(ref mut previous_hashes) => {
 					// get hashes of pending transactions
-					let best_block = self.best_block_number();
-					let current_hashes = self.pending_transactions_hashes(best_block);
+					let current_hashes = self.pending_transactions_hashes();
 
 					let new_hashes =
 					{
@@ -217,7 +218,8 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
 			match polls.poll(&index.value()) {
 				Some(&PollFilter::Logs(ref _block_number, ref _previous_log, ref filter)) => filter.clone(),
 				// just empty array
-				_ => return Box::new(future::ok(Vec::new())),
+				Some(_) => return Box::new(future::ok(Vec::new())),
+				None => return Box::new(future::err(errors::filter_not_found())),
 			}
 		};
 

@@ -23,7 +23,7 @@ use version::version_data;
 use crypto::{ecies, DEFAULT_MAC};
 use ethkey::{Brain, Generator};
 use ethstore::random_phrase;
-use ethsync::LightSyncProvider;
+use sync::LightSyncProvider;
 use ethcore::account_provider::AccountProvider;
 use ethcore_logger::RotatingLogger;
 use node_health::{NodeHealth, Health};
@@ -270,6 +270,21 @@ impl Parity for ParityClient {
 		Ok(
 			txq.ready_transactions(chain_info.best_block_number, chain_info.best_block_timestamp)
 				.into_iter()
+				.map(|tx| Transaction::from_pending(tx, chain_info.best_block_number, self.eip86_transition))
+				.collect::<Vec<_>>()
+		)
+	}
+
+	fn all_transactions(&self) -> Result<Vec<Transaction>> {
+		let txq = self.light_dispatch.transaction_queue.read();
+		let chain_info = self.light_dispatch.client.chain_info();
+
+		let current = txq.ready_transactions(chain_info.best_block_number, chain_info.best_block_timestamp);
+		let future = txq.future_transactions(chain_info.best_block_number, chain_info.best_block_timestamp);
+		Ok(
+			current
+				.into_iter()
+				.chain(future.into_iter())
 				.map(|tx| Transaction::from_pending(tx, chain_info.best_block_number, self.eip86_transition))
 				.collect::<Vec<_>>()
 		)

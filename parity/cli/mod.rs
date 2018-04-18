@@ -294,7 +294,7 @@ usage! {
 
 			ARG arg_chain: (String) = "foundation", or |c: &Config| c.parity.as_ref()?.chain.clone(),
 			"--chain=[CHAIN]",
-			"Specify the blockchain type. CHAIN may be either a JSON chain specification file or olympic, frontier, homestead, mainnet, morden, ropsten, classic, expanse, musicoin, ellaism, easthub, testnet, kovan or dev.",
+			"Specify the blockchain type. CHAIN may be either a JSON chain specification file or olympic, frontier, homestead, mainnet, morden, ropsten, classic, expanse, musicoin, ellaism, easthub, social, testnet, kovan or dev.",
 
 			ARG arg_keys_path: (String) = "$BASE/keys", or |c: &Config| c.parity.as_ref()?.keys_path.clone(),
 			"--keys-path=[PATH]",
@@ -349,6 +349,35 @@ usage! {
 			ARG arg_password: (Vec<String>) = Vec::new(), or |c: &Config| c.account.as_ref()?.password.clone(),
 			"--password=[FILE]...",
 			"Provide a file containing a password for unlocking an account. Leading and trailing whitespace is trimmed.",
+
+		["Private transactions options"]
+			FLAG flag_private_enabled: (bool) = false, or |c: &Config| c.private_tx.as_ref()?.enabled,
+			"--private-tx-enabled",
+			"Enable private transactions.",
+
+			ARG arg_private_signer: (Option<String>) = None, or |c: &Config| c.private_tx.as_ref()?.signer.clone(),
+			"--private-signer=[ACCOUNT]",
+			"Specify the account for signing public transaction created upon verified private transaction.",
+
+			ARG arg_private_validators: (Option<String>) = None, or |c: &Config| c.private_tx.as_ref()?.validators.as_ref().map(|vec| vec.join(",")),
+			"--private-validators=[ACCOUNTS]",
+			"Specify the accounts for validating private transactions. ACCOUNTS is a comma-delimited list of addresses.",
+
+			ARG arg_private_account: (Option<String>) = None, or |c: &Config| c.private_tx.as_ref()?.account.clone(),
+			"--private-account=[ACCOUNT]",
+			"Specify the account for signing requests to secret store.",
+
+			ARG arg_private_sstore_url: (Option<String>) = None, or |c: &Config| c.private_tx.as_ref()?.sstore_url.clone(),
+			"--private-sstore-url=[URL]",
+			"Specify secret store URL used for encrypting private transactions.",
+
+			ARG arg_private_sstore_threshold: (Option<u32>) = None, or |c: &Config| c.private_tx.as_ref()?.sstore_threshold.clone(),
+			"--private-sstore-threshold=[NUM]",
+			"Specify secret store threshold used for encrypting private transactions.",
+
+			ARG arg_private_passwords: (Option<String>) = None, or |c: &Config| c.private_tx.as_ref()?.passwords.clone(),
+			"--private-passwords=[FILE]...",
+			"Provide a file containing passwords for unlocking accounts (signer, private account, validators).",
 
 		["UI options"]
 			FLAG flag_force_ui: (bool) = false, or |c: &Config| c.ui.as_ref()?.force.clone(),
@@ -462,7 +491,7 @@ usage! {
 			"--jsonrpc-interface=[IP]",
 			"Specify the hostname portion of the JSONRPC API server, IP should be an interface's IP address, or all (all interfaces) or local.",
 
-			ARG arg_jsonrpc_apis: (String) = "web3,eth,pubsub,net,parity,parity_pubsub,traces,rpc,shh,shh_pubsub", or |c: &Config| c.rpc.as_ref()?.apis.as_ref().map(|vec| vec.join(",")),
+			ARG arg_jsonrpc_apis: (String) = "web3,eth,pubsub,net,parity,private,parity_pubsub,traces,rpc,shh,shh_pubsub", or |c: &Config| c.rpc.as_ref()?.apis.as_ref().map(|vec| vec.join(",")),
 			"--jsonrpc-apis=[APIS]",
 			"Specify the APIs available through the JSONRPC interface using a comma-delimited list of API names. Possible names are: all, safe, web3, net, eth, pubsub, personal, signer, parity, parity_pubsub, parity_accounts, parity_set, traces, rpc, secretstore, shh, shh_pubsub. You can also disable a specific API by putting '-' in the front, example: all,-personal. safe contains following apis: web3, net, eth, pubsub, parity, parity_pubsub, traces, rpc, shh, shh_pubsub",
 
@@ -495,7 +524,7 @@ usage! {
 			"--ws-interface=[IP]",
 			"Specify the hostname portion of the WebSockets server, IP should be an interface's IP address, or all (all interfaces) or local.",
 
-			ARG arg_ws_apis: (String) = "web3,eth,pubsub,net,parity,parity_pubsub,traces,rpc,shh,shh_pubsub", or |c: &Config| c.websockets.as_ref()?.apis.as_ref().map(|vec| vec.join(",")),
+			ARG arg_ws_apis: (String) = "web3,eth,pubsub,net,parity,parity_pubsub,private,traces,rpc,shh,shh_pubsub", or |c: &Config| c.websockets.as_ref()?.apis.as_ref().map(|vec| vec.join(",")),
 			"--ws-apis=[APIS]",
 			"Specify the APIs available through the WebSockets interface using a comma-delimited list of API names. Possible names are: all, safe, web3, net, eth, pubsub, personal, signer, parity, parity_pubsub, parity_accounts, parity_set, traces, rpc, secretstore, shh, shh_pubsub. You can also disable a specific API by putting '-' in the front, example: all,-personal. safe contains following apis: web3, net, eth, pubsub, parity, parity_pubsub, traces, rpc, shh, shh_pubsub",
 
@@ -520,7 +549,7 @@ usage! {
 			"--ipc-path=[PATH]",
 			"Specify custom path for JSON-RPC over IPC service.",
 
-			ARG arg_ipc_apis: (String) = "web3,eth,pubsub,net,parity,parity_pubsub,parity_accounts,traces,rpc,shh,shh_pubsub", or |c: &Config| c.ipc.as_ref()?.apis.as_ref().map(|vec| vec.join(",")),
+			ARG arg_ipc_apis: (String) = "web3,eth,pubsub,net,parity,parity_pubsub,parity_accounts,private,traces,rpc,shh,shh_pubsub", or |c: &Config| c.ipc.as_ref()?.apis.as_ref().map(|vec| vec.join(",")),
 			"--ipc-apis=[APIS]",
 			"Specify custom API set available via JSON-RPC over IPC using a comma-delimited list of API names. Possible names are: all, safe, web3, net, eth, pubsub, personal, signer, parity, parity_pubsub, parity_accounts, parity_set, traces, rpc, secretstore, shh, shh_pubsub. You can also disable a specific API by putting '-' in the front, example: all,-personal. safe contains: web3, net, eth, pubsub, parity, parity_pubsub, traces, rpc, shh, shh_pubsub",
 
@@ -696,13 +725,17 @@ usage! {
 			"--gas-cap=[GAS]",
 			"A cap on how large we will raise the gas limit per block due to transaction volume.",
 
-			ARG arg_tx_queue_mem_limit: (u32) = 2u32, or |c: &Config| c.mining.as_ref()?.tx_queue_mem_limit.clone(),
+			ARG arg_tx_queue_mem_limit: (u32) = 4u32, or |c: &Config| c.mining.as_ref()?.tx_queue_mem_limit.clone(),
 			"--tx-queue-mem-limit=[MB]",
 			"Maximum amount of memory that can be used by the transaction queue. Setting this parameter to 0 disables limiting.",
 
-			ARG arg_tx_queue_size: (usize) = 8192usize, or |c: &Config| c.mining.as_ref()?.tx_queue_size.clone(),
+			ARG arg_tx_queue_size: (usize) = 8_192usize, or |c: &Config| c.mining.as_ref()?.tx_queue_size.clone(),
 			"--tx-queue-size=[LIMIT]",
 			"Maximum amount of transactions in the queue (waiting to be included in next block).",
+
+			ARG arg_tx_queue_per_sender: (Option<usize>) = None, or |c: &Config| c.mining.as_ref()?.tx_queue_per_sender.clone(),
+			"--tx-queue-per-sender=[LIMIT]",
+			"Maximum number of transactions per sender in the queue. By default it's 1% of the entire queue, but not less than 16.",
 
 			ARG arg_tx_queue_gas: (String) = "off", or |c: &Config| c.mining.as_ref()?.tx_queue_gas.clone(),
 			"--tx-queue-gas=[LIMIT]",
@@ -710,15 +743,7 @@ usage! {
 
 			ARG arg_tx_queue_strategy: (String) = "gas_price", or |c: &Config| c.mining.as_ref()?.tx_queue_strategy.clone(),
 			"--tx-queue-strategy=[S]",
-			"Prioritization strategy used to order transactions in the queue. S may be: gas - Prioritize txs with low gas limit; gas_price - Prioritize txs with high gas price; gas_factor - Prioritize txs using gas price and gas limit ratio.",
-
-			ARG arg_tx_queue_ban_count: (u16) = 1u16, or |c: &Config| c.mining.as_ref()?.tx_queue_ban_count.clone(),
-			"--tx-queue-ban-count=[C]",
-			"Number of times maximal time for execution (--tx-time-limit) can be exceeded before banning sender/recipient/code.",
-
-			ARG arg_tx_queue_ban_time: (u16) = 180u16, or |c: &Config| c.mining.as_ref()?.tx_queue_ban_time.clone(),
-			"--tx-queue-ban-time=[SEC]",
-			"Banning time (in seconds) for offenders of specified execution time limit. Also number of offending actions have to reach the threshold within that time.",
+			"Prioritization strategy used to order transactions in the queue. S may be: gas_price - Prioritize txs with high gas price",
 
 			ARG arg_stratum_interface: (String) = "local", or |c: &Config| c.stratum.as_ref()?.interface.clone(),
 			"--stratum-interface=[IP]",
@@ -750,7 +775,7 @@ usage! {
 
 			ARG arg_tx_time_limit: (Option<u64>) = None, or |c: &Config| c.mining.as_ref()?.tx_time_limit.clone(),
 			"--tx-time-limit=[MS]",
-			"Maximal time for processing single transaction. If enabled senders/recipients/code of transactions offending the limit will be banned from being included in transaction queue for 180 seconds.",
+			"Maximal time for processing single transaction. If enabled senders of transactions offending the limit will get other transactions penalized.",
 
 			ARG arg_extra_data: (Option<String>) = None, or |c: &Config| c.mining.as_ref()?.extra_data.clone(),
 			"--extra-data=[STRING]",
@@ -1003,6 +1028,13 @@ usage! {
 			"--cache=[MB]",
 			"Equivalent to --cache-size MB.",
 
+			ARG arg_tx_queue_ban_count: (u16) = 1u16, or |c: &Config| c.mining.as_ref()?.tx_queue_ban_count.clone(),
+			"--tx-queue-ban-count=[C]",
+			"Not supported.",
+
+			ARG arg_tx_queue_ban_time: (u16) = 180u16, or |c: &Config| c.mining.as_ref()?.tx_queue_ban_time.clone(),
+			"--tx-queue-ban-time=[SEC]",
+			"Not supported.",
 	}
 }
 
@@ -1018,6 +1050,7 @@ struct Config {
 	ipc: Option<Ipc>,
 	dapps: Option<Dapps>,
 	secretstore: Option<SecretStore>,
+	private_tx: Option<PrivateTransactions>,
 	ipfs: Option<Ipfs>,
 	mining: Option<Mining>,
 	footprint: Option<Footprint>,
@@ -1059,6 +1092,18 @@ struct Account {
 	refresh_time: Option<u64>,
 	disable_hardware: Option<bool>,
 	fast_unlock: Option<bool>,
+}
+
+#[derive(Default, Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PrivateTransactions {
+	enabled: Option<bool>,
+	signer: Option<String>,
+	validators: Option<Vec<String>>,
+	account: Option<String>,
+	passwords: Option<String>,
+	sstore_url: Option<String>,
+	sstore_threshold: Option<u32>,
 }
 
 #[derive(Default, Debug, PartialEq, Deserialize)]
@@ -1195,6 +1240,7 @@ struct Mining {
 	gas_cap: Option<String>,
 	extra_data: Option<String>,
 	tx_queue_size: Option<usize>,
+	tx_queue_per_sender: Option<usize>,
 	tx_queue_mem_limit: Option<u32>,
 	tx_queue_gas: Option<String>,
 	tx_queue_strategy: Option<String>,
@@ -1506,6 +1552,15 @@ mod tests {
 			flag_no_hardware_wallets: false,
 			flag_fast_unlock: false,
 
+			// -- Private Transactions Options
+			flag_private_enabled: true,
+			arg_private_signer: Some("0xdeadbeefcafe0000000000000000000000000000".into()),
+			arg_private_validators: Some("0xdeadbeefcafe0000000000000000000000000000".into()),
+			arg_private_passwords: Some("~/.safe/password.file".into()),
+			arg_private_account: Some("0xdeadbeefcafe0000000000000000000000000000".into()),
+			arg_private_sstore_url: Some("http://localhost:8082".into()),
+			arg_private_sstore_threshold: Some(0),
+
 			flag_force_ui: false,
 			flag_no_ui: false,
 			arg_ui_port: 8180u16,
@@ -1609,7 +1664,8 @@ mod tests {
 			arg_gas_cap: "6283184".into(),
 			arg_extra_data: Some("Parity".into()),
 			arg_tx_queue_size: 8192usize,
-			arg_tx_queue_mem_limit: 2u32,
+			arg_tx_queue_per_sender: None,
+			arg_tx_queue_mem_limit: 4u32,
 			arg_tx_queue_gas: "off".into(),
 			arg_tx_queue_strategy: "gas_factor".into(),
 			arg_tx_queue_ban_count: 1u16,
@@ -1841,6 +1897,7 @@ mod tests {
 				http_port: Some(8082),
 				path: None,
 			}),
+			private_tx: None,
 			ipfs: Some(Ipfs {
 				enable: Some(false),
 				port: Some(5001),
@@ -1866,6 +1923,7 @@ mod tests {
 				gas_floor_target: None,
 				gas_cap: None,
 				tx_queue_size: Some(8192),
+				tx_queue_per_sender: None,
 				tx_queue_mem_limit: None,
 				tx_queue_gas: Some("off".into()),
 				tx_queue_strategy: None,
