@@ -18,6 +18,8 @@ use ethereum_types::{Address};
 use machine::Call;
 use super::SystemCall;
 
+// Contract API generated from forked simple_casper (to use latest vyper) at https://github.com/ascjones/casper/blob/80e08b13db1f096f2652e7e4330d4c65af8d13d2/casper/contracts/simple_casper.v.py
+// Compiled using https://vyper.online/ 
 use_contract!(simple_casper_contract, "SimpleCasper", "res/contracts/simple_casper.json");
 
 pub type Epoch = i128;
@@ -37,12 +39,78 @@ impl SimpleCasperContract {
         }
     }
 
-    pub fn current_epoch(&self, caller: &Call) -> Result<Epoch, Error> {
-        self.simple_casper_contract.functions()
-            .current_epoch()
-            .call(|data|;
-    }
+    // pub fn current_epoch(&self, caller: &Call) -> Result<Epoch, Error> {
+    //     self.simple_casper_contract.functions()
+    //         .current_epoch()
+    //         .call(|data|;
+    // }
 }
+
+#[cfg(test)]
+mod test {
+    // create contract constructor with bytecode + abi encoded constructor parms
+    // instantiate contract
+    // use client to read public properties!
+
+	// use client::PrepareOpenBlock;
+	// use ethereum_types::U256;
+	// use spec::Spec;
+	// use test_helpers::generate_dummy_client_with_spec_and_accounts;
+
+	// use super::{BlockRewardContract, RewardKind};
+
+	// #[test]
+	// fn block_reward_contract() {
+	// 	let client = generate_dummy_client_with_spec_and_accounts(
+	// 		Spec::new_test_round_block_reward_contract,
+	// 		None,
+	// 	);
+
+	// 	let machine = Spec::new_test_machine();
+
+	// 	// the spec has a block reward contract defined at the given address
+	// 	let block_reward_contract = BlockRewardContract::new(
+	// 		"0000000000000000000000000000000000000042".into(),
+	// 	);
+
+	// 	let mut call = |to, data| {
+	// 		let mut block = client.prepare_open_block(
+	// 			"0000000000000000000000000000000000000001".into(),
+	// 			(3141562.into(), 31415620.into()),
+	// 			vec![],
+	// 		);
+
+	// 		let result = machine.execute_as_system(
+	// 			block.block_mut(),
+	// 			to,
+	// 			U256::max_value(),
+	// 			Some(data),
+	// 		);
+
+	// 		result.map_err(|e| format!("{}", e))
+	// 	};
+
+	// 	// if no benefactors are given no rewards are attributed
+	// 	assert!(block_reward_contract.reward(&vec![], &mut call).unwrap().is_empty());
+
+	// 	// the contract rewards (1000 + kind) for each benefactor
+	// 	let benefactors = vec![
+	// 		("0000000000000000000000000000000000000033".into(), RewardKind::Author),
+	// 		("0000000000000000000000000000000000000034".into(), RewardKind::Uncle),
+	// 		("0000000000000000000000000000000000000035".into(), RewardKind::EmptyStep),
+	// 	];
+
+	// 	let rewards = block_reward_contract.reward(&benefactors, &mut call).unwrap();
+	// 	let expected = vec![
+	// 		("0000000000000000000000000000000000000033".into(), U256::from(1000)),
+	// 		("0000000000000000000000000000000000000034".into(), U256::from(1000 + 1)),
+	// 		("0000000000000000000000000000000000000035".into(), U256::from(1000 + 2)),
+	// 	];
+
+	// 	assert_eq!(expected, rewards);
+	// }
+}
+
 
 // QUERIES
 // get_current_epoch()
