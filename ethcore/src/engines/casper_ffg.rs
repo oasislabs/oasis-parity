@@ -18,8 +18,8 @@ use ethereum_types::{Address};
 use machine::Call;
 use super::SystemCall;
 
-// Contract API generated from forked simple_casper (to use latest vyper) at https://github.com/ascjones/casper/blob/80e08b13db1f096f2652e7e4330d4c65af8d13d2/casper/contracts/simple_casper.v.py
-// Compiled using https://vyper.online/ 
+// Contract ABI from https://gist.githubusercontent.com/vbuterin/868a6213b058fb4f1fdfcf64e54f0e91/raw/33fc177da3863ec320d1ebf95816ba52ffbffbe8/casper_abi 
+// via Alpha testnet instructions at https://hackmd.io/s/Hk6UiFU7z#
 use_contract!(simple_casper_contract, "SimpleCasper", "res/contracts/simple_casper.json");
 
 pub type Epoch = i128;
