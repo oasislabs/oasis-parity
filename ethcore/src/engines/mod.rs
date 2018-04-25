@@ -19,6 +19,7 @@
 mod authority_round;
 mod basic_authority;
 mod block_reward;
+mod casper_ffg;
 mod instant_seal;
 mod null_engine;
 mod signer;

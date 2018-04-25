@@ -893,6 +893,11 @@ impl Spec {
 	pub fn new_pow_test_spec() -> Self {
 		load_bundled!("ethereum/olympic")
 	}
+
+	/// Create a new spec for a hybrid Casper FFG chain
+	pub fn new_test_hybrid_casper() -> Self {
+		load_bundled!("casper_ffg")
+	}
 }
 
 #[cfg(test)]

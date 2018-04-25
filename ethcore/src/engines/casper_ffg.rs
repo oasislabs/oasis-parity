@@ -14,15 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use ethereum_types::{Address};
+use ethereum_types::{Address, U256};
 use machine::Call;
 use super::SystemCall;
 
-// Contract ABI from https://gist.githubusercontent.com/vbuterin/868a6213b058fb4f1fdfcf64e54f0e91/raw/33fc177da3863ec320d1ebf95816ba52ffbffbe8/casper_abi 
-// via Alpha testnet instructions at https://hackmd.io/s/Hk6UiFU7z#
+// Contract ABI generated from forked simple_casper (to use latest vyper) at https://github.com/ascjones/casper/blob/80e08b13db1f096f2652e7e4330d4c65af8d13d2/casper/contracts/simple_casper.v.py
+// Compiled using https://vyper.online/ 
 use_contract!(simple_casper_contract, "SimpleCasper", "res/contracts/simple_casper.json");
 
-pub type Epoch = i128;
+pub type Epoch = U256;
 pub type Error = String; // TODO: [aj] should we use EngineError or more specialised error?
 
 /// A client for the CasperFFG contract simple_casper.v.py
@@ -39,6 +39,29 @@ impl SimpleCasperContract {
         }
     }
 
+	// pub fn public_creation_transaction(&self, block: BlockId, source: &SignedTransaction, validators: &[Address], gas_price: U256) -> Result<(Transaction, Option<Address>), Error> {
+	// 	if let Action::Call(_) = source.action {
+	// 		bail!(ErrorKind::BadTransactonType);
+	// 	}
+	// 	let sender = source.sender();
+	// 	let state = self.client.state_at(block).ok_or(ErrorKind::StatePruned)?;
+	// 	let nonce = state.nonce(&sender)?;
+	// 	let executed = self.execute_private(source, TransactOptions::with_no_tracing(), block)?;
+	// 	let gas: u64 = 650000 +
+	// 		validators.len() as u64 * 30000 +
+	// 		executed.code.as_ref().map_or(0, |c| c.len() as u64) * 8000 +
+	// 		executed.state.len() as u64 * 8000;
+	// 	Ok((Transaction {
+	// 		nonce: nonce,
+	// 		action: Action::Create,
+	// 		gas: gas.into(),
+	// 		gas_price: gas_price,
+	// 		value: source.value,
+	// 		data: Self::generate_constructor(validators, executed.code.unwrap_or_default(), executed.state)
+	// 	},
+	// 	executed.contract_address))
+	// }
+
     // pub fn current_epoch(&self, caller: &Call) -> Result<Epoch, Error> {
     //     self.simple_casper_contract.functions()
     //         .current_epoch()
@@ -48,6 +71,18 @@ impl SimpleCasperContract {
 
 #[cfg(test)]
 mod test {
+	use super::{SimpleCasperContract};
+	use ethereum_types::U256;
+	use spec::Spec;
+	use test_helpers::generate_dummy_client_with_spec_and_accounts;
+
+	#[test]
+	fn simple_casper_contract() {
+		let _client = generate_dummy_client_with_spec_and_accounts(
+			Spec::new_test_hybrid_casper,
+			None,
+		);
+	}
     // create contract constructor with bytecode + abi encoded constructor parms
     // instantiate contract
     // use client to read public properties!
