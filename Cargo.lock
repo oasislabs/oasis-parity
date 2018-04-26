@@ -3411,6 +3411,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "trie-bench"
+version = "0.1.0"
+dependencies = [
+ "docopt 0.8.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ethcore-bytes 0.1.0",
+ "ethcore-logger 1.11.0",
+ "ethereum-types 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hashdb 0.1.1",
+ "keccak-hash 0.1.0",
+ "kvdb 0.1.0",
+ "kvdb-rocksdb 0.1.0",
+ "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "memorydb 0.1.1",
+ "patricia-trie 0.1.0",
+ "rand 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rlp 0.2.1",
+ "serde 1.0.37 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.37 (registry+https://github.com/rust-lang/crates.io-index)",
+ "triehash 0.1.0",
+]
+
+[[package]]
 name = "trie-standardmap"
 version = "0.1.0"
 dependencies = [

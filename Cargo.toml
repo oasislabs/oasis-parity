@@ -130,6 +130,7 @@ members = [
 	"ethkey/cli",
 	"ethstore/cli",
 	"evmbin",
+	"util/trie-bench",
 	"miner",
 	"transaction-pool",
 	"whisper",

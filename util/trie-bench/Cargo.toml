@@ -1,0 +1,30 @@
+[package]
+name = "trie-bench"
+description = "Trie benchmark"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[[bin]]
+name = "trie-bench"
+path = "src/main.rs"
+
+
+[dependencies]
+elastic-array = "0.10"
+log = "0.3"
+rand = "0.4"
+docopt = "0.8"
+serde = "1.0"
+serde_derive = "1.0"
+ethcore-bytes = { path = "../bytes" }
+ethereum-types = "0.3"
+keccak-hash = { path = "../hash" }
+hashdb = { path = "../hashdb" }
+rlp = { path = "../rlp" }
+triehash = { path = "../triehash" }
+memorydb = { path = "../memorydb" }
+ethcore-logger = { path = "../../logger" }
+patricia-trie = { path = "../patricia_trie" }
+kvdb = { path = "../kvdb" }
+kvdb-rocksdb = { path = "../kvdb-rocksdb" }
+

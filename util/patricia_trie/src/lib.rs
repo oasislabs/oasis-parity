@@ -39,6 +39,7 @@ use hashdb::{HashDB, DBValue};
 pub mod node;
 pub mod triedb;
 pub mod triedbmut;
+pub mod compact;
 pub mod sectriedb;
 pub mod sectriedbmut;
 pub mod recorder;
@@ -50,6 +51,7 @@ mod nibbleslice;
 mod nibblevec;
 
 pub use self::triedbmut::TrieDBMut;
+pub use self::compact::TrieDBMut as CompactTrieDBMut;
 pub use self::triedb::{TrieDB, TrieDBIterator};
 pub use self::sectriedbmut::SecTrieDBMut;
 pub use self::sectriedb::SecTrieDB;
