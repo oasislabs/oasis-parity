@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+
+
 use std::sync::Arc;
 
 use ethereum_types::{Address, U256};
@@ -21,6 +23,7 @@ use client::{BlockId, Client, CallContract};
 
 // Contract ABI generated from forked simple_casper (to use latest vyper) at https://github.com/ascjones/casper/blob/80e08b13db1f096f2652e7e4330d4c65af8d13d2/casper/contracts/simple_casper.v.py
 // Compiled using https://vyper.online/ 
+// Also, decimal10 types were replaced with int256, in order for this macro to work. Issue in ethabi: https://github.com/paritytech/ethabi/issues/93
 use_contract!(simple_casper_contract, "SimpleCasper", "res/contracts/simple_casper.json");
 
 pub type Epoch = U256;
@@ -63,15 +66,47 @@ impl SimpleCasperContract {
 	// 		data: Self::generate_constructor(validators, executed.code.unwrap_or_default(), executed.state)
 	// 	},
 	// 	executed.contract_address))
-	// }
+	// 
 
-    pub fn current_epoch(&self) -> Result<Epoch, Error> {
+	fn epoch_length(&self) -> Result<U256, Error> {
+		self.simple_casper_contract.functions()
+			.epoch_length()
+			.call(&|data| self.client.call_contract(BlockId::Latest, self.address, data))
+			.map_err(|e| e.to_string())
+	}
+
+	fn withdrawal_delay(&self) -> Result<U256, Error> {
+        self.simple_casper_contract.functions()
+            .withdrawal_delay()
+            .call(&|data| self.client.call_contract(BlockId::Latest, self.address, data))
+			.map_err(|e| e.to_string())
+	}
+
+	fn dynasty_logout_delay(&self) -> Result<U256, Error> {
+        self.simple_casper_contract.functions()
+            .dynasty_logout_delay()
+            .call(&|data| self.client.call_contract(BlockId::Latest, self.address, data))
+			.map_err(|e| e.to_string())
+	}
+
+	fn base_interest_factor(&self) -> Result<U256, Error> {
+        self.simple_casper_contract.functions()
+            .base_interest_factor()
+            .call(&|data| self.client.call_contract(BlockId::Latest, self.address, data))
+			.map_err(|e| e.to_string())
+	}
+
+	fn base_penalty_factor(&self) -> Result<U256, Error> {
+        self.simple_casper_contract.functions()
+            .base_penalty_factor()
+            .call(&|data| self.client.call_contract(BlockId::Latest, self.address, data))
+			.map_err(|e| e.to_string())
+	}
+
+    fn current_epoch(&self) -> Result<Epoch, Error> {
         self.simple_casper_contract.functions()
             .current_epoch()
-            .call(&|data| {
-				println!("Data: {:?}", data);
-				self.client.call_contract(BlockId::Latest, self.address, data)
-			})
+            .call(&|data| self.client.call_contract(BlockId::Latest, self.address, data))
 			.map_err(|e| e.to_string())
     }
 }
@@ -80,12 +115,15 @@ impl SimpleCasperContract {
 mod test {
 	use super::{SimpleCasperContract};
 	use ethabi::{encode, Token};
-	use ethereum_types::U256;
 	use client::{BlockId, CallContract};
 	use spec::Spec;
 	use rustc_hex::ToHex;
 	use test_helpers::generate_dummy_client_with_spec_and_accounts;
 
+	// "bd832b0cd3291c39ef67691858f35c71dfb3bf21" // todo: casper address const
+
+	// using this for now just to generate the constructor bytecode to be appended to the contract bytecode in casper_ffg.json
+	// just run with cargo test -- --nocapture
 	#[test]
 	fn generate_casper_constructor_bytecode() {
 		// casper constructor
@@ -98,17 +136,18 @@ mod test {
 		let epoch_length = Token::Int(1u32.into());
 		let withdrawal_delay = Token::Int(2u32.into());
 		let dynasty_logout_delay = Token::Int(3u32.into());
-		let owner = Token::Address("0000000000000000000000000000000000000010".into());
-		let sighasher = Token::Address("0000000000000000000000000000000000000020".into());
-		let purity_checker = Token::Address("0000000000000000000000000000000000000030".into());
-		let base_interest_factor = Token::Int(4u32.into()); // int instead of decimal
-		let base_penalty_factor = Token::Int(5u32.into()); // todo: convert decimal value to int equivalent
+		let owner = Token::Address("0000000000000000000000000000000000000004".into());
+		let sighasher = Token::Address("0000000000000000000000000000000000000005".into());
+		let purity_checker = Token::Address("0000000000000000000000000000000000000006".into());
+		let base_interest_factor = Token::Int(7u32.into()); // int instead of decimal
+		let base_penalty_factor = Token::Int(8u32.into()); // todo: convert decimal value to int equivalent
+		let min_deposit_size = Token::Uint(9u32.into());
 
-		let encoded = encode(&[epoch_length, withdrawal_delay, dynasty_logout_delay, owner, sighasher, purity_checker, base_interest_factor, base_penalty_factor]);
+		let encoded = encode(&[epoch_length, withdrawal_delay, dynasty_logout_delay, owner, sighasher, purity_checker, base_interest_factor, base_penalty_factor, min_deposit_size]);
 		println!("ENCODED: '{:?}'", encoded.to_hex());
 
 		// result: pasted after 36000f3 in casper_ffg.json
-		// 00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000005
+		// 000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000050000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000700000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000009
 	}
 
 	#[test]
@@ -123,75 +162,15 @@ mod test {
 			client.clone(),
 		);
 
-		// let's see what int128 looks like
-		let data = vec![147u8, 114u8, 180u8, 228u8];
-		println!("data: {:?}", data);
-		let x = client.call_contract(BlockId::Latest, casper.address, data);
-		println!("Call contract result {:?}", x);
+		// constructor args
+		assert_eq!(Ok(1.into()), casper.epoch_length());
+		assert_eq!(Ok(2.into()), casper.withdrawal_delay());
+		assert_eq!(Ok(3.into()), casper.dynasty_logout_delay());
+		assert_eq!(Ok(7.into()), casper.base_interest_factor());
+		assert_eq!(Ok(8.into()), casper.base_penalty_factor());
 
 		assert_eq!(Ok(0.into()), casper.current_epoch());
 	}
-    // create contract constructor with bytecode + abi encoded constructor parms
-    // instantiate contract
-    // use client to read public properties!
-
-	// use client::PrepareOpenBlock;
-	// use ethereum_types::U256;
-	// use spec::Spec;
-	// use test_helpers::generate_dummy_client_with_spec_and_accounts;
-
-	// use super::{BlockRewardContract, RewardKind};
-
-	// #[test]
-	// fn block_reward_contract() {
-	// 	let client = generate_dummy_client_with_spec_and_accounts(
-	// 		Spec::new_test_round_block_reward_contract,
-	// 		None,
-	// 	);
-
-	// 	let machine = Spec::new_test_machine();
-
-	// 	// the spec has a block reward contract defined at the given address
-	// 	let block_reward_contract = BlockRewardContract::new(
-	// 		"0000000000000000000000000000000000000042".into(),
-	// 	);
-
-	// 	let mut call = |to, data| {
-	// 		let mut block = client.prepare_open_block(
-	// 			"0000000000000000000000000000000000000001".into(),
-	// 			(3141562.into(), 31415620.into()),
-	// 			vec![],
-	// 		);
-
-	// 		let result = machine.execute_as_system(
-	// 			block.block_mut(),
-	// 			to,
-	// 			U256::max_value(),
-	// 			Some(data),
-	// 		);
-
-	// 		result.map_err(|e| format!("{}", e))
-	// 	};
-
-	// 	// if no benefactors are given no rewards are attributed
-	// 	assert!(block_reward_contract.reward(&vec![], &mut call).unwrap().is_empty());
-
-	// 	// the contract rewards (1000 + kind) for each benefactor
-	// 	let benefactors = vec![
-	// 		("0000000000000000000000000000000000000033".into(), RewardKind::Author),
-	// 		("0000000000000000000000000000000000000034".into(), RewardKind::Uncle),
-	// 		("0000000000000000000000000000000000000035".into(), RewardKind::EmptyStep),
-	// 	];
-
-	// 	let rewards = block_reward_contract.reward(&benefactors, &mut call).unwrap();
-	// 	let expected = vec![
-	// 		("0000000000000000000000000000000000000033".into(), U256::from(1000)),
-	// 		("0000000000000000000000000000000000000034".into(), U256::from(1000 + 1)),
-	// 		("0000000000000000000000000000000000000035".into(), U256::from(1000 + 2)),
-	// 	];
-
-	// 	assert_eq!(expected, rewards);
-	// }
 }
 
 
