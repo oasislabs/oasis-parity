@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-
-
 use std::sync::Arc;
 
 use ethereum_types::{Address, U256};
@@ -27,7 +25,9 @@ use client::{BlockId, Client, CallContract};
 use_contract!(simple_casper_contract, "SimpleCasper", "res/contracts/simple_casper.json");
 
 pub type Epoch = U256;
-pub type Error = String; // TODO: [aj] should we use EngineError or more specialised error?
+pub type I128 = U256; 		// Marker type for int128 in casper contract
+pub type Decimal = U256; 	// Marker type for decimal10 in casper contract
+pub type Error = String; 	// TODO: [aj] should we use EngineError or more specialised error?
 
 /// A client for the CasperFFG contract simple_casper.v.py
 pub struct SimpleCasperContract {
@@ -68,35 +68,35 @@ impl SimpleCasperContract {
 	// 	executed.contract_address))
 	// 
 
-	fn epoch_length(&self) -> Result<U256, Error> {
+	fn epoch_length(&self) -> Result<I128, Error> {
 		self.simple_casper_contract.functions()
 			.epoch_length()
 			.call(&|data| self.client.call_contract(BlockId::Latest, self.address, data))
 			.map_err(|e| e.to_string())
 	}
 
-	fn withdrawal_delay(&self) -> Result<U256, Error> {
+	fn withdrawal_delay(&self) -> Result<I128, Error> {
         self.simple_casper_contract.functions()
             .withdrawal_delay()
             .call(&|data| self.client.call_contract(BlockId::Latest, self.address, data))
 			.map_err(|e| e.to_string())
 	}
 
-	fn dynasty_logout_delay(&self) -> Result<U256, Error> {
+	fn dynasty_logout_delay(&self) -> Result<I128, Error> {
         self.simple_casper_contract.functions()
             .dynasty_logout_delay()
             .call(&|data| self.client.call_contract(BlockId::Latest, self.address, data))
 			.map_err(|e| e.to_string())
 	}
 
-	fn base_interest_factor(&self) -> Result<U256, Error> {
+	fn base_interest_factor(&self) -> Result<Decimal, Error> {
         self.simple_casper_contract.functions()
             .base_interest_factor()
             .call(&|data| self.client.call_contract(BlockId::Latest, self.address, data))
 			.map_err(|e| e.to_string())
 	}
 
-	fn base_penalty_factor(&self) -> Result<U256, Error> {
+	fn base_penalty_factor(&self) -> Result<Decimal, Error> {
         self.simple_casper_contract.functions()
             .base_penalty_factor()
             .call(&|data| self.client.call_contract(BlockId::Latest, self.address, data))
