@@ -14,9 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::sync::Arc;
+
 use ethereum_types::{Address, U256};
-use machine::Call;
-use super::SystemCall;
+use client::{BlockId, Client, CallContract};
 
 // Contract ABI generated from forked simple_casper (to use latest vyper) at https://github.com/ascjones/casper/blob/80e08b13db1f096f2652e7e4330d4c65af8d13d2/casper/contracts/simple_casper.v.py
 // Compiled using https://vyper.online/ 
@@ -29,13 +30,15 @@ pub type Error = String; // TODO: [aj] should we use EngineError or more special
 pub struct SimpleCasperContract {
     address: Address,
     simple_casper_contract: simple_casper_contract::SimpleCasper,
+	client: Arc<Client>,
 }
 
 impl SimpleCasperContract {
-    pub fn new(address: Address) -> SimpleCasperContract {
+    pub fn new(address: Address, client: Arc<Client>) -> SimpleCasperContract {
         SimpleCasperContract {
             address,
             simple_casper_contract: simple_casper_contract::SimpleCasper::default(),
+			client,
         }
     }
 
@@ -62,26 +65,71 @@ impl SimpleCasperContract {
 	// 	executed.contract_address))
 	// }
 
-    // pub fn current_epoch(&self, caller: &Call) -> Result<Epoch, Error> {
-    //     self.simple_casper_contract.functions()
-    //         .current_epoch()
-    //         .call(|data|;
-    // }
+    pub fn current_epoch(&self) -> Result<Epoch, Error> {
+        self.simple_casper_contract.functions()
+            .current_epoch()
+            .call(&|data| {
+				println!("Data: {:?}", data);
+				self.client.call_contract(BlockId::Latest, self.address, data)
+			})
+			.map_err(|e| e.to_string())
+    }
 }
 
 #[cfg(test)]
 mod test {
 	use super::{SimpleCasperContract};
+	use ethabi::{encode, Token};
 	use ethereum_types::U256;
+	use client::{BlockId, CallContract};
 	use spec::Spec;
+	use rustc_hex::ToHex;
 	use test_helpers::generate_dummy_client_with_spec_and_accounts;
 
 	#[test]
+	fn generate_casper_constructor_bytecode() {
+		// casper constructor
+		// 		def __init__(
+		//         epoch_length: int128, withdrawal_delay: int128, dynasty_logout_delay: int128,
+		//         owner: address, sighasher: address, purity_checker: address,
+		//         base_interest_factor: decimal, base_penalty_factor: decimal,
+		// min_deposit_size: wei_value):
+
+		let epoch_length = Token::Int(1u32.into());
+		let withdrawal_delay = Token::Int(2u32.into());
+		let dynasty_logout_delay = Token::Int(3u32.into());
+		let owner = Token::Address("0000000000000000000000000000000000000010".into());
+		let sighasher = Token::Address("0000000000000000000000000000000000000020".into());
+		let purity_checker = Token::Address("0000000000000000000000000000000000000030".into());
+		let base_interest_factor = Token::Int(4u32.into()); // int instead of decimal
+		let base_penalty_factor = Token::Int(5u32.into()); // todo: convert decimal value to int equivalent
+
+		let encoded = encode(&[epoch_length, withdrawal_delay, dynasty_logout_delay, owner, sighasher, purity_checker, base_interest_factor, base_penalty_factor]);
+		println!("ENCODED: '{:?}'", encoded.to_hex());
+
+		// result: pasted after 36000f3 in casper_ffg.json
+		// 00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000005
+	}
+
+	#[test]
 	fn simple_casper_contract() {
-		let _client = generate_dummy_client_with_spec_and_accounts(
+		let client = generate_dummy_client_with_spec_and_accounts(
 			Spec::new_test_hybrid_casper,
 			None,
 		);
+
+		let casper = SimpleCasperContract::new(
+			"bd832b0cd3291c39ef67691858f35c71dfb3bf21".into(),
+			client.clone(),
+		);
+
+		// let's see what int128 looks like
+		let data = vec![147u8, 114u8, 180u8, 228u8];
+		println!("data: {:?}", data);
+		let x = client.call_contract(BlockId::Latest, casper.address, data);
+		println!("Call contract result {:?}", x);
+
+		assert_eq!(Ok(0.into()), casper.current_epoch());
 	}
     // create contract constructor with bytecode + abi encoded constructor parms
     // instantiate contract
