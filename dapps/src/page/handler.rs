@@ -99,12 +99,7 @@ impl<T: DappFile> PageHandler<T> {
 		}
 
 		let initial_content = if file.content_type().to_owned() == mime::TEXT_HTML {
-			let content = &format!(
-				r#"<script src="/{}/inject.js"></script>"#,
-				apps::UTILS_PATH,
-			);
-
-			content.as_bytes().to_vec()
+			Vec::new()
 		} else {
 			Vec::new()
 		};
