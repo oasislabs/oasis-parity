@@ -1,9 +1,7 @@
 {
 	"name": "CasperFFG",
 	"engine": {
-		"null": {
-			"params": {}
-		}
+		"instantSeal": null
 	},
 	"params": {
 		"gasLimitBoundDivisor": "0x0400",

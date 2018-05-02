@@ -209,6 +209,8 @@ mod test {
 			client.import_sealed_block(b).unwrap();
 		}
 
+		println!("Current block {} before init", client.best_block_header().number());
+
 		let mut exec = |to, data| {
 			let from = Address::default(); // todo: null sender????
 			let transaction = Transaction {
@@ -225,12 +227,19 @@ mod test {
 
 		let res = casper.initialize_epoch(1.into(), &mut exec);
 		::client::EngineClient::update_sealing(&*client);
+
+		// check contract precondition
+		let current_block : U256 = client.best_block_header().number().into();
+		let computed_current_epoch = current_block / epoch_length;
+
+		println!("Current block {}, epoch length {}, computed current epoch {}", 
+			current_block, epoch_length, computed_current_epoch);
 		
 		assert_eq!(Ok(()), res);
 
 		assert_eq!(Ok(0.into()), casper.dynasty());
 		assert_eq!(Ok(1.into()), casper.next_validator_index());
-		assert_eq!(Ok(1.into()), casper.current_epoch());
+		assert_eq!(Ok(computed_current_epoch), casper.current_epoch());
 	}
 }
 
