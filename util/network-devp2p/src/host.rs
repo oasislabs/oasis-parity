@@ -105,10 +105,13 @@ pub struct NetworkContext<'s> {
 
 impl<'s> NetworkContext<'s> {
 	/// Create a new network IO access point. Takes references to all the data that can be updated within the IO handler.
-	fn new(io: &'s IoContext<NetworkIoMessage>,
+	fn new(
+		io: &'s IoContext<NetworkIoMessage>,
 		protocol: ProtocolId,
-		session: Option<SharedSession>, sessions: Arc<RwLock<Slab<SharedSession>>>,
-		reserved_peers: &'s HashSet<NodeId>) -> NetworkContext<'s> {
+		session: Option<SharedSession>,
+		sessions: Arc<RwLock<Slab<SharedSession>>>,
+		reserved_peers: &'s HashSet<NodeId>,
+	) -> NetworkContext<'s> {
 		let id = session.as_ref().map(|s| s.lock().token());
 		NetworkContext {
 			io: io,
@@ -403,6 +406,7 @@ impl Host {
 		}
 		for p in to_kill {
 			trace!(target: "network", "Disconnecting on shutdown: {}", p);
+			// FIXME: should this be true?
 			self.kill_connection(p, io, true);
 		}
 		io.unregister_handler()?;
@@ -552,10 +556,13 @@ impl Host {
 		// iterate over all nodes, reserved ones coming first.
 		// if we are pinned to only reserved nodes, ignore all others.
 		let nodes = reserved_nodes.iter().cloned().chain(if !pin {
-			self.nodes.read().nodes(allow_ips)
+			let nodes = self.nodes.read().nodes(allow_ips);
+			debug!(target: "network", "node_table_nodes: {}", nodes.len());
+			nodes
 		} else {
 			Vec::new()
 		});
+
 
 		let max_handshakes_per_round = max_handshakes / 2;
 		let mut started: usize = 0;
@@ -600,6 +607,7 @@ impl Host {
 				},
 				Err(e) => {
 					debug!(target: "network", "{}: Can't connect to address {:?}: {:?}", id, address, e);
+					self.nodes.write().note_failure(&id);
 					return;
 				}
 			}
@@ -692,6 +700,10 @@ impl Host {
 									}
 								}
 							}
+							if let Some(id) = s.id() {
+								debug!(target: "network", "noting failure for id: {}", id);
+								self.nodes.write().note_failure(&id);
+							}
 							kill = true;
 							break;
 						},
@@ -723,6 +735,13 @@ impl Host {
 								(!s.info.originated && ingress_count > max_ingress) {
 								// only proceed if the connecting peer is reserved.
 								if !self.reserved_nodes.read().contains(&id) {
+
+									debug!(target: "network",
+										   "originated: {}, ingress: {} ({}), egress {} ({})",
+										   s.info.originated,
+										   ingress_count, max_ingress,
+										   egress_count, min_peers);
+
 									s.disconnect(io, DisconnectReason::TooManyPeers);
 									kill = true;
 									break;
@@ -843,7 +862,10 @@ impl Host {
 		}
 		if let Some(id) = failure_id {
 			if remote {
-				self.nodes.write().note_failure(&id);
+				{
+					self.nodes.write().note_failure(&id);
+				}
+				debug!(target: "network", "failed node: {}, {:?}", id, self.nodes.write().get_mut(&id));
 			}
 		}
 		for p in to_disconnect {
@@ -1024,6 +1046,7 @@ impl IoHandler<NetworkIoMessage> for Host {
 				if let Some(session) = session {
 					session.lock().disconnect(io, DisconnectReason::DisconnectRequested);
 					if let Some(id) = session.lock().id() {
+						debug!(target: "network", "Marking as useless {} {}", peer, id);
 						self.nodes.write().mark_as_useless(id)
 					}
 				}

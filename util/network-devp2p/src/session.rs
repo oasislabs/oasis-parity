@@ -356,9 +356,9 @@ impl Session {
 			PACKET_DISCONNECT => {
 				let rlp = Rlp::new(&data);
 				let reason: u8 = rlp.val_at(0)?;
-				if self.had_hello {
-					debug!(target:"network", "Disconnected: {}: {:?}", self.token(), DisconnectReason::from_u8(reason));
-				}
+				// if self.had_hello {
+				debug!(target:"network", "Remote Disconnected: {}: {:?}", self.token(), DisconnectReason::from_u8(reason));
+				// }
 				Err(ErrorKind::Disconnect(DisconnectReason::from_u8(reason)).into())
 			}
 			PACKET_PING => {
@@ -515,4 +515,3 @@ impl Session {
 		Ok(())
 	}
 }
-

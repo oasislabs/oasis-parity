@@ -128,12 +128,13 @@ impl FromStr for NodeEndpoint {
 	}
 }
 
-#[derive(PartialEq, Eq, Copy, Clone)]
+#[derive(PartialEq, Debug, Eq, Copy, Clone)]
 pub enum PeerType {
 	_Required,
 	Optional
 }
 
+#[derive(Debug)]
 pub struct Node {
 	pub id: NodeId,
 	pub endpoint: NodeEndpoint,
@@ -255,6 +256,9 @@ impl NodeTable {
 		refs
 	}
 
+	// TODO: quarantine nodes
+	//       invalid nodes 24h + random 1h
+
 	/// Returns node ids sorted by failure percentage, for nodes with the same failure percentage the absolute number of
 	/// failures is considered.
 	pub fn nodes(&self, filter: IpFilter) -> Vec<NodeId> {
@@ -285,15 +289,22 @@ impl NodeTable {
 
 	/// Apply table changes coming from discovery
 	pub fn update(&mut self, mut update: TableUpdates, reserved: &HashSet<NodeId>) {
+		let added = update.added.len();
+		let removed = update.removed.len();
+
 		for (_, node) in update.added.drain() {
 			let entry = self.nodes.entry(node.id.clone()).or_insert_with(|| Node::new(node.id.clone(), node.endpoint.clone()));
 			entry.endpoint = node.endpoint;
 		}
+
 		for r in update.removed {
 			if !reserved.contains(&r) {
 				self.nodes.remove(&r);
 			}
 		}
+
+		debug!(target: "network", "Added {}, and removed {} peers from node table. Node table size: {}",
+			   added, removed, self.nodes.len());
 	}
 
 	/// Increase failure counte for a node
@@ -306,11 +317,12 @@ impl NodeTable {
 	/// Mark as useless, no further attempts to connect until next call to `clear_useless`.
 	pub fn mark_as_useless(&mut self, id: &NodeId) {
 		self.useless_nodes.insert(id.clone());
+		debug!(target: "network", "Useless peer count: {}", self.useless_nodes.len());
 	}
 
 	/// Atempt to connect to useless nodes again.
 	pub fn clear_useless(&mut self) {
-		self.useless_nodes.clear();
+		// self.useless_nodes.clear();
 	}
 
 	/// Save the nodes.json file.
