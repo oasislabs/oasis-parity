@@ -4,4 +4,5 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
+ansi_term = "0.10"
 log = "0.3"

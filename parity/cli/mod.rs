@@ -820,7 +820,7 @@ usage! {
 			"--fast-and-loose",
 			"Disables DB WAL, which gives a significant speed up but means an unclean exit is unrecoverable.",
 
-			FLAG flag_scale_verifiers: (bool) = true, or |c: &Config| c.footprint.as_ref()?.scale_verifiers.clone(),
+			FLAG flag_scale_verifiers: (bool) = false, or |c: &Config| c.footprint.as_ref()?.scale_verifiers.clone(),
 			"--scale-verifiers",
 			"Automatically scale amount of verifier threads based on workload. Not guaranteed to be faster.",
 
