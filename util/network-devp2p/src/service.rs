@@ -54,7 +54,7 @@ impl NetworkService {
 	/// Starts IO event loop
 	pub fn new(config: NetworkConfiguration, filter: Option<Arc<ConnectionFilter>>) -> Result<NetworkService, Error> {
 		let host_handler = Arc::new(HostHandler { public_url: RwLock::new(None) });
-		let io_service = IoService::<NetworkIoMessage>::start()?;
+		let io_service = IoService::<NetworkIoMessage>::start("net", None)?;
 
 		Ok(NetworkService {
 			io_service: io_service,

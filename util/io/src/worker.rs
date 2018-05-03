@@ -59,13 +59,16 @@ pub struct Worker {
 
 impl Worker {
 	/// Creates a new worker instance.
-	pub fn new<Message>(index: usize,
-						stealer: chase_lev::Stealer<Work<Message>>,
-						channel: IoChannel<Message>,
-						wait: Arc<SCondvar>,
-						wait_mutex: Arc<SMutex<()>>,
-					   ) -> Worker
-					where Message: Send + Sync + 'static {
+	pub fn new<Message>(
+		name: &str,
+		index: usize,
+		stealer: chase_lev::Stealer<Work<Message>>,
+		channel: IoChannel<Message>,
+		wait: Arc<SCondvar>,
+		wait_mutex: Arc<SMutex<()>>,
+	) -> Worker where
+		Message: Send + Sync + 'static
+	{
 		let deleting = Arc::new(AtomicBool::new(false));
 		let mut worker = Worker {
 			thread: None,
@@ -73,12 +76,15 @@ impl Worker {
 			deleting: deleting.clone(),
 			wait_mutex: wait_mutex.clone(),
 		};
-		worker.thread = Some(thread::Builder::new().stack_size(STACK_SIZE).name(format!("IO Worker #{}", index)).spawn(
-			move || {
+		worker.thread = Some(thread::Builder::new()
+			.stack_size(STACK_SIZE)
+			.name(format!("{:>6} IO #{}", name, index))
+			.spawn(move || {
 				LOCAL_STACK_SIZE.with(|val| val.set(STACK_SIZE));
 				Worker::work_loop(stealer, channel.clone(), wait, wait_mutex.clone(), deleting)
 			})
-			.expect("Error creating worker thread"));
+			.expect("Error creating worker thread")
+		);
 		worker
 	}
 

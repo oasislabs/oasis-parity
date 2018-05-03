@@ -494,6 +494,7 @@ impl Session {
 
 	/// Disconnect this session
 	pub fn disconnect<Message>(&mut self, io: &IoContext<Message>, reason: DisconnectReason) -> Error where Message: Send + Sync + Clone {
+		trace!(target: "network", "Disconnecting({}): {:?}", reason, self.id());
 		if let State::Session(_) = self.state {
 			let mut rlp = RlpStream::new();
 			rlp.begin_list(1);

@@ -1492,7 +1492,7 @@ impl ChainSync {
 	}
 
 	/// Generic packet sender
-	fn send_packet(&mut self, sync: &mut SyncIo, peer_id: PeerId, packet_id: PacketId, packet: Bytes) {
+	fn send_packet(&self, sync: &mut SyncIo, peer_id: PeerId, packet_id: PacketId, packet: Bytes) {
 		if let Err(e) = sync.send(peer_id, packet_id, packet) {
 			debug!(target:"sync", "Error sending packet: {:?}", e);
 			sync.disconnect_peer(peer_id);
@@ -1934,12 +1934,12 @@ impl ChainSync {
 	}
 
 	/// returns peer ids that have different blocks than our chain
-	fn get_lagging_peers(&mut self, chain_info: &BlockChainInfo) -> Vec<PeerId> {
+	fn get_lagging_peers(&self, chain_info: &BlockChainInfo) -> Vec<PeerId> {
 		let latest_hash = chain_info.best_block_hash;
 		self
 			.peers
-			.iter_mut()
-			.filter_map(|(&id, ref mut peer_info)| {
+			.iter()
+			.filter_map(|(&id, ref peer_info)| {
 				trace!(target: "sync", "Checking peer our best {} their best {}", latest_hash, peer_info.latest_hash);
 				if peer_info.latest_hash != latest_hash {
 					Some(id)
@@ -2185,7 +2185,7 @@ impl ChainSync {
 	}
 
 	/// Distribute valid proposed blocks to subset of current peers.
-	fn propagate_proposed_blocks(&mut self, io: &mut SyncIo, proposed: &[Bytes]) {
+	fn propagate_proposed_blocks(&self, io: &mut SyncIo, proposed: &[Bytes]) {
 		let peers = self.get_consensus_peers();
 		trace!(target: "sync", "Sending proposed blocks to {:?}", peers);
 		for block in proposed {
@@ -2238,7 +2238,7 @@ impl ChainSync {
 	}
 
 	/// Broadcast consensus message to peers.
-	pub fn propagate_consensus_packet(&mut self, io: &mut SyncIo, packet: Bytes) {
+	pub fn propagate_consensus_packet(&self, io: &mut SyncIo, packet: Bytes) {
 		let lucky_peers = ChainSync::select_random_peers(&self.get_consensus_peers());
 		trace!(target: "sync", "Sending consensus packet to {:?}", lucky_peers);
 		for peer_id in lucky_peers {
@@ -2262,7 +2262,7 @@ impl ChainSync {
 	}
 
 	/// Broadcast private transaction message to peers.
-	pub fn propagate_private_transaction(&mut self, io: &mut SyncIo, packet: Bytes) {
+	pub fn propagate_private_transaction(&self, io: &mut SyncIo, packet: Bytes) {
 		let lucky_peers = ChainSync::select_random_peers(&self.get_private_transaction_peers());
 		trace!(target: "sync", "Sending private transaction packet to {:?}", lucky_peers);
 		for peer_id in lucky_peers {
@@ -2285,7 +2285,7 @@ impl ChainSync {
 	}
 
 	/// Broadcast signed private transaction message to peers.
-	pub fn propagate_signed_private_transaction(&mut self, io: &mut SyncIo, packet: Bytes) {
+	pub fn propagate_signed_private_transaction(&self, io: &mut SyncIo, packet: Bytes) {
 		let lucky_peers = ChainSync::select_random_peers(&self.get_private_transaction_peers());
 		trace!(target: "sync", "Sending signed private transaction packet to {:?}", lucky_peers);
 		for peer_id in lucky_peers {

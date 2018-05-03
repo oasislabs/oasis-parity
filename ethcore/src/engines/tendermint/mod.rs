@@ -168,7 +168,7 @@ impl Tendermint {
 		let engine = Arc::new(
 			Tendermint {
 				client: RwLock::new(None),
-				step_service: IoService::<Step>::start()?,
+				step_service: IoService::<Step>::start("tendermint", 1)?,
 				height: AtomicUsize::new(1),
 				view: AtomicUsize::new(0),
 				step: RwLock::new(Step::Propose),

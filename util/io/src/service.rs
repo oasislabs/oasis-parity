@@ -190,15 +190,18 @@ pub struct IoManager<Message> where Message: Send + Sync {
 impl<Message> IoManager<Message> where Message: Send + Sync + 'static {
 	/// Creates a new instance and registers it with the event loop.
 	pub fn start(
+		name: String,
 		event_loop: &mut EventLoop<IoManager<Message>>,
-		handlers: Arc<RwLock<Slab<Arc<IoHandler<Message>>, HandlerId>>>
+		handlers: Arc<RwLock<Slab<Arc<IoHandler<Message>>, HandlerId>>>,
+		worker_threads: Option<usize>,
 	) -> Result<(), IoError> {
 		let (worker, stealer) = chase_lev::deque();
-		let num_workers = 4;
+		let num_workers = worker_threads.unwrap_or(4);
 		let work_ready_mutex =  Arc::new(SMutex::new(()));
 		let work_ready = Arc::new(SCondvar::new());
 		let workers = (0..num_workers).map(|i|
 			Worker::new(
+				&name,
 				i,
 				stealer.clone(),
 				IoChannel::new(event_loop.channel(), Arc::downgrade(&handlers)),
@@ -435,7 +438,12 @@ pub struct IoService<Message> where Message: Send + Sync + 'static {
 
 impl<Message> IoService<Message> where Message: Send + Sync + 'static {
 	/// Starts IO event loop
-	pub fn start() -> Result<IoService<Message>, IoError> {
+	pub fn start<N, T>(name: N, worker_threads: T) -> Result<IoService<Message>, IoError> where
+		N: Into<String>,
+		T: Into<Option<usize>>,
+	{
+		let name = name.into();
+		let worker_threads = worker_threads.into();
 		let mut config = EventLoopBuilder::new();
 		config.messages_per_tick(1024);
 		let mut event_loop = config.build().expect("Error creating event loop");
@@ -443,7 +451,7 @@ impl<Message> IoService<Message> where Message: Send + Sync + 'static {
 		let handlers = Arc::new(RwLock::new(Slab::new(MAX_HANDLERS)));
 		let h = handlers.clone();
 		let thread = thread::spawn(move || {
-			IoManager::<Message>::start(&mut event_loop, h).expect("Error starting IO service");
+			IoManager::<Message>::start(name, &mut event_loop, h, worker_threads).expect("Error starting IO service");
 		});
 		Ok(IoService {
 			thread: Mutex::new(Some(thread)),

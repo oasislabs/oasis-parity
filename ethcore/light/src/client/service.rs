@@ -67,7 +67,7 @@ impl<T: ChainDataFetcher> Service<T> {
 	/// Start the service: initialize I/O workers and client itself.
 	pub fn start(config: ClientConfig, spec: &Spec, fetcher: T, db: Arc<KeyValueDB>, cache: Arc<Mutex<Cache>>) -> Result<Self, Error> {
 
-		let io_service = IoService::<ClientIoMessage>::start().map_err(Error::Io)?;
+		let io_service = IoService::<ClientIoMessage>::start("light", None).map_err(Error::Io)?;
 		let client = Arc::new(Client::new(config,
 			db,
 			db::COL_LIGHT_CHAIN,

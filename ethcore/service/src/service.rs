@@ -88,7 +88,7 @@ impl ClientService {
 		private_tx_conf: ethcore_private_tx::ProviderConfig,
 		) -> Result<ClientService, Error>
 	{
-		let io_service = IoService::<ClientIoMessage>::start()?;
+		let io_service = IoService::<ClientIoMessage>::start("client", 2)?;
 
 		info!("Configured for {} using {} engine", Colour::White.bold().paint(spec.name.clone()), Colour::Yellow.bold().paint(spec.engine.name()));
 
