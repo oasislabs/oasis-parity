@@ -111,9 +111,9 @@ mod packet {
 mod timeout {
 	use std::time::Duration;
 
-	pub const HANDSHAKE: Duration =  Duration::from_millis(2500);
-	pub const ACKNOWLEDGE_UPDATE: Duration = Duration::from_millis(5000);
-	pub const BASE: u64 = 1500; // base timeout for packet.
+	pub const HANDSHAKE: Duration =  Duration::from_millis(6_000);
+	pub const ACKNOWLEDGE_UPDATE: Duration = Duration::from_millis(1_000);
+	pub const BASE: u64 = 3500; // base timeout for packet.
 
 	// timeouts per request within packet.
 	pub const HEADERS: u64 = 250; // per header?
