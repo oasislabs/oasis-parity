@@ -590,6 +590,7 @@ impl LightProtocol {
 			packet::SEND_TRANSACTIONS => self.relay_transactions(peer, io, rlp),
 
 			other => {
+				debug!(target: "pip", "UnrecognizedPacket: {}", other);
 				Err(Error::UnrecognizedPacket(other))
 			}
 		};

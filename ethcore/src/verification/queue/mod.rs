@@ -255,7 +255,7 @@ impl<K: Kind> VerificationQueue<K> {
 			let state = state.clone();
 
 			let handle = thread::Builder::new()
-				.name(format!("Verifier #{}", i))
+				.name(format!(" Verifier #{}", i))
 				.spawn(move || {
 					VerificationQueue::verify(
 						verification,

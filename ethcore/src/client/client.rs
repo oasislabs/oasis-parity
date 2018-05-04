@@ -277,7 +277,6 @@ impl Importer {
 
 	/// This is triggered by a message coming from a block queue when the block is ready for insertion
 	pub fn import_verified_blocks(&self, client: &Client) -> usize {
-
 		// Shortcut out if we know we're incapable of syncing the chain.
 		if !client.enabled.load(AtomicOrdering::Relaxed) {
 			return 0;
