@@ -123,8 +123,9 @@ impl SyncSupplier {
 				None => return Ok(Some((BLOCK_HEADERS_PACKET, RlpStream::new_list(0)))) //no such header, return nothing
 			}
 		} else {
-			trace!(target: "sync", "{} -> GetBlockHeaders (number: {}, max: {}, skip: {}, reverse:{})", peer_id, r.val_at::<BlockNumber>(0)?, max_headers, skip, reverse);
-			r.val_at(0)?
+			let number = r.val_at::<BlockNumber>(0)?;
+			trace!(target: "sync", "{} -> GetBlockHeaders (number: {}, max: {}, skip: {}, reverse:{})", peer_id, number, max_headers, skip, reverse);
+			number
 		};
 
 		let mut number = if reverse {
@@ -138,7 +139,7 @@ impl SyncSupplier {
 		let inc = (skip + 1) as BlockNumber;
 		let overlay = io.chain_overlay().read();
 
-		while number <= last && count < max_count {
+		while (number <= last || overlay.contains_key(&number)) && count < max_count {
 			if let Some(hdr) = overlay.get(&number) {
 				trace!(target: "sync", "{}: Returning cached fork header", peer_id);
 				data.extend_from_slice(hdr);
@@ -155,8 +156,7 @@ impl SyncSupplier {
 					break;
 				}
 				number -= inc;
-			}
-			else {
+			} else {
 				number += inc;
 			}
 		}
