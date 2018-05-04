@@ -51,6 +51,7 @@ use super::{
 	PAR_PROTOCOL_VERSION_1,
 	PAR_PROTOCOL_VERSION_2,
 	PAR_PROTOCOL_VERSION_3,
+	PAR_PROTOCOL_VERSION_4,
 
 	BLOCK_BODIES_PACKET,
 	BLOCK_HEADERS_PACKET,
@@ -648,8 +649,24 @@ impl SyncHandler {
 			trace!(target: "sync", "Peer {} network id mismatch (ours: {}, theirs: {})", peer_id, sync.network_id, peer.network_id);
 			return Ok(());
 		}
-		if (warp_protocol && peer.protocol_version != PAR_PROTOCOL_VERSION_1 && peer.protocol_version != PAR_PROTOCOL_VERSION_2 && peer.protocol_version != PAR_PROTOCOL_VERSION_3)
-			|| (!warp_protocol && peer.protocol_version != ETH_PROTOCOL_VERSION_63 && peer.protocol_version != ETH_PROTOCOL_VERSION_62) {
+
+		let has_supported_protocol_version = if warp_protocol {
+			match peer.protocol_version {
+				PAR_PROTOCOL_VERSION_1 |
+				PAR_PROTOCOL_VERSION_2 |
+				PAR_PROTOCOL_VERSION_3 |
+				PAR_PROTOCOL_VERSION_4 => true,
+				_ => false,
+			}
+		} else {
+			match peer.protocol_version {
+				ETH_PROTOCOL_VERSION_62 |
+				ETH_PROTOCOL_VERSION_63 => true,
+				_ => false,
+			}
+		};
+
+		if !has_supported_protocol_version {
 			io.disable_peer(peer_id, DisconnectReason::IncompatibleProtocol);
 			trace!(target: "sync", "Peer {} unsupported eth protocol ({})", peer_id, peer.protocol_version);
 			return Ok(());
