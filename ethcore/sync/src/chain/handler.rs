@@ -23,7 +23,7 @@ use ethcore::header::{BlockNumber, Header as BlockHeader};
 use ethcore::snapshot::{ManifestData, RestorationStatus};
 use ethereum_types::{H256, U256};
 use hash::keccak;
-use network::{PeerId};
+use network::{DisconnectReason, PeerId};
 use rlp::{Rlp};
 use snapshot::{ChunkType};
 use std::cmp;
@@ -156,7 +156,7 @@ impl SyncHandler {
 		let last_imported_number = sync.new_blocks.last_imported_block_number();
 		if last_imported_number > header.number() && last_imported_number - header.number() > MAX_NEW_BLOCK_AGE {
 			trace!(target: "sync", "Ignored ancient new block {:?}", h);
-			io.disable_peer(peer_id);
+			io.disable_peer(peer_id, DisconnectReason::UselessPeer);
 			return Ok(());
 		}
 		match io.chain().import_block(block_rlp.as_raw().to_vec()) {
@@ -178,7 +178,7 @@ impl SyncHandler {
 			},
 			Err(e) => {
 				debug!(target: "sync", "Bad new block {:?} : {:?}", h, e);
-				io.disable_peer(peer_id);
+				io.disable_peer(peer_id, DisconnectReason::BadProtocol);
 			}
 		};
 		if unknown {
@@ -232,7 +232,7 @@ impl SyncHandler {
 			}
 			if last_imported_number > number && last_imported_number - number > MAX_NEW_BLOCK_AGE {
 				trace!(target: "sync", "Ignored ancient new block hash {:?}", hash);
-				io.disable_peer(peer_id);
+				io.disable_peer(peer_id, DisconnectReason::UselessPeer);
 				continue;
 			}
 			match io.chain().block_status(BlockId::Hash(hash.clone())) {
@@ -254,7 +254,7 @@ impl SyncHandler {
 				},
 				BlockStatus::Bad => {
 					debug!(target: "sync", "Bad new block hash {:?}", hash);
-					io.disable_peer(peer_id);
+					io.disable_peer(peer_id, DisconnectReason::BadProtocol);
 					return Ok(());
 				}
 			}
@@ -305,7 +305,7 @@ impl SyncHandler {
 
 			match result {
 				Err(DownloaderImportError::Invalid) => {
-					io.disable_peer(peer_id);
+					io.disable_peer(peer_id, DisconnectReason::BadProtocol);
 					sync.deactivate_peer(io, peer_id);
 					sync.continue_sync(io);
 					return Ok(());
@@ -340,14 +340,14 @@ impl SyncHandler {
 
 			if item_count == 0 || item_count != 1 {
 				trace!(target: "sync", "{}: Chain is too short to confirm the block", peer_id);
-				io.disable_peer(peer_id);
+				io.disable_peer(peer_id, DisconnectReason::UselessPeer);
 				return Ok(());
 			}
 
 			let header = r.at(0)?.as_raw();
 			if keccak(&header) != fork_hash {
 				trace!(target: "sync", "{}: Fork mismatch", peer_id);
-				io.disable_peer(peer_id);
+				io.disable_peer(peer_id, DisconnectReason::UselessPeer);
 				return Ok(());
 			}
 
@@ -416,7 +416,7 @@ impl SyncHandler {
 				sync.deactivate_peer(io, peer_id);
 			},
 			Err(DownloaderImportError::Invalid) => {
-				io.disable_peer(peer_id);
+				io.disable_peer(peer_id, DisconnectReason::BadProtocol);
 				sync.deactivate_peer(io, peer_id);
 				sync.continue_sync(io);
 				return Ok(());
@@ -476,7 +476,7 @@ impl SyncHandler {
 
 			match result {
 				Err(DownloaderImportError::Invalid) => {
-					io.disable_peer(peer_id);
+					io.disable_peer(peer_id, DisconnectReason::BadProtocol);
 					sync.deactivate_peer(io, peer_id);
 					sync.continue_sync(io);
 					return Ok(());
@@ -511,7 +511,7 @@ impl SyncHandler {
 		let manifest = match ManifestData::from_rlp(manifest_rlp.as_raw()) {
 			Err(e) => {
 				trace!(target: "sync", "{}: Ignored bad manifest: {:?}", peer_id, e);
-				io.disable_peer(peer_id);
+				io.disable_peer(peer_id, DisconnectReason::BadProtocol);
 				sync.continue_sync(io);
 				return Ok(());
 			}
@@ -523,7 +523,7 @@ impl SyncHandler {
 
 		if !is_supported_version {
 			trace!(target: "sync", "{}: Snapshot manifest version not supported: {}", peer_id, manifest.version);
-			io.disable_peer(peer_id);
+			io.disable_peer(peer_id, DisconnectReason::IncompatibleProtocol);
 			sync.continue_sync(io);
 			return Ok(());
 		}
@@ -639,18 +639,18 @@ impl SyncHandler {
 		}
 		let chain_info = io.chain().chain_info();
 		if peer.genesis != chain_info.genesis_hash {
-			io.disable_peer(peer_id);
+			io.disable_peer(peer_id, DisconnectReason::UselessPeer);
 			trace!(target: "sync", "Peer {} genesis hash mismatch (ours: {}, theirs: {})", peer_id, chain_info.genesis_hash, peer.genesis);
 			return Ok(());
 		}
 		if peer.network_id != sync.network_id {
-			io.disable_peer(peer_id);
+			io.disable_peer(peer_id, DisconnectReason::UselessPeer);
 			trace!(target: "sync", "Peer {} network id mismatch (ours: {}, theirs: {})", peer_id, sync.network_id, peer.network_id);
 			return Ok(());
 		}
 		if (warp_protocol && peer.protocol_version != PAR_PROTOCOL_VERSION_1 && peer.protocol_version != PAR_PROTOCOL_VERSION_2 && peer.protocol_version != PAR_PROTOCOL_VERSION_3)
 			|| (!warp_protocol && peer.protocol_version != ETH_PROTOCOL_VERSION_63 && peer.protocol_version != ETH_PROTOCOL_VERSION_62) {
-			io.disable_peer(peer_id);
+			io.disable_peer(peer_id, DisconnectReason::IncompatibleProtocol);
 			trace!(target: "sync", "Peer {} unsupported eth protocol ({})", peer_id, peer.protocol_version);
 			return Ok(());
 		}

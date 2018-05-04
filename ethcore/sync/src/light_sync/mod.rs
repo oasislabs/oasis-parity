@@ -45,7 +45,7 @@ use light::net::{
 	Error as NetError,
 };
 use light::request::{self, CompleteHeadersRequest as HeadersRequest};
-use network::PeerId;
+use network::{DisconnectReason, PeerId};
 use ethereum_types::{H256, U256};
 use parking_lot::{Mutex, RwLock};
 use rand::{Rng, OsRng};
@@ -224,7 +224,7 @@ impl<'a> ResponseContext for ResponseCtx<'a> {
 	fn responder(&self) -> PeerId { self.peer }
 	fn req_id(&self) -> &ReqId { &self.req_id }
 	fn data(&self) -> &[encoded::Header] { self.data }
-	fn punish_responder(&self) { self.ctx.disable_peer(self.peer) }
+	fn punish_responder(&self) { self.ctx.disable_peer(self.peer, DisconnectReason::DisconnectRequested) }
 }
 
 /// Light client synchronization manager. See module docs for more details.
@@ -374,7 +374,7 @@ impl<L: AsLightClient + Send + Sync> Handler for LightSync<L> {
 			Some(&request::Response::Headers(ref response)) => &response.headers[..],
 			Some(_) => {
 				trace!("Disabling peer {} for wrong response type.", peer);
-				ctx.disable_peer(peer);
+				ctx.disable_peer(peer, DisconnectReason::BadProtocol);
 				&[]
 			}
 			None => &[],
@@ -499,7 +499,7 @@ impl<L: AsLightClient> LightSync<L> {
 						AbortReason::BadScaffold(bad_peers) => {
 							debug!(target: "sync", "Disabling peers responsible for bad scaffold");
 							for peer in bad_peers {
-								ctx.disable_peer(peer);
+								ctx.disable_peer(peer, DisconnectReason::BadProtocol);
 							}
 						}
 						AbortReason::NoResponses => {}

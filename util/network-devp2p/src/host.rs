@@ -152,8 +152,8 @@ impl<'s> NetworkContextTrait for NetworkContext<'s> {
 		self.io.channel()
 	}
 
-	fn disable_peer(&self, peer: PeerId) {
-		self.io.message(NetworkIoMessage::DisablePeer(peer))
+	fn disable_peer(&self, peer: PeerId, reason: DisconnectReason) {
+		self.io.message(NetworkIoMessage::DisablePeer(peer, reason))
 			.unwrap_or_else(|e| warn!("Error sending network IO message: {:?}", e));
 	}
 
@@ -1019,10 +1019,10 @@ impl IoHandler<NetworkIoMessage> for Host {
 				trace!(target: "network", "Disconnect requested {}", peer);
 				self.kill_connection(*peer, io, false);
 			},
-			NetworkIoMessage::DisablePeer(ref peer) => {
+			NetworkIoMessage::DisablePeer(ref peer, reason) => {
 				let session = { self.sessions.read().get(*peer).cloned() };
 				if let Some(session) = session {
-					session.lock().disconnect(io, DisconnectReason::DisconnectRequested);
+					session.lock().disconnect(io, reason);
 					if let Some(id) = session.lock().id() {
 						self.nodes.write().mark_as_useless(id)
 					}

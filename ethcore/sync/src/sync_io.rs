@@ -21,13 +21,14 @@ use ethcore::client::BlockChainClient;
 use ethcore::header::BlockNumber;
 use ethcore::snapshot::SnapshotService;
 use parking_lot::RwLock;
+use network::DisconnectReason;
 
 /// IO interface for the syncing handler.
 /// Provides peer connection management and an interface to the blockchain client.
 // TODO: ratings
 pub trait SyncIo {
 	/// Disable a peer
-	fn disable_peer(&mut self, peer_id: PeerId);
+	fn disable_peer(&mut self, peer_id: PeerId, reason: DisconnectReason);
 	/// Disconnect peer
 	fn disconnect_peer(&mut self, peer_id: PeerId);
 	/// Respond to current request with a packet. Can be called from an IO handler for incoming packet.
@@ -84,8 +85,8 @@ impl<'s> NetSyncIo<'s> {
 }
 
 impl<'s> SyncIo for NetSyncIo<'s> {
-	fn disable_peer(&mut self, peer_id: PeerId) {
-		self.network.disable_peer(peer_id);
+	fn disable_peer(&mut self, peer_id: PeerId, reason: DisconnectReason) {
+		self.network.disable_peer(peer_id, reason);
 	}
 
 	fn disconnect_peer(&mut self, peer_id: PeerId) {

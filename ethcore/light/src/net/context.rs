@@ -16,7 +16,7 @@
 
 //! I/O and event context generalizations.
 
-use network::{NetworkContext, PeerId, NodeId};
+use network::{NetworkContext, PeerId, NodeId, DisconnectReason};
 
 use super::{Announcement, LightProtocol, ReqId};
 use super::error::Error;
@@ -37,7 +37,7 @@ pub trait IoContext {
 	fn disconnect_peer(&self, peer: PeerId);
 
 	/// Disable a peer -- this is a disconnect + a time-out.
-	fn disable_peer(&self, peer: PeerId);
+	fn disable_peer(&self, peer: PeerId, reason: DisconnectReason);
 
 	/// Get a peer's protocol version.
 	fn protocol_version(&self, peer: PeerId) -> Option<u8>;
@@ -65,9 +65,9 @@ impl<T> IoContext for T where T: ?Sized + NetworkContext {
 		NetworkContext::disconnect_peer(self, peer);
 	}
 
-	fn disable_peer(&self, peer: PeerId) {
+	fn disable_peer(&self, peer: PeerId, reason: DisconnectReason) {
 		trace!(target: "pip", "Initiating disable of peer {}", peer);
-		NetworkContext::disable_peer(self, peer);
+		NetworkContext::disable_peer(self, peer, reason);
 	}
 
 	fn protocol_version(&self, peer: PeerId) -> Option<u8> {
@@ -100,7 +100,7 @@ pub trait BasicContext {
 	fn disconnect_peer(&self, peer: PeerId);
 
 	/// Disable a peer.
-	fn disable_peer(&self, peer: PeerId);
+	fn disable_peer(&self, peer: PeerId, reason: DisconnectReason);
 }
 
 /// Context for a protocol event which has a peer ID attached.
@@ -138,8 +138,8 @@ impl<'a> BasicContext for TickCtx<'a> {
 		self.io.disconnect_peer(peer);
 	}
 
-	fn disable_peer(&self, peer: PeerId) {
-		self.io.disable_peer(peer);
+	fn disable_peer(&self, peer: PeerId, reason: DisconnectReason) {
+		self.io.disable_peer(peer, reason);
 	}
 }
 
@@ -171,8 +171,8 @@ impl<'a> BasicContext for Ctx<'a> {
 		self.io.disconnect_peer(peer);
 	}
 
-	fn disable_peer(&self, peer: PeerId) {
-		self.io.disable_peer(peer);
+	fn disable_peer(&self, peer: PeerId, reason: DisconnectReason) {
+		self.io.disable_peer(peer, reason);
 	}
 }
 

@@ -23,7 +23,7 @@ use std::time::{Duration, SystemTime};
 use std::sync::Arc;
 
 use ethereum_types::{H256, H512};
-use network::{self, HostInfo, NetworkContext, NodeId, PeerId, ProtocolId, TimerToken};
+use network::{self, HostInfo, NetworkContext, NodeId, PeerId, ProtocolId, TimerToken, DisconnectReason};
 use ordered_float::OrderedFloat;
 use parking_lot::{Mutex, RwLock};
 use rlp::{DecoderError, RlpStream, Rlp};
@@ -383,7 +383,7 @@ pub trait Context {
 	/// Disconnect a peer.
 	fn disconnect_peer(&self, PeerId);
 	/// Disable a peer.
-	fn disable_peer(&self, PeerId);
+	fn disable_peer(&self, PeerId, DisconnectReason);
 	/// Get a peer's node key.
 	fn node_key(&self, PeerId) -> Option<NodeId>;
 	/// Get a peer's protocol version for given protocol.
@@ -396,8 +396,8 @@ impl<T> Context for T where T: ?Sized + NetworkContext {
 	fn disconnect_peer(&self, peer: PeerId) {
 		NetworkContext::disconnect_peer(self, peer);
 	}
-	fn disable_peer(&self, peer: PeerId) {
-		NetworkContext::disable_peer(self, peer)
+	fn disable_peer(&self, peer: PeerId, reason: DisconnectReason) {
+		NetworkContext::disable_peer(self, peer, reason)
 	}
 	fn node_key(&self, peer: PeerId) -> Option<NodeId> {
 		self.session_info(peer).and_then(|info| info.id)
@@ -634,7 +634,7 @@ impl<T: MessageHandler> Network<T> {
 			Some(node_key) => node_key,
 			None => {
 				debug!(target: "whisper", "Disconnecting peer {}, who has no node key.", peer);
-				io.disable_peer(*peer);
+				io.disable_peer(*peer, DisconnectReason::UselessPeer);
 				return;
 			}
 		};
@@ -642,7 +642,7 @@ impl<T: MessageHandler> Network<T> {
 		let version = match io.protocol_version(PROTOCOL_ID, *peer) {
 			Some(version) => version as usize,
 			None => {
-				io.disable_peer(*peer);
+				io.disable_peer(*peer, DisconnectReason::IncompatibleProtocol);
 				return
 			}
 		};
@@ -672,7 +672,7 @@ impl<T: MessageHandler> Network<T> {
 
 		if let Err(e) = res {
 			trace!(target: "whisper", "Disabling peer due to misbehavior: {}", e);
-			io.disable_peer(*peer);
+			io.disable_peer(*peer, DisconnectReason::BadProtocol);
 		}
 	}
 

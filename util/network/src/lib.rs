@@ -83,7 +83,7 @@ pub enum NetworkIoMessage {
 	/// Disconnect a peer.
 	Disconnect(PeerId),
 	/// Disconnect and temporary disable peer.
-	DisablePeer(PeerId),
+	DisablePeer(PeerId, DisconnectReason),
 	/// Network has been started with the host as the given enode.
 	NetworkStarted(String),
 }
@@ -263,7 +263,7 @@ pub trait NetworkContext {
 	fn io_channel(&self) -> IoChannel<NetworkIoMessage>;
 
 	/// Disconnect a peer and prevent it from connecting again.
-	fn disable_peer(&self, peer: PeerId);
+	fn disable_peer(&self, peer: PeerId, reason: DisconnectReason);
 
 	/// Disconnect peer. Reconnect can be attempted later.
 	fn disconnect_peer(&self, peer: PeerId);
@@ -304,8 +304,8 @@ impl<'a, T> NetworkContext for &'a T where T: ?Sized + NetworkContext {
 		(**self).io_channel()
 	}
 
-	fn disable_peer(&self, peer: PeerId) {
-		(**self).disable_peer(peer)
+	fn disable_peer(&self, peer: PeerId, reason: DisconnectReason) {
+		(**self).disable_peer(peer, reason)
 	}
 
 	fn disconnect_peer(&self, peer: PeerId) {

@@ -21,7 +21,7 @@
 use transaction::UnverifiedTransaction;
 
 use io::TimerToken;
-use network::{HostInfo, NetworkProtocolHandler, NetworkContext, PeerId};
+use network::{HostInfo, NetworkProtocolHandler, NetworkContext, PeerId, DisconnectReason};
 use rlp::{RlpStream, Rlp};
 use ethereum_types::{H256, U256};
 use kvdb::DBValue;
@@ -1073,7 +1073,7 @@ fn punish(peer: PeerId, io: &IoContext, e: Error) {
 		}
 		Punishment::Disable => {
 			debug!(target: "pip", "Disabling peer {}: {}", peer, e);
-			io.disable_peer(peer)
+			io.disable_peer(peer, DisconnectReason::DisconnectRequested)
 		}
 	}
 }

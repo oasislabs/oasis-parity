@@ -27,7 +27,7 @@ use ethcore::executed::{Executed, ExecutionError};
 
 use futures::{Poll, Future};
 use futures::sync::oneshot::{self, Receiver, Canceled};
-use network::PeerId;
+use network::{DisconnectReason, PeerId};
 use parking_lot::{RwLock, Mutex};
 use rand;
 
@@ -467,7 +467,7 @@ impl Handler for OnDemand {
 			if let Err(e) = pending.supply_response(&*self.cache, response) {
 				let peer = ctx.peer();
 				debug!(target: "on_demand", "Peer {} gave bad response: {:?}", peer, e);
-				ctx.disable_peer(peer);
+				ctx.disable_peer(peer, DisconnectReason::BadProtocol);
 
 				break;
 			}
