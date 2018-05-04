@@ -187,6 +187,8 @@ mod test {
 
 	#[test]
 	fn init_first_epoch() {
+		::env_logger::init().ok();
+
 		let casper = setup();
 		let client = casper.client.clone();
 
@@ -209,14 +211,12 @@ mod test {
 			client.import_sealed_block(b).unwrap();
 		}
 
-		println!("Current block {} before init", client.best_block_header().number());
-
 		let mut exec = |to, data| {
 			let from = Address::default(); // todo: null sender????
 			let transaction = Transaction {
 				nonce: U256::default(),
 				action: Action::Call(to),
-				gas: U256::from(3_141_562),  // Sames as block gas limit (copied from ethereumj). todo: what should it be?
+				gas: 100_000.into(), // todo: should work with 0 gas
 				gas_price: U256::default(),
 				value: U256::zero(),
 				data: data,
@@ -225,8 +225,17 @@ mod test {
 				.map_err(|e| e.to_string())	
 		};
 
+		let s1 = client.latest_state();
+		println!("S1 {:?}", s1);
+
+		let _event = casper.casper.events().epoch();
+
 		let res = casper.initialize_epoch(1.into(), &mut exec);
-		::client::EngineClient::update_sealing(&*client);
+
+		let s2 = client.latest_state(); //.state_at(BlockId::Latest).unwrap();
+		println!("S2 {:?}", s2);
+		let diff = s2.diff_from(s1);
+		println!("Diff {:?}", diff);
 
 		// check contract precondition
 		let current_block : U256 = client.best_block_header().number().into();
@@ -236,6 +245,7 @@ mod test {
 			current_block, epoch_length, computed_current_epoch);
 		
 		assert_eq!(Ok(()), res);
+		// assert_eq!(Ok(()), res2);
 
 		assert_eq!(Ok(0.into()), casper.dynasty());
 		assert_eq!(Ok(1.into()), casper.next_validator_index());

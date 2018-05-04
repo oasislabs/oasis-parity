@@ -64,6 +64,7 @@ extern crate byteorder;
 extern crate crossbeam;
 extern crate common_types as types;
 extern crate crypto;
+extern crate env_logger;
 extern crate ethash;
 extern crate ethcore_bloom_journal as bloom_journal;
 extern crate ethcore_io as io;
