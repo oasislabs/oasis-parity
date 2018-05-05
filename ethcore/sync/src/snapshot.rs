@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+use chain::{PeerInfo};
 use ethcore::snapshot::{ManifestData};
 use ethereum_types::H256;
 use hash::keccak;
@@ -107,10 +108,15 @@ impl Snapshot {
 	}
 
 	/// Find a random chunk to download
-	pub fn needed_chunk(&mut self) -> Option<H256> {
+	pub fn needed_chunk(&mut self, peer: &PeerInfo) -> Option<H256> {
+		let all_chunks = self.all_chunks();
+		let avail_chunks: Vec<H256> = all_chunks.iter().enumerate()
+			.filter(|&(index, _)| peer.chunk_index_available(index))
+			.map(|(_, h)| *h)
+			.collect();
+		trace!(target: "warp-sync", "Found {} available chunks from peer", avail_chunks.len());
 		// Find all random chunks
-		let needed_chunks: Vec<H256> = self.pending_state_chunks.iter()
-			.chain(self.pending_block_chunks.iter())
+		let needed_chunks: Vec<H256> = avail_chunks.iter()
 			.filter(|&h| !self.downloading_chunks.contains(h) && !self.completed_chunks.contains(h))
 			.map(|h| *h)
 			.collect();
@@ -152,6 +158,38 @@ impl Snapshot {
 
 	pub fn is_complete(&self) -> bool {
 		self.total_chunks() == self.completed_chunks.len()
+	}
+
+	pub fn bitfield_size(&self) -> usize {
+		(self.total_chunks() as f64 / 8 as f64).ceil() as usize
+	}
+
+	fn all_chunks(&self) -> Vec<H256> {
+		self.pending_block_chunks
+			.iter()
+			.chain(self.pending_state_chunks.iter())
+			.map(|h| *h)
+			.collect()
+	}
+
+	// The bitfield is represented as an array of
+	// 8-bits uints
+	pub fn bitfield(&self) -> Vec<u8> {
+		let len = self.bitfield_size();
+		let mut bytes: Vec<u8> = vec![0; len];
+		let all_chunks = self.all_chunks();
+
+		for (chunk_index, chunk_hash) in all_chunks.iter().enumerate() {
+			if self.completed_chunks.contains(&chunk_hash) {
+				let byte_index = chunk_index / 8;
+				let bit_index = chunk_index % 8;
+				let mask = 1 << (7 - bit_index);
+
+				bytes[byte_index] |= mask;
+			}
+		}
+
+		bytes
 	}
 }
 
