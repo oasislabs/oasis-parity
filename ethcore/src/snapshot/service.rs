@@ -249,7 +249,7 @@ pub struct Service {
 	progress: super::Progress,
 	taking_snapshot: AtomicBool,
 	restoring_snapshot: AtomicBool,
-	ready: AtomicBool,
+	restoration_ready: AtomicBool,
 }
 
 impl Service {
@@ -271,7 +271,7 @@ impl Service {
 			progress: Default::default(),
 			taking_snapshot: AtomicBool::new(false),
 			restoring_snapshot: AtomicBool::new(false),
-			ready: AtomicBool::new(false),
+			restoration_ready: AtomicBool::new(false),
 		};
 
 		// create the root snapshot dir if it doesn't exist.
@@ -424,29 +424,29 @@ impl Service {
 	/// Initialize the restoration synchronously.
 	/// The recover flag indicates whether to recover the restored snapshot.
 	pub fn init_restore(&self, manifest: ManifestData, recover: bool) -> Result<(), Error> {
-		self.ready.store(false, Ordering::SeqCst);
-
-		let rest_dir = self.restoration_dir();
-		let rest_db = self.restoration_db();
-		let recovery_temp = self.temp_recovery_dir();
-		let prev_chunks = self.prev_chunks_dir();
-
-		// delete and restore the restoration dir.
-		if let Err(e) = fs::remove_dir_all(&prev_chunks) {
-			match e.kind() {
-				ErrorKind::NotFound => {},
-				_ => return Err(e.into()),
-			}
-		}
-
-		// Move the previous recovery temp directory
-		// to `prev_chunks` to be able to restart restoring
-		// with previously downloaded blocks
-		// This step is optional, so don't fail on error
-		fs::rename(&recovery_temp, &prev_chunks).ok();
-
 		{
 			let mut res = self.restoration.lock();
+
+			let rest_dir = self.restoration_dir();
+			let rest_db = self.restoration_db();
+			let recovery_temp = self.temp_recovery_dir();
+			let prev_chunks = self.prev_chunks_dir();
+
+			// delete and restore the restoration dir.
+			if let Err(e) = fs::remove_dir_all(&prev_chunks) {
+				match e.kind() {
+					ErrorKind::NotFound => {},
+					_ => return Err(e.into()),
+				}
+			}
+
+			self.restoration_ready.store(false, Ordering::SeqCst);
+
+			// Move the previous recovery temp directory
+			// to `prev_chunks` to be able to restart restoring
+			// with previously downloaded blocks
+			// This step is optional, so don't fail on error
+			fs::rename(&recovery_temp, &prev_chunks).ok();
 
 			self.state_chunks.store(0, Ordering::SeqCst);
 			self.block_chunks.store(0, Ordering::SeqCst);
@@ -491,19 +491,19 @@ impl Service {
 				state_chunks_done: self.state_chunks.load(Ordering::SeqCst) as u32,
 				block_chunks_done: self.block_chunks.load(Ordering::SeqCst) as u32,
 			};
+
+			self.restoring_snapshot.store(true, Ordering::SeqCst);
+
+			// Import previous chunks, continue if it fails
+			self.import_prev_chunks(&mut res, manifest).ok();
+			self.restoration_ready.store(true, Ordering::SeqCst);
 		}
-
-		self.restoring_snapshot.store(true, Ordering::SeqCst);
-
-		// Import previous chunks, continue if it fails
-		self.import_prev_chunks(manifest).ok();
-		self.ready.store(true, Ordering::SeqCst);
 
 		Ok(())
 	}
 
 	/// Import the previous chunks into the current restoration
-	fn import_prev_chunks(&self, manifest: ManifestData) -> Result<(), Error> {
+	fn import_prev_chunks(&self, restoration: &mut Option<Restoration>, manifest: ManifestData) -> Result<(), Error> {
 		let prev_chunks = self.prev_chunks_dir();
 
 		// Restore previous snapshot chunks
@@ -512,8 +512,10 @@ impl Service {
 
 		for prev_chunk_file in files {
 			// Import the chunk, don't fail and continue if one fails
-			self.import_prev_chunk(&manifest, prev_chunk_file).ok();
-			num_temp_chunks += 1;
+			match self.import_prev_chunk(restoration, &manifest, prev_chunk_file) {
+				Ok(_) => num_temp_chunks += 1,
+				Err(e) => trace!(target: "snapshot", "Error importing chunk: {:?}", e),
+			}
 		}
 
 		trace!(target:"snapshot", "Imported {} previous chunks", num_temp_chunks);
@@ -525,7 +527,7 @@ impl Service {
 	}
 
 	/// Import a previous chunk at the given path
-	fn import_prev_chunk(&self, manifest: &ManifestData, file: io::Result<fs::DirEntry>) -> Result<(), Error> {
+	fn import_prev_chunk(&self, restoration: &mut Option<Restoration>, manifest: &ManifestData, file: io::Result<fs::DirEntry>) -> Result<(), Error> {
 		let file = file?;
 		let path = file.path();
 
@@ -535,19 +537,15 @@ impl Service {
 
 		let hash = keccak(&buffer);
 
-		let (is_valid, is_state) = if manifest.block_hashes.contains(&hash) {
-			(true, false)
+		let is_state = if manifest.block_hashes.contains(&hash) {
+			false
 		} else if manifest.state_hashes.contains(&hash) {
-			(true, true)
+			true
 		} else {
-			(false, false)
+			return Ok(());
 		};
 
-		if !is_valid {
-			return Ok(());
-		}
-
-		self.feed_chunk(hash, &buffer, is_state)?;
+		self.feed_chunk_with_restoration(restoration, hash, &buffer, is_state)?;
 
 		trace!(target: "snapshot", "Fed chunk {:?}", hash);
 
@@ -588,7 +586,7 @@ impl Service {
 
 		let _ = fs::remove_dir_all(self.restoration_dir());
 		*self.status.lock() = RestorationStatus::Inactive;
-		self.ready.store(false, Ordering::SeqCst);
+		self.restoration_ready.store(false, Ordering::SeqCst);
 
 		Ok(())
 	}
@@ -596,9 +594,13 @@ impl Service {
 	/// Feed a chunk of either kind. no-op if no restoration or status is wrong.
 	fn feed_chunk(&self, hash: H256, chunk: &[u8], is_state: bool) -> Result<(), Error> {
 		// TODO: be able to process block chunks and state chunks at same time?
-		let (result, db) = {
-			let mut restoration = self.restoration.lock();
+		let mut restoration = self.restoration.lock();
+		self.feed_chunk_with_restoration(&mut restoration, hash, chunk, is_state)
+	}
 
+	/// Feed a chunk with the Restoration
+	fn feed_chunk_with_restoration(&self, restoration: &mut Option<Restoration>, hash: H256, chunk: &[u8], is_state: bool) -> Result<(), Error> {
+		let (result, db) = {
 			match self.status() {
 				RestorationStatus::Inactive | RestorationStatus::Failed => {
 					trace!(target: "snapshot", "Tried to restore chunk {:x} while inactive or failed", hash);
@@ -705,8 +707,8 @@ impl SnapshotService for Service {
 		}
 	}
 
-	fn ready(&self) -> bool {
-		self.ready.load(Ordering::SeqCst)
+	fn restoration_ready(&self) -> bool {
+		self.restoration_ready.load(Ordering::SeqCst)
 	}
 
 	fn completed_chunks(&self) -> Option<Vec<H256>> {
@@ -750,7 +752,7 @@ impl SnapshotService for Service {
 	fn abort_restore(&self) {
 		trace!(target: "snapshot", "Aborting restore");
 		self.restoring_snapshot.store(false, Ordering::SeqCst);
-		self.ready.store(false, Ordering::SeqCst);
+		self.restoration_ready.store(false, Ordering::SeqCst);
 		*self.restoration.lock() = None;
 		*self.status.lock() = RestorationStatus::Inactive;
 	}

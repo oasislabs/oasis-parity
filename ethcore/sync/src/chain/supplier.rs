@@ -15,10 +15,10 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 use bytes::Bytes;
-use ethcore::client::{BlockId};
-use ethcore::header::{BlockNumber};
 use ethcore::snapshot::ManifestData;
-use ethereum_types::{H256};
+use ethcore::client::BlockId;
+use ethcore::header::BlockNumber;
+use ethereum_types::H256;
 use network::{self, PeerId};
 use parking_lot::RwLock;
 use rlp::{Rlp, RlpStream};
@@ -28,13 +28,10 @@ use sync_io::SyncIo;
 use super::{
 	ChainSync,
 	PeerInfo,
-
 	RlpResponseResult,
 	PacketDecodeError,
-
 	BLOCK_BODIES_PACKET,
 	BLOCK_HEADERS_PACKET,
-
 	CONSENSUS_DATA_PACKET,
 	GET_BLOCK_BODIES_PACKET,
 	GET_BLOCK_HEADERS_PACKET,
@@ -43,7 +40,6 @@ use super::{
 	GET_SNAPSHOT_DATA_PACKET,
 	GET_SNAPSHOT_MANIFEST_PACKET,
 	GET_SNAPSHOT_BITFIELD_PACKET,
-
 	MAX_BODIES_TO_SEND,
 	MAX_HEADERS_TO_SEND,
 	MAX_NODE_DATA_TO_SEND,
@@ -58,7 +54,8 @@ use super::{
 
 type FRlp = Fn(&ChainSync, &SyncIo, &Rlp, PeerId) -> RlpResponseResult;
 
-pub struct SyncSupplier {}
+/// The Chain Sync Supplier: answers requests from peers with available data
+pub struct SyncSupplier;
 
 impl SyncSupplier {
 	/// Dispatch incoming requests and responses
@@ -276,22 +273,22 @@ impl SyncSupplier {
 	/// Respond to GetSnapshotManifest request
 	fn return_snapshot_manifest(sync: &ChainSync, io: &SyncIo, r: &Rlp, peer_id: PeerId) -> RlpResponseResult {
 		let count = r.item_count().unwrap_or(0);
-		trace!(target: "warp-sync", "{} -> GetSnapshotManifest", peer_id);
+		trace!(target: "warp", "{} -> GetSnapshotManifest", peer_id);
 		if count != 0 {
-			debug!(target: "warp-sync", "Invalid GetSnapshotManifest request, ignoring.");
+			debug!(target: "warp", "Invalid GetSnapshotManifest request, ignoring.");
 			return Ok(None);
 		}
 
 		let peer_protocol = sync.peers.get(&peer_id).map_or(0, |ref peer| peer.protocol_version);
 		let rlp = match SyncSupplier::get_snapshot_manifest(io, peer_protocol) {
 			Some(manifest) => {
-				trace!(target: "warp-sync", "{} <- SnapshotManifest", peer_id);
+				trace!(target: "warp", "{} <- SnapshotManifest", peer_id);
 				let mut rlp = RlpStream::new_list(1);
 				rlp.append_raw(&manifest.into_rlp(), 1);
 				rlp
 			},
 			None => {
-				trace!(target: "warp-sync", "{}: No snapshot manifest to return", peer_id);
+				trace!(target: "warp", "{}: No snapshot manifest to return", peer_id);
 				RlpStream::new_list(0)
 			}
 		};
@@ -301,16 +298,16 @@ impl SyncSupplier {
 	/// Respond to GetSnapshotData request
 	fn return_snapshot_data(_sync: &ChainSync, io: &SyncIo, r: &Rlp, peer_id: PeerId) -> RlpResponseResult {
 		let hash: H256 = r.val_at(0)?;
-		trace!(target: "warp-sync", "{} -> GetSnapshotData {:?}", peer_id, hash);
+		trace!(target: "warp", "{} -> GetSnapshotData {:?}", peer_id, hash);
 		let rlp = match io.snapshot_service().chunk(hash) {
 			Some(data) => {
 				let mut rlp = RlpStream::new_list(1);
-				trace!(target: "warp-sync", "{} <- SnapshotData", peer_id);
+				trace!(target: "warp", "{} <- SnapshotData", peer_id);
 				rlp.append(&data);
 				rlp
 			},
 			None => {
-				trace!(target: "warp-sync", "{}: No snapshot data to return", peer_id);
+				trace!(target: "warp", "{}: No snapshot data to return", peer_id);
 				RlpStream::new_list(0)
 			}
 		};
