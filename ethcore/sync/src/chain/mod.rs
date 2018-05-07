@@ -813,7 +813,8 @@ impl ChainSync {
 				self.maybe_start_snapshot_sync(io);
 			},
 			SyncState::Idle | SyncState::Blocks | SyncState::NewBlocks
-				if force || higher_difficulty || self.old_blocks.is_some() => {
+				if force || higher_difficulty || self.old_blocks.is_some() =>
+			{
 				if io.chain().queue_info().is_full() {
 					self.pause_sync();
 					return;

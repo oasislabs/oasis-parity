@@ -21,7 +21,7 @@ use ethcore::client::{BlockStatus, BlockId, BlockImportError, BlockImportErrorKi
 use ethcore::error::*;
 use ethcore::header::{BlockNumber, Header as BlockHeader};
 use ethcore::snapshot::{ManifestData, RestorationStatus};
-use ethereum_types::{H256, U256};
+use ethereum_types::{H256, H512, U256};
 use hash::keccak;
 use network::{DisconnectReason, PeerId};
 use rlp::{Rlp};
@@ -716,11 +716,12 @@ impl SyncHandler {
 			sync.sync_start_time = Some(Instant::now());
 		}
 
+		let peer_node_id: H512 = io.peer_session_info(peer_id).map(|si| si.id).unwrap_or_default().unwrap_or_default();
+		debug!(target: "sync", "Connected {}:{} [{:x}]", peer_id, io.peer_info(peer_id), peer_node_id);
 		sync.peers.insert(peer_id.clone(), peer);
 		// Don't activate peer immediatelly when searching for common block.
 		// Let the current sync round complete first.
 		sync.active_peers.insert(peer_id.clone());
-		debug!(target: "sync", "Connected {}:{}", peer_id, io.peer_info(peer_id));
 
 		match sync.fork_block {
 			Some((fork_block, _)) if env::var("SKIP_PEER_CONFIRMATION").is_err() => {
