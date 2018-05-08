@@ -348,7 +348,7 @@ impl<L: AsLightClient + Send + Sync> Handler for LightSync<L> {
 		if last_td > announcement.head_td {
 			trace!(target: "sync", "Peer {} moved backwards.", ctx.peer());
 			self.peers.write().remove(&ctx.peer());
-			ctx.disconnect_peer(ctx.peer());
+			ctx.disconnect_peer(ctx.peer(), DisconnectReason::BadProtocol);
 			return
 		}
 

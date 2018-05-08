@@ -19,7 +19,7 @@ use block_sync::BlockRequest;
 use bytes::Bytes;
 use ethcore::header::BlockNumber;
 use ethereum_types::H256;
-use network::{PeerId, PacketId};
+use network::{DisconnectReason, PeerId, PacketId};
 use rlp::RlpStream;
 use std::time::Instant;
 use sync_io::SyncIo;
@@ -168,7 +168,7 @@ impl SyncRequester {
 			};
 			if let Err(e) = result {
 				debug!(target:"sync", "Error sending request: {:?}", e);
-				io.disconnect_peer(peer_id);
+				io.disconnect_peer(peer_id, DisconnectReason::BadProtocol);
 			}
 		}
 	}

@@ -616,7 +616,7 @@ impl LightProtocol {
 			for slowpoke in slowpokes {
 				debug!(target: "pip", "Peer {} handshake timed out", slowpoke);
 				pending.remove(&slowpoke);
-				io.disconnect_peer(slowpoke);
+				io.disconnect_peer(slowpoke, DisconnectReason::PingTimeout);
 			}
 		}
 
@@ -627,13 +627,13 @@ impl LightProtocol {
 				let peer = peer.lock();
 				if peer.pending_requests.check_timeout(now) {
 					debug!(target: "pip", "Peer {} request timeout", peer_id);
-					io.disconnect_peer(*peer_id);
+					io.disconnect_peer(*peer_id, DisconnectReason::PingTimeout);
 				}
 
 				if let Some((ref start, _)) = peer.awaiting_acknowledge {
 					if *start + ack_duration <= now {
 						debug!(target: "pip", "Peer {} update acknowledgement timeout", peer_id);
-						io.disconnect_peer(*peer_id);
+						io.disconnect_peer(*peer_id, DisconnectReason::PingTimeout);
 					}
 				}
 			}
@@ -1069,7 +1069,7 @@ fn punish(peer: PeerId, io: &IoContext, e: Error) {
 		Punishment::None => {}
 		Punishment::Disconnect => {
 			debug!(target: "pip", "Disconnecting peer {}: {}", peer, e);
-			io.disconnect_peer(peer)
+			io.disconnect_peer(peer, DisconnectReason::DisconnectRequested)
 		}
 		Punishment::Disable => {
 			debug!(target: "pip", "Disabling peer {}: {}", peer, e);

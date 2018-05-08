@@ -104,7 +104,7 @@ use plain_hasher::H256FastMap;
 use parking_lot::RwLock;
 use bytes::Bytes;
 use rlp::{RlpStream, DecoderError};
-use network::{self, PeerId, PacketId};
+use network::{self, DisconnectReason, PeerId, PacketId};
 use ethcore::header::{BlockNumber};
 use ethcore::client::{BlockChainClient, BlockStatus, BlockId, BlockChainInfo, BlockQueueInfo};
 use ethcore::snapshot::{RestorationStatus};
@@ -987,7 +987,7 @@ impl ChainSync {
 			};
 			if timeout {
 				trace!(target:"sync", "Timeout {}", peer_id);
-				io.disconnect_peer(*peer_id);
+				io.disconnect_peer(*peer_id, DisconnectReason::PingTimeout);
 				aborting.push(*peer_id);
 			}
 		}
@@ -1000,7 +1000,7 @@ impl ChainSync {
 			let elapsed = (tick - ask_time) / 1_000_000_000;
 			if elapsed > STATUS_TIMEOUT {
 				trace!(target:"sync", "Status timeout {}", peer);
-				io.disconnect_peer(*peer);
+				io.disconnect_peer(*peer, DisconnectReason::PingTimeout);
 			}
 		}
 	}
@@ -1159,12 +1159,13 @@ impl ChainSync {
 	}
 
 	/// Dispatch incoming requests and responses
-	pub fn dispatch_packet(sync: &RwLock<ChainSync>, io: &mut SyncIo, peer: PeerId, packet_id: u8, data: &[u8]) {
-		SyncSupplier::dispatch_packet(sync, io, peer, packet_id, data)
-	}
+	pub fn dispatch_packet(sync: &RwLock<ChainSync>, io: &mut SyncIo, peer_id: PeerId, packet_id: u8, data: &[u8]) {
+		let handled = SyncSupplier::on_packet(sync, io, peer_id, packet_id, data)
+			|| SyncHandler::on_packet(sync, io, peer_id, packet_id, data);
 
-	pub fn on_packet(&mut self, io: &mut SyncIo, peer: PeerId, packet_id: u8, data: &[u8]) {
-		SyncHandler::on_packet(self, io, peer, packet_id, data);
+		if !handled {
+			debug!(target: "sync", "{}: Unknown packet {}", peer_id, packet_id);
+		}
 	}
 
 	/// Called by peer when it is disconnecting

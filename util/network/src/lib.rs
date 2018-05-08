@@ -81,7 +81,7 @@ pub enum NetworkIoMessage {
 	/// Initliaze public interface.
 	InitPublicInterface,
 	/// Disconnect a peer.
-	Disconnect(PeerId),
+	Disconnect(PeerId, DisconnectReason),
 	/// Disconnect and temporary disable peer.
 	DisablePeer(PeerId, DisconnectReason),
 	/// Network has been started with the host as the given enode.
@@ -266,7 +266,7 @@ pub trait NetworkContext {
 	fn disable_peer(&self, peer: PeerId, reason: DisconnectReason);
 
 	/// Disconnect peer. Reconnect can be attempted later.
-	fn disconnect_peer(&self, peer: PeerId);
+	fn disconnect_peer(&self, peer: PeerId, reason: DisconnectReason);
 
 	/// Check if the session is still active.
 	fn is_expired(&self) -> bool;
@@ -308,8 +308,8 @@ impl<'a, T> NetworkContext for &'a T where T: ?Sized + NetworkContext {
 		(**self).disable_peer(peer, reason)
 	}
 
-	fn disconnect_peer(&self, peer: PeerId) {
-		(**self).disconnect_peer(peer)
+	fn disconnect_peer(&self, peer: PeerId, reason: DisconnectReason) {
+		(**self).disconnect_peer(peer, reason)
 	}
 
 	fn is_expired(&self) -> bool {

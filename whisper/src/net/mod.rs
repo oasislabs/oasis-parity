@@ -381,7 +381,7 @@ pub struct PoolStatus {
 /// Generic network context.
 pub trait Context {
 	/// Disconnect a peer.
-	fn disconnect_peer(&self, PeerId);
+	fn disconnect_peer(&self, PeerId, DisconnectReason);
 	/// Disable a peer.
 	fn disable_peer(&self, PeerId, DisconnectReason);
 	/// Get a peer's node key.
@@ -393,8 +393,8 @@ pub trait Context {
 }
 
 impl<T> Context for T where T: ?Sized + NetworkContext {
-	fn disconnect_peer(&self, peer: PeerId) {
-		NetworkContext::disconnect_peer(self, peer);
+	fn disconnect_peer(&self, peer: PeerId, reason: DisconnectReason) {
+		NetworkContext::disconnect_peer(self, peer, reason);
 	}
 	fn disable_peer(&self, peer: PeerId, reason: DisconnectReason) {
 		NetworkContext::disable_peer(self, peer, reason)
@@ -411,7 +411,7 @@ impl<T> Context for T where T: ?Sized + NetworkContext {
 			debug!(target: "whisper", "Failed to send packet {} to peer {}: {}",
 				packet_id, peer, e);
 
-			self.disconnect_peer(peer)
+			self.disconnect_peer(peer, DisconnectReason::BadProtocol)
 		}
 	}
 }
@@ -471,7 +471,7 @@ impl<T: MessageHandler> Network<T> {
 			let punish_timeout = |last_activity: &SystemTime| {
 				if *last_activity + MAX_TOLERATED_DELAY <= now {
 					debug!(target: "whisper", "Disconnecting peer {} due to excessive timeout.", peer_id);
-					io.disconnect_peer(*peer_id);
+					io.disconnect_peer(*peer_id, DisconnectReason::PingTimeout);
 				}
 			};
 

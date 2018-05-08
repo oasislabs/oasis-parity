@@ -157,8 +157,8 @@ impl<'s> NetworkContextTrait for NetworkContext<'s> {
 			.unwrap_or_else(|e| warn!("Error sending network IO message: {:?}", e));
 	}
 
-	fn disconnect_peer(&self, peer: PeerId) {
-		self.io.message(NetworkIoMessage::Disconnect(peer))
+	fn disconnect_peer(&self, peer: PeerId, reason: DisconnectReason) {
+		self.io.message(NetworkIoMessage::Disconnect(peer, reason))
 			.unwrap_or_else(|e| warn!("Error sending network IO message: {:?}", e));
 	}
 
@@ -1011,10 +1011,10 @@ impl IoHandler<NetworkIoMessage> for Host {
 				self.timers.write().insert(handler_token, ProtocolTimer { protocol: *protocol, token: *token });
 				io.register_timer(handler_token, *delay).unwrap_or_else(|e| debug!("Error registering timer {}: {:?}", token, e));
 			},
-			NetworkIoMessage::Disconnect(ref peer) => {
+			NetworkIoMessage::Disconnect(ref peer, reason) => {
 				let session = { self.sessions.read().get(*peer).cloned() };
 				if let Some(session) = session {
-					session.lock().disconnect(io, DisconnectReason::DisconnectRequested);
+					session.lock().disconnect(io, reason);
 				}
 				trace!(target: "network", "Disconnect requested {}", peer);
 				self.kill_connection(*peer, io, false);

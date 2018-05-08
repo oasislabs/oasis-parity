@@ -18,7 +18,7 @@ use bytes::Bytes;
 use ethereum_types::H256;
 use ethcore::client::BlockChainInfo;
 use ethcore::header::BlockNumber;
-use network::{PeerId, PacketId};
+use network::{DisconnectReason, PeerId, PacketId};
 use rand::Rng;
 use rlp::{Encodable, RlpStream};
 use sync_io::SyncIo;
@@ -324,7 +324,7 @@ impl SyncPropagator {
 	fn send_packet(sync: &mut SyncIo, peer_id: PeerId, packet_id: PacketId, packet: Bytes) {
 		if let Err(e) = sync.send(peer_id, packet_id, packet) {
 			debug!(target:"sync", "Error sending packet: {:?}", e);
-			sync.disconnect_peer(peer_id);
+			sync.disconnect_peer(peer_id, DisconnectReason::BadProtocol);
 		}
 	}
 }

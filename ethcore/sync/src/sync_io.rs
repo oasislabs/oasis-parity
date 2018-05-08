@@ -30,7 +30,7 @@ pub trait SyncIo {
 	/// Disable a peer
 	fn disable_peer(&mut self, peer_id: PeerId, reason: DisconnectReason);
 	/// Disconnect peer
-	fn disconnect_peer(&mut self, peer_id: PeerId);
+	fn disconnect_peer(&mut self, peer_id: PeerId, reason: DisconnectReason);
 	/// Respond to current request with a packet. Can be called from an IO handler for incoming packet.
 	fn respond(&mut self, packet_id: PacketId, data: Vec<u8>) -> Result<(), Error>;
 	/// Send a packet to a peer.
@@ -89,8 +89,8 @@ impl<'s> SyncIo for NetSyncIo<'s> {
 		self.network.disable_peer(peer_id, reason);
 	}
 
-	fn disconnect_peer(&mut self, peer_id: PeerId) {
-		self.network.disconnect_peer(peer_id);
+	fn disconnect_peer(&mut self, peer_id: PeerId, reason: DisconnectReason) {
+		self.network.disconnect_peer(peer_id, reason);
 	}
 
 	fn respond(&mut self, packet_id: PacketId, data: Vec<u8>) -> Result<(), Error>{

@@ -34,7 +34,7 @@ pub trait IoContext {
 	fn respond(&self, packet_id: u8, packet_body: Vec<u8>);
 
 	/// Disconnect a peer.
-	fn disconnect_peer(&self, peer: PeerId);
+	fn disconnect_peer(&self, peer: PeerId, reason: DisconnectReason);
 
 	/// Disable a peer -- this is a disconnect + a time-out.
 	fn disable_peer(&self, peer: PeerId, reason: DisconnectReason);
@@ -60,9 +60,9 @@ impl<T> IoContext for T where T: ?Sized + NetworkContext {
 		}
 	}
 
-	fn disconnect_peer(&self, peer: PeerId) {
+	fn disconnect_peer(&self, peer: PeerId, reason: DisconnectReason) {
 		trace!(target: "pip", "Initiating disconnect of peer {}", peer);
-		NetworkContext::disconnect_peer(self, peer);
+		NetworkContext::disconnect_peer(self, peer, reason);
 	}
 
 	fn disable_peer(&self, peer: PeerId, reason: DisconnectReason) {
@@ -97,7 +97,7 @@ pub trait BasicContext {
 	fn make_announcement(&self, announcement: Announcement);
 
 	/// Disconnect a peer.
-	fn disconnect_peer(&self, peer: PeerId);
+	fn disconnect_peer(&self, peer: PeerId, reason: DisconnectReason);
 
 	/// Disable a peer.
 	fn disable_peer(&self, peer: PeerId, reason: DisconnectReason);
@@ -134,8 +134,8 @@ impl<'a> BasicContext for TickCtx<'a> {
 		self.proto.make_announcement(self.io, announcement);
 	}
 
-	fn disconnect_peer(&self, peer: PeerId) {
-		self.io.disconnect_peer(peer);
+	fn disconnect_peer(&self, peer: PeerId, reason: DisconnectReason) {
+		self.io.disconnect_peer(peer, reason);
 	}
 
 	fn disable_peer(&self, peer: PeerId, reason: DisconnectReason) {
@@ -167,8 +167,8 @@ impl<'a> BasicContext for Ctx<'a> {
 		self.proto.make_announcement(self.io, announcement);
 	}
 
-	fn disconnect_peer(&self, peer: PeerId) {
-		self.io.disconnect_peer(peer);
+	fn disconnect_peer(&self, peer: PeerId, reason: DisconnectReason) {
+		self.io.disconnect_peer(peer, reason);
 	}
 
 	fn disable_peer(&self, peer: PeerId, reason: DisconnectReason) {

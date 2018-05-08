@@ -24,11 +24,12 @@ use ethcore::snapshot::{ManifestData, RestorationStatus};
 use ethereum_types::{H256, H512, U256};
 use hash::keccak;
 use network::{DisconnectReason, PeerId};
-use std::env;
+use parking_lot::RwLock;
 use rlp::Rlp;
 use snapshot::ChunkType;
 use std::cmp;
 use std::collections::HashSet;
+use std::env;
 use std::time::Instant;
 use sync_io::SyncIo;
 
@@ -70,10 +71,12 @@ use super::{
 pub struct SyncHandler;
 
 impl SyncHandler {
-	pub fn on_packet(sync: &mut ChainSync, io: &mut SyncIo, peer: PeerId, packet_id: u8, data: &[u8]) {
+	/// Handles incoming packet, returns whether the packet has been handled or not
+	pub fn on_packet(sync: &RwLock<ChainSync>, io: &mut SyncIo, peer: PeerId, packet_id: u8, data: &[u8]) -> bool {
+		let sync = &mut *sync.write();
 		if packet_id != STATUS_PACKET && !sync.peers.contains_key(&peer) {
 			debug!(target:"sync", "Unexpected packet {} from unregistered peer: {}:{}", packet_id, peer, io.peer_info(peer));
-			return;
+			return true;
 		}
 		let rlp = Rlp::new(data);
 		let result = match packet_id {
@@ -91,13 +94,14 @@ impl SyncHandler {
 			PRIVATE_TRANSACTION_PACKET => SyncHandler::on_private_transaction(sync, io, peer, &rlp),
 			SIGNED_PRIVATE_TRANSACTION_PACKET => SyncHandler::on_signed_private_transaction(sync, io, peer, &rlp),
 			_ => {
-				debug!(target: "sync", "{}: Unknown packet {}", peer, packet_id);
-				Ok(())
+				return false;
 			}
 		};
 		result.unwrap_or_else(|e| {
 			debug!(target:"sync", "{} -> Malformed packet {} : {}", peer, packet_id, e);
-		})
+		});
+
+		return true;
 	}
 
 	/// Called when peer sends us new consensus packet
@@ -125,7 +129,7 @@ impl SyncHandler {
 		trace!(target: "sync", "== Connected {}: {}", peer, io.peer_info(peer));
 		if let Err(e) = sync.send_status(io, peer) {
 			debug!(target:"sync", "Error sending status request: {:?}", e);
-			io.disconnect_peer(peer);
+			io.disconnect_peer(peer, DisconnectReason::BadProtocol);
 		} else {
 			sync.handshaking_peers.insert(peer, Instant::now());
 		}
@@ -623,7 +627,7 @@ impl SyncHandler {
 			}
 			Err(()) => {
 				trace!(target: "sync", "{}: Got bad snapshot chunk", peer_id);
-				io.disconnect_peer(peer_id);
+				io.disconnect_peer(peer_id, DisconnectReason::BadProtocol);
 				sync.continue_sync(io);
 				return Ok(());
 			}
