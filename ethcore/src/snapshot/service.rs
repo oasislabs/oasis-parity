@@ -424,80 +424,78 @@ impl Service {
 	/// Initialize the restoration synchronously.
 	/// The recover flag indicates whether to recover the restored snapshot.
 	pub fn init_restore(&self, manifest: ManifestData, recover: bool) -> Result<(), Error> {
-		{
-			let mut res = self.restoration.lock();
+		let mut res = self.restoration.lock();
 
-			let rest_dir = self.restoration_dir();
-			let rest_db = self.restoration_db();
-			let recovery_temp = self.temp_recovery_dir();
-			let prev_chunks = self.prev_chunks_dir();
+		let rest_dir = self.restoration_dir();
+		let rest_db = self.restoration_db();
+		let recovery_temp = self.temp_recovery_dir();
+		let prev_chunks = self.prev_chunks_dir();
 
-			// delete and restore the restoration dir.
-			if let Err(e) = fs::remove_dir_all(&prev_chunks) {
-				match e.kind() {
-					ErrorKind::NotFound => {},
-					_ => return Err(e.into()),
-				}
+		// delete and restore the restoration dir.
+		if let Err(e) = fs::remove_dir_all(&prev_chunks) {
+			match e.kind() {
+				ErrorKind::NotFound => {},
+				_ => return Err(e.into()),
 			}
-
-			self.restoration_ready.store(false, Ordering::SeqCst);
-
-			// Move the previous recovery temp directory
-			// to `prev_chunks` to be able to restart restoring
-			// with previously downloaded blocks
-			// This step is optional, so don't fail on error
-			fs::rename(&recovery_temp, &prev_chunks).ok();
-
-			self.state_chunks.store(0, Ordering::SeqCst);
-			self.block_chunks.store(0, Ordering::SeqCst);
-
-			// tear down existing restoration.
-			*res = None;
-
-			// delete and restore the restoration dir.
-			if let Err(e) = fs::remove_dir_all(&rest_dir) {
-				match e.kind() {
-					ErrorKind::NotFound => {},
-					_ => return Err(e.into()),
-				}
-			}
-
-			fs::create_dir_all(&rest_dir)?;
-
-			// make new restoration.
-			let writer = match recover {
-				true => Some(LooseWriter::new(self.temp_recovery_dir())?),
-				false => None
-			};
-
-			let params = RestorationParams {
-				manifest: manifest.clone(),
-				pruning: self.pruning,
-				db: self.restoration_db_handler.open(&self.restoration_db())?,
-				writer: writer,
-				genesis: &self.genesis_block,
-				guard: Guard::new(rest_db),
-				engine: &*self.engine,
-			};
-
-			let state_chunks = manifest.state_hashes.len();
-			let block_chunks = manifest.block_hashes.len();
-
-			*res = Some(Restoration::new(params)?);
-
-			*self.status.lock() = RestorationStatus::Ongoing {
-				state_chunks: state_chunks as u32,
-				block_chunks: block_chunks as u32,
-				state_chunks_done: self.state_chunks.load(Ordering::SeqCst) as u32,
-				block_chunks_done: self.block_chunks.load(Ordering::SeqCst) as u32,
-			};
-
-			self.restoring_snapshot.store(true, Ordering::SeqCst);
-
-			// Import previous chunks, continue if it fails
-			self.import_prev_chunks(&mut res, manifest).ok();
-			self.restoration_ready.store(true, Ordering::SeqCst);
 		}
+
+		self.restoration_ready.store(false, Ordering::SeqCst);
+
+		// Move the previous recovery temp directory
+		// to `prev_chunks` to be able to restart restoring
+		// with previously downloaded blocks
+		// This step is optional, so don't fail on error
+		fs::rename(&recovery_temp, &prev_chunks).ok();
+
+		self.state_chunks.store(0, Ordering::SeqCst);
+		self.block_chunks.store(0, Ordering::SeqCst);
+
+		// tear down existing restoration.
+		*res = None;
+
+		// delete and restore the restoration dir.
+		if let Err(e) = fs::remove_dir_all(&rest_dir) {
+			match e.kind() {
+				ErrorKind::NotFound => {},
+				_ => return Err(e.into()),
+			}
+		}
+
+		fs::create_dir_all(&rest_dir)?;
+
+		// make new restoration.
+		let writer = match recover {
+			true => Some(LooseWriter::new(self.temp_recovery_dir())?),
+			false => None
+		};
+
+		let params = RestorationParams {
+			manifest: manifest.clone(),
+			pruning: self.pruning,
+			db: self.restoration_db_handler.open(&self.restoration_db())?,
+			writer: writer,
+			genesis: &self.genesis_block,
+			guard: Guard::new(rest_db),
+			engine: &*self.engine,
+		};
+
+		let state_chunks = manifest.state_hashes.len();
+		let block_chunks = manifest.block_hashes.len();
+
+		*res = Some(Restoration::new(params)?);
+
+		*self.status.lock() = RestorationStatus::Ongoing {
+			state_chunks: state_chunks as u32,
+			block_chunks: block_chunks as u32,
+			state_chunks_done: self.state_chunks.load(Ordering::SeqCst) as u32,
+			block_chunks_done: self.block_chunks.load(Ordering::SeqCst) as u32,
+		};
+
+		self.restoring_snapshot.store(true, Ordering::SeqCst);
+
+		// Import previous chunks, continue if it fails
+		self.import_prev_chunks(&mut res, manifest).ok();
+		self.restoration_ready.store(true, Ordering::SeqCst);
 
 		Ok(())
 	}

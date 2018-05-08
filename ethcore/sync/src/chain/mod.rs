@@ -482,7 +482,7 @@ impl ChainSync {
 	pub fn new(config: SyncConfig, chain: &BlockChainClient, private_tx_handler: Arc<PrivateTxHandler>) -> ChainSync {
 		let chain_info = chain.chain_info();
 		let best_block = chain.chain_info().best_block_number;
-		let state = ChainSync::get_init_state(config.warp_sync, chain);
+		let state = ChainSync::init_state(config.warp_sync, chain);
 
 		let mut sync = ChainSync {
 			state,
@@ -507,7 +507,7 @@ impl ChainSync {
 		sync
 	}
 
-	fn get_init_state(warp_sync: WarpSync, chain: &BlockChainClient) -> SyncState {
+	fn init_state(warp_sync: WarpSync, chain: &BlockChainClient) -> SyncState {
 		let best_block = chain.chain_info().best_block_number;
 		match warp_sync {
 			WarpSync::Enabled => SyncState::WaitingPeers,
@@ -582,7 +582,7 @@ impl ChainSync {
 				}
 			}
 		}
-		self.state = ChainSync::get_init_state(self.warp_sync, io.chain());
+		self.state = ChainSync::init_state(self.warp_sync, io.chain());
 		// Reactivate peers only if some progress has been made
 		// since the last sync round of if starting fresh.
 		self.active_peers = self.peers.keys().cloned().collect();
@@ -613,17 +613,15 @@ impl ChainSync {
 			return;
 		}
 		match self.state {
-			SyncState::Idle |
-			SyncState::NewBlocks |
 			SyncState::SnapshotInit |
+			SyncState::SnapshotData |
 			SyncState::SnapshotManifest |
 			SyncState::SnapshotWaiting => {
 				trace!(target: "sync", "Skipping warp sync. State: {:?}", self.state);
 				return;
 			},
-			SyncState::SnapshotData => {
-				self.continue_sync(io);
-			},
+			SyncState::Idle |
+			SyncState::NewBlocks |
 			SyncState::WaitingPeers |
 			SyncState::Blocks |
 			SyncState::Waiting => (),
@@ -643,10 +641,12 @@ impl ChainSync {
 				.filter(|&(_, p)| p.is_allowed() && p.snapshot_number.map_or(false, |sn|
 					// Snapshot must be old enough that it's usefull to sync with it
 					our_best_block < sn && (sn - our_best_block) > SNAPSHOT_RESTORE_THRESHOLD &&
+
 					// Snapshot must have been taken after the Fork
 					sn > fork_block &&
 					// Snapshot must be greater than the warp barrier if any
 					sn > expected_warp_block &&
+
 					// If we know a highest block, snapshot must be recent enough
 					self.highest_block.map_or(true, |highest| {
 						highest < sn || (highest - sn) <= SNAPSHOT_RESTORE_THRESHOLD
@@ -686,18 +686,23 @@ impl ChainSync {
 		}
 	}
 
-	fn start_snapshot_sync(&mut self, io: &mut SyncIo, peers: &[PeerId]) {
+	fn start_snapshot_sync(&mut self, io: &mut SyncIo, peer_ids: &[PeerId]) {
 		if !self.snapshot.have_manifest() {
-			for p in peers {
-				if self.peers.get(p).map_or(false, |p| p.asking == PeerAsking::Nothing) {
-					SyncRequester::request_snapshot_manifest(self, io, *p);
-				}
-			}
-			self.state = SyncState::SnapshotManifest;
+			let peers: Vec<&PeerId> = peer_ids.iter()
+				.filter(|p_id| {
+					self.peers.get(p_id).map_or(false, |p| p.asking == PeerAsking::Nothing)
+				})
+				.collect();
+
 			trace!(target: "sync", "New snapshot sync with {:?}", peers);
+			for p in peers {
+				SyncRequester::request_snapshot_manifest(self, io, *p);
+			}
+
+			self.state = SyncState::SnapshotManifest;
 		} else {
 			self.state = SyncState::SnapshotData;
-			trace!(target: "sync", "Resumed snapshot sync with {:?}", peers);
+			trace!(target: "sync", "Resumed snapshot sync");
 		}
 	}
 
@@ -727,30 +732,16 @@ impl ChainSync {
 		}
 	}
 
-	/// Check if the snapshot service is ready
-	fn check_snapshot_service(&mut self, io: &SyncIo) {
-		if io.snapshot_service().restoration_ready() {
-			trace!(target: "snapshot", "Snapshot Service is ready!");
-			// Sync the previously resumed chunks
-			self.snapshot.sync(io);
-			// Move to fetching snapshot data
-			self.state = SyncState::SnapshotData;
-		}
-	}
-
 	/// Resume downloading
 	fn continue_sync(&mut self, io: &mut SyncIo) {
 		// Collect active peers that can sync
-		let confirmed_peers: Vec<(PeerId, u8)> = self.peers.iter().filter_map(|(peer_id, peer)|
-			if peer.can_sync() {
+		let mut peers: Vec<(PeerId, u8)> = self.peers.iter().filter_map(|(peer_id, peer)|
+			if peer.can_sync() && peer.asking == PeerAsking::Nothing && self.active_peers.contains(peer_id) {
 				Some((*peer_id, peer.protocol_version))
 			} else {
 				None
 			}
 		).collect();
-		let mut peers: Vec<(PeerId, u8)> = confirmed_peers.iter().filter(|&&(peer_id, _)|
-			self.active_peers.contains(&peer_id)
-		).map(|v| *v).collect();
 
 		random::new().shuffle(&mut peers); //TODO: sort by rating
 		// prefer peers with higher protocol version
@@ -758,7 +749,7 @@ impl ChainSync {
 		trace!(
 			target: "sync",
 			"Syncing with peers: {} active, {} confirmed, {} total",
-			self.active_peers.len(), confirmed_peers.len(), self.peers.len()
+			self.active_peers.len(), peers.len(), self.peers.len()
 		);
 		for (peer_id, _) in peers {
 			self.sync_peer(io, peer_id, false);
@@ -790,22 +781,25 @@ impl ChainSync {
 			trace!(target: "sync", "Skipping deactivated peer {}", peer_id);
 			return;
 		}
+
+		if self.state == SyncState::Waiting {
+			trace!(target: "sync", "Waiting for the block queue");
+			return;
+		}
+		if self.state == SyncState::SnapshotInit {
+			trace!(target: "sync", "Waiting for the snapshot service to initialize");
+			return;
+		}
+		if self.state == SyncState::SnapshotWaiting {
+			trace!(target: "sync", "Waiting for the snapshot restoration");
+			return;
+		}
+
+		let chain_info = io.chain().chain_info();
 		let (peer_latest, peer_difficulty, peer_snapshot_number, peer_snapshot_hash) = {
 			if let Some(peer) = self.peers.get_mut(&peer_id) {
 				if peer.asking != PeerAsking::Nothing || !peer.can_sync() {
 					trace!(target: "sync", "Skipping busy peer {}", peer_id);
-					return;
-				}
-				if self.state == SyncState::Waiting {
-					trace!(target: "sync", "Waiting for the block queue");
-					return;
-				}
-				if self.state == SyncState::SnapshotInit {
-					trace!(target: "sync", "Waiting for the snapshot service to initialize");
-					return;
-				}
-				if self.state == SyncState::SnapshotWaiting {
-					trace!(target: "sync", "Waiting for the snapshot restoration");
 					return;
 				}
 				(peer.latest_hash.clone(), peer.difficulty.clone(), peer.snapshot_number.as_ref().cloned().unwrap_or(0), peer.snapshot_hash.as_ref().cloned())
@@ -813,11 +807,7 @@ impl ChainSync {
 				return;
 			}
 		};
-		let chain_info = io.chain().chain_info();
-		let syncing_difficulty = chain_info.pending_total_difficulty;
-		let num_active_peers = self.peers.values().filter(|p| p.asking != PeerAsking::Nothing).count();
 
-		let higher_difficulty = peer_difficulty.map_or(true, |pd| pd > syncing_difficulty);
 		match self.state {
 			SyncState::WaitingPeers => {
 				trace!(
@@ -829,39 +819,43 @@ impl ChainSync {
 				);
 				self.maybe_start_snapshot_sync(io);
 			},
-			SyncState::Idle | SyncState::Blocks | SyncState::NewBlocks
-				if force || higher_difficulty || self.old_blocks.is_some() =>
-			{
+			SyncState::Idle | SyncState::Blocks | SyncState::NewBlocks => {
 				if io.chain().queue_info().is_full() {
 					self.pause_sync();
 					return;
 				}
 
+				let syncing_difficulty = chain_info.pending_total_difficulty;
+				let num_active_peers = self.peers.values().filter(|p| p.asking != PeerAsking::Nothing).count();
+
+				let higher_difficulty = peer_difficulty.map_or(true, |pd| pd > syncing_difficulty);
+				let should_sync = force || higher_difficulty;
+
 				let have_latest = io.chain().block_status(BlockId::Hash(peer_latest)) != BlockStatus::Unknown;
 				trace!(target: "sync", "Considering peer {}, force={}, td={:?}, our td={}, latest={}, have_latest={}, state={:?}", peer_id, force, peer_difficulty, syncing_difficulty, peer_latest, have_latest, self.state);
-				if !have_latest && (higher_difficulty || force || self.state == SyncState::NewBlocks) {
+
+				let request = if !have_latest && (should_sync || self.state == SyncState::NewBlocks) {
 					// check if got new blocks to download
 					trace!(target: "sync", "Syncing with peer {}, force={}, td={:?}, our td={}, state={:?}", peer_id, force, peer_difficulty, syncing_difficulty, self.state);
-					if let Some(request) = self.new_blocks.request_blocks(io, num_active_peers) {
-						SyncRequester::request_blocks(self, io, peer_id, request, BlockSet::NewBlocks);
+					(self.new_blocks.request_blocks(io, num_active_peers), BlockSet::NewBlocks)
+				} else if let Some(ref mut old_blocks) = self.old_blocks {
+					if !should_sync {
+						return;
+					}
+					(old_blocks.request_blocks(io, num_active_peers), BlockSet::OldBlocks)
+				} else {
+					return;
+				};
+
+				match request {
+					(Some(request), block_set) => {
+						SyncRequester::request_blocks(self, io, peer_id, request, block_set);
 						if self.state == SyncState::Idle {
 							self.state = SyncState::Blocks;
 						}
-						return;
-					}
+					},
+					_ => (),
 				}
-
-				// Only ask for old blocks if the peer has a higher difficulty
-				if force || higher_difficulty {
-					if let Some(request) = self.old_blocks.as_mut().and_then(|d| d.request_blocks(io, num_active_peers)) {
-						SyncRequester::request_blocks(self, io, peer_id, request, BlockSet::OldBlocks);
-						return;
-					}
-				} else {
-					trace!(target: "sync", "peer {} is not suitable for asking old blocks", peer_id);
-					self.deactivate_peer(io, peer_id);
-				}
-				return;
 			},
 			SyncState::SnapshotData => {
 				let peer_has_snapshot = peer_snapshot_hash.is_some() && peer_snapshot_hash == self.snapshot.snapshot_hash();
@@ -882,7 +876,8 @@ impl ChainSync {
 				}
 
 				if let RestorationStatus::Ongoing { state_chunks_done, block_chunks_done, .. } = io.snapshot_service().status() {
-					if self.snapshot.done_chunks() - (state_chunks_done + block_chunks_done) as usize > MAX_SNAPSHOT_CHUNKS_DOWNLOAD_AHEAD {
+					let chunks_ahead = self.snapshot.done_chunks() - (state_chunks_done + block_chunks_done) as usize;
+					if  chunks_ahead > MAX_SNAPSHOT_CHUNKS_DOWNLOAD_AHEAD {
 						trace!(target: "sync", "Snapshot queue full, pausing sync");
 						self.state = SyncState::SnapshotWaiting;
 						return;
@@ -896,9 +891,6 @@ impl ChainSync {
 				SyncState::Waiting |
 				SyncState::SnapshotWaiting |
 				SyncState::SnapshotInit => (),
-			_ => {
-				trace!(target: "sync", "Skipping peer {}, force={}, td={:?}, our td={}, state={:?}", peer_id, force, peer_difficulty, syncing_difficulty, self.state);
-			}
 		}
 	}
 
@@ -1024,7 +1016,8 @@ impl ChainSync {
 						self.restart(io);
 					},
 					RestorationStatus::Ongoing { state_chunks_done, block_chunks_done, .. } => {
-						if !self.snapshot.is_complete() && self.snapshot.done_chunks() - (state_chunks_done + block_chunks_done) as usize <= MAX_SNAPSHOT_CHUNKS_DOWNLOAD_AHEAD {
+						let chunks_ahead = self.snapshot.done_chunks() - (state_chunks_done + block_chunks_done) as usize;
+						if !self.snapshot.is_complete() && chunks_ahead <= MAX_SNAPSHOT_CHUNKS_DOWNLOAD_AHEAD {
 							trace!(target:"sync", "Resuming snapshot sync");
 							self.state = SyncState::SnapshotData;
 							self.continue_sync(io);
@@ -1032,14 +1025,19 @@ impl ChainSync {
 					},
 					RestorationStatus::Failed => {
 						trace!(target: "sync", "Snapshot restoration aborted");
-						self.state = SyncState::WaitingPeers;
-						self.snapshot.clear();
-						self.continue_sync(io);
+						self.reset_and_continue(io);
 					},
 				}
 			},
 			SyncState::SnapshotInit => {
-				self.check_snapshot_service(io);
+				if io.snapshot_service().restoration_ready() {
+					trace!(target: "warp", "Snapshot Service is ready!");
+					// Sync the previously resumed chunks
+					self.snapshot.sync(io);
+					// Move to fetching snapshot data
+					self.state = SyncState::SnapshotData;
+					self.continue_sync(io);
+				}
 			}
 			_ => (),
 		}
