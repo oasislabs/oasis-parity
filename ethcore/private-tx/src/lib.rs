@@ -216,7 +216,7 @@ impl Provider where {
 				let private_state_hash = self.calculate_state_hash(&private_state, contract_nonce);
 				trace!("Hashed effective private state for sender: {:?}", private_state_hash);
 				self.transactions_for_signing.lock().add_transaction(private.hash(), signed_transaction, contract_validators, private_state, contract_nonce)?;
-				self.broadcast_private_transaction(private.rlp_bytes().into_vec());
+				self.broadcast_private_transaction(private.hash(), private.rlp_bytes().into_vec());
 				Ok(Receipt {
 					hash: tx_hash,
 					contract_address: None,
@@ -254,37 +254,20 @@ impl Provider where {
 			.iter()
 			.find(|address| self.validator_accounts.contains(address));
 
-		match validation_account {
-			None => {
-				// TODO [ToDr] This still seems a bit invalid, imho we should still import the transaction to the pool.
-				// Importing to pool verifies correctness and nonce; here we are just blindly forwarding.
-				//
-				// Not for verification, broadcast further to peers
-				self.broadcast_private_transaction(rlp.into());
-				return Ok(());
-			},
-			Some(&validation_account) => {
-				let hash = private_tx.hash();
-				trace!("Private transaction taken for verification");
-				let original_tx = self.extract_original_transaction(private_tx, &contract)?;
-				trace!("Validating transaction: {:?}", original_tx);
-				// Verify with the first account available
-				trace!("The following account will be used for verification: {:?}", validation_account);
-				let nonce_cache = Default::default();
-				self.transactions_for_verification.lock().add_transaction(
-					original_tx,
-					contract,
-					validation_account,
-					hash,
-					self.pool_client(&nonce_cache),
-				)?;
-				// NOTE This will just fire `on_private_transaction_queued` but from a client thread.
-				// It seems that a lot of heavy work (verification) is done in this thread anyway
-				// it might actually make sense to decouple it from clientService and just use dedicated thread
-				// for both verification and execution.
-				self.channel.send(ClientIoMessage::NewPrivateTransaction).map_err(|_| ErrorKind::ClientIsMalformed.into())
-			}
-		}
+		let original_tx = self.extract_original_transaction(private_tx.clone(), &contract)?;
+		trace!("Original transaction: {:?}", original_tx);
+		let nonce_cache = Default::default();
+		self.transactions_for_verification.lock().add_transaction(
+			original_tx,
+			validation_account.map(|&account| account),
+			private_tx,
+			self.pool_client(&nonce_cache),
+		)?;
+		// NOTE This will just fire `on_private_transaction_queued` but from a client thread.
+		// It seems that a lot of heavy work (verification) is done in this thread anyway
+		// it might actually make sense to decouple it from clientService and just use dedicated thread
+		// for both verification and execution.
+		self.channel.send(ClientIoMessage::NewPrivateTransaction).map_err(|_| ErrorKind::ClientIsMalformed.into())
 	}
 
 	fn pool_client<'a>(&'a self, nonce_cache: &'a RwLock<HashMap<Address, U256>>) -> miner::pool_client::PoolClient<'a, Client> {
@@ -318,24 +301,34 @@ impl Provider where {
 			let transaction_hash = transaction.signed().hash();
 			match verification_queue.private_transaction_descriptor(&transaction_hash) {
 				Ok(desc) => {
-					if !self.validator_accounts.contains(&desc.validator_account) {
-						trace!("Cannot find validator account in config");
-						bail!(ErrorKind::ValidatorAccountNotSet);
-					}
-					let account = desc.validator_account;
-					if let Action::Call(contract) = transaction.signed().action {
-						// TODO [ToDr] Usage of BlockId::Latest
-						let contract_nonce = self.get_contract_nonce(&contract, BlockId::Latest)?;
-						let private_state = self.execute_private_transaction(BlockId::Latest, transaction.signed())?;
-						let private_state_hash = self.calculate_state_hash(&private_state, contract_nonce);
-						trace!("Hashed effective private state for validator: {:?}", private_state_hash);
-						let password = find_account_password(&self.passwords, &*self.accounts, &account);
-						let signed_state = self.accounts.sign(account, password, private_state_hash)?;
-						let signed_private_transaction = SignedPrivateTransaction::new(desc.private_hash, signed_state, None);
-						trace!("Sending signature for private transaction: {:?}", signed_private_transaction);
-						self.broadcast_signed_private_transaction(signed_private_transaction.rlp_bytes().into_vec());
-					} else {
-						warn!("Incorrect type of action for the transaction");
+					let private_hash = desc.private_transaction.hash();
+					match desc.validator_account {
+						None => {
+							trace!("Propagating transaction further");
+							self.broadcast_private_transaction(private_hash, desc.private_transaction.rlp_bytes().into_vec());
+							return Ok(())
+						}
+						Some(validator_account) => {
+							if !self.validator_accounts.contains(&validator_account) {
+								trace!("Propagating transaction further");
+								self.broadcast_private_transaction(private_hash, desc.private_transaction.rlp_bytes().into_vec());
+								return Ok(())
+							}
+							if let Action::Call(contract) = transaction.signed().action {
+								// TODO [ToDr] Usage of BlockId::Latest
+								let contract_nonce = self.get_contract_nonce(&contract, BlockId::Latest)?;
+								let private_state = self.execute_private_transaction(BlockId::Latest, transaction.signed())?;
+								let private_state_hash = self.calculate_state_hash(&private_state, contract_nonce);
+								trace!("Hashed effective private state for validator: {:?}", private_state_hash);
+								let password = find_account_password(&self.passwords, &*self.accounts, &validator_account);
+								let signed_state = self.accounts.sign(validator_account, password, private_state_hash)?;
+								let signed_private_transaction = SignedPrivateTransaction::new(private_hash, signed_state, None);
+								trace!("Sending signature for private transaction: {:?}", signed_private_transaction);
+								self.broadcast_signed_private_transaction(signed_private_transaction.hash(), signed_private_transaction.rlp_bytes().into_vec());
+							} else {
+								warn!("Incorrect type of action for the transaction");
+							}
+						}
 					}
 				},
 				Err(e) => {
@@ -355,10 +348,8 @@ impl Provider where {
 		let private_hash = tx.private_transaction_hash();
 		let desc = match self.transactions_for_signing.lock().get(&private_hash) {
 			None => {
-				// TODO [ToDr] Verification (we can't just blindly forward every transaction)
-
 				// Not our transaction, broadcast further to peers
-				self.broadcast_signed_private_transaction(rlp.into());
+				self.broadcast_signed_private_transaction(tx.hash(), rlp.into());
 				return Ok(());
 			},
 			Some(desc) => desc,
@@ -440,13 +431,13 @@ impl Provider where {
 	}
 
 	/// Broadcast the private transaction message to the chain
-	fn broadcast_private_transaction(&self, message: Bytes) {
-		self.notify(|notify| notify.broadcast(ChainMessageType::PrivateTransaction(message.clone())));
+	fn broadcast_private_transaction(&self, transaction_hash: H256, message: Bytes) {
+		self.notify(|notify| notify.broadcast(ChainMessageType::PrivateTransaction(transaction_hash.clone(), message.clone())));
 	}
 
 	/// Broadcast signed private transaction message to the chain
-	fn broadcast_signed_private_transaction(&self, message: Bytes) {
-		self.notify(|notify| notify.broadcast(ChainMessageType::SignedPrivateTransaction(message.clone())));
+	fn broadcast_signed_private_transaction(&self, transaction_hash: H256, message: Bytes) {
+		self.notify(|notify| notify.broadcast(ChainMessageType::SignedPrivateTransaction(transaction_hash.clone(), message.clone())));
 	}
 
 	fn iv_from_transaction(transaction: &SignedTransaction) -> H128 {
