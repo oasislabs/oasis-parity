@@ -104,11 +104,11 @@ impl<'a> TestContext<'a> {
 }
 
 impl<'a> Context for TestContext<'a> {
-	fn disconnect_peer(&self, id: PeerId) {
+	fn disconnect_peer(&self, id: PeerId, _reason: DisconnectReason) {
 		self.events.lock().push(Event::Disconnect(self.local_id, id));
 	}
 
-	fn disable_peer(&self, id: PeerId) {
+	fn disable_peer(&self, id: PeerId, _reason: DisconnectReason) {
 		self.events.lock().push(Event::Disconnect(self.local_id, id));
 	}
 

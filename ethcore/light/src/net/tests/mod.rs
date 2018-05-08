@@ -21,7 +21,7 @@ use ethcore::blockchain_info::BlockChainInfo;
 use ethcore::client::{EachBlockWith, TestBlockChainClient};
 use ethcore::ids::BlockId;
 use ethcore::encoded;
-use network::{PeerId, NodeId};
+use network::{DisconnectReason, PeerId, NodeId};
 use transaction::{Action, PendingTransaction};
 
 use net::context::IoContext;
@@ -74,11 +74,11 @@ impl IoContext for Expect {
 		assert_eq!(self, &Expect::Respond(packet_id, packet_body));
 	}
 
-	fn disconnect_peer(&self, peer: PeerId) {
+	fn disconnect_peer(&self, peer: PeerId, _reason: DisconnectReason) {
 		assert_eq!(self, &Expect::Punish(peer));
 	}
 
-	fn disable_peer(&self, peer: PeerId) {
+	fn disable_peer(&self, peer: PeerId, _reason: DisconnectReason) {
 		assert_eq!(self, &Expect::Punish(peer));
 	}
 

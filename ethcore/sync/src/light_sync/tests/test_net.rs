@@ -29,7 +29,7 @@ use kvdb_memorydb;
 use light::client::fetch::{self, Unavailable};
 use light::net::{LightProtocol, IoContext, Capabilities, Params as LightParams};
 use light::provider::LightProvider;
-use network::{NodeId, PeerId};
+use network::{DisconnectReason, NodeId, PeerId};
 use parking_lot::RwLock;
 
 use std::time::Duration;
@@ -60,11 +60,11 @@ impl<'a> IoContext for TestIoContext<'a> {
 		}
 	}
 
-	fn disconnect_peer(&self, peer: PeerId) {
+	fn disconnect_peer(&self, peer: PeerId, _reason: DisconnectReason) {
 		self.to_disconnect.write().insert(peer);
 	}
 
-	fn disable_peer(&self, peer: PeerId) { self.disconnect_peer(peer) }
+	fn disable_peer(&self, peer: PeerId, reason: DisconnectReason) { self.disconnect_peer(peer, reason) }
 	fn protocol_version(&self, _peer: PeerId) -> Option<u8> { Some(::light::net::MAX_PROTOCOL_VERSION) }
 
 	fn persistent_peer_id(&self, _peer: PeerId) -> Option<NodeId> { unimplemented!() }

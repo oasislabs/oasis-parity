@@ -19,7 +19,7 @@
 use cache::Cache;
 use ethcore::header::Header;
 use futures::Future;
-use network::{PeerId, NodeId};
+use network::{DisconnectReason, PeerId, NodeId};
 use net::*;
 use ethereum_types::H256;
 use parking_lot::Mutex;
@@ -68,11 +68,11 @@ impl BasicContext for Context {
 		panic!("didn't expect to make announcement")
 	}
 
-	fn disconnect_peer(&self, id: PeerId) {
-		self.disable_peer(id)
+	fn disconnect_peer(&self, id: PeerId, reason: DisconnectReason) {
+		self.disable_peer(id, reason)
 	}
 
-	fn disable_peer(&self, peer_id: PeerId) {
+	fn disable_peer(&self, peer_id: PeerId, _reason: DisconnectReason) {
 		match *self {
 			Context::Punish(id) if id == peer_id => {},
 			_ => panic!("Unexpectedly punished peer."),

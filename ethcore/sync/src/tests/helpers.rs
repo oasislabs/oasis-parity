@@ -20,7 +20,7 @@ use std::time::Duration;
 use ethereum_types::H256;
 use parking_lot::{RwLock, Mutex};
 use bytes::Bytes;
-use network::{self, PeerId, ProtocolId, PacketId, SessionInfo};
+use network::{self, DisconnectReason, PeerId, ProtocolId, PacketId, SessionInfo};
 use tests::snapshot::*;
 use ethcore::client::{TestBlockChainClient, BlockChainClient, Client as EthcoreClient,
 	ClientConfig, ChainNotify, ChainMessageType, ClientIoMessage};
@@ -81,11 +81,11 @@ impl<'p, C> Drop for TestIo<'p, C> where C: FlushingBlockChainClient, C: 'p {
 }
 
 impl<'p, C> SyncIo for TestIo<'p, C> where C: FlushingBlockChainClient, C: 'p {
-	fn disable_peer(&mut self, peer_id: PeerId) {
-		self.disconnect_peer(peer_id);
+	fn disable_peer(&mut self, peer_id: PeerId, reason: DisconnectReason) {
+		self.disconnect_peer(peer_id, reason);
 	}
 
-	fn disconnect_peer(&mut self, peer_id: PeerId) {
+	fn disconnect_peer(&mut self, peer_id: PeerId, _reason: DisconnectReason) {
 		self.to_disconnect.insert(peer_id);
 	}
 
