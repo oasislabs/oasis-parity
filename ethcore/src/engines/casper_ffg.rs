@@ -29,7 +29,7 @@ pub type I128 = U256; 		// Marker type for int128 in casper contract
 pub type Decimal = U256; 	// Marker type for decimal10 in casper contract
 pub type Error = String; 	// TODO: [aj] should we use EngineError or more specialised error?
 
-pub type ExecuteCasperTransaction<'a> = FnMut(Address, Vec<u8>) -> Result<(), String> + 'a;
+pub type ExecuteCasperTransaction<'a> = Fn(Address, Vec<u8>) -> Result<(), String> + 'a;
 
 // Transactions for creating casper contract dependencies
 // Copied from https://github.com/karlfloersch/pyethereum/blob/develop/ethereum/hybrid_casper/casper_initiating_transactions.py
@@ -52,10 +52,6 @@ impl SimpleCasperContract {
 			client,
         }
     }
-
-	// fn transact_null_sender(&self, data: Option<Vec<u8>>) {
-		
-	// }
 
 	fn epoch_length(&self) -> Result<I128, Error> {
 		self.casper.functions()
@@ -113,18 +109,19 @@ impl SimpleCasperContract {
 			.map_err(|e| e.to_string())
 	}
 
-	fn initialize_epoch(&self, epoch: I128, exec: &mut ExecuteCasperTransaction) -> Result<(), Error> {
+	fn initialize_epoch(&self, epoch: I128, transact: &ExecuteCasperTransaction) -> Result<(), Error> {
 		let init_epoch = self.casper.functions().initialize_epoch();
-		exec(self.address, init_epoch.input(epoch))
+		transact(self.address, init_epoch.input(epoch))
 	}
 }
 
 #[cfg(test)]
 mod test {
-	use super::{SimpleCasperContract};
+	use std::sync::Arc;
+	use super::{SimpleCasperContract, ExecuteCasperTransaction};
 	use ethabi::{encode, Token};
 	use ethereum_types::{Address, U256};
-	use client::{BlockId, CallContract, BlockInfo, ImportSealedBlock, PrepareOpenBlock};
+	use client::{Client, BlockId, CallContract, BlockInfo, ImportSealedBlock, PrepareOpenBlock};
 	use spec::Spec;
 	use rustc_hex::ToHex;
 	use test_helpers::generate_dummy_client_with_spec_and_accounts;
@@ -174,6 +171,23 @@ mod test {
 		)
 	}
 
+	fn exec_casper<'a>(client: Arc<Client>) -> Box<ExecuteCasperTransaction<'a>> {
+		let exec = move |to, data| {
+			let from = Address::default(); // todo: null sender????
+			let transaction = Transaction {
+				nonce: U256::default(),
+				action: Action::Call(to),
+				gas: 3_000_000.into(), // todo: should work with 0 gas
+				gas_price: U256::default(),
+				value: U256::zero(),
+				data: data,
+			}.fake_sign(from);
+			client.miner().import_own_transaction(&*client, transaction.into())
+				.map_err(|e| e.to_string())	
+		};
+		Box::new(exec)
+	}
+
 	#[test]
 	fn constructor_parameters_initialized() {
 		let casper = setup();
@@ -186,6 +200,7 @@ mod test {
 	}
 
 	#[test]
+	// https://github.com/ethereum/casper/blob/v0.1.0/casper/contracts/simple_casper.v.py#L364
 	fn init_first_epoch() {
 		::env_logger::init().ok();
 
@@ -209,23 +224,10 @@ mod test {
 			client.import_sealed_block(b).unwrap();
 		}
 
-		let mut exec = |to, data| {
-			let from = Address::default(); // todo: null sender????
-			let transaction = Transaction {
-				nonce: U256::default(),
-				action: Action::Call(to),
-				gas: 3_000_000.into(), // todo: should work with 0 gas
-				gas_price: U256::default(),
-				value: U256::zero(),
-				data: data,
-			}.fake_sign(from);
-			client.miner().import_own_transaction(&*client, transaction.into())
-				.map_err(|e| e.to_string())	
-		};
-
 		let _event = casper.casper.events().epoch();
+		let exec = exec_casper(client.clone());
 
-		let res = casper.initialize_epoch(1.into(), &mut exec);
+		let res = casper.initialize_epoch(1.into(), &*exec); // &mut exec);
 
 		// check contract precondition
 		let current_block : U256 = client.best_block_header().number().into();
@@ -237,14 +239,18 @@ mod test {
 		assert_eq!(Ok(1.into()), casper.next_validator_index());
 		assert_eq!(Ok(computed_current_epoch), casper.current_epoch());
 	}
+
+	// #[test]
+	// // https://github.com/ethereum/casper/blob/v0.1.0/casper/contracts/simple_casper.v.py#L364
+	// fn deposit() {
+	// 	::env_logger::init().ok();
+
+	// 	let casper = setup();
+	// 	let client = casper.client.clone();
+	// }
 }
 
 // VALIDATOR COMMANDS
-// initialize_epoch
-// https://github.com/ethereum/casper/blob/master/casper/contracts/simple_casper.v.py#L248
-
-// deposit 
-// https://github.com/ethereum/casper/blob/master/casper/contracts/simple_casper.v.py#L281
 
 // logout
 // https://github.com/ethereum/casper/blob/master/casper/contracts/simple_casper.v.py#L302
