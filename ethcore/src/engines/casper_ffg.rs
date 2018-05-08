@@ -198,14 +198,12 @@ mod test {
 		assert_eq!(Ok(0.into()), casper.current_epoch());
 		assert_eq!(Ok(1.into()), casper.next_validator_index());
 
-		// new_epoch()
 		let current_block = client.best_block_header().number();
 		let block_count = epoch_length * (current_epoch + 1.into()) - current_block.into();
 
 		// add blocks - is this the best way?
 		for _ in 0u32..From::from(block_count) {
 			let mut b = client.prepare_open_block(Address::default(), (3141562.into(), 31415620.into()), vec![]);
-			// b.block_mut().state_mut().add_balance(&address, &5.into(), CleanupMode::NoEmpty).unwrap();
 			b.block_mut().state_mut().commit().unwrap();
 			let b = b.close_and_lock().seal(&*client.engine(), vec![]).unwrap();
 			client.import_sealed_block(b).unwrap();
@@ -216,7 +214,7 @@ mod test {
 			let transaction = Transaction {
 				nonce: U256::default(),
 				action: Action::Call(to),
-				gas: 100_000.into(), // todo: should work with 0 gas
+				gas: 3_000_000.into(), // todo: should work with 0 gas
 				gas_price: U256::default(),
 				value: U256::zero(),
 				data: data,
@@ -225,27 +223,15 @@ mod test {
 				.map_err(|e| e.to_string())	
 		};
 
-		let s1 = client.latest_state();
-		println!("S1 {:?}", s1);
-
 		let _event = casper.casper.events().epoch();
 
 		let res = casper.initialize_epoch(1.into(), &mut exec);
 
-		let s2 = client.latest_state(); //.state_at(BlockId::Latest).unwrap();
-		println!("S2 {:?}", s2);
-		let diff = s2.diff_from(s1);
-		println!("Diff {:?}", diff);
-
 		// check contract precondition
 		let current_block : U256 = client.best_block_header().number().into();
 		let computed_current_epoch = current_block / epoch_length;
-
-		println!("Current block {}, epoch length {}, computed current epoch {}", 
-			current_block, epoch_length, computed_current_epoch);
 		
 		assert_eq!(Ok(()), res);
-		// assert_eq!(Ok(()), res2);
 
 		assert_eq!(Ok(0.into()), casper.dynasty());
 		assert_eq!(Ok(1.into()), casper.next_validator_index());
