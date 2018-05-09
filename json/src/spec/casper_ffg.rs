@@ -19,17 +19,39 @@
 use ethereum_types::Address;
 use uint::Uint;
 
+#[derive(Debug, PartialEq, Deserialize)]
+pub struct CasperContractParams {
+    // EPOCH_LENGTH: 50 blocks
+    #[serde(rename="epochLength")]
+    pub epoch_length: Option<Uint>,
+    // WITHDRAWAL_DELAY: 15,000 epochs
+    #[serde(rename="withdrawalDelay")]
+    pub withdrawal_delay: Option<Uint>,
+    // DYNASTY_LOGOUT_DELAY: 700 dynasties
+    #[serde(rename="dynastyLogoutDelay")]
+    pub dynasty_logout_delay: Option<Uint>,
+    // BASE_INTEREST_FACTOR: 7e-3
+    #[serde(rename="baseInterestFactor")]
+    pub base_interest_factor: Option<f32>,
+    // BASE_PENALTY_FACTOR: 2e-7
+    #[serde(rename="basePenaltyFactor")]
+    pub base_penalty_factor: Option<f32>,
+    // MIN_DEPOSIT_SIZE: 1.5e21 wei (1500 ETH)
+    #[serde(rename="minDepositSizeEth")]
+    pub min_deposit_size_eth: Option<Uint>,
+}
+
 /// Casper FFG params deserialisation
 #[derive(Debug, PartialEq, Deserialize)]
 pub struct CasperFfgParams {
 
+    #[serde(rename="contract_params")]
+    pub contract_params: Option<CasperContractParams>,
 
     // HYBRID_CASPER_FORK_BLKNUM: TBD
     #[serde(rename="hybridCasperForkBlockNumber")]
     pub hybrid_casper_fork_block_number: Option<Uint>,
 
-    // CASPER_ADDR: TBD
-    // CASPER_CODE: see below
     // CASPER_BALANCE: 1e24 wei (1,000,000 ETH)
     // SIGHASHER_ADDR: TBD
     // SIGHASHER_CODE: see below
@@ -39,21 +61,7 @@ pub struct CasperFfgParams {
     // NEW_BLOCK_REWARD: 6e17 wei (0.6 ETH)
     // NON_REVERT_MIN_DEPOSIT: amount in wei configurable by client
 
-    // todo: contract params - do they belong here?
-    // /// TODO COMMENT
-    // #[serde(rename="epochLength")]
-    // pub epoch_length: Option<Uint>,
-    // /// TODO COMMENT
-    // #[serde(rename="withdrawalDelay")]
-    // pub withdrawal_delay: Option<Uint>,
-    // /// todo comment
-    // #[serde(rename="dynastyLogoutDelay")]
-    // pub dynasty_logout_delay: Uint,
-    // ///
-    // #[serde(rename="baseInterestFactor")]
-    // pub base_interest_factor: String,
-    // ///
-    // #[serde(rename="basePenaltyFactor")]
+    
 }
 
 /// Authority engine deserialization.
@@ -73,16 +81,25 @@ mod tests {
 	use spec::authority_round::AuthorityRound;
 
 	#[test]
-	fn authority_round_deserialization() {
+	fn casper_params_deserialisation() {
 		let s = r#"{
 			"params": {
+                "contractParams": {
+                    epochLength: 50,
+                    withdrawalDelay: 15000,
+                    dynastyLogoutDelay: 700,
+                    baseInterestFactor: 7e-3,
+                    basePenaltyFactor: 2e-7,
+                    minDepositSizeEth: 1500,
+                },
 				"hybridCasperForkBlknum": 100,
-                "casperAddr": ""
 			}
 		}"#;
 
 		let deserialized: CasperFfg = serde_json::from_str(s).unwrap();
-		assert_eq!(deserialized.params.hybrid_casper_fork_block_number, 100);
+        let contract_params = deserialized.params.contract_params.unwrap();
+		assert_eq!(deserialized.params.hybrid_casper_fork_block_number, Some(100));
+        assert_eq!(params.epoch_length, Some(15000));
 		// assert_eq!(deserialized.params.validators, ValidatorSet::List(vec![Address(H160::from("0xc6d9d2cd449a754c494264e1809c50e34d64562b"))]));
 		// assert_eq!(deserialized.params.start_step, Some(Uint(U256::from(24))));
 		// assert_eq!(deserialized.params.immediate_transitions, None);
