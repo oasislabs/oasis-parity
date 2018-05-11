@@ -147,10 +147,10 @@
 		"type": "address",
 		"name": "purity_checker"
 	}, {
-		"type": "decimal10",
+		"type": "int256",
 		"name": "base_interest_factor"
 	}, {
-		"type": "decimal10",
+		"type": "int256",
 		"name": "base_penalty_factor"
 	}, {
 		"type": "int128",
@@ -162,7 +162,7 @@
 }, {
 	"name": "main_hash_voted_frac",
 	"outputs": [{
-		"type": "decimal10",
+		"type": "int256",
 		"name": "out"
 	}],
 	"inputs": [],
@@ -331,7 +331,7 @@
 }, {
 	"name": "validators__deposit",
 	"outputs": [{
-		"type": "decimal10",
+		"type": "int256",
 		"name": "out"
 	}],
 	"inputs": [{
@@ -451,7 +451,7 @@
 }, {
 	"name": "dynasty_wei_delta",
 	"outputs": [{
-		"type": "decimal10",
+		"type": "int256",
 		"name": "out"
 	}],
 	"inputs": [{
@@ -521,7 +521,7 @@
 }, {
 	"name": "checkpoints__cur_dyn_votes",
 	"outputs": [{
-		"type": "decimal10",
+		"type": "int256",
 		"name": "out"
 	}],
 	"inputs": [{
@@ -538,7 +538,7 @@
 }, {
 	"name": "checkpoints__prev_dyn_votes",
 	"outputs": [{
-		"type": "decimal10",
+		"type": "int256",
 		"name": "out"
 	}],
 	"inputs": [{
@@ -611,7 +611,7 @@
 }, {
 	"name": "deposit_scale_factor",
 	"outputs": [{
-		"type": "decimal10",
+		"type": "int256",
 		"name": "out"
 	}],
 	"inputs": [{
@@ -625,7 +625,7 @@
 }, {
 	"name": "last_nonvoter_rescale",
 	"outputs": [{
-		"type": "decimal10",
+		"type": "int256",
 		"name": "out"
 	}],
 	"inputs": [],
@@ -636,7 +636,7 @@
 }, {
 	"name": "last_voter_rescale",
 	"outputs": [{
-		"type": "decimal10",
+		"type": "int256",
 		"name": "out"
 	}],
 	"inputs": [],
@@ -680,7 +680,7 @@
 }, {
 	"name": "reward_factor",
 	"outputs": [{
-		"type": "decimal10",
+		"type": "int256",
 		"name": "out"
 	}],
 	"inputs": [],
@@ -735,7 +735,7 @@
 }, {
 	"name": "BASE_INTEREST_FACTOR",
 	"outputs": [{
-		"type": "decimal10",
+		"type": "int256",
 		"name": "out"
 	}],
 	"inputs": [],
@@ -746,7 +746,7 @@
 }, {
 	"name": "BASE_PENALTY_FACTOR",
 	"outputs": [{
-		"type": "decimal10",
+		"type": "int256",
 		"name": "out"
 	}],
 	"inputs": [],
