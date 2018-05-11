@@ -18,14 +18,22 @@ use std::sync::Arc;
 
 use client::{BlockId, Client, CallContract};
 use ethereum_types::{Address, U256};
-use ethabi::{encode, Token};
 use executive::contract_address;
 use transaction::{SignedTransaction, Transaction, UnverifiedTransaction};
 use vm::CreateContractAddress;
+use rustc_hex::FromHex;
 
-// Contract ABI generated from forked simple_casper (to use latest vyper) at https://github.com/ascjones/casper/blob/80e08b13db1f096f2652e7e4330d4c65af8d13d2/casper/contracts/simple_casper.v.py
-// Compiled using https://vyper.online/ 
+// Contract bytecode and ABI generated from https://github.com/ethereum/casper/v0.1.0 // todo
+// This uses vyper compiler v0.4.0 which won't build from the vyper repo, but will work from within the casper repo.
+// 1) Clone casper repo
+// 2) Setup virtualenv for casper
+// 3) pip install requirementes
+// 4) py test
+// 5) cd contracts && vyper simple_casper.v.py
+
 // Also, decimal10 types were replaced with int256, in order for this macro to work. Issue in ethabi: https://github.com/paritytech/ethabi/issues/93
+const CASPER_CONTRACT: &'static str = include_str!("../../res/contracts/simple_casper.evm");
+
 use_contract!(simple_casper_contract, "SimpleCasper", "res/contracts/simple_casper.json");
 
 pub type Epoch = U256;
@@ -48,6 +56,16 @@ pub struct CasperContractParams {
     base_interest_factor: f64,
     base_penalty_factor: f64,
     min_deposit_size_eth: u64,
+}
+
+/// Convert a float to a U256, this can be replaced when we have a type for vyper decimal10/fixedMofN
+fn float_to_int(v: f64) -> U256 {
+	// todo: [AJ] check for inputs > MAX / 10 ^ 10
+	let x = v * 10.0_f64.powi(10);
+	if x < 1.0 {
+		panic!("Max 10 decimal place precision");
+	}
+	U256::from(x as i64)
 }
 
 // pub struct CasperParams {
@@ -109,7 +127,11 @@ impl SimpleCasperContract {
     fn current_epoch(&self) -> Result<Epoch, Error> {
         self.casper.functions()
             .current_epoch()
-            .call(&|data| self.client.call_contract(BlockId::Latest, self.address, data))
+            .call(&|data| {
+				let res = self.client.call_contract(BlockId::Latest, self.address, data);
+				println!("Current epoch {:?}", res);
+				res
+			})
 			.map_err(|e| e.to_string())
     }
 
@@ -144,9 +166,9 @@ pub fn casper_initiating_transactions(params: &CasperContractParams, start_nonce
 		(signed_tx, addr)
 	}
 
-	let (viper_rlp_decoder_tx,_) = decode_tx(VIPER_RLP_DECODER_TX); 
+	let (viper_rlp_decoder_tx,_) = decode_tx(VIPER_RLP_DECODER_TX);
 	let (sig_hasher_tx, sig_hasher_addr) = decode_tx(SIG_HASHER_TX);
-	let (purity_checker_tx, purity_checker_addr) = decode_tx(PURITY_CHECKER_TX); 
+	let (purity_checker_tx, purity_checker_addr) = decode_tx(PURITY_CHECKER_TX);
 
 	let mut txs = Vec::new();
 	let mut nonce = start_nonce;
@@ -168,20 +190,25 @@ pub fn casper_initiating_transactions(params: &CasperContractParams, start_nonce
 	// let base_interest_factor = Token::Int(7u32.into()); // int instead of decimal
 	// let base_penalty_factor = Token::Int(8u32.into()); // todo: convert decimal value to int equivalent
 	// let min_deposit_size = Token::Uint(9u32.into());
-
-	let encoded = encode(&[
-		Token::Int(params.epoch_length.into()), 
-		Token::Int(params.withdrawal_delay.into()), 
-		Token::Int(params.dynasty_logout_delay.into()), 
-		Token::Address(sig_hasher_addr), 
-		Token::Address(purity_checker_addr), 
-		// base_interest_factor, 
-		// base_penalty_factor, 
-		// min_deposit_size
-	]);
+	let constructor_code = CASPER_CONTRACT.from_hex().expect("Casper contract code is valid");
+	let contract = simple_casper_contract::SimpleCasper::default();
+	// todo: use i128 here instead with new rust?
+	let min_deposit_size_wei = U256::from(params.min_deposit_size_eth) * U256::from(10).pow(U256::from(18));
+	let data = contract.constructor(
+		constructor_code,
+		params.epoch_length,
+		params.withdrawal_delay,
+		params.dynasty_logout_delay,
+		sig_hasher_addr,
+		purity_checker_addr,
+		// todo: [AJ] convert f64s above into abi compatible ints
+		float_to_int(params.base_interest_factor),
+		float_to_int(params.base_penalty_factor),
+		min_deposit_size_wei,
+	);
 
 	txs
-	// let sig_hasher_tx: UnverifiedTransaction = 
+	// let sig_hasher_tx: UnverifiedTransaction =
     // o = []
     // nonce = starting_nonc
     // # Create transactions for instantiating RLP decoder, sig hasher and purity checker, plus transactions for feeding the
@@ -207,43 +234,14 @@ mod test {
 	use super::*;
 	use ethabi::{encode, Token};
 	use ethereum_types::{Address, U256};
-	use client::{Client, BlockId, CallContract, BlockInfo, ImportSealedBlock, PrepareOpenBlock};
+	use client::{Client, BlockInfo, ImportSealedBlock, PrepareOpenBlock};
 	use spec::Spec;
 	use rustc_hex::ToHex;
 	use test_helpers::generate_dummy_client_with_spec_and_accounts;
-	use transaction::{Action, SignedTransaction, PendingTransaction, Transaction};
+	use transaction::{Action, Transaction};
 	use miner::MinerService;
 
 	const EPOCH_LENGTH: u32 = 10;
-	const CASPER_ADDRESS: &'static str = "bd832b0cd3291c39ef67691858f35c71dfb3bf21"; 
-
-	// using this for now just to generate the constructor bytecode to be appended to the contract bytecode in casper_ffg.json
-	// just run with cargo test -- --nocapture
-	#[test]
-	fn generate_casper_constructor_bytecode() {
-		// casper constructor
-		// 		def __init__(
-		//         epoch_length: int128, withdrawal_delay: int128, dynasty_logout_delay: int128,
-		//         owner: address, sighasher: address, purity_checker: address,
-		//         base_interest_factor: decimal, base_penalty_factor: decimal,
-		// min_deposit_size: wei_value):
-
-		let epoch_length = Token::Int(EPOCH_LENGTH.into());
-		let withdrawal_delay = Token::Int(2u32.into());
-		let dynasty_logout_delay = Token::Int(3u32.into());
-		let owner = Token::Address("0000000000000000000000000000000000000004".into());
-		let sighasher = Token::Address("0000000000000000000000000000000000000005".into());
-		let purity_checker = Token::Address("0000000000000000000000000000000000000006".into());
-		let base_interest_factor = Token::Int(7u32.into()); // int instead of decimal
-		let base_penalty_factor = Token::Int(8u32.into()); // todo: convert decimal value to int equivalent
-		let min_deposit_size = Token::Uint(9u32.into());
-
-		let encoded = encode(&[epoch_length, withdrawal_delay, dynasty_logout_delay, owner, sighasher, purity_checker, base_interest_factor, base_penalty_factor, min_deposit_size]);
-		println!("ENCODED: '{:?}'", encoded.to_hex());
-
-		// result: append after 36000f3 in casper_ffg.json
-		// 000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000050000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000700000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000009
-	}
 
 	fn setup() -> SimpleCasperContract {
 		let params = CasperContractParams {
@@ -254,7 +252,7 @@ mod test {
 			base_penalty_factor: 2e-7,
 			min_deposit_size_eth: 1500,
 		};
-		
+
 		let txs = casper_initiating_transactions(&params, 0.into());
 
 		let client = generate_dummy_client_with_spec_and_accounts(
@@ -280,7 +278,7 @@ mod test {
 				data: data,
 			}.fake_sign(from);
 			client.miner().import_own_transaction(&*client, transaction.into())
-				.map_err(|e| e.to_string())	
+				.map_err(|e| e.to_string())
 		};
 		Box::new(exec)
 	}
@@ -329,7 +327,7 @@ mod test {
 		// check contract precondition
 		let current_block : U256 = client.best_block_header().number().into();
 		let computed_current_epoch = current_block / epoch_length;
-		
+
 		assert_eq!(Ok(()), res);
 
 		assert_eq!(Ok(0.into()), casper.dynasty());
