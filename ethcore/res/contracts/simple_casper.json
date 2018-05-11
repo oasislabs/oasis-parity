@@ -1,944 +1,779 @@
-[
-    {
-        "anonymous": false,
-        "inputs": [
-            {
-                "indexed": true,
-                "name": "_from",
-                "type": "address"
-            },
-            {
-                "indexed": true,
-                "name": "_validator_index",
-                "type": "int128"
-            },
-            {
-                "indexed": false,
-                "name": "_validation_address",
-                "type": "address"
-            },
-            {
-                "indexed": false,
-                "name": "_start_dyn",
-                "type": "int128"
-            },
-            {
-                "indexed": false,
-                "name": "_amount",
-                "type": "int128"
-            }
-        ],
-        "name": "Deposit",
-        "type": "event"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            {
-                "indexed": true,
-                "name": "_from",
-                "type": "address"
-            },
-            {
-                "indexed": true,
-                "name": "_validator_index",
-                "type": "int128"
-            },
-            {
-                "indexed": true,
-                "name": "_target_hash",
-                "type": "bytes32"
-            },
-            {
-                "indexed": false,
-                "name": "_target_epoch",
-                "type": "int128"
-            },
-            {
-                "indexed": false,
-                "name": "_source_epoch",
-                "type": "int128"
-            }
-        ],
-        "name": "Vote",
-        "type": "event"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            {
-                "indexed": true,
-                "name": "_from",
-                "type": "address"
-            },
-            {
-                "indexed": true,
-                "name": "_validator_index",
-                "type": "int128"
-            },
-            {
-                "indexed": false,
-                "name": "_end_dyn",
-                "type": "int128"
-            }
-        ],
-        "name": "Logout",
-        "type": "event"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            {
-                "indexed": true,
-                "name": "_to",
-                "type": "address"
-            },
-            {
-                "indexed": true,
-                "name": "_validator_index",
-                "type": "int128"
-            },
-            {
-                "indexed": false,
-                "name": "_amount",
-                "type": "int128"
-            }
-        ],
-        "name": "Withdraw",
-        "type": "event"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            {
-                "indexed": true,
-                "name": "_from",
-                "type": "address"
-            },
-            {
-                "indexed": true,
-                "name": "_offender",
-                "type": "address"
-            },
-            {
-                "indexed": true,
-                "name": "_offender_index",
-                "type": "int128"
-            },
-            {
-                "indexed": false,
-                "name": "_bounty",
-                "type": "int128"
-            },
-            {
-                "indexed": false,
-                "name": "_destroyed",
-                "type": "int128"
-            }
-        ],
-        "name": "Slash",
-        "type": "event"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            {
-                "indexed": true,
-                "name": "_number",
-                "type": "int128"
-            },
-            {
-                "indexed": true,
-                "name": "_checkpoint_hash",
-                "type": "bytes32"
-            },
-            {
-                "indexed": false,
-                "name": "_is_justified",
-                "type": "bool"
-            },
-            {
-                "indexed": false,
-                "name": "_is_finalized",
-                "type": "bool"
-            }
-        ],
-        "name": "Epoch",
-        "type": "event"
-    },
-    {
-        "constant": false,
-        "inputs": [
-            {
-                "name": "epoch_length",
-                "type": "int128"
-            },
-            {
-                "name": "withdrawal_delay",
-                "type": "int128"
-            },
-            {
-                "name": "dynasty_logout_delay",
-                "type": "int128"
-            },
-            {
-                "name": "owner",
-                "type": "address"
-            },
-            {
-                "name": "sighasher",
-                "type": "address"
-            },
-            {
-                "name": "purity_checker",
-                "type": "address"
-            },
-            {
-                "name": "base_interest_factor",
-                "type": "int256"
-            },
-            {
-                "name": "base_penalty_factor",
-                "type": "int256"
-            },
-            {
-                "name": "min_deposit_size",
-                "type": "int128"
-            }
-        ],
-        "name": "__init__",
-        "outputs": [],
-        "payable": false,
-        "type": "constructor"
-    },
-    {
-        "constant": true,
-        "gas": 2683,
-        "inputs": [],
-        "name": "main_hash_voted_frac",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int256"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 2691,
-        "inputs": [
-            {
-                "name": "validator_index",
-                "type": "int128"
-            }
-        ],
-        "name": "deposit_size",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int128"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 2295,
-        "inputs": [],
-        "name": "total_curdyn_deposits_scaled",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int128"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 2325,
-        "inputs": [],
-        "name": "total_prevdyn_deposits_scaled",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int128"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 603,
-        "inputs": [],
-        "name": "recommended_source_epoch",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int128"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 480,
-        "inputs": [],
-        "name": "recommended_target_hash",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "bytes32"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": false,
-        "gas": 360767,
-        "inputs": [
-            {
-                "name": "epoch",
-                "type": "int128"
-            }
-        ],
-        "name": "initialize_epoch",
-        "outputs": [],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": false,
-        "gas": 672180,
-        "inputs": [
-            {
-                "name": "validation_addr",
-                "type": "address"
-            },
-            {
-                "name": "withdrawal_addr",
-                "type": "address"
-            }
-        ],
-        "name": "deposit",
-        "outputs": [],
-        "payable": true,
-        "type": "function"
-    },
-    {
-        "constant": false,
-        "gas": 759424,
-        "inputs": [
-            {
-                "name": "logout_msg",
-                "type": "bytes"
-            }
-        ],
-        "name": "logout",
-        "outputs": [],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": false,
-        "gas": 89957,
-        "inputs": [
-            {
-                "name": "validator_index",
-                "type": "int128"
-            }
-        ],
-        "name": "withdraw",
-        "outputs": [],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": false,
-        "gas": 1018125,
-        "inputs": [
-            {
-                "name": "vote_msg",
-                "type": "bytes"
-            }
-        ],
-        "name": "vote",
-        "outputs": [],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": false,
-        "gas": 1582130,
-        "inputs": [
-            {
-                "name": "vote_msg_1",
-                "type": "bytes"
-            },
-            {
-                "name": "vote_msg_2",
-                "type": "bytes"
-            }
-        ],
-        "name": "slash",
-        "outputs": [],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": false,
-        "gas": 41080,
-        "inputs": [],
-        "name": "owner_withdraw",
-        "outputs": [],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": false,
-        "gas": 21221,
-        "inputs": [
-            {
-                "name": "new_owner",
-                "type": "address"
-            }
-        ],
-        "name": "change_owner",
-        "outputs": [],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1410,
-        "inputs": [
-            {
-                "name": "arg0",
-                "type": "int128"
-            }
-        ],
-        "name": "validators__deposit",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int256"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1440,
-        "inputs": [
-            {
-                "name": "arg0",
-                "type": "int128"
-            }
-        ],
-        "name": "validators__start_dynasty",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int128"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1470,
-        "inputs": [
-            {
-                "name": "arg0",
-                "type": "int128"
-            }
-        ],
-        "name": "validators__end_dynasty",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int128"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1494,
-        "inputs": [
-            {
-                "name": "arg0",
-                "type": "int128"
-            }
-        ],
-        "name": "validators__addr",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "address"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1530,
-        "inputs": [
-            {
-                "name": "arg0",
-                "type": "int128"
-            }
-        ],
-        "name": "validators__withdrawal_addr",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "address"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1482,
-        "inputs": [
-            {
-                "name": "arg0",
-                "type": "int128"
-            }
-        ],
-        "name": "checkpoint_hashes",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "bytes32"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1323,
-        "inputs": [],
-        "name": "next_validator_index",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int128"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1491,
-        "inputs": [
-            {
-                "name": "arg0",
-                "type": "address"
-            }
-        ],
-        "name": "validator_indexes",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int128"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1383,
-        "inputs": [],
-        "name": "dynasty",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int128"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1602,
-        "inputs": [
-            {
-                "name": "arg0",
-                "type": "int128"
-            }
-        ],
-        "name": "dynasty_wei_delta",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int256"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1632,
-        "inputs": [
-            {
-                "name": "arg0",
-                "type": "int128"
-            }
-        ],
-        "name": "dynasty_start_epoch",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int128"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1662,
-        "inputs": [
-            {
-                "name": "arg0",
-                "type": "int128"
-            }
-        ],
-        "name": "dynasty_in_epoch",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int128"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1941,
-        "inputs": [
-            {
-                "name": "arg0",
-                "type": "int128"
-            },
-            {
-                "name": "arg1",
-                "type": "int128"
-            }
-        ],
-        "name": "votes__cur_dyn_votes",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int256"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1977,
-        "inputs": [
-            {
-                "name": "arg0",
-                "type": "int128"
-            },
-            {
-                "name": "arg1",
-                "type": "int128"
-            }
-        ],
-        "name": "votes__prev_dyn_votes",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int256"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 2007,
-        "inputs": [
-            {
-                "name": "arg0",
-                "type": "int128"
-            },
-            {
-                "name": "arg1",
-                "type": "int128"
-            }
-        ],
-        "name": "votes__vote_bitmap",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "uint256"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1860,
-        "inputs": [
-            {
-                "name": "arg0",
-                "type": "int128"
-            }
-        ],
-        "name": "votes__is_justified",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "bool"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1890,
-        "inputs": [
-            {
-                "name": "arg0",
-                "type": "int128"
-            }
-        ],
-        "name": "votes__is_finalized",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "bool"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1653,
-        "inputs": [],
-        "name": "main_hash_justified",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "bool"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1872,
-        "inputs": [
-            {
-                "name": "arg0",
-                "type": "int128"
-            }
-        ],
-        "name": "deposit_scale_factor",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int256"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1713,
-        "inputs": [],
-        "name": "last_nonvoter_rescale",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int256"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1743,
-        "inputs": [],
-        "name": "last_voter_rescale",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int256"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1773,
-        "inputs": [],
-        "name": "current_epoch",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int128"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1803,
-        "inputs": [],
-        "name": "last_finalized_epoch",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int128"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1833,
-        "inputs": [],
-        "name": "last_justified_epoch",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int128"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1863,
-        "inputs": [],
-        "name": "reward_factor",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int256"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1893,
-        "inputs": [],
-        "name": "expected_source_epoch",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int128"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1923,
-        "inputs": [],
-        "name": "EPOCH_LENGTH",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int128"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1953,
-        "inputs": [],
-        "name": "WITHDRAWAL_DELAY",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int128"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 1983,
-        "inputs": [],
-        "name": "DYNASTY_LOGOUT_DELAY",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int128"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 2013,
-        "inputs": [],
-        "name": "BASE_INTEREST_FACTOR",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int256"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "gas": 2043,
-        "inputs": [],
-        "name": "BASE_PENALTY_FACTOR",
-        "outputs": [
-            {
-                "name": "out",
-                "type": "int256"
-            }
-        ],
-        "payable": false,
-        "type": "function"
-    }
-]
+[{
+	"name": "Deposit",
+	"inputs": [{
+		"type": "address",
+		"name": "_from",
+		"indexed": true
+	}, {
+		"type": "int128",
+		"name": "_validator_index",
+		"indexed": true
+	}, {
+		"type": "address",
+		"name": "_validation_address",
+		"indexed": false
+	}, {
+		"type": "int128",
+		"name": "_start_dyn",
+		"indexed": false
+	}, {
+		"type": "int128",
+		"name": "_amount",
+		"indexed": false
+	}],
+	"anonymous": false,
+	"type": "event"
+}, {
+	"name": "Vote",
+	"inputs": [{
+		"type": "address",
+		"name": "_from",
+		"indexed": true
+	}, {
+		"type": "int128",
+		"name": "_validator_index",
+		"indexed": true
+	}, {
+		"type": "bytes32",
+		"name": "_target_hash",
+		"indexed": true
+	}, {
+		"type": "int128",
+		"name": "_target_epoch",
+		"indexed": false
+	}, {
+		"type": "int128",
+		"name": "_source_epoch",
+		"indexed": false
+	}],
+	"anonymous": false,
+	"type": "event"
+}, {
+	"name": "Logout",
+	"inputs": [{
+		"type": "address",
+		"name": "_from",
+		"indexed": true
+	}, {
+		"type": "int128",
+		"name": "_validator_index",
+		"indexed": true
+	}, {
+		"type": "int128",
+		"name": "_end_dyn",
+		"indexed": false
+	}],
+	"anonymous": false,
+	"type": "event"
+}, {
+	"name": "Withdraw",
+	"inputs": [{
+		"type": "address",
+		"name": "_to",
+		"indexed": true
+	}, {
+		"type": "int128",
+		"name": "_validator_index",
+		"indexed": true
+	}, {
+		"type": "int128",
+		"name": "_amount",
+		"indexed": false
+	}],
+	"anonymous": false,
+	"type": "event"
+}, {
+	"name": "Slash",
+	"inputs": [{
+		"type": "address",
+		"name": "_from",
+		"indexed": true
+	}, {
+		"type": "address",
+		"name": "_offender",
+		"indexed": true
+	}, {
+		"type": "int128",
+		"name": "_offender_index",
+		"indexed": true
+	}, {
+		"type": "int128",
+		"name": "_bounty",
+		"indexed": false
+	}, {
+		"type": "int128",
+		"name": "_destroyed",
+		"indexed": false
+	}],
+	"anonymous": false,
+	"type": "event"
+}, {
+	"name": "Epoch",
+	"inputs": [{
+		"type": "int128",
+		"name": "_number",
+		"indexed": true
+	}, {
+		"type": "bytes32",
+		"name": "_checkpoint_hash",
+		"indexed": true
+	}, {
+		"type": "bool",
+		"name": "_is_justified",
+		"indexed": false
+	}, {
+		"type": "bool",
+		"name": "_is_finalized",
+		"indexed": false
+	}],
+	"anonymous": false,
+	"type": "event"
+}, {
+	"name": "__init__",
+	"outputs": [],
+	"inputs": [{
+		"type": "int128",
+		"name": "epoch_length"
+	}, {
+		"type": "int128",
+		"name": "withdrawal_delay"
+	}, {
+		"type": "int128",
+		"name": "dynasty_logout_delay"
+	}, {
+		"type": "address",
+		"name": "sighasher"
+	}, {
+		"type": "address",
+		"name": "purity_checker"
+	}, {
+		"type": "decimal10",
+		"name": "base_interest_factor"
+	}, {
+		"type": "decimal10",
+		"name": "base_penalty_factor"
+	}, {
+		"type": "int128",
+		"name": "min_deposit_size"
+	}],
+	"constant": false,
+	"payable": false,
+	"type": "constructor"
+}, {
+	"name": "main_hash_voted_frac",
+	"outputs": [{
+		"type": "decimal10",
+		"name": "out"
+	}],
+	"inputs": [],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 2689
+}, {
+	"name": "deposit_size",
+	"outputs": [{
+		"type": "int128",
+		"name": "out"
+	}],
+	"inputs": [{
+		"type": "int128",
+		"name": "validator_index"
+	}],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 2691
+}, {
+	"name": "total_curdyn_deposits_in_wei",
+	"outputs": [{
+		"type": "int128",
+		"name": "out"
+	}],
+	"inputs": [],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 2295
+}, {
+	"name": "total_prevdyn_deposits_in_wei",
+	"outputs": [{
+		"type": "int128",
+		"name": "out"
+	}],
+	"inputs": [],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 2325
+}, {
+	"name": "recommended_source_epoch",
+	"outputs": [{
+		"type": "int128",
+		"name": "out"
+	}],
+	"inputs": [],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 603
+}, {
+	"name": "recommended_target_hash",
+	"outputs": [{
+		"type": "bytes32",
+		"name": "out"
+	}],
+	"inputs": [],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 480
+}, {
+	"name": "highest_justified_epoch",
+	"outputs": [{
+		"type": "int128",
+		"name": "out"
+	}],
+	"inputs": [{
+		"type": "int128",
+		"name": "min_total_deposits"
+	}],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 1882000000000000000000000000000616
+}, {
+	"name": "highest_finalized_epoch",
+	"outputs": [{
+		"type": "int128",
+		"name": "out"
+	}],
+	"inputs": [{
+		"type": "int128",
+		"name": "min_total_deposits"
+	}],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 1882000000000000000000000000000646
+}, {
+	"name": "initialize_epoch",
+	"outputs": [],
+	"inputs": [{
+		"type": "int128",
+		"name": "epoch"
+	}],
+	"constant": false,
+	"payable": false,
+	"type": "function",
+	"gas": 407407
+}, {
+	"name": "deposit",
+	"outputs": [],
+	"inputs": [{
+		"type": "address",
+		"name": "validation_addr"
+	}, {
+		"type": "address",
+		"name": "withdrawal_addr"
+	}],
+	"constant": false,
+	"payable": true,
+	"type": "function",
+	"gas": 672247
+}, {
+	"name": "logout",
+	"outputs": [],
+	"inputs": [{
+		"type": "bytes",
+		"name": "logout_msg"
+	}],
+	"constant": false,
+	"payable": false,
+	"type": "function",
+	"gas": 64024
+}, {
+	"name": "withdraw",
+	"outputs": [],
+	"inputs": [{
+		"type": "int128",
+		"name": "validator_index"
+	}],
+	"constant": false,
+	"payable": false,
+	"type": "function",
+	"gas": 89851
+}, {
+	"name": "vote",
+	"outputs": [],
+	"inputs": [{
+		"type": "bytes",
+		"name": "vote_msg"
+	}],
+	"constant": false,
+	"payable": false,
+	"type": "function",
+	"gas": 321183
+}, {
+	"name": "slash",
+	"outputs": [],
+	"inputs": [{
+		"type": "bytes",
+		"name": "vote_msg_1"
+	}, {
+		"type": "bytes",
+		"name": "vote_msg_2"
+	}],
+	"constant": false,
+	"payable": false,
+	"type": "function",
+	"gas": 190614
+}, {
+	"name": "validators__deposit",
+	"outputs": [{
+		"type": "decimal10",
+		"name": "out"
+	}],
+	"inputs": [{
+		"type": "int128",
+		"name": "arg0"
+	}],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 1440
+}, {
+	"name": "validators__start_dynasty",
+	"outputs": [{
+		"type": "int128",
+		"name": "out"
+	}],
+	"inputs": [{
+		"type": "int128",
+		"name": "arg0"
+	}],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 1470
+}, {
+	"name": "validators__end_dynasty",
+	"outputs": [{
+		"type": "int128",
+		"name": "out"
+	}],
+	"inputs": [{
+		"type": "int128",
+		"name": "arg0"
+	}],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 1500
+}, {
+	"name": "validators__addr",
+	"outputs": [{
+		"type": "address",
+		"name": "out"
+	}],
+	"inputs": [{
+		"type": "int128",
+		"name": "arg0"
+	}],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 1524
+}, {
+	"name": "validators__withdrawal_addr",
+	"outputs": [{
+		"type": "address",
+		"name": "out"
+	}],
+	"inputs": [{
+		"type": "int128",
+		"name": "arg0"
+	}],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 1560
+}, {
+	"name": "checkpoint_hashes",
+	"outputs": [{
+		"type": "bytes32",
+		"name": "out"
+	}],
+	"inputs": [{
+		"type": "int128",
+		"name": "arg0"
+	}],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 1512
+}, {
+	"name": "next_validator_index",
+	"outputs": [{
+		"type": "int128",
+		"name": "out"
+	}],
+	"inputs": [],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 1353
+}, {
+	"name": "validator_indexes",
+	"outputs": [{
+		"type": "int128",
+		"name": "out"
+	}],
+	"inputs": [{
+		"type": "address",
+		"name": "arg0"
+	}],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 1521
+}, {
+	"name": "dynasty",
+	"outputs": [{
+		"type": "int128",
+		"name": "out"
+	}],
+	"inputs": [],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 1413
+}, {
+	"name": "dynasty_wei_delta",
+	"outputs": [{
+		"type": "decimal10",
+		"name": "out"
+	}],
+	"inputs": [{
+		"type": "int128",
+		"name": "arg0"
+	}],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 1632
+}, {
+	"name": "dynasty_start_epoch",
+	"outputs": [{
+		"type": "int128",
+		"name": "out"
+	}],
+	"inputs": [{
+		"type": "int128",
+		"name": "arg0"
+	}],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 1662
+}, {
+	"name": "dynasty_in_epoch",
+	"outputs": [{
+		"type": "int128",
+		"name": "out"
+	}],
+	"inputs": [{
+		"type": "int128",
+		"name": "arg0"
+	}],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 1692
+}, {
+	"name": "checkpoints__cur_dyn_deposits",
+	"outputs": [{
+		"type": "int128",
+		"name": "out"
+	}],
+	"inputs": [{
+		"type": "int128",
+		"name": "arg0"
+	}],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 1794
+}, {
+	"name": "checkpoints__prev_dyn_deposits",
+	"outputs": [{
+		"type": "int128",
+		"name": "out"
+	}],
+	"inputs": [{
+		"type": "int128",
+		"name": "arg0"
+	}],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 1830
+}, {
+	"name": "checkpoints__cur_dyn_votes",
+	"outputs": [{
+		"type": "decimal10",
+		"name": "out"
+	}],
+	"inputs": [{
+		"type": "int128",
+		"name": "arg0"
+	}, {
+		"type": "int128",
+		"name": "arg1"
+	}],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 2037
+}, {
+	"name": "checkpoints__prev_dyn_votes",
+	"outputs": [{
+		"type": "decimal10",
+		"name": "out"
+	}],
+	"inputs": [{
+		"type": "int128",
+		"name": "arg0"
+	}, {
+		"type": "int128",
+		"name": "arg1"
+	}],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 2067
+}, {
+	"name": "checkpoints__vote_bitmap",
+	"outputs": [{
+		"type": "uint256",
+		"name": "out"
+	}],
+	"inputs": [{
+		"type": "int128",
+		"name": "arg0"
+	}, {
+		"type": "int128",
+		"name": "arg1"
+	}],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 2097
+}, {
+	"name": "checkpoints__is_justified",
+	"outputs": [{
+		"type": "bool",
+		"name": "out"
+	}],
+	"inputs": [{
+		"type": "int128",
+		"name": "arg0"
+	}],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 1950
+}, {
+	"name": "checkpoints__is_finalized",
+	"outputs": [{
+		"type": "bool",
+		"name": "out"
+	}],
+	"inputs": [{
+		"type": "int128",
+		"name": "arg0"
+	}],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 1980
+}, {
+	"name": "main_hash_justified",
+	"outputs": [{
+		"type": "bool",
+		"name": "out"
+	}],
+	"inputs": [],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 1743
+}, {
+	"name": "deposit_scale_factor",
+	"outputs": [{
+		"type": "decimal10",
+		"name": "out"
+	}],
+	"inputs": [{
+		"type": "int128",
+		"name": "arg0"
+	}],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 1962
+}, {
+	"name": "last_nonvoter_rescale",
+	"outputs": [{
+		"type": "decimal10",
+		"name": "out"
+	}],
+	"inputs": [],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 1803
+}, {
+	"name": "last_voter_rescale",
+	"outputs": [{
+		"type": "decimal10",
+		"name": "out"
+	}],
+	"inputs": [],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 1833
+}, {
+	"name": "current_epoch",
+	"outputs": [{
+		"type": "int128",
+		"name": "out"
+	}],
+	"inputs": [],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 1863
+}, {
+	"name": "last_finalized_epoch",
+	"outputs": [{
+		"type": "int128",
+		"name": "out"
+	}],
+	"inputs": [],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 1893
+}, {
+	"name": "last_justified_epoch",
+	"outputs": [{
+		"type": "int128",
+		"name": "out"
+	}],
+	"inputs": [],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 1923
+}, {
+	"name": "reward_factor",
+	"outputs": [{
+		"type": "decimal10",
+		"name": "out"
+	}],
+	"inputs": [],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 1953
+}, {
+	"name": "expected_source_epoch",
+	"outputs": [{
+		"type": "int128",
+		"name": "out"
+	}],
+	"inputs": [],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 1983
+}, {
+	"name": "EPOCH_LENGTH",
+	"outputs": [{
+		"type": "int128",
+		"name": "out"
+	}],
+	"inputs": [],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 2013
+}, {
+	"name": "WITHDRAWAL_DELAY",
+	"outputs": [{
+		"type": "int128",
+		"name": "out"
+	}],
+	"inputs": [],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 2043
+}, {
+	"name": "DYNASTY_LOGOUT_DELAY",
+	"outputs": [{
+		"type": "int128",
+		"name": "out"
+	}],
+	"inputs": [],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 2073
+}, {
+	"name": "BASE_INTEREST_FACTOR",
+	"outputs": [{
+		"type": "decimal10",
+		"name": "out"
+	}],
+	"inputs": [],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 2103
+}, {
+	"name": "BASE_PENALTY_FACTOR",
+	"outputs": [{
+		"type": "decimal10",
+		"name": "out"
+	}],
+	"inputs": [],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 2133
+}, {
+	"name": "MIN_DEPOSIT_SIZE",
+	"outputs": [{
+		"type": "int128",
+		"name": "out"
+	}],
+	"inputs": [],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 2163
+}, {
+	"name": "START_EPOCH",
+	"outputs": [{
+		"type": "int128",
+		"name": "out"
+	}],
+	"inputs": [],
+	"constant": true,
+	"payable": false,
+	"type": "function",
+	"gas": 2193
+}]
