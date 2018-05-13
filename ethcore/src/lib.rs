@@ -109,7 +109,6 @@ extern crate wasm;
 extern crate memory_cache;
 extern crate journaldb;
 
-
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows", target_os = "android"))]
 extern crate hardware_wallet;
 
@@ -162,6 +161,7 @@ pub mod snapshot;
 pub mod spec;
 pub mod state;
 pub mod state_db;
+
 // Test helpers made public for usage outside ethcore
 pub mod test_helpers;
 pub mod trace;
