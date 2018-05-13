@@ -9,7 +9,7 @@ name = "parity-evm"
 path = "./src/main.rs"
 
 [dependencies]
-docopt = "0.8"
+docopt = "1.0"
 ethcore = { path = "../ethcore" }
 ethjson = { path = "../json" }
 ethcore-bytes = { path = "../util/bytes" }
