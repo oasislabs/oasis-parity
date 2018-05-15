@@ -155,7 +155,7 @@ impl SimpleCasperContract {
 	}
 }
 
-pub fn casper_initiating_transactions(params: &CasperContractParams, start_nonce: U256) -> Vec<SignedTransaction> {
+pub fn casper_initiating_transactions(params: &CasperContractParams, start_nonce: U256) -> (Vec<SignedTransaction>, Address) {
 	fn decode_tx(hex: &str) -> (SignedTransaction, Address) {
 		let bytes = ::rustc_hex::FromHex::from_hex(hex).expect("hardcoded transaction should be valid hex");
 		let unverified_tx : UnverifiedTransaction = ::rlp::decode(&bytes);
@@ -172,13 +172,14 @@ pub fn casper_initiating_transactions(params: &CasperContractParams, start_nonce
 
 	let mut txs = Vec::new();
 	let mut nonce = start_nonce;
+	let gas_price = U256::from(25_000_000_000);
 
 	for tx in [viper_rlp_decoder_tx, sig_hasher_tx, purity_checker_tx].iter() {
 		let fund_tx = Transaction {
 			nonce: nonce,
 			action: tx.action.clone(),
-			gas: 90_000.into(),
-			gas_price: 25_000_000_000u64.into(),
+			gas: U256::from(90_000),
+			gas_price,
 			value: tx.gas * tx.gas_price + tx.value,
 			data: vec![],
 		}.null_sign(1);
@@ -187,9 +188,6 @@ pub fn casper_initiating_transactions(params: &CasperContractParams, start_nonce
 		nonce = nonce + 1.into();
 	}
 
-	// let base_interest_factor = Token::Int(7u32.into()); // int instead of decimal
-	// let base_penalty_factor = Token::Int(8u32.into()); // todo: convert decimal value to int equivalent
-	// let min_deposit_size = Token::Uint(9u32.into());
 	let constructor_code = CASPER_CONTRACT.from_hex().expect("Casper contract code is valid");
 	let contract = simple_casper_contract::SimpleCasper::default();
 	// todo: use i128 here instead with new rust?
@@ -206,8 +204,17 @@ pub fn casper_initiating_transactions(params: &CasperContractParams, start_nonce
 		float_to_int(params.base_penalty_factor),
 		min_deposit_size_wei,
 	);
-
-	txs
+	let casper_deploy_tx = Transaction {
+		nonce,
+		action: Action::Create,
+		gas: U256::from(5_000_000),
+		gas_price,
+		value: U256::from(0),
+		data,
+	}.null_sign(1);
+	txs.push(casper_deploy_tx);
+	let (casper_addr,_) = contract_address(CreateContractAddress::FromSenderAndNonce, &casper_deploy_tx.sender(), &nonce, &[]);
+	txs, casper_addr
 	// let sig_hasher_tx: UnverifiedTransaction =
     // o = []
     // nonce = starting_nonc
@@ -253,15 +260,60 @@ mod test {
 			min_deposit_size_eth: 1500,
 		};
 
-		let txs = casper_initiating_transactions(&params, 0.into());
+		let (txs, casper_addr) = casper_initiating_transactions(&params, 0.into());
 
 		let client = generate_dummy_client_with_spec_and_accounts(
 			Spec::new_test_hybrid_casper,
 			None,
 		);
 
+		// run init txs - todo: extract function
+		for tx in txs {
+
+		}
+
+		// from pyethereum
+	// 	state.gas_limit = 10**8
+    // for tx in init_txs:
+    //     state.set_balance(utils.privtoaddr(config.casper_config['SENDER']), 15**18)
+    //     success, output = apply_transaction(state, tx)
+    //     assert success
+    //     state.gas_used = 0
+    //     state.set_balance(utils.privtoaddr(config.casper_config['SENDER']), 0)
+    //     state.set_balance(casper_address, 10**25)
+    // consensus.initialize(state)
+
+		// from ethereumj
+	//  txs.forEach((tx) -> {
+    //         // We need money!
+    //         track.addBalance(NULL_SIGN_SENDER.getAddress(), BigInteger.valueOf(15).pow(18));
+
+    //         Repository txTrack = track.startTracking();
+    //         TransactionExecutor executor = createTransactionExecutor(tx, coinbase, txTrack, block, 0);
+
+    //         executor.init();
+    //         executor.execute();
+    //         executor.go();
+    //         executor.finalization();
+
+    //         byte[] contractAddress = executor.getReceipt().getTransaction().getContractAddress();
+    //         if (contractAddress != null) {
+    //             logger.info("Casper init: contract deployed at {}, tx: [{}]", Hex.toHexString(contractAddress), tx);
+    //         }
+    //         if (!executor.getReceipt().isSuccessful()) {
+    //             logger.error("Casper init failed on tx [{}], receipt [{}], breaking", tx, executor.getReceipt());
+    //             throw new RuntimeException("Casper initialization transactions on 1st block failed");
+    //         }
+
+    //         txTrack.commit();
+    //         BigInteger restBalance = track.getBalance(NULL_SIGN_SENDER.getAddress());
+    //         track.addBalance(NULL_SIGN_SENDER.getAddress(), restBalance.negate());
+    //         track.addBalance(casperAddress, track.getBalance(casperAddress).negate());
+    //         track.addBalance(casperAddress, BigInteger.valueOf(10).pow(25));
+    //     });
+
 		SimpleCasperContract::new(
-			CASPER_ADDRESS.into(),
+			casper_addr,
 			client.clone(),
 		)
 	}
