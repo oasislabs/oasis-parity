@@ -82,11 +82,18 @@ pub trait BlockProvider {
 	fn best_ancient_number(&self) -> Option<BlockNumber> {
 		self.best_ancient_block().map(|h| self.block_number(&h).expect("Ancient block is always set to an existing block or `None`. Existing block always has a number; qed"))
 	}
+
 	/// Get raw block data
 	fn block(&self, hash: &H256) -> Option<encoded::Block>;
 
+	/// Get raw block data without filling the cache
+	fn uncached_block(&self, hash: &H256) -> Option<encoded::Block>;
+
 	/// Get the familial details concerning a block.
 	fn block_details(&self, hash: &H256) -> Option<BlockDetails>;
+
+	/// Get the familial details concerning a block without filling the cache.
+	fn uncached_block_details(&self, hash: &H256) -> Option<BlockDetails>;
 
 	/// Get the hash of given block's number.
 	fn block_hash(&self, index: BlockNumber) -> Option<H256>;
@@ -96,6 +103,9 @@ pub trait BlockProvider {
 
 	/// Get receipts of block with given hash.
 	fn block_receipts(&self, hash: &H256) -> Option<BlockReceipts>;
+
+	/// Get receipts of block with given hash without filling the cache.
+	fn uncached_block_receipts(&self, hash: &H256) -> Option<BlockReceipts>;
 
 	/// Get the header RLP of a block.
 	fn block_header_data(&self, hash: &H256) -> Option<encoded::Header>;
@@ -241,6 +251,20 @@ impl BlockProvider for BlockChain {
 		Some(encoded::Block::new_from_header_and_body(&header.view(), &body.view()))
 	}
 
+	/// Get raw block data without filling the cache
+	fn uncached_block(&self, hash: &H256) -> Option<encoded::Block> {
+		let swapper = blocks_swapper();
+		let b = self.db.get(db::COL_HEADERS, hash)
+			.expect("Low level database error. Some issue with disk?")?;
+		let header = encoded::Header::new(decompress(&b, swapper).into_vec());
+
+		let b = self.db.get(db::COL_BODIES, hash)
+			.expect("Low level database error. Some issue with disk?")?;
+		let body = encoded::Body::new(decompress(&b, swapper).into_vec());
+
+		Some(encoded::Block::new_from_header_and_body(&header.view(), &body.view()))
+	}
+
 	/// Get block header data
 	fn block_header_data(&self, hash: &H256) -> Option<encoded::Header> {
 		// Check cache first
@@ -308,6 +332,11 @@ impl BlockProvider for BlockChain {
 		Some(result)
 	}
 
+	/// Get the familial details concerning a block without filling the cache
+	fn uncached_block_details(&self, hash: &H256) -> Option<BlockDetails> {
+		Some(self.db.read(db::COL_EXTRA, hash)?)
+	}
+
 	/// Get the hash of given block's number.
 	fn block_hash(&self, index: BlockNumber) -> Option<H256> {
 		let result = self.db.read_with_cache(db::COL_EXTRA, &self.block_hashes, &index)?;
@@ -327,6 +356,11 @@ impl BlockProvider for BlockChain {
 		let result = self.db.read_with_cache(db::COL_EXTRA, &self.block_receipts, hash)?;
 		self.cache_man.lock().note_used(CacheId::BlockReceipts(*hash));
 		Some(result)
+	}
+
+	/// Get receipts of block with given hash without filling the cache
+	fn uncached_block_receipts(&self, hash: &H256) -> Option<BlockReceipts> {
+		Some(self.db.read(db::COL_EXTRA, hash)?)
 	}
 
 	/// Returns numbers of blocks containing given bloom.
@@ -734,6 +768,58 @@ impl BlockChain {
 			index: index,
 			is_from_route_finalized: is_from_route_finalized,
 		})
+	}
+
+	/// Insert a block in DB without filling caches and without checking any integrity
+	/// Must only be used when trusting the source (eg. DB migration)
+	pub fn unsafe_insert_block(&self, batch: &mut DBTransaction, bytes: &[u8], block_details: BlockDetails, receipts: Vec<Receipt>) {
+		let block = view!(BlockView, bytes);
+		let header = block.header_view();
+		let hash = header.hash();
+
+		// store block in db
+		let swapper = blocks_swapper();
+		batch.put(db::COL_HEADERS, &hash, &compress(header.rlp().as_raw(), swapper));
+		batch.put(db::COL_BODIES, &hash, &compress(&Self::block_to_body(&bytes), swapper));
+
+		let info = BlockInfo {
+			hash: hash,
+			number: header.number(),
+			total_difficulty: header.difficulty(),
+			location: BlockLocation::CanonChain,
+		};
+
+		let mut block_details_update = HashMap::new();
+		block_details_update.insert(hash, block_details);
+
+		let mut block_hashes_update = HashMap::new();
+		block_hashes_update.insert(header.number(), hash);
+
+		let block_receipts_udpate = self.prepare_block_receipts_update(receipts, &info);
+		let blocks_blooms_update = self.prepare_block_blooms_update(&bytes, &info);
+		let transactions_addresses_update = self.prepare_transaction_addresses_update(&bytes, &info);
+
+		for (key, value) in block_details_update {
+			batch.write(db::COL_EXTRA, &key, &value);
+		}
+
+		for (key, value) in block_hashes_update {
+			batch.write(db::COL_EXTRA, &key, &value);
+		}
+
+		for (key, value) in block_receipts_udpate {
+			batch.write(db::COL_EXTRA, &key, &value);
+		}
+
+		for (key, value) in blocks_blooms_update {
+			batch.write(db::COL_EXTRA, &key, &value);
+		}
+
+		for (key, value) in transactions_addresses_update {
+			if let Some(tx_address) = value {
+				batch.write(db::COL_EXTRA, &key, &tx_address);
+			}
+		}
 	}
 
 	/// Inserts a verified, known block from the canonical chain.

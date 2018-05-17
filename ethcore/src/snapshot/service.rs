@@ -414,19 +414,19 @@ impl Service {
 			let chain = cur_chain.read();
 
 			let block_hash = block_view.hash();
-			let block_receipts = chain.block_receipts(&block_hash);
 			let block_number = block_view.number();
 
+			let block_details = chain.uncached_block_details(&block_hash);
+			let block_receipts = chain.uncached_block_receipts(&block_hash);
+
 			let parent_hash = block_view.parent_hash();
-			let parent_block_details = chain.block_details(&parent_hash);
 
-			match (block_receipts, parent_block_details) {
-				(Some(block_receipts), Some(parent_details)) => {
-					let parent_td = parent_details.total_difficulty;
-					let raw_block = block_view.into_inner();
+			match (block_receipts, block_details) {
+				(Some(block_receipts), Some(block_details)) => {
 					let block_receipts = block_receipts.receipts;
+					let bytes = block_view.into_inner();
 
-					next_chain.insert_unordered_block(&mut batch, &raw_block, block_receipts, Some(parent_td), false, true);
+					next_chain.unsafe_insert_block(&mut batch, &bytes, block_details, block_receipts);
 					count+=1;
 				},
 				_ => break,
@@ -450,7 +450,7 @@ impl Service {
 				break;
 			}
 
-			block = chain.block(&parent_hash);
+			block = chain.uncached_block(&parent_hash);
 		}
 
 		// Final commit to the DB
