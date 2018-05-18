@@ -945,21 +945,21 @@ impl ChainSync {
 			SyncState::SnapshotWaiting => {
 				match io.snapshot_service().status() {
 					RestorationStatus::Inactive => {
-						trace!(target:"sync", "Snapshot restoration is complete");
+						trace!(target:"warp", "Snapshot restoration is complete");
 						self.restart(io);
 					},
 					RestorationStatus::Initializing { .. } => {
-						trace!(target:"sync", "Snapshot restoration is initializing");
+						trace!(target:"warp", "Snapshot restoration is initializing");
 					},
 					RestorationStatus::Ongoing { state_chunks_done, block_chunks_done, .. } => {
 						if !self.snapshot.is_complete() && self.snapshot.done_chunks() - (state_chunks_done + block_chunks_done) as usize <= MAX_SNAPSHOT_CHUNKS_DOWNLOAD_AHEAD {
-							trace!(target:"sync", "Resuming snapshot sync");
+							trace!(target:"warp", "Resuming snapshot sync");
 							self.state = SyncState::SnapshotData;
 							self.continue_sync(io);
 						}
 					},
 					RestorationStatus::Failed => {
-						trace!(target: "sync", "Snapshot restoration aborted");
+						trace!(target: "warp", "Snapshot restoration aborted");
 						self.state = SyncState::WaitingPeers;
 						self.snapshot.clear();
 						self.continue_sync(io);

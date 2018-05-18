@@ -288,10 +288,6 @@ impl Service {
 		let reader = LooseReader::new(service.snapshot_dir()).ok();
 		*service.reader.get_mut() = reader;
 
-		trace!(target: "snapshot", "Migrating blocks...");
-		service.migrate_blocks()?;
-		trace!(target: "snapshot", "Done migrating blocks!");
-
 		Ok(service)
 	}
 
@@ -468,6 +464,8 @@ impl Service {
 		next_db.write_buffered(batch);
 		next_chain.commit();
 		next_db.flush().expect("DB flush failed.");
+
+		trace!(target: "snapshot", "Done migrating {} EXTRA columns", extra_count);
 
 		// Update best ancient block in the Next Chain
 		next_chain.update_best_ancient_block(&last_block_hash);
