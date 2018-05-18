@@ -87,13 +87,10 @@ pub trait BlockProvider {
 	fn block(&self, hash: &H256) -> Option<encoded::Block>;
 
 	/// Get raw block data without filling the cache
-	fn uncached_block(&self, hash: &H256) -> Option<encoded::Block>;
+	fn uncached_block(&self, hash: &H256) -> Option<(H256, Box<Vec<u8>>, Box<Vec<u8>>)>;
 
 	/// Get the familial details concerning a block.
 	fn block_details(&self, hash: &H256) -> Option<BlockDetails>;
-
-	/// Get the familial details concerning a block without filling the cache.
-	fn uncached_block_details(&self, hash: &H256) -> Option<BlockDetails>;
 
 	/// Get the hash of given block's number.
 	fn block_hash(&self, index: BlockNumber) -> Option<H256>;
@@ -103,9 +100,6 @@ pub trait BlockProvider {
 
 	/// Get receipts of block with given hash.
 	fn block_receipts(&self, hash: &H256) -> Option<BlockReceipts>;
-
-	/// Get receipts of block with given hash without filling the cache.
-	fn uncached_block_receipts(&self, hash: &H256) -> Option<BlockReceipts>;
 
 	/// Get the header RLP of a block.
 	fn block_header_data(&self, hash: &H256) -> Option<encoded::Header>;
@@ -215,7 +209,8 @@ pub struct BlockChain {
 	blocks_blooms: RwLock<HashMap<GroupPosition, BloomGroup>>,
 	block_receipts: RwLock<HashMap<H256, BlockReceipts>>,
 
-	db: Arc<KeyValueDB>,
+	// The chain DB
+	pub db: Arc<KeyValueDB>,
 
 	cache_man: Mutex<CacheManager<CacheId>>,
 
@@ -252,17 +247,15 @@ impl BlockProvider for BlockChain {
 	}
 
 	/// Get raw block data without filling the cache
-	fn uncached_block(&self, hash: &H256) -> Option<encoded::Block> {
-		let swapper = blocks_swapper();
-		let b = self.db.get(db::COL_HEADERS, hash)
+	fn uncached_block(&self, hash: &H256) -> Option<(H256, Box<Vec<u8>>, Box<Vec<u8>>)> {
+		let header_bytes = self.db.get(db::COL_HEADERS, hash)
 			.expect("Low level database error. Some issue with disk?")?;
-		let header = encoded::Header::new(decompress(&b, swapper).into_vec());
-
-		let b = self.db.get(db::COL_BODIES, hash)
+		let body_bytes = self.db.get(db::COL_BODIES, hash)
 			.expect("Low level database error. Some issue with disk?")?;
-		let body = encoded::Body::new(decompress(&b, swapper).into_vec());
+		let header = encoded::Header::new(decompress(&header_bytes, blocks_swapper()).into_vec());
+		let parent_hash = header.parent_hash();
 
-		Some(encoded::Block::new_from_header_and_body(&header.view(), &body.view()))
+		Some((parent_hash, Box::new(header_bytes.to_vec()), Box::new(body_bytes.to_vec())))
 	}
 
 	/// Get block header data
@@ -332,11 +325,6 @@ impl BlockProvider for BlockChain {
 		Some(result)
 	}
 
-	/// Get the familial details concerning a block without filling the cache
-	fn uncached_block_details(&self, hash: &H256) -> Option<BlockDetails> {
-		Some(self.db.read(db::COL_EXTRA, hash)?)
-	}
-
 	/// Get the hash of given block's number.
 	fn block_hash(&self, index: BlockNumber) -> Option<H256> {
 		let result = self.db.read_with_cache(db::COL_EXTRA, &self.block_hashes, &index)?;
@@ -356,11 +344,6 @@ impl BlockProvider for BlockChain {
 		let result = self.db.read_with_cache(db::COL_EXTRA, &self.block_receipts, hash)?;
 		self.cache_man.lock().note_used(CacheId::BlockReceipts(*hash));
 		Some(result)
-	}
-
-	/// Get receipts of block with given hash without filling the cache
-	fn uncached_block_receipts(&self, hash: &H256) -> Option<BlockReceipts> {
-		Some(self.db.read(db::COL_EXTRA, hash)?)
 	}
 
 	/// Returns numbers of blocks containing given bloom.

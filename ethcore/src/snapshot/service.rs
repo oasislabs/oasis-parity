@@ -29,13 +29,12 @@ use super::io::{SnapshotReader, LooseReader, SnapshotWriter, LooseWriter};
 
 use blockchain::{BlockChain, BlockProvider};
 use client::{Client, ChainInfo, ClientIoMessage};
+use db;
 use engines::EthEngine;
 use error::Error;
 use hash::keccak;
 use ids::BlockId;
-
 use io::IoChannel;
-
 use ethereum_types::H256;
 use parking_lot::{Mutex, RwLock, RwLockReadGuard};
 use util_error::UtilError;
@@ -289,6 +288,10 @@ impl Service {
 		let reader = LooseReader::new(service.snapshot_dir()).ok();
 		*service.reader.get_mut() = reader;
 
+		trace!(target: "snapshot", "Migrating blocks...");
+		service.migrate_blocks()?;
+		trace!(target: "snapshot", "Done migrating blocks!");
+
 		Ok(service)
 	}
 
@@ -352,9 +355,10 @@ impl Service {
 
 		let cur_chain = &self.client.chain();
 		let cur_chain_info = cur_chain.read().chain_info();
+		let cur_db = cur_chain.read().db.clone();
 
 		let next_db = self.restoration_db_handler.open(&rest_db)?;
-		let next_chain = BlockChain::new(Default::default(), &[], next_db.clone());
+		let next_chain = BlockChain::new(Default::default(), &self.genesis_block, next_db.clone());
 		let next_chain_info = next_chain.chain_info();
 
 		// Get the *inclusive* first and last blocks to iterate through
@@ -408,40 +412,31 @@ impl Service {
 
 		let mut success = false;
 		let mut batch = DBTransaction::new();
-		let mut block = cur_chain.read().block(&last_block_hash);
+		let mut block_hash = last_block_hash;
 
-		while let Some(block_view) = block {
+		loop {
 			let chain = cur_chain.read();
+			let raw_block = chain.uncached_block(&block_hash);
+			let (parent_hash, header_bytes, body_bytes) = match raw_block {
+				Some((parent_hash, header_b, body_b)) => (parent_hash, header_b, body_b),
+				None => break,
+			};
 
-			let block_hash = block_view.hash();
-			let block_number = block_view.number();
+			batch.put(db::COL_HEADERS, &block_hash, &header_bytes);
+			batch.put(db::COL_BODIES, &block_hash, &body_bytes);
 
-			let block_details = chain.uncached_block_details(&block_hash);
-			let block_receipts = chain.uncached_block_receipts(&block_hash);
-
-			let parent_hash = block_view.parent_hash();
-
-			match (block_receipts, block_details) {
-				(Some(block_receipts), Some(block_details)) => {
-					let block_receipts = block_receipts.receipts;
-					let bytes = block_view.into_inner();
-
-					next_chain.unsafe_insert_block(&mut batch, &bytes, block_details, block_receipts);
-					count+=1;
-				},
-				_ => break,
-			}
+			count += 1;
 
 			// Writting changes to DB and logging every now and then
-			if block_number % 1_000 == 0 {
+			if count % 1_000 == 0 {
 				next_db.write_buffered(batch);
 				next_chain.commit();
 				next_db.flush().expect("DB flush failed.");
 				batch = DBTransaction::new();
 			}
 
-			if block_number % 10_000 == 0 {
-				trace!(target: "snapshot", "Block restoration at #{}", block_number);
+			if count % 10_000 == 0 {
+				trace!(target: "snapshot", "Migrated #{} blocks", count);
 			}
 
 			// Break when we hit target
@@ -450,7 +445,23 @@ impl Service {
 				break;
 			}
 
-			block = chain.uncached_block(&parent_hash);
+			block_hash = parent_hash;
+		}
+
+		trace!(target: "snapshot", "Now migrating over the EXTRA column");
+
+		// Migrate of the `EXTRA` DB column
+		let mut extra_count = 0;
+		for (key, value) in cur_db.iter(db::COL_EXTRA) {
+			batch.put(db::COL_EXTRA, &key, &value);
+			extra_count += 1;
+
+			if extra_count % 1_000 == 0 {
+				next_db.write_buffered(batch);
+				next_chain.commit();
+				next_db.flush().expect("DB flush failed.");
+				batch = DBTransaction::new();
+			}
 		}
 
 		// Final commit to the DB
