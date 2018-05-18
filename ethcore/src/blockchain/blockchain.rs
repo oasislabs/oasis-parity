@@ -753,58 +753,6 @@ impl BlockChain {
 		})
 	}
 
-	/// Insert a block in DB without filling caches and without checking any integrity
-	/// Must only be used when trusting the source (eg. DB migration)
-	pub fn unsafe_insert_block(&self, batch: &mut DBTransaction, bytes: &[u8], block_details: BlockDetails, receipts: Vec<Receipt>) {
-		let block = view!(BlockView, bytes);
-		let header = block.header_view();
-		let hash = header.hash();
-
-		// store block in db
-		let swapper = blocks_swapper();
-		batch.put(db::COL_HEADERS, &hash, &compress(header.rlp().as_raw(), swapper));
-		batch.put(db::COL_BODIES, &hash, &compress(&Self::block_to_body(&bytes), swapper));
-
-		let info = BlockInfo {
-			hash: hash,
-			number: header.number(),
-			total_difficulty: header.difficulty(),
-			location: BlockLocation::CanonChain,
-		};
-
-		let mut block_details_update = HashMap::new();
-		block_details_update.insert(hash, block_details);
-
-		let mut block_hashes_update = HashMap::new();
-		block_hashes_update.insert(header.number(), hash);
-
-		let block_receipts_udpate = self.prepare_block_receipts_update(receipts, &info);
-		let blocks_blooms_update = self.prepare_block_blooms_update(&bytes, &info);
-		let transactions_addresses_update = self.prepare_transaction_addresses_update(&bytes, &info);
-
-		for (key, value) in block_details_update {
-			batch.write(db::COL_EXTRA, &key, &value);
-		}
-
-		for (key, value) in block_hashes_update {
-			batch.write(db::COL_EXTRA, &key, &value);
-		}
-
-		for (key, value) in block_receipts_udpate {
-			batch.write(db::COL_EXTRA, &key, &value);
-		}
-
-		for (key, value) in blocks_blooms_update {
-			batch.write(db::COL_EXTRA, &key, &value);
-		}
-
-		for (key, value) in transactions_addresses_update {
-			if let Some(tx_address) = value {
-				batch.write(db::COL_EXTRA, &key, &tx_address);
-			}
-		}
-	}
-
 	/// Inserts a verified, known block from the canonical chain.
 	///
 	/// Can be performed out-of-order, but care must be taken that the final chain is in a correct state.
