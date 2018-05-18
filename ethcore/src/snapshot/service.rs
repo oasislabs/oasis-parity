@@ -449,6 +449,11 @@ impl Service {
 		// Migrate of the `EXTRA` DB column
 		let mut extra_count = 0;
 		for (key, value) in cur_db.iter(db::COL_EXTRA) {
+			// Don't migrate the first, ancient and best values
+			if *key == *b"ancient" || *key == *b"best" || *key == *b"first" {
+				continue;
+			}
+
 			batch.put(db::COL_EXTRA, &key, &value);
 			extra_count += 1;
 
