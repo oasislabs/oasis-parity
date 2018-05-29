@@ -210,7 +210,7 @@ pub struct Client {
 	queue_transactions: IoChannelQueue,
 	/// Ancient blocks import queue
 	queue_ancient_blocks: IoChannelQueue,
-	/// Hashes of pending ancient block wainting to be included
+	/// Hashes of pending ancient block waiting to be included
 	pending_ancient_blocks: RwLock<HashSet<H256>>,
 	/// Consensus messages import queue
 	queue_consensus_message: IoChannelQueue,
@@ -1704,7 +1704,7 @@ impl BlockChainClient for Client {
 
 	fn list_storage(&self, id: BlockId, account: &Address, after: Option<&H256>, count: u64) -> Option<Vec<H256>> {
 		if !self.factories.trie.is_fat() {
-			trace!(target: "fatdb", "list_stroage: Not a fat DB");
+			trace!(target: "fatdb", "list_storage: Not a fat DB");
 			return None;
 		}
 
@@ -2352,7 +2352,7 @@ mod tests {
 		let (new_hash, new_block) = get_good_dummy_block_hash();
 
 		let go = {
-			// Separate thread uncommited transaction
+			// Separate thread uncommitted transaction
 			let go = Arc::new(AtomicBool::new(false));
 			let go_thread = go.clone();
 			let another_client = client.clone();
