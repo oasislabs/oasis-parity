@@ -49,6 +49,7 @@ mod fatdbmut;
 mod lookup;
 mod nibbleslice;
 mod nibblevec;
+mod slicable;
 
 pub use self::triedbmut::TrieDBMut;
 pub use self::compact::TrieDBMut as CompactTrieDBMut;

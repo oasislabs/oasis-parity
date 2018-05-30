@@ -27,4 +27,5 @@ ethcore-logger = { path = "../../logger" }
 patricia-trie = { path = "../patricia_trie" }
 kvdb = { path = "../kvdb" }
 kvdb-rocksdb = { path = "../kvdb-rocksdb" }
-
+lmdb-zero = "0.4"
+parking_lot = "0.5"

@@ -20,15 +20,13 @@ use super::{TrieError, TrieMut};
 
 use hashdb::HashDB;
 use bytes::ToPretty;
-use rlp::{Rlp, RlpStream, Prototype};
 use hashdb::DBValue;
 
 use std::collections::{HashSet, VecDeque};
 use std::mem;
 use std::ops::Index;
 use ethereum_types::H256;
-use elastic_array::{ElasticArray32, ElasticArray1024};
-use keccak::{KECCAK_NULL_RLP};
+use slicable::{Slicable, Input};
 
 // For lookups into the Node storage buffer.
 #[derive(Debug, Clone)]
@@ -57,7 +55,7 @@ impl From<H256> for NodeHandle {
 	}
 }
 
-type PartialKey = ElasticArray32<u8>;
+type PartialKey = Vec<u8>;
 type Value = Vec<u8>;
 
 /// Node types in the Trie.
@@ -68,31 +66,34 @@ enum Node {
 	/// Value node.
 	Value(Value),
 	/// A branch has up to 16 children and an optional value.
-	Branch(Vec<(PartialKey, NodeHandle)>)
+	Branch(Vec<(PartialKey, NodeHandle)>),
+	Full(Vec<NodeHandle>)
 }
 
 impl Node {
-	fn into_rlp<F>(self, mut child_cb: F) -> ElasticArray1024<u8>
-	where F: FnMut(NodeHandle, &mut RlpStream) {
+	fn into_sliced<F>(self, v: &mut Vec<u8>, mut child_cb: F)
+	where F: FnMut(NodeHandle, &mut Vec<u8>) {
 		match self {
 			Node::Value(value) => {
-				let mut stream = RlpStream::new();
-				stream.append(&&value[..]);
-				stream.drain()
+				v.push(NodeKind::Value as u8);
+				value.using_encoded(|s| v.extend(s));
 			},
 			Node::Branch(nodes) => {
-				let mut stream = RlpStream::new_list(nodes.len());
+				v.push(NodeKind::Branch as u8);
+				(nodes.len() as u32).using_encoded(|s| v.extend(s));
 				for (key, handle) in nodes.into_iter() {
-					stream.begin_list(2);
-					stream.append(&&key[..]);
-					child_cb(handle, &mut stream);
+					key.using_encoded(|s| v.extend(s));
+					child_cb(handle, v);
 				}
-				stream.drain()
+			},
+			Node::Full(nodes) => {
+				v.push(NodeKind::Full as u8);
+				for handle in nodes.into_iter() {
+					child_cb(handle, v);
+				}
 			},
 			Node::Empty => {
-				let mut stream = RlpStream::new();
-				stream.append_empty_data();
-				stream.drain()
+				v.push(NodeKind::Empty as u8);
 			}
 		}
 	}
@@ -108,34 +109,74 @@ impl Node {
 			})
 	}
 
-	// decode a node from rlp without getting its children.
-	fn from_rlp(rlp: &[u8]) -> Self {
-		let r = Rlp::new(rlp);
-		match r.prototype().unwrap() {
-			Prototype::List(n) => {
-				let mut nodes = Vec::with_capacity(n);
-				for r in r.iter() {
-					let key = PartialKey::from_slice(r.at(0).unwrap().data().unwrap());
-					let handle = Self::inline_or_hash(r.at(1).unwrap().as_raw());
-					nodes.push((key, handle));
-				}
-				Node::Branch(nodes)
+	// decode a node from bytes without getting its children.
+	fn from_sliced<I: Input>(value: &mut I) -> Self {
+		match i8::decode(value) {
+			Some(x) if x == NodeKind::Empty as i8 => {
+				Node::Empty
 			},
-			Prototype::Data(0) => Node::Empty,
-			Prototype::Data(_) => Node::Value(r.data().unwrap().into()),
-			// something went wrong.
-			_ => panic!("Rlp is not valid.")
+			Some(x) if x == NodeKind::Value as i8 => {
+				Node::Value(Slicable::decode(value).unwrap())
+			},
+			Some(x) if x == NodeKind::Branch as i8 => {
+				let len: u32 = Slicable::decode(value).unwrap();
+				let mut children = Vec::with_capacity(len as usize);
+				for _ in 0 .. len {
+					let key = Slicable::decode(value).unwrap();
+					let data: Vec<u8> = Slicable::decode(value).unwrap();
+					let handle = Self::inline_or_hash(&data);
+					children.push((key, handle));
+				}
+				Node::Branch(children)
+			},
+			Some(x) if x == NodeKind::Full as i8 => {
+				let mut children = Vec::with_capacity(256);
+				for _ in 0 .. 256 {
+					let data: Vec<u8> = Slicable::decode(value).unwrap();
+					let handle = Self::inline_or_hash(&data);
+					children.push(handle);
+				}
+				Node::Full(children)
+			},
+			Some(x) => panic!("Encoding is invalid: {}", x),
+			None => panic!("Encoding is none."),
 		}
 	}
 
 	fn try_decode_hash(node_data: &[u8]) -> Option<H256> {
-		let r = Rlp::new(node_data);
-		if r.is_data() && r.size() == 32 {
-			Some(r.as_val().expect("Hash is the correct size of 32 bytes; qed"))
+		if node_data.len() == 32 {
+			Some(H256::from(node_data))
 		} else {
 			None
 		}
 	}
+
+	fn maybe_full(self) -> Node {
+		match self {
+			Node::Branch(children) => {
+				if children.len() == 256 && children.iter().all(|&(ref k, _)| k.len() == 1) {
+					println!("BRANCH -> FULL");
+					for i in 0..256 {
+						assert_eq!(&children[i].0[..1], &[ i as u8 ]);
+					}
+					let children = children.into_iter().map(|(_, node)| node).collect();
+					return Node::Full(children);
+				} else {
+					Node::Branch(children)
+				}
+			},
+			node @ _ => node,
+		}
+	}
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(i8)]
+enum NodeKind {
+	Empty = 1,
+	Value = 2,
+	Branch = 3,
+	Full = 4,
 }
 
 // post-inspect action.
@@ -273,11 +314,10 @@ pub struct TrieDBMut<'a> {
 impl<'a> TrieDBMut<'a> {
 	/// Create a new trie with backing database `db` and empty `root`.
 	pub fn new(db: &'a mut HashDB, root: &'a mut H256) -> Self {
-		*root = KECCAK_NULL_RLP;
-		let root_handle = NodeHandle::Hash(KECCAK_NULL_RLP);
-
+		let mut storage = NodeStorage::empty();
+		let root_handle = NodeHandle::InMemory(storage.alloc(Stored::New(Node::Empty)));
 		TrieDBMut {
-			storage: NodeStorage::empty(),
+			storage: storage,
 			db: db,
 			root: root,
 			root_handle: root_handle,
@@ -315,14 +355,14 @@ impl<'a> TrieDBMut<'a> {
 
 	// cache a node by hash
 	fn cache(&mut self, hash: H256) -> super::Result<StorageHandle> {
-		let node_rlp = self.db.get(&hash).ok_or_else(|| Box::new(TrieError::IncompleteDatabase(hash)))?;
-		let node = self.cache_node_data(&node_rlp[..]);
+		let node_bytes = self.db.get(&hash).ok_or_else(|| Box::new(TrieError::IncompleteDatabase(hash)))?;
+		let node = self.cache_node_data(&node_bytes[..]);
 		Ok(self.storage.alloc(Stored::Cached(node, hash)))
 	}
 
 	// cache a node by hash
-	fn cache_node_data(&mut self, node_rlp: &[u8]) -> Node {
-		let node = Node::from_rlp(&node_rlp);
+	fn cache_node_data(&mut self, mut node_bytes: &[u8]) -> Node {
+		let node = Node::from_sliced(&mut node_bytes);
 		let node = match node {
 			Node::Branch(mut children) => {
 				for &mut (_, ref mut n) in children.iter_mut() {
@@ -366,17 +406,17 @@ impl<'a> TrieDBMut<'a> {
 	{
 		let mut handle = handle.clone();
 		'next: loop {
-			let mut _node_from_rlp: Option<Node> = None;
+			let mut _node_from_bytes: Option<Node> = None;
 			let node = match handle {
 				NodeHandle::Hash(ref hash) => {
-					let node_rlp = self.db.get(&hash).ok_or_else(|| Box::new(TrieError::IncompleteDatabase(*hash)))?;
-					_node_from_rlp = Some(Node::from_rlp(&node_rlp));
-					_node_from_rlp.as_ref().unwrap()
+					let node_bytes = self.db.get(&hash).ok_or_else(|| Box::new(TrieError::IncompleteDatabase(*hash)))?;
+					_node_from_bytes = Some(Node::from_sliced(&mut &node_bytes[..]));
+					_node_from_bytes.as_ref().unwrap()
 				},
 				NodeHandle::InMemory(ref handle) => &self.storage[handle],
 				NodeHandle::Embedded(ref bytes) => {
-					_node_from_rlp = Some(Node::from_rlp(bytes));
-					_node_from_rlp.as_ref().unwrap()
+					_node_from_bytes = Some(Node::from_sliced(&mut &bytes[..]));
+					_node_from_bytes.as_ref().unwrap()
 				}
 			};
 			match *node {
@@ -403,12 +443,22 @@ impl<'a> TrieDBMut<'a> {
 						if partial.starts_with(key) {
 							trace!(target: "trie", "lookup: BRANCH descent");
 							handle = child.clone();
-							partial = PartialKey::from_slice(&partial[key.len()..]);
+							partial = PartialKey::from(&partial[key.len()..]);
 							continue 'next;
 						}
 					}
 					trace!(target: "trie", "lookup: BRANCH NOT-FOUND");
 					return Ok(None)
+				}
+				Node::Full(ref children) => {
+					trace!(target: "trie", "lookup: FULL partial={:?}", partial);
+					if partial.is_empty() {
+						trace!(target: "trie", "lookup: FULL END-NOT-FOUND");
+						return Ok(None);
+					}
+					trace!(target: "trie", "lookup: BRANCH descent");
+					handle = children[partial[0] as usize].clone();
+					partial = PartialKey::from(&partial[1..]);
 				}
 			}
 		}
@@ -462,12 +512,9 @@ impl<'a> TrieDBMut<'a> {
 				trace!(target: "trie", "branch: ROUTE,AUGMENT");
 				assert!(!empty_key);
 				let partial_char = partial[0];
-				let (exists, index) = match children.binary_search_by(|&(ref c, _)| {
-					assert!(!c.is_empty());
-					partial_char.cmp(&c[0]) }) {
+				let (exists, index) = match children.binary_search_by(|&(ref c, _)| c[0].cmp(&partial_char)) {
 					Ok(index) => (true, index),
 					Err(index) => (false, index),
-
 				};
 
 				if children.is_empty() || !exists {
@@ -476,7 +523,7 @@ impl<'a> TrieDBMut<'a> {
 					let value = NodeHandle::InMemory(self.storage.alloc(Stored::New(Node::Value(value))));
 					assert!(!partial.is_empty());
 					children.insert(index, (partial, value));
-					return Ok(InsertAction::Replace(Node::Branch(children)));
+					return Ok(InsertAction::Replace(Node::Branch(children).maybe_full()));
 				}
 				let key = children[index].0.clone();
 				let node = children[index].1.clone();
@@ -487,7 +534,7 @@ impl<'a> TrieDBMut<'a> {
 
 				if split_at == key.len() {
 					trace!(target: "trie", "branch: DESCENT");
-					let mid = PartialKey::from_slice(&partial[key.len()..]);
+					let mid = PartialKey::from(&partial[key.len()..]);
 					let (new_child, changed) = self.insert_at(node, mid, value, old_val)?;
 					assert!(!key.is_empty());
 					children[index] = (key, NodeHandle::InMemory(new_child));
@@ -496,9 +543,9 @@ impl<'a> TrieDBMut<'a> {
 						false => return Ok(InsertAction::Restore(Node::Branch(children))),
 					}
 				} else {
-					let new_root_key = PartialKey::from_slice(&partial[..split_at]);
-					let value_key = PartialKey::from_slice(&partial[split_at..]);
-					let old_key = PartialKey::from_slice(&key[split_at..]);
+					let new_root_key = PartialKey::from(&partial[..split_at]);
+					let value_key = PartialKey::from(&partial[split_at..]);
+					let old_key = PartialKey::from(&key[split_at..]);
 					let old_node = children[index].1.clone();
 					let value = NodeHandle::InMemory(self.storage.alloc(Stored::New(Node::Value(value))));
 					let ((left_key, left_node), (right_key, right_node)) = if key[split_at] < partial[split_at] {
@@ -510,7 +557,20 @@ impl<'a> TrieDBMut<'a> {
 					let branch = NodeHandle::InMemory(self.storage.alloc(Stored::New(Node::Branch(vec![(left_key, left_node), (right_key, right_node)]))));
 					assert!(!new_root_key.is_empty());
 					children[index] = (new_root_key, branch);
-					InsertAction::Replace(Node::Branch(children))
+					InsertAction::Replace(Node::Branch(children).maybe_full())
+				}
+			},
+			Node::Full(mut children) => {
+				assert!(!empty_key);
+				let partial_char = partial[0];
+				let node = children[partial_char as usize].clone();
+				trace!(target: "trie", "full: DESCENT");
+				let mid = PartialKey::from(&partial[1..]);
+				let (new_child, changed) = self.insert_at(node, mid, value, old_val)?;
+				children[partial_char as usize] = NodeHandle::InMemory(new_child);
+				match changed {
+					true => return Ok(InsertAction::Replace(Node::Full(children))),
+					false => return Ok(InsertAction::Restore(Node::Full(children))),
 				}
 			}
 		})
@@ -539,6 +599,7 @@ impl<'a> TrieDBMut<'a> {
 		Ok(match (node, partial.is_empty()) {
 			(Node::Empty, _) => Action::Delete,
 			(Node::Branch(c), true) => Action::Restore(Node::Branch(c)),
+			(Node::Full(c), true) => Action::Restore(Node::Full(c)),
 			(Node::Value(val), true) => {
 				*old_val = Some(val);
 				Action::Delete
@@ -547,16 +608,13 @@ impl<'a> TrieDBMut<'a> {
 				panic!("Key is too long");
 			}
 			(Node::Branch(mut children), false) => {
-				let mut index = 0;
-				for &(ref key, _) in children.iter() {
-					//TODO: binary search
-					if key[0] > partial[0] {
-						break;
-					}
-					index +=1;
+				let partial_char = partial[0];
+				let (exists, index) = match children.binary_search_by(|&(ref c, _)| c[0].cmp(&partial_char)) {
+					Ok(index) => (true, index),
+					Err(index) => (false, index),
 				};
 
-				if children.is_empty() || children[index].0[0] != partial[0] {
+				if children.is_empty() || !exists {
 					return Ok(Action::Restore(Node::Branch(children)));
 				}
 
@@ -564,7 +622,7 @@ impl<'a> TrieDBMut<'a> {
 				if !partial.starts_with(&key) {
 					return Ok(Action::Restore(Node::Branch(children)));
 				}
-				let partial = PartialKey::from_slice(&partial[key.len()..]);
+				let partial = PartialKey::from(&partial[key.len()..]);
 				trace!(target: "trie", "removing value out of branch child, partial={:?}", partial);
 				match self.remove_at(children[index].1.clone(), partial, old_val)? {
 					Some((new, changed)) => {
@@ -572,9 +630,10 @@ impl<'a> TrieDBMut<'a> {
 							if subchildren.len() == 1 {
 								// single child, delete it and merge into this node
 								// TODO: add to deleted list
+								//self.death_row.insert(hash);
 								let (sub_key, sub) = subchildren.pop().unwrap();
 								let mut new_key = key;
-								new_key.append_slice(&sub_key);
+								new_key.extend_from_slice(&sub_key);
 								children[index] = (new_key, sub);
 								return Ok(Action::Replace(Node::Branch(children)))
 							}
@@ -594,6 +653,9 @@ impl<'a> TrieDBMut<'a> {
 						Action::Replace(Node::Branch(children))
 					}
 				}
+			}
+			(Node::Full(_children), false) => {
+				unimplemented!();
 			}
 		})
 	}
@@ -617,11 +679,12 @@ impl<'a> TrieDBMut<'a> {
 
 		match self.storage.destroy(handle) {
 			Stored::New(node) => {
-				let root_rlp = node.into_rlp(|child, stream| self.commit_node(child, stream));
-				*self.root = self.db.insert(&root_rlp[..]);
+				let mut bytes = Vec::new();
+				node.into_sliced(&mut bytes, |child, stream| self.commit_node(child, stream));
+				*self.root = self.db.insert(&bytes);
 				self.hash_count += 1;
 
-				trace!(target: "trie", "root node rlp: {:?}", (&root_rlp[..]).pretty());
+				trace!(target: "trie", "root node bytes: {:?}", (&bytes[..]).pretty());
 				self.root_handle = NodeHandle::Hash(*self.root);
 			}
 			Stored::Cached(node, hash) => {
@@ -633,21 +696,22 @@ impl<'a> TrieDBMut<'a> {
 	}
 
 	/// commit a node, hashing it, committing it to the db,
-	/// and writing it to the rlp stream as necessary.
-	fn commit_node(&mut self, handle: NodeHandle, stream: &mut RlpStream) {
+	/// and writing it to the byte stream as necessary.
+	fn commit_node(&mut self, handle: NodeHandle, stream: &mut Vec<u8>) {
 		match handle {
 			NodeHandle::Embedded(_) => panic!("Commiting embedded node"),
-			NodeHandle::Hash(h) => stream.append(&h),
+			NodeHandle::Hash(h) => (&h[..]).using_encoded(|s| stream.extend(s)),
 			NodeHandle::InMemory(h) => match self.storage.destroy(h) {
-				Stored::Cached(_, h) => stream.append(&h),
+				Stored::Cached(_, h) => (&h[..]).using_encoded(|s| stream.extend(s)),
 				Stored::New(node) => {
-					let node_rlp = node.into_rlp(|child, stream| self.commit_node(child, stream));
-					if node_rlp.len() >= 32 {
-						let hash = self.db.insert(&node_rlp[..]);
+					let mut bytes = Vec::new();
+					node.into_sliced(&mut bytes, |child, stream| self.commit_node(child, stream));
+					if bytes.len() >= 32 {
+						let hash = self.db.insert(&bytes);
 						self.hash_count += 1;
-						stream.append(&hash)
+						(&hash[..]).using_encoded(|s| stream.extend(s));
 					} else {
-						stream.append_raw(&node_rlp, 1)
+						bytes.using_encoded(|s| stream.extend(s));
 					}
 				}
 			}
@@ -672,7 +736,7 @@ impl<'a> TrieMut for TrieDBMut<'a> {
 
 	fn is_empty(&self) -> bool {
 		match self.root_handle {
-			NodeHandle::Hash(h) => h == KECCAK_NULL_RLP,
+			NodeHandle::Hash(_h) => false, //TODO: check for empty node hash
 			NodeHandle::InMemory(ref h) => match self.storage[h] {
 				Node::Empty => true,
 				_ => false,
@@ -682,7 +746,7 @@ impl<'a> TrieMut for TrieDBMut<'a> {
 	}
 
 	fn get<'x, 'key>(&'x self, key: &'key [u8]) -> super::Result<Option<DBValue>> where 'x: 'key {
-		self.lookup(PartialKey::from_slice(key), &self.root_handle)
+		self.lookup(PartialKey::from(key), &self.root_handle)
 	}
 
 
@@ -696,7 +760,7 @@ impl<'a> TrieMut for TrieDBMut<'a> {
 		let root_handle = self.root_handle();
 		let (new_handle, changed) = self.insert_at(
 			root_handle,
-			PartialKey::from_slice(key),
+			PartialKey::from(key),
 			value.into(),
 			&mut old_val,
 		)?;
@@ -711,7 +775,7 @@ impl<'a> TrieMut for TrieDBMut<'a> {
 		trace!(target: "trie", "remove: key={:?}", key.pretty());
 
 		let root_handle = self.root_handle();
-		let key = PartialKey::from_slice(key);
+		let key = PartialKey::from(key);
 		let mut old_val = None;
 
 		match self.remove_at(root_handle, key, &mut old_val)? {
@@ -721,8 +785,7 @@ impl<'a> TrieMut for TrieDBMut<'a> {
 			}
 			None => {
 				trace!(target: "trie", "remove: obliterated trie");
-				self.root_handle = NodeHandle::Hash(KECCAK_NULL_RLP);
-				*self.root = KECCAK_NULL_RLP;
+				self.root_handle = NodeHandle::InMemory(self.storage.alloc(Stored::New(Node::Empty)));
 			}
 		}
 
