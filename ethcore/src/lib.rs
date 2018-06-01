@@ -76,7 +76,6 @@ extern crate ethereum_types;
 extern crate ethjson;
 extern crate ethkey;
 
-
 extern crate hashdb;
 extern crate itertools;
 extern crate lru_cache;
@@ -109,7 +108,7 @@ extern crate wasm;
 extern crate memory_cache;
 extern crate journaldb;
 
-#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows", target_os = "android"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 extern crate hardware_wallet;
 
 #[cfg(test)]

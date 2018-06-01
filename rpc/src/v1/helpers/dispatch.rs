@@ -52,7 +52,7 @@ use v1::types::{
 	DecryptRequest as RpcDecryptRequest,
 };
 
-#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows", target_os = "android"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 use rlp;
 
 pub use self::nonce::Reservations;
@@ -433,7 +433,7 @@ fn sign_transaction(
 		data: filled.data,
 	};
 
-	#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows", target_os = "android"))]
+	#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 	{
 		if accounts.is_hardware_address(&filled.from) {
 			return hardware_signature(accounts, filled.from, t, chain_id).map(WithToken::No)
@@ -678,11 +678,8 @@ pub fn execute<D: Dispatcher + 'static>(
 				))
 		},
 		ConfirmationPayload::EthSignMessage(address, data) => {
-			#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows", target_os = "android"))]
-			{
-				if accounts.is_hardware_address(&address) {
-					return Box::new(future::err(errors::unsupported("Signing via hardware wallets is not supported.", None)));
-				}
+			if accounts.is_hardware_address(&address) {
+				return Box::new(future::err(errors::unsupported("Signing via hardware wallets is not supported.", None)));
 			}
 
 			let hash = eth_data_hash(data);
@@ -695,11 +692,8 @@ pub fn execute<D: Dispatcher + 'static>(
 			Box::new(future::done(res))
 		},
 		ConfirmationPayload::Decrypt(address, data) => {
-			#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows", target_os = "android"))]
-			{
-				if accounts.is_hardware_address(&address) {
-					return Box::new(future::err(errors::unsupported("Decrypting via hardware wallets is not supported.", None)));
-				}
+			if accounts.is_hardware_address(&address) {
+				return Box::new(future::err(errors::unsupported("Decrypting via hardware wallets is not supported.", None)));
 			}
 			let res = decrypt(&accounts, address, data, pass)
 				.map(|result| result
@@ -723,7 +717,7 @@ fn signature(accounts: &AccountProvider, address: Address, hash: H256, password:
 }
 
 // obtain a hardware signature from the given account.
-#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows", target_os = "android"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 fn hardware_signature(accounts: &AccountProvider, address: Address, t: Transaction, chain_id: Option<u64>)
 	-> Result<SignedTransaction>
 {
