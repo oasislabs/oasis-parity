@@ -1915,7 +1915,7 @@ impl BlockChainClient for Client {
 	}
 
 	fn ready_transactions(&self, max_len: usize) -> Vec<Arc<VerifiedTransaction>> {
-		self.importer.miner.ready_transactions(self, max_len)
+		self.importer.miner.ready_transactions(self, max_len, ::miner::PendingOrdering::Priority)
 	}
 
 	fn signing_chain_id(&self) -> Option<u64> {
