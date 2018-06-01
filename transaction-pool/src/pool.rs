@@ -470,8 +470,8 @@ pub struct UnorderedIterator<'a, T, R, S> where
 	S: Scoring<T> + 'a,
 {
 	ready: R,
-	senders: hash_map::Iter<'a, T::Sender, Transactions<T, S>>,
-	transactions: Option<slice::Iter<'a, Transaction<T>>>,
+	senders: hash_map::Iter<'a, Sender, Transactions<T, S>>,
+	transactions: Option<slice::Iter<'a, Arc<T>>>,
 }
 
 impl<'a, T, R, S> Iterator for UnorderedIterator<'a, T, R, S> where
@@ -487,7 +487,7 @@ impl<'a, T, R, S> Iterator for UnorderedIterator<'a, T, R, S> where
 				if let Some(tx) = transactions.next() {
 					match self.ready.is_ready(&tx) {
 						Readiness::Ready => {
-							return Some(tx.transaction.clone());
+							return Some(tx.clone());
 						},
 						state => trace!("[{:?}] Ignoring {:?} transaction.", tx.hash(), state),
 					}
