@@ -18,7 +18,7 @@
 
 mod stores;
 
-#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))] 
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows", target_os = "android")))] 
 mod no_hw;
 
 use ethstore::{
@@ -38,12 +38,12 @@ pub use ethstore::ethkey::Signature;
 pub use ethstore::{Derivation, IndexDerivation, KeyFile};
 pub use super::transaction::{Action, Transaction};
 
-#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))] 
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows", target_os = "android"))] 
 mod hw {
 	pub use hardware_wallet::{Error as HardwareError, HardwareWalletManager, KeyPath, TransactionInfo};
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))] 
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows", target_os = "android")))] 
 mod hw { 
     pub use account_provider::no_hw::{HardwareError, HardwareWalletManager};
 }
@@ -178,7 +178,7 @@ impl AccountProvider {
 	pub fn new(sstore: Box<SecretStore>, settings: AccountProviderSettings) -> Self {
 		let mut hardware_store = None;
 		
-		#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+		#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows", target_os = "android"))]
 		{
 			if settings.enable_hardware_wallets {
 				match hw::HardwareWalletManager::new() {
@@ -826,7 +826,7 @@ impl AccountProvider {
 	}
 
 	/// Sign transaction with hardware wallet.
-	#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+	#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows", target_os = "android"))]
 	pub fn sign_with_hardware(&self, address: Address, transaction: &Transaction, chain_id: Option<u64>, rlp_encoded_transaction: &[u8]) -> Result<Signature, SignError> {
 		let t_info = hw::TransactionInfo {
 			nonce: transaction.nonce,
