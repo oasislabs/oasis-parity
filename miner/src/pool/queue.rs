@@ -181,32 +181,29 @@ impl TransactionQueue {
 		client: C,
 		transactions: Vec<verifier::Transaction>,
 	) -> Vec<Result<(), transaction::Error>> {
+		transactions.into_iter().map(|_| Ok(())).collect()
 		// Run verification
-		let _timer = ::trace_time::PerfTimer::new("queue::verifyAndImport");
-		let options = self.options.read().clone();
-
-		let verifier = verifier::Verifier::new(client, options, self.insertion_id.clone());
-		let results = transactions
-			.into_par_iter()
-			.map(|transaction| verifier.verify_transaction(transaction))
-			.map(|result| result.and_then(|verified| {
-				// TODO [ToDr] Temporary
-				let _pool = self.pool.write();
-				Ok(())
-				// self.pool.write().import(verified)
-				// 	.map(|_imported| ())
-				// 	.map_err(convert_error)
-			}))
-			.collect::<Vec<_>>();
-
-		// Notify about imported transactions.
-		(self.pool.write().listener_mut().1).0.notify();
-
-		if results.iter().any(|r| r.is_ok()) {
-			self.cached_pending.write().clear();
-		}
-
-		results
+		// let _timer = ::trace_time::PerfTimer::new("queue::verifyAndImport");
+		// let options = self.options.read().clone();
+        //
+		// let verifier = verifier::Verifier::new(client, options, self.insertion_id.clone());
+		// let results = transactions
+		// 	.into_par_iter()
+		// 	.map(|transaction| verifier.verify_transaction(transaction))
+		// 	.map(|result| result.and_then(|verified| {
+		// 		self.pool.write().import(verified)
+		// 			.map(|_imported| ())
+		// 			.map_err(convert_error)
+		// 	}))
+		// 	.collect::<Vec<_>>();
+        //
+		// if results.iter().any(|r| r.is_ok()) {
+		// 	// Notify about imported transactions.
+		// 	(self.pool.write().listener_mut().1).0.notify();
+		// 	self.cached_pending.write().clear();
+		// }
+        //
+		// results
 	}
 
 	/// Returns all transactions in the queue without explicit ordering.
