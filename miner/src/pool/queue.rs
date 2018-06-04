@@ -200,7 +200,8 @@ impl TransactionQueue {
 		(self.pool.write().listener_mut().1).0.notify();
 
 		if results.iter().any(|r| r.is_ok()) {
-			self.cached_pending.write().clear();
+			// TODO [ToDr] Temporary! Clear pending set.
+			// self.cached_pending.write().clear();
 		}
 
 		results
