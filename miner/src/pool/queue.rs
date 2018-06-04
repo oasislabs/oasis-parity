@@ -190,9 +190,12 @@ impl TransactionQueue {
 			.into_par_iter()
 			.map(|transaction| verifier.verify_transaction(transaction))
 			.map(|result| result.and_then(|verified| {
-				self.pool.write().import(verified)
-					.map(|_imported| ())
-					.map_err(convert_error)
+				// TODO [ToDr] Temporary
+				let _pool = self.pool.write();
+				Ok(())
+				// self.pool.write().import(verified)
+				// 	.map(|_imported| ())
+				// 	.map_err(convert_error)
 			}))
 			.collect::<Vec<_>>();
 
@@ -200,8 +203,7 @@ impl TransactionQueue {
 		(self.pool.write().listener_mut().1).0.notify();
 
 		if results.iter().any(|r| r.is_ok()) {
-			// TODO [ToDr] Temporary! Clear pending set.
-			// self.cached_pending.write().clear();
+			self.cached_pending.write().clear();
 		}
 
 		results
