@@ -898,12 +898,13 @@ impl MinerService for Miner {
 		transactions: Vec<UnverifiedTransaction>
 	) -> Vec<Result<TransactionImportResult, Error>> {
 		trace!(target: "external_tx", "Importing external transactions");
-		let results = {
-			let mut transaction_queue = self.transaction_queue.write();
-			self.add_transactions_to_queue(
-				chain, transactions, TransactionOrigin::External, None, &mut transaction_queue
-			)
-		};
+		// let results = {
+		// 	let mut transaction_queue = self.transaction_queue.write();
+		// 	self.add_transactions_to_queue(
+		// 		chain, transactions, TransactionOrigin::External, None, &mut transaction_queue
+		// 	)
+		// };
+		let results: Vec<_> = transactions.into_iter().map(|_| Ok(TransactionImportResult::Current)).collect();
 
 		if !results.is_empty() && self.options.reseal_on_external_tx &&	self.tx_reseal_allowed() {
 			// --------------------------------------------------------------------------
