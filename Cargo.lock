@@ -169,6 +169,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "bv"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
 name = "byteorder"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2406,6 +2411,7 @@ version = "0.1.0"
 name = "patricia-trie"
 version = "0.1.0"
 dependencies = [
+ "bv 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ethcore-bytes 0.1.0",
  "ethcore-logger 1.11.0",
@@ -3804,6 +3810,7 @@ dependencies = [
 "checksum bitflags 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)" = "4efd02e230a02e18f92fc2735f44597385ed02ad8f831e7c1c1156ee5e1ab3a5"
 "checksum bitflags 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)" = "b3c30d3802dfb7281680d6285f2ccdaa8c2d8fee41f93805dba5c4cf50dc23cf"
 "checksum bn 0.4.4 (git+https://github.com/paritytech/bn)" = "<none>"
+"checksum bv 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)" = "d31c96a681465e7742cc04bb1961e732e21128bcf1dc9d5fe8cfc052b484f140"
 "checksum byteorder 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "652805b7e73fada9d85e9a6682a4abd490cb52d96aeecc12e33a0de34dfd0d23"
 "checksum bytes 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)" = "1b7db437d718977f6dc9b2e3fd6fc343c02ac6b899b73fdd2179163447bd9ce9"
 "checksum cc 1.0.9 (registry+https://github.com/rust-lang/crates.io-index)" = "2b4911e4bdcb4100c7680e7e854ff38e23f1b34d4d9e079efae3da2801341ffc"

@@ -42,7 +42,7 @@ use std::collections::HashMap;
 use docopt::Docopt;
 use ethereum_types::{H256};
 use patricia_trie::{TrieDBMut as EthereumTrie, TrieMut};
-use patricia_trie::{CompactTrieDBMut as CompactTrie};
+use patricia_trie::{CompactTrieDBMut as CompactTrie, Base2TrieDBMut as Base2Trie};
 use kvdb::{DBValue, DBTransaction};
 use keccak::{keccak, KECCAK_NULL_RLP};
 use rand::Rng;
@@ -62,6 +62,7 @@ Usage:
 Trie options:
     --ethereum         Use standard ethereum trie.
     --compact          Use compact trie.
+    --base2            Use base2 trie.
     --lmdb             Use LMDB backend.
 
 General options:
@@ -76,6 +77,7 @@ struct Args {
 	cmd_query: bool,
 	flag_ethereum: bool,
 	flag_compact: bool,
+	flag_base2: bool,
 	flag_lmdb: bool,
 	flag_dir: Option<String>,
 	flag_log: String,
@@ -259,7 +261,7 @@ fn initialize_logger(log_level: &str) -> Result<(), String> {
 
 fn open_db(args: &Args) -> Box<DB> {
 	let mut path = PathBuf::from(args.flag_dir.as_ref().map(|s| s.as_str()).unwrap_or(&"trie-bench-db"));
-	path.push(if args.flag_ethereum { "ethereum" } else { "compact" });
+	path.push(if args.flag_compact { "compact" } else { if args.flag_base2 { "base2" } else { "ethereum" } });
 	path.push(if args.flag_lmdb { "lmdb" } else { "rocksdb" });
 	std::fs::create_dir_all(&path).expect("Error creating db dir");
 	if args.flag_lmdb {
@@ -299,8 +301,9 @@ fn generate(args: Args) {
 
 	let mut rng = rand::Isaac64Rng::new_unseeded();
 	let mut key = H256::new();
-	let compact = !args.flag_ethereum;
-	println!("Using {} trie", if compact { "compact" } else { "ethereum" });
+	let compact = args.flag_compact;
+	let base2 = args.flag_base2;
+	println!("Using {} trie", if compact { "compact" } else { if base2 { "base2"} else { "ethereum" } });
 
 	{
 		let mut gen_batch = |trie: &mut TrieMut| {
@@ -313,12 +316,14 @@ fn generate(args: Args) {
 			}
 		};
 
-		for batch in 0 .. 1000 {
-			match (batch == 0, compact) {
-				(true, false) => gen_batch(&mut EthereumTrie::new(db.as_hashdb(), &mut root)),
-				(false, false) => gen_batch(&mut EthereumTrie::from_existing(db.as_hashdb(), &mut root).expect("Error creating trie")),
-				(true, true) => gen_batch(&mut CompactTrie::new(db.as_hashdb(), &mut root)),
-				(false, true) => gen_batch(&mut CompactTrie::from_existing(db.as_hashdb(), &mut root).expect("Error creating trie")),
+		for batch in 0 .. 100 {
+			match (batch == 0, compact, base2) {
+				(true, false, false) => gen_batch(&mut EthereumTrie::new(db.as_hashdb(), &mut root)),
+				(false, false, false) => gen_batch(&mut EthereumTrie::from_existing(db.as_hashdb(), &mut root).expect("Error creating trie")),
+				(true, true, _) => gen_batch(&mut CompactTrie::new(db.as_hashdb(), &mut root)),
+				(false, true, _) => gen_batch(&mut CompactTrie::from_existing(db.as_hashdb(), &mut root).expect("Error creating trie")),
+				(true, _, true) => gen_batch(&mut Base2Trie::new(db.as_hashdb(), &mut root)),
+				(false, _, true) => gen_batch(&mut Base2Trie::from_existing(db.as_hashdb(), &mut root).expect("Error creating trie")),
 			}
 			db.commit();
 			if batch % 1 == 0 {
@@ -326,6 +331,7 @@ fn generate(args: Args) {
 			}
 		}
 	}
+	db.print_stats();
 }
 
 fn query(args: Args) {

@@ -24,6 +24,7 @@ extern crate ethcore_bytes as bytes;
 extern crate elastic_array;
 extern crate memorydb;
 extern crate ethcore_logger;
+#[macro_use] extern crate bv;
 
 #[cfg(test)]
 extern crate trie_standardmap as standardmap;
@@ -40,6 +41,7 @@ pub mod node;
 pub mod triedb;
 pub mod triedbmut;
 pub mod compact;
+pub mod base2;
 pub mod sectriedb;
 pub mod sectriedbmut;
 pub mod recorder;
@@ -53,6 +55,7 @@ mod slicable;
 
 pub use self::triedbmut::TrieDBMut;
 pub use self::compact::TrieDBMut as CompactTrieDBMut;
+pub use self::base2::TrieDBMut as Base2TrieDBMut;
 pub use self::triedb::{TrieDB, TrieDBIterator};
 pub use self::sectriedbmut::SecTrieDBMut;
 pub use self::sectriedb::SecTrieDB;
