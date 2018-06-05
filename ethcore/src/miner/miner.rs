@@ -756,11 +756,12 @@ impl miner::MinerService for Miner {
 		transactions: Vec<UnverifiedTransaction>
 	) -> Vec<Result<(), transaction::Error>> {
 		trace!(target: "external_tx", "Importing external transactions");
-		let client = self.pool_client(chain);
-		let results = self.transaction_queue.import(
-			client,
-			transactions.into_iter().map(pool::verifier::Transaction::Unverified).collect(),
-		);
+		// let client = self.pool_client(chain);
+		// let results = self.transaction_queue.import(
+		// 	client,
+		// 	transactions.into_iter().map(pool::verifier::Transaction::Unverified).collect(),
+		// );
+		let results: Vec<_> = transactions.into_iter().map(|_| Ok(())).collect();
 
 		if !results.is_empty() && self.options.reseal_on_external_tx &&	self.sealing.lock().reseal_allowed() {
 			// --------------------------------------------------------------------------
