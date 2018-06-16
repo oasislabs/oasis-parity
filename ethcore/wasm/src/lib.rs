@@ -17,10 +17,10 @@
 //! Wasm Interpreter
 
 extern crate byteorder;
-extern crate ethcore_logger;
+// extern crate ethcore_logger;
 extern crate ethereum_types;
 #[macro_use] extern crate log;
-extern crate libc;
+// extern crate libc;
 extern crate parity_wasm;
 extern crate vm;
 extern crate pwasm_utils as wasm_utils;

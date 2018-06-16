@@ -24,6 +24,9 @@ extern crate rlp;
 extern crate rlp_derive;
 extern crate keccak_hash as hash;
 extern crate heapsize;
+#[macro_use]
+extern crate serde_derive;
+extern crate serde;
 
 #[cfg(test)]
 extern crate rustc_hex;

@@ -19,11 +19,12 @@ use std::cmp::PartialEq;
 use std::fmt;
 use std::str::FromStr;
 use std::hash::{Hash, Hasher};
-use secp256k1::{Message as SecpMessage, RecoverableSignature, RecoveryId, Error as SecpError};
-use secp256k1::key::{SecretKey, PublicKey};
+// use secp256k1::{Message as SecpMessage, RecoverableSignature, RecoveryId, Error as SecpError};
+// use secp256k1::key::{SecretKey, PublicKey};
+// use secp256k1;
 use rustc_hex::{ToHex, FromHex};
 use ethereum_types::{H520, H256};
-use {Secret, Public, SECP256K1, Error, Message, public_to_address, Address};
+use {Public, Error, Message, Address};
 
 /// Signature encoded as RSV components
 #[repr(C)]
@@ -188,53 +189,68 @@ impl DerefMut for Signature {
 	}
 }
 
-pub fn sign(secret: &Secret, message: &Message) -> Result<Signature, Error> {
-	let context = &SECP256K1;
-	let sec = SecretKey::from_slice(context, &secret)?;
-	let s = context.sign_recoverable(&SecpMessage::from_slice(&message[..])?, &sec)?;
-	let (rec_id, data) = s.serialize_compact(context);
-	let mut data_arr = [0; 65];
+// pub fn sign(secret: &Secret, message: &Message) -> Result<Signature, Error> {
+// 	let context = &SECP256K1;
+// 	let sec = SecretKey::from_slice(context, &secret)?;
+// 	let s = context.sign_recoverable(&SecpMessage::from_slice(&message[..])?, &sec)?;
+// 	let (rec_id, data) = s.serialize_compact(context);
+// 	let mut data_arr = [0; 65];
+//
+// 	// no need to check if s is low, it always is
+// 	data_arr[0..64].copy_from_slice(&data[0..64]);
+// 	data_arr[64] = rec_id.to_i32() as u8;
+// 	Ok(Signature(data_arr))
+// }
 
-	// no need to check if s is low, it always is
-	data_arr[0..64].copy_from_slice(&data[0..64]);
-	data_arr[64] = rec_id.to_i32() as u8;
-	Ok(Signature(data_arr))
-}
-
-pub fn verify_public(public: &Public, signature: &Signature, message: &Message) -> Result<bool, Error> {
-	let context = &SECP256K1;
-	let rsig = RecoverableSignature::from_compact(context, &signature[0..64], RecoveryId::from_i32(signature[64] as i32)?)?;
-	let sig = rsig.to_standard(context);
-
-	let pdata: [u8; 65] = {
-		let mut temp = [4u8; 65];
-		temp[1..65].copy_from_slice(&**public);
-		temp
-	};
-
-	let publ = PublicKey::from_slice(context, &pdata)?;
-	match context.verify(&SecpMessage::from_slice(&message[..])?, &sig, &publ) {
-		Ok(_) => Ok(true),
-		Err(SecpError::IncorrectSignature) => Ok(false),
-		Err(x) => Err(Error::from(x))
-	}
-}
-
-pub fn verify_address(address: &Address, signature: &Signature, message: &Message) -> Result<bool, Error> {
-	let public = recover(signature, message)?;
-	let recovered_address = public_to_address(&public);
-	Ok(address == &recovered_address)
-}
+// pub fn verify_public(public: &Public, signature: &Signature, message: &Message) -> Result<bool, Error> {
+// 	// let context = &SECP256K1;
+// 	let rsig = RecoverableSignature::from_compact(context, &signature[0..64], RecoveryId::from_i32(signature[64] as i32)?)?;
+// 	let sig = rsig.to_standard(context);
+//
+// 	let pdata: [u8; 65] = {
+// 		let mut temp = [4u8; 65];
+// 		temp[1..65].copy_from_slice(&**public);
+// 		temp
+// 	};
+//
+// 	let publ = PublicKey::from_slice(context, &pdata)?;
+// 	match context.verify(&SecpMessage::from_slice(&message[..])?, &sig, &publ) {
+// 		Ok(_) => Ok(true),
+// 		Err(SecpError::IncorrectSignature) => Ok(false),
+// 		Err(x) => Err(Error::from(x))
+// 	}
+// }
+//
+// pub fn verify_address(address: &Address, signature: &Signature, message: &Message) -> Result<bool, Error> {
+// 	let public = recover(signature, message)?;
+// 	let recovered_address = public_to_address(&public);
+// 	Ok(address == &recovered_address)
+// }
 
 pub fn recover(signature: &Signature, message: &Message) -> Result<Public, Error> {
-	let context = &SECP256K1;
-	let rsig = RecoverableSignature::from_compact(context, &signature[0..64], RecoveryId::from_i32(signature[64] as i32)?)?;
-	let pubkey = context.recover(&SecpMessage::from_slice(&message[..])?, &rsig)?;
-	let serialized = pubkey.serialize_vec(context, false);
-
-	let mut public = Public::default();
-	public.copy_from_slice(&serialized[1..65]);
-	Ok(public)
+	// let mut array: [u8; 64] = [0; 64];
+	// for i in 0..64 {
+	//     array[i] = signature.0[i];
+	// }
+	panic!()
+	// let ssig = secp256k1::Signature::parse(&array);
+        //
+	// let mut array: [u8; 32] = [0; 32];
+	// for i in 0..32 {
+	//     array[i] = message[i];
+	// }
+	// let msg = secp256k1::Message::parse(&array);
+	// let rid = secp256k1::RecoveryId::parse(signature[64])?;
+	// let pubkey = secp256k1::recover(&msg, &ssig, &rid)?;
+	// // let context = &SECP256K1;
+	// // let rsig = RecoverableSignature::from_compact(context, &signature[0..64], RecoveryId::from_i32(signature[64] as i32)?)?;
+        //
+	// // let pubkey = context.recover(&SecpMessage::from_slice(&message[..])?, &rsig)?;
+	// // let serialized = pubkey.serialize_vec(context, false);
+        // //
+	// let mut public = Public::default();
+	// public.copy_from_slice(&pubkey.serialize()[1..65]);
+	// Ok(public)
 }
 
 #[cfg(test)]

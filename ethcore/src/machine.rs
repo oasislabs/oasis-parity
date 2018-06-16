@@ -20,9 +20,9 @@ use std::collections::{BTreeMap, HashMap};
 use std::cmp;
 use std::sync::Arc;
 
-use block::{ExecutedBlock, IsBlock};
+// use block::{ExecutedBlock, IsBlock};
 use builtin::Builtin;
-use client::{BlockInfo, CallContract};
+// use client::{BlockInfo, CallContract};
 use error::Error;
 use executive::Executive;
 use header::{BlockNumber, Header, ExtendedHeader};
@@ -30,7 +30,7 @@ use spec::CommonParams;
 use state::{CleanupMode, Substate};
 use trace::{NoopTracer, NoopVMTracer, Tracer, ExecutiveTracer, RewardType, Tracing};
 use transaction::{self, SYSTEM_ADDRESS, UnverifiedTransaction, SignedTransaction};
-use tx_filter::TransactionFilter;
+// use tx_filter::TransactionFilter;
 
 use ethereum_types::{U256, Address};
 use bytes::BytesRef;
@@ -72,7 +72,7 @@ pub type ScheduleCreationRules = Fn(&mut Schedule, BlockNumber) + Sync + Send;
 pub struct EthereumMachine {
 	params: CommonParams,
 	builtins: Arc<BTreeMap<Address, Builtin>>,
-	tx_filter: Option<Arc<TransactionFilter>>,
+	// tx_filter: Option<Arc<TransactionFilter>>,
 	ethash_extensions: Option<EthashExtensions>,
 	schedule_rules: Option<Box<ScheduleCreationRules>>,
 }
@@ -80,11 +80,11 @@ pub struct EthereumMachine {
 impl EthereumMachine {
 	/// Regular ethereum machine.
 	pub fn regular(params: CommonParams, builtins: BTreeMap<Address, Builtin>) -> EthereumMachine {
-		let tx_filter = TransactionFilter::from_params(&params).map(Arc::new);
+		// let tx_filter = TransactionFilter::from_params(&params).map(Arc::new);
 		EthereumMachine {
 			params: params,
 			builtins: Arc::new(builtins),
-			tx_filter: tx_filter,
+			// tx_filter: tx_filter,
 			ethash_extensions: None,
 			schedule_rules: None,
 		}
@@ -117,131 +117,131 @@ impl EthereumMachine {
 	/// information. If suicides, logs or refunds happen within the system call, they
 	/// will not be executed or recorded. Gas used by this system call will not be counted
 	/// on the block.
-	pub fn execute_as_system(
-		&self,
-		block: &mut ExecutedBlock,
-		contract_address: Address,
-		gas: U256,
-		data: Option<Vec<u8>>,
-	) -> Result<Vec<u8>, Error> {
-		let env_info = {
-			let mut env_info = block.env_info();
-			env_info.gas_limit = env_info.gas_used.saturating_add(gas);
-			env_info
-		};
+	// pub fn execute_as_system(
+	// 	&self,
+	// 	block: &mut ExecutedBlock,
+	// 	contract_address: Address,
+	// 	gas: U256,
+	// 	data: Option<Vec<u8>>,
+	// ) -> Result<Vec<u8>, Error> {
+	// 	let env_info = {
+	// 		let mut env_info = block.env_info();
+	// 		env_info.gas_limit = env_info.gas_used.saturating_add(gas);
+	// 		env_info
+	// 	};
+        //
+	// 	let mut state = block.state_mut();
+	// 	let params = ActionParams {
+	// 		code_address: contract_address.clone(),
+	// 		address: contract_address.clone(),
+	// 		sender: SYSTEM_ADDRESS.clone(),
+	// 		origin: SYSTEM_ADDRESS.clone(),
+	// 		gas: gas,
+	// 		gas_price: 0.into(),
+	// 		value: ActionValue::Transfer(0.into()),
+	// 		code: state.code(&contract_address)?,
+	// 		code_hash: Some(state.code_hash(&contract_address)?),
+	// 		data: data,
+	// 		call_type: CallType::Call,
+	// 		params_type: ParamsType::Separate,
+	// 	};
+	// 	let mut ex = Executive::new(&mut state, &env_info, self);
+	// 	let mut substate = Substate::new();
+	// 	let mut output = Vec::new();
+	// 	if let Err(e) = ex.call(params, &mut substate, BytesRef::Flexible(&mut output), &mut NoopTracer, &mut NoopVMTracer) {
+	// 		warn!("Encountered error on making system call: {}", e);
+	// 	}
+        //
+	// 	Ok(output)
+	// }
 
-		let mut state = block.state_mut();
-		let params = ActionParams {
-			code_address: contract_address.clone(),
-			address: contract_address.clone(),
-			sender: SYSTEM_ADDRESS.clone(),
-			origin: SYSTEM_ADDRESS.clone(),
-			gas: gas,
-			gas_price: 0.into(),
-			value: ActionValue::Transfer(0.into()),
-			code: state.code(&contract_address)?,
-			code_hash: Some(state.code_hash(&contract_address)?),
-			data: data,
-			call_type: CallType::Call,
-			params_type: ParamsType::Separate,
-		};
-		let mut ex = Executive::new(&mut state, &env_info, self);
-		let mut substate = Substate::new();
-		let mut output = Vec::new();
-		if let Err(e) = ex.call(params, &mut substate, BytesRef::Flexible(&mut output), &mut NoopTracer, &mut NoopVMTracer) {
-			warn!("Encountered error on making system call: {}", e);
-		}
+	// /// Push last known block hash to the state.
+	// fn push_last_hash(&self, block: &mut ExecutedBlock) -> Result<(), Error> {
+	// 	let params = self.params();
+	// 	if block.header().number() == params.eip210_transition {
+	// 		let state = block.state_mut();
+	// 		state.init_code(&params.eip210_contract_address, params.eip210_contract_code.clone())?;
+	// 	}
+	// 	if block.header().number() >= params.eip210_transition {
+	// 		let parent_hash = block.header().parent_hash().clone();
+	// 		let _ = self.execute_as_system(
+	// 			block,
+	// 			params.eip210_contract_address,
+	// 			params.eip210_contract_gas,
+	// 			Some(parent_hash.to_vec()),
+	// 		)?;
+	// 	}
+	// 	Ok(())
+	// }
 
-		Ok(output)
-	}
+	// /// Logic to perform on a new block: updating last hashes and the DAO
+	// /// fork, for ethash.
+	// pub fn on_new_block(&self, block: &mut ExecutedBlock) -> Result<(), Error> {
+	// 	self.push_last_hash(block)?;
+        //
+	// 	if let Some(ref ethash_params) = self.ethash_extensions {
+	// 		if block.header().number() == ethash_params.dao_hardfork_transition {
+	// 			let state = block.state_mut();
+	// 			for child in &ethash_params.dao_hardfork_accounts {
+	// 				let beneficiary = &ethash_params.dao_hardfork_beneficiary;
+	// 				state.balance(child)
+	// 					.and_then(|b| state.transfer_balance(child, beneficiary, &b, CleanupMode::NoEmpty))?;
+	// 			}
+	// 		}
+	// 	}
+        //
+	// 	Ok(())
+	// }
 
-	/// Push last known block hash to the state.
-	fn push_last_hash(&self, block: &mut ExecutedBlock) -> Result<(), Error> {
-		let params = self.params();
-		if block.header().number() == params.eip210_transition {
-			let state = block.state_mut();
-			state.init_code(&params.eip210_contract_address, params.eip210_contract_code.clone())?;
-		}
-		if block.header().number() >= params.eip210_transition {
-			let parent_hash = block.header().parent_hash().clone();
-			let _ = self.execute_as_system(
-				block,
-				params.eip210_contract_address,
-				params.eip210_contract_gas,
-				Some(parent_hash.to_vec()),
-			)?;
-		}
-		Ok(())
-	}
-
-	/// Logic to perform on a new block: updating last hashes and the DAO
-	/// fork, for ethash.
-	pub fn on_new_block(&self, block: &mut ExecutedBlock) -> Result<(), Error> {
-		self.push_last_hash(block)?;
-
-		if let Some(ref ethash_params) = self.ethash_extensions {
-			if block.header().number() == ethash_params.dao_hardfork_transition {
-				let state = block.state_mut();
-				for child in &ethash_params.dao_hardfork_accounts {
-					let beneficiary = &ethash_params.dao_hardfork_beneficiary;
-					state.balance(child)
-						.and_then(|b| state.transfer_balance(child, beneficiary, &b, CleanupMode::NoEmpty))?;
-				}
-			}
-		}
-
-		Ok(())
-	}
-
-	/// Populate a header's fields based on its parent's header.
-	/// Usually implements the chain scoring rule based on weight.
-	/// The gas floor target must not be lower than the engine's minimum gas limit.
-	pub fn populate_from_parent(&self, header: &mut Header, parent: &Header, gas_floor_target: U256, gas_ceil_target: U256) {
-		header.set_difficulty(parent.difficulty().clone());
-		let gas_limit = parent.gas_limit().clone();
-		assert!(!gas_limit.is_zero(), "Gas limit should be > 0");
-
-		if let Some(ref ethash_params) = self.ethash_extensions {
-			let gas_limit = {
-				let bound_divisor = self.params().gas_limit_bound_divisor;
-				let lower_limit = gas_limit - gas_limit / bound_divisor + 1.into();
-				let upper_limit = gas_limit + gas_limit / bound_divisor - 1.into();
-				let gas_limit = if gas_limit < gas_floor_target {
-					let gas_limit = cmp::min(gas_floor_target, upper_limit);
-					round_block_gas_limit(gas_limit, lower_limit, upper_limit)
-				} else if gas_limit > gas_ceil_target {
-					let gas_limit = cmp::max(gas_ceil_target, lower_limit);
-					round_block_gas_limit(gas_limit, lower_limit, upper_limit)
-				} else {
-					let total_lower_limit = cmp::max(lower_limit, gas_floor_target);
-					let total_upper_limit = cmp::min(upper_limit, gas_ceil_target);
-					let gas_limit = cmp::max(gas_floor_target, cmp::min(total_upper_limit,
-						lower_limit + (header.gas_used().clone() * 6u32 / 5.into()) / bound_divisor));
-					round_block_gas_limit(gas_limit, total_lower_limit, total_upper_limit)
-				};
-				// ensure that we are not violating protocol limits
-				debug_assert!(gas_limit >= lower_limit);
-				debug_assert!(gas_limit <= upper_limit);
-				gas_limit
-			};
-
-			header.set_gas_limit(gas_limit);
-			if header.number() >= ethash_params.dao_hardfork_transition &&
-				header.number() <= ethash_params.dao_hardfork_transition + 9 {
-				header.set_extra_data(b"dao-hard-fork"[..].to_owned());
-			}
-			return
-		}
-
-		header.set_gas_limit({
-			let bound_divisor = self.params().gas_limit_bound_divisor;
-			if gas_limit < gas_floor_target {
-				cmp::min(gas_floor_target, gas_limit + gas_limit / bound_divisor - 1.into())
-			} else {
-				cmp::max(gas_floor_target, gas_limit - gas_limit / bound_divisor + 1.into())
-			}
-		});
-	}
+	// /// Populate a header's fields based on its parent's header.
+	// /// Usually implements the chain scoring rule based on weight.
+	// /// The gas floor target must not be lower than the engine's minimum gas limit.
+	// pub fn populate_from_parent(&self, header: &mut Header, parent: &Header, gas_floor_target: U256, gas_ceil_target: U256) {
+	// 	header.set_difficulty(parent.difficulty().clone());
+	// 	let gas_limit = parent.gas_limit().clone();
+	// 	assert!(!gas_limit.is_zero(), "Gas limit should be > 0");
+        //
+	// 	if let Some(ref ethash_params) = self.ethash_extensions {
+	// 		let gas_limit = {
+	// 			let bound_divisor = self.params().gas_limit_bound_divisor;
+	// 			let lower_limit = gas_limit - gas_limit / bound_divisor + 1.into();
+	// 			let upper_limit = gas_limit + gas_limit / bound_divisor - 1.into();
+	// 			let gas_limit = if gas_limit < gas_floor_target {
+	// 				let gas_limit = cmp::min(gas_floor_target, upper_limit);
+	// 				round_block_gas_limit(gas_limit, lower_limit, upper_limit)
+	// 			} else if gas_limit > gas_ceil_target {
+	// 				let gas_limit = cmp::max(gas_ceil_target, lower_limit);
+	// 				round_block_gas_limit(gas_limit, lower_limit, upper_limit)
+	// 			} else {
+	// 				let total_lower_limit = cmp::max(lower_limit, gas_floor_target);
+	// 				let total_upper_limit = cmp::min(upper_limit, gas_ceil_target);
+	// 				let gas_limit = cmp::max(gas_floor_target, cmp::min(total_upper_limit,
+	// 					lower_limit + (header.gas_used().clone() * 6u32 / 5.into()) / bound_divisor));
+	// 				round_block_gas_limit(gas_limit, total_lower_limit, total_upper_limit)
+	// 			};
+	// 			// ensure that we are not violating protocol limits
+	// 			debug_assert!(gas_limit >= lower_limit);
+	// 			debug_assert!(gas_limit <= upper_limit);
+	// 			gas_limit
+	// 		};
+        //
+	// 		header.set_gas_limit(gas_limit);
+	// 		if header.number() >= ethash_params.dao_hardfork_transition &&
+	// 			header.number() <= ethash_params.dao_hardfork_transition + 9 {
+	// 			header.set_extra_data(b"dao-hard-fork"[..].to_owned());
+	// 		}
+	// 		return
+	// 	}
+        //
+	// 	header.set_gas_limit({
+	// 		let bound_divisor = self.params().gas_limit_bound_divisor;
+	// 		if gas_limit < gas_floor_target {
+	// 			cmp::min(gas_floor_target, gas_limit + gas_limit / bound_divisor - 1.into())
+	// 		} else {
+	// 			cmp::max(gas_floor_target, gas_limit - gas_limit / bound_divisor + 1.into())
+	// 		}
+	// 	});
+	// }
 
 	/// Get the general parameters of the chain.
 	pub fn params(&self) -> &CommonParams {
@@ -341,18 +341,18 @@ impl EthereumMachine {
 		Ok(())
 	}
 
-	/// Does verification of the transaction against the parent state.
-	pub fn verify_transaction<C: BlockInfo + CallContract>(&self, t: &SignedTransaction, header: &Header, client: &C)
-		-> Result<(), transaction::Error>
-	{
-		if let Some(ref filter) = self.tx_filter.as_ref() {
-			if !filter.transaction_allowed(header.parent_hash(), t, client) {
-				return Err(transaction::Error::NotAllowed.into())
-			}
-		}
-
-		Ok(())
-	}
+	// /// Does verification of the transaction against the parent state.
+	// pub fn verify_transaction<C: BlockInfo + CallContract>(&self, t: &SignedTransaction, header: &Header, client: &C)
+	// 	-> Result<(), transaction::Error>
+	// {
+	// 	if let Some(ref filter) = self.tx_filter.as_ref() {
+	// 		if !filter.transaction_allowed(header.parent_hash(), t, client) {
+	// 			return Err(transaction::Error::NotAllowed.into())
+	// 		}
+	// 	}
+    //
+	// 	Ok(())
+	// }
 
 	/// Additional params.
 	pub fn additional_params(&self) -> HashMap<String, String> {
@@ -401,8 +401,8 @@ impl ::parity_machine::Machine for EthereumMachine {
 	type Header = Header;
 	type ExtendedHeader = ExtendedHeader;
 
-	type LiveBlock = ExecutedBlock;
-	type EngineClient = ::client::EngineClient;
+	// type LiveBlock = ExecutedBlock;
+	// type EngineClient = ::client::EngineClient;
 	type AuxiliaryRequest = AuxiliaryRequest;
 	type AncestryAction = ::types::ancestry_action::AncestryAction;
 
@@ -414,46 +414,46 @@ impl<'a> ::parity_machine::LocalizedMachine<'a> for EthereumMachine {
 	type AuxiliaryData = AuxiliaryData<'a>;
 }
 
-impl ::parity_machine::WithBalances for EthereumMachine {
-	fn balance(&self, live: &ExecutedBlock, address: &Address) -> Result<U256, Error> {
-		live.state().balance(address).map_err(Into::into)
-	}
+// impl ::parity_machine::WithBalances for EthereumMachine {
+// 	fn balance(&self, live: &ExecutedBlock, address: &Address) -> Result<U256, Error> {
+// 		live.state().balance(address).map_err(Into::into)
+// 	}
+//
+// 	fn add_balance(&self, live: &mut ExecutedBlock, address: &Address, amount: &U256) -> Result<(), Error> {
+// 		live.state_mut().add_balance(address, amount, CleanupMode::NoEmpty).map_err(Into::into)
+// 	}
+// }
 
-	fn add_balance(&self, live: &mut ExecutedBlock, address: &Address, amount: &U256) -> Result<(), Error> {
-		live.state_mut().add_balance(address, amount, CleanupMode::NoEmpty).map_err(Into::into)
-	}
-}
-
-/// A state machine that uses block rewards.
-pub trait WithRewards: ::parity_machine::Machine {
-	/// Note block rewards, traces each reward storing information about benefactor, amount and type
-	/// of reward.
-	fn note_rewards(
-		&self,
-		live: &mut Self::LiveBlock,
-		rewards: &[(Address, RewardType, U256)],
-	) -> Result<(), Self::Error>;
-}
-
-impl WithRewards for EthereumMachine {
-	fn note_rewards(
-		&self,
-		live: &mut Self::LiveBlock,
-		rewards: &[(Address, RewardType, U256)],
-	) -> Result<(), Self::Error> {
-		if let Tracing::Enabled(ref mut traces) = *live.traces_mut() {
-			let mut tracer = ExecutiveTracer::default();
-
-			for &(address, ref reward_type, amount) in rewards {
-				tracer.trace_reward(address, amount, reward_type.clone());
-			}
-
-			traces.push(tracer.drain().into());
-		}
-
-		Ok(())
-	}
-}
+// /// A state machine that uses block rewards.
+// pub trait WithRewards: ::parity_machine::Machine {
+// 	/// Note block rewards, traces each reward storing information about benefactor, amount and type
+// 	/// of reward.
+// 	fn note_rewards(
+// 		&self,
+// 		live: &mut Self::LiveBlock,
+// 		rewards: &[(Address, RewardType, U256)],
+// 	) -> Result<(), Self::Error>;
+// }
+//
+// impl WithRewards for EthereumMachine {
+// 	fn note_rewards(
+// 		&self,
+// 		live: &mut Self::LiveBlock,
+// 		rewards: &[(Address, RewardType, U256)],
+// 	) -> Result<(), Self::Error> {
+// 		if let Tracing::Enabled(ref mut traces) = *live.traces_mut() {
+// 			let mut tracer = ExecutiveTracer::default();
+//
+// 			for &(address, ref reward_type, amount) in rewards {
+// 				tracer.trace_reward(address, amount, reward_type.clone());
+// 			}
+//
+// 			traces.push(tracer.drain().into());
+// 		}
+//
+// 		Ok(())
+// 	}
+// }
 
 // Try to round gas_limit a bit so that:
 // 1) it will still be in desired range

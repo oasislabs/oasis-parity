@@ -21,16 +21,16 @@ use std::time::SystemTime;
 use kvdb;
 use ethereum_types::{H256, U256, Address, Bloom};
 use util_error::{self, UtilError};
-use snappy::InvalidInput;
+// use snappy::InvalidInput;
 use unexpected::{Mismatch, OutOfBounds};
 use trie::TrieError;
-use io::*;
+// use io::*;
 use header::BlockNumber;
-use client::Error as ClientError;
-use snapshot::Error as SnapshotError;
-use engines::EngineError;
+// use client::Error as ClientError;
+// use snapshot::Error as SnapshotError;
+// use engines::EngineError;
 use ethkey::Error as EthkeyError;
-use account_provider::SignError as AccountsError;
+// use account_provider::SignError as AccountsError;
 use transaction::Error as TransactionError;
 
 pub use executed::{ExecutionError, CallError};
@@ -243,35 +243,35 @@ error_chain! {
 	}
 		
 	foreign_links {
-		Io(IoError) #[doc = "Io create error"];
-		StdIo(::std::io::Error) #[doc = "Error concerning the Rust standard library's IO subsystem."];
+		// Io(IoError) #[doc = "Io create error"];
+		// StdIo(::std::io::Error) #[doc = "Error concerning the Rust standard library's IO subsystem."];
 		Trie(TrieError) #[doc = "Error concerning TrieDBs."];
 		Execution(ExecutionError) #[doc = "Error concerning EVM code execution."];
 		Block(BlockError) #[doc = "Error concerning block processing."];
 		Transaction(TransactionError) #[doc = "Error concerning transaction processing."];
-		Snappy(InvalidInput) #[doc = "Snappy error."];
-		Engine(EngineError) #[doc = "Consensus vote error."];
+		// Snappy(InvalidInput) #[doc = "Snappy error."];
+		// Engine(EngineError) #[doc = "Consensus vote error."];
 		Ethkey(EthkeyError) #[doc = "Ethkey error."];
 	}
 
 	errors {
-		#[doc = "Client configuration error."]
-		Client(err: ClientError) {
-			description("Client configuration error.")
-			display("Client configuration error {}", err)
-		}
+		// #[doc = "Client configuration error."]
+		// Client(err: ClientError) {
+		// 	description("Client configuration error.")
+		// 	display("Client configuration error {}", err)
+		// }
 
-		#[doc = "Snapshot error."]
-		Snapshot(err: SnapshotError) {
-			description("Snapshot error.")
-			display("Snapshot error {}", err)
-		}
+		// #[doc = "Snapshot error."]
+		// Snapshot(err: SnapshotError) {
+		// 	description("Snapshot error.")
+		// 	display("Snapshot error {}", err)
+		// }
 
-		#[doc = "Account Provider error"]
-		AccountProvider(err: AccountsError) {
-			description("Accounts Provider error")
-			display("Accounts Provider error {}", err)
-		} 
+		// #[doc = "Account Provider error"]
+		// AccountProvider(err: AccountsError) {
+		// 	description("Accounts Provider error")
+		// 	display("Accounts Provider error {}", err)
+		// } 
 
 		#[doc = "PoW hash is invalid or out of date."]
 		PowHashInvalid {
@@ -302,20 +302,20 @@ error_chain! {
 /// Result of import block operation.
 pub type ImportResult = EthcoreResult<H256>;
 
-impl From<ClientError> for Error {
-	fn from(err: ClientError) -> Error {
-		match err {
-			ClientError::Trie(err) => ErrorKind::Trie(err).into(),
-			_ => ErrorKind::Client(err).into()
-		}
-	}
-}
+// impl From<ClientError> for Error {
+// 	fn from(err: ClientError) -> Error {
+// 		match err {
+// 			ClientError::Trie(err) => ErrorKind::Trie(err).into(),
+// 			_ => ErrorKind::Client(err).into()
+// 		}
+// 	}
+// }
 
-impl From<AccountsError> for Error { 
-	fn from(err: AccountsError) -> Error { 
-		ErrorKind::AccountProvider(err).into()
-	} 
-}
+// impl From<AccountsError> for Error { 
+// 	fn from(err: AccountsError) -> Error { 
+// 		ErrorKind::AccountProvider(err).into()
+// 	} 
+// }
 
 impl From<::rlp::DecoderError> for Error {
 	fn from(err: ::rlp::DecoderError) -> Error {
@@ -334,16 +334,16 @@ impl From<BlockImportError> for Error {
 	}
 }
 
-impl From<SnapshotError> for Error {
-	fn from(err: SnapshotError) -> Error {
-		match err {
-			SnapshotError::Io(err) => ErrorKind::StdIo(err).into(),
-			SnapshotError::Trie(err) => ErrorKind::Trie(err).into(),
-			SnapshotError::Decoder(err) => err.into(),
-			other => ErrorKind::Snapshot(other).into(),
-		}
-	}
-}
+// impl From<SnapshotError> for Error {
+// 	fn from(err: SnapshotError) -> Error {
+// 		match err {
+// 			SnapshotError::Io(err) => ErrorKind::StdIo(err).into(),
+// 			SnapshotError::Trie(err) => ErrorKind::Trie(err).into(),
+// 			SnapshotError::Decoder(err) => err.into(),
+// 			other => ErrorKind::Snapshot(other).into(),
+// 		}
+// 	}
+// }
 
 impl<E> From<Box<E>> for Error where Error: From<E> {
 	fn from(err: Box<E>) -> Error {

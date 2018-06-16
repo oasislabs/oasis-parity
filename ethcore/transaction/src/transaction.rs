@@ -20,7 +20,7 @@ use std::ops::Deref;
 use ethereum_types::{H256, H160, Address, U256};
 use error;
 use ethjson;
-use ethkey::{self, Signature, Secret, Public, recover, public_to_address};
+use ethkey::{self, Signature, Public, recover, public_to_address};
 use evm::Schedule;
 use hash::keccak;
 use heapsize::HeapSizeOf;
@@ -138,27 +138,27 @@ impl HeapSizeOf for Transaction {
 	}
 }
 
-impl From<ethjson::state::Transaction> for SignedTransaction {
-	fn from(t: ethjson::state::Transaction) -> Self {
-		let to: Option<ethjson::hash::Address> = t.to.into();
-		let secret = t.secret.map(|s| Secret::from(s.0));
-		let tx = Transaction {
-			nonce: t.nonce.into(),
-			gas_price: t.gas_price.into(),
-			gas: t.gas_limit.into(),
-			action: match to {
-				Some(to) => Action::Call(to.into()),
-				None => Action::Create
-			},
-			value: t.value.into(),
-			data: t.data.into(),
-		};
-		match secret {
-			Some(s) => tx.sign(&s, None),
-			None => tx.null_sign(1),
-		}
-	}
-}
+// impl From<ethjson::state::Transaction> for SignedTransaction {
+// 	fn from(t: ethjson::state::Transaction) -> Self {
+// 		let to: Option<ethjson::hash::Address> = t.to.into();
+// 		let secret = t.secret.map(|s| Secret::from(s.0));
+// 		let tx = Transaction {
+// 			nonce: t.nonce.into(),
+// 			gas_price: t.gas_price.into(),
+// 			gas: t.gas_limit.into(),
+// 			action: match to {
+// 				Some(to) => Action::Call(to.into()),
+// 				None => Action::Create
+// 			},
+// 			value: t.value.into(),
+// 			data: t.data.into(),
+// 		};
+// 		match secret {
+// 			Some(s) => tx.sign(&s, None),
+// 			None => tx.null_sign(1),
+// 		}
+// 	}
+// }
 
 impl From<ethjson::transaction::Transaction> for UnverifiedTransaction {
 	fn from(t: ethjson::transaction::Transaction) -> Self {
@@ -191,13 +191,13 @@ impl Transaction {
 		keccak(stream.as_raw())
 	}
 
-	/// Signs the transaction as coming from `sender`.
-	pub fn sign(self, secret: &Secret, chain_id: Option<u64>) -> SignedTransaction {
-		let sig = ::ethkey::sign(secret, &self.hash(chain_id))
-			.expect("data is valid and context has signing capabilities; qed");
-		SignedTransaction::new(self.with_signature(sig, chain_id))
-			.expect("secret is valid so it's recoverable")
-	}
+	// /// Signs the transaction as coming from `sender`.
+	// pub fn sign(self, secret: &Secret, chain_id: Option<u64>) -> SignedTransaction {
+	// 	let sig = ::ethkey::sign(secret, &self.hash(chain_id))
+	// 		.expect("data is valid and context has signing capabilities; qed");
+	// 	SignedTransaction::new(self.with_signature(sig, chain_id))
+	// 		.expect("secret is valid so it's recoverable")
+	// }
 
 	/// Signs the transaction with signature.
 	pub fn with_signature(self, sig: Signature, chain_id: Option<u64>) -> UnverifiedTransaction {
@@ -460,21 +460,21 @@ impl From<SignedTransaction> for UnverifiedTransaction {
 impl SignedTransaction {
 	/// Try to verify transaction and recover sender.
 	pub fn new(transaction: UnverifiedTransaction) -> Result<Self, ethkey::Error> {
-		if transaction.is_unsigned() {
+		// if transaction.is_unsigned() {
 			Ok(SignedTransaction {
 				transaction: transaction,
 				sender: UNSIGNED_SENDER,
 				public: None,
 			})
-		} else {
-			let public = transaction.recover_public()?;
-			let sender = public_to_address(&public);
-			Ok(SignedTransaction {
-				transaction: transaction,
-				sender: sender,
-				public: Some(public),
-			})
-		}
+		// } else {
+		// 	// let public = transaction.recover_public()?;
+		// 	// let sender = public_to_address(&public);
+		// 	// Ok(SignedTransaction {
+		// 	// 	transaction: transaction,
+		// 	// 	sender: sender,
+		// 	// 	public: Some(public),
+		// 	// })
+		// }
 	}
 
 	/// Returns transaction sender.

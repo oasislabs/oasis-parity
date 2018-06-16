@@ -18,7 +18,7 @@ use std::cmp::{max, min};
 use std::io::{self, Read};
 
 use byteorder::{ByteOrder, BigEndian};
-use ethcore_crypto::digest;
+// use ethcore_crypto::digest;
 use num::{BigUint, Zero, One};
 
 use hash::keccak;
@@ -212,8 +212,8 @@ fn ethereum_builtin(name: &str) -> Box<Impl> {
 	match name {
 		"identity" => Box::new(Identity) as Box<Impl>,
 		"ecrecover" => Box::new(EcRecover) as Box<Impl>,
-		"sha256" => Box::new(Sha256) as Box<Impl>,
-		"ripemd160" => Box::new(Ripemd160) as Box<Impl>,
+		// "sha256" => Box::new(Sha256) as Box<Impl>,
+		// "ripemd160" => Box::new(Ripemd160) as Box<Impl>,
 		"modexp" => Box::new(ModexpImpl) as Box<Impl>,
 		"alt_bn128_add" => Box::new(Bn128AddImpl) as Box<Impl>,
 		"alt_bn128_mul" => Box::new(Bn128MulImpl) as Box<Impl>,
@@ -291,22 +291,22 @@ impl Impl for EcRecover {
 	}
 }
 
-impl Impl for Sha256 {
-	fn execute(&self, input: &[u8], output: &mut BytesRef) -> Result<(), Error> {
-		let d = digest::sha256(input);
-		output.write(0, &*d);
-		Ok(())
-	}
-}
-
-impl Impl for Ripemd160 {
-	fn execute(&self, input: &[u8], output: &mut BytesRef) -> Result<(), Error> {
-		let hash = digest::ripemd160(input);
-		output.write(0, &[0; 12][..]);
-		output.write(12, &hash);
-		Ok(())
-	}
-}
+// impl Impl for Sha256 {
+// 	fn execute(&self, input: &[u8], output: &mut BytesRef) -> Result<(), Error> {
+// 		let d = digest::sha256(input);
+// 		output.write(0, &*d);
+// 		Ok(())
+// 	}
+// }
+//
+// impl Impl for Ripemd160 {
+// 	fn execute(&self, input: &[u8], output: &mut BytesRef) -> Result<(), Error> {
+// 		let hash = digest::ripemd160(input);
+// 		output.write(0, &[0; 12][..]);
+// 		output.write(12, &hash);
+// 		Ok(())
+// 	}
+// }
 
 // calculate modexp: exponentiation by squaring. the `num` crate has pow, but not modular.
 fn modexp(mut base: BigUint, mut exp: BigUint, modulus: BigUint) -> BigUint {

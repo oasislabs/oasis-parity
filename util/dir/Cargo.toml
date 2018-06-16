@@ -4,6 +4,6 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-ethereum-types = "0.3"
+ethereum-types = { git = "https://github.com/ekiden/primitives", branch = "ekiden" }
 journaldb = { path = "../journaldb" }
 app_dirs = { git = "https://github.com/paritytech/app-dirs-rs" }

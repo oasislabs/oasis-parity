@@ -25,7 +25,6 @@ extern crate ethcore_bytes as bytes;
 extern crate hashdb;
 extern crate kvdb;
 extern crate memorydb;
-extern crate parking_lot;
 extern crate plain_hasher;
 extern crate rlp;
 extern crate util_error as error;

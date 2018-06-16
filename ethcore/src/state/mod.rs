@@ -29,7 +29,7 @@ use hash::{KECCAK_NULL_RLP, KECCAK_EMPTY};
 use receipt::{Receipt, TransactionOutcome};
 use machine::EthereumMachine as Machine;
 use vm::EnvInfo;
-use error::Error;
+use error::{Error, ErrorKind};
 use executive::{Executive, TransactOptions};
 use factory::Factories;
 use trace::{self, FlatTrace, VMTrace};
@@ -191,74 +191,74 @@ impl AccountEntry {
 /// Check the given proof of execution.
 /// `Err(ExecutionError::Internal)` indicates failure, everything else indicates
 /// a successful proof (as the transaction itself may be poorly chosen).
-pub fn check_proof(
-	proof: &[DBValue],
-	root: H256,
-	transaction: &SignedTransaction,
-	machine: &Machine,
-	env_info: &EnvInfo,
-) -> ProvedExecution {
-	let backend = self::backend::ProofCheck::new(proof);
-	let mut factories = Factories::default();
-	factories.accountdb = ::account_db::Factory::Plain;
+// pub fn check_proof(
+// 	proof: &[DBValue],
+// 	root: H256,
+// 	transaction: &SignedTransaction,
+// 	machine: &Machine,
+// 	env_info: &EnvInfo,
+// ) -> ProvedExecution {
+// 	let backend = self::backend::ProofCheck::new(proof);
+// 	let mut factories = Factories::default();
+// 	factories.accountdb = ::account_db::Factory::Plain;
+//
+// 	let res = State::from_existing(
+// 		backend,
+// 		root,
+// 		machine.account_start_nonce(env_info.number),
+// 		factories
+// 	);
+//
+// 	let mut state = match res {
+// 		Ok(state) => state,
+// 		Err(_) => return ProvedExecution::BadProof,
+// 	};
+//
+// 	let options = TransactOptions::with_no_tracing().save_output_from_contract();
+// 	match state.execute(env_info, machine, transaction, options, true) {
+// 		Ok(executed) => ProvedExecution::Complete(executed),
+// 		Err(ExecutionError::Internal(_)) => ProvedExecution::BadProof,
+// 		Err(e) => ProvedExecution::Failed(e),
+// 	}
+// }
 
-	let res = State::from_existing(
-		backend,
-		root,
-		machine.account_start_nonce(env_info.number),
-		factories
-	);
-
-	let mut state = match res {
-		Ok(state) => state,
-		Err(_) => return ProvedExecution::BadProof,
-	};
-
-	let options = TransactOptions::with_no_tracing().save_output_from_contract();
-	match state.execute(env_info, machine, transaction, options, true) {
-		Ok(executed) => ProvedExecution::Complete(executed),
-		Err(ExecutionError::Internal(_)) => ProvedExecution::BadProof,
-		Err(e) => ProvedExecution::Failed(e),
-	}
-}
-
-/// Prove a transaction on the given state.
-/// Returns `None` when the transacion could not be proved,
-/// and a proof otherwise.
-pub fn prove_transaction<H: AsHashDB + Send + Sync>(
-	db: H,
-	root: H256,
-	transaction: &SignedTransaction,
-	machine: &Machine,
-	env_info: &EnvInfo,
-	factories: Factories,
-	virt: bool,
-) -> Option<(Bytes, Vec<DBValue>)> {
-	use self::backend::Proving;
-
-	let backend = Proving::new(db);
-	let res = State::from_existing(
-		backend,
-		root,
-		machine.account_start_nonce(env_info.number),
-		factories,
-	);
-
-	let mut state = match res {
-		Ok(state) => state,
-		Err(_) => return None,
-	};
-
-	let options = TransactOptions::with_no_tracing().dont_check_nonce().save_output_from_contract();
-	match state.execute(env_info, machine, transaction, options, virt) {
-		Err(ExecutionError::Internal(_)) => None,
-		Err(e) => {
-			trace!(target: "state", "Proved call failed: {}", e);
-			Some((Vec::new(), state.drop().1.extract_proof()))
-		}
-		Ok(res) => Some((res.output, state.drop().1.extract_proof())),
-	}
-}
+// /// Prove a transaction on the given state.
+// /// Returns `None` when the transacion could not be proved,
+// /// and a proof otherwise.
+// pub fn prove_transaction<H: AsHashDB + Send + Sync>(
+// 	db: H,
+// 	root: H256,
+// 	transaction: &SignedTransaction,
+// 	machine: &Machine,
+// 	env_info: &EnvInfo,
+// 	factories: Factories,
+// 	virt: bool,
+// ) -> Option<(Bytes, Vec<DBValue>)> {
+// 	use self::backend::Proving;
+//
+// 	let backend = Proving::new(db);
+// 	let res = State::from_existing(
+// 		backend,
+// 		root,
+// 		machine.account_start_nonce(env_info.number),
+// 		factories,
+// 	);
+//
+// 	let mut state = match res {
+// 		Ok(state) => state,
+// 		Err(_) => return None,
+// 	};
+//
+// 	let options = TransactOptions::with_no_tracing().dont_check_nonce().save_output_from_contract();
+// 	match state.execute(env_info, machine, transaction, options, virt) {
+// 		Err(ExecutionError::Internal(_)) => None,
+// 		Err(e) => {
+// 			trace!(target: "state", "Proved call failed: {}", e);
+// 			Some((Vec::new(), state.drop().1.extract_proof()))
+// 		}
+// 		Ok(res) => Some((res.output, state.drop().1.extract_proof())),
+// 	}
+// }
 
 /// Representation of the entire state of all accounts in the system.
 ///

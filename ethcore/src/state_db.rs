@@ -27,7 +27,7 @@ use hashdb::HashDB;
 use state::{self, Account};
 use header::BlockNumber;
 use hash::keccak;
-use parking_lot::Mutex;
+use std::sync::Mutex;
 use util_error::UtilError;
 use bloom_journal::{Bloom, BloomJournal};
 use db::COL_ACCOUNT_BLOOM;
@@ -197,7 +197,7 @@ impl StateDB {
 	/// Journal all recent operations under the given era and ID.
 	pub fn journal_under(&mut self, batch: &mut DBTransaction, now: u64, id: &H256) -> Result<u32, UtilError> {
 		{
- 			let mut bloom_lock = self.account_bloom.lock();
+ 			let mut bloom_lock = self.account_bloom.lock().unwrap();
  			Self::commit_bloom(batch, bloom_lock.drain_journal())?;
  		}
 		let records = self.db.journal_under(batch, now, id)?;
@@ -220,7 +220,7 @@ impl StateDB {
 	/// blockchain route has ben calculated.
 	pub fn sync_cache(&mut self, enacted: &[H256], retracted: &[H256], is_best: bool) {
 		trace!("sync_cache id = (#{:?}, {:?}), parent={:?}, best={}", self.commit_number, self.commit_hash, self.parent_hash, is_best);
-		let mut cache = self.account_cache.lock();
+		let mut cache = self.account_cache.lock().unwrap();
 		let cache = &mut *cache;
 
 		// Purge changes from re-enacted and retracted blocks.
@@ -358,8 +358,8 @@ impl StateDB {
 	pub fn mem_used(&self) -> usize {
 		// TODO: account for LRU-cache overhead; this is a close approximation.
 		self.db.mem_used() + {
-			let accounts = self.account_cache.lock().accounts.len();
-			let code_size = self.code_cache.lock().current_size();
+			let accounts = self.account_cache.lock().unwrap().accounts.len();
+			let code_size = self.code_cache.lock().unwrap().current_size();
 			code_size + accounts * ::std::mem::size_of::<Option<Account>>()
 		}
 	}
@@ -427,13 +427,13 @@ impl state::Backend for StateDB {
 	}
 
 	fn cache_code(&self, hash: H256, code: Arc<Vec<u8>>) {
-		let mut cache = self.code_cache.lock();
+		let mut cache = self.code_cache.lock().unwrap();
 
 		cache.insert(hash, code);
 	}
 
 	fn get_cached_account(&self, addr: &Address) -> Option<Option<Account>> {
-		let mut cache = self.account_cache.lock();
+		let mut cache = self.account_cache.lock().unwrap();
 		if !Self::is_allowed(addr, &self.parent_hash, &cache.modifications) {
 			return None;
 		}
@@ -442,7 +442,7 @@ impl state::Backend for StateDB {
 
 	fn get_cached<F, U>(&self, a: &Address, f: F) -> Option<U>
 		where F: FnOnce(Option<&mut Account>) -> U {
-		let mut cache = self.account_cache.lock();
+		let mut cache = self.account_cache.lock().unwrap();
 		if !Self::is_allowed(a, &self.parent_hash, &cache.modifications) {
 			return None;
 		}
@@ -450,20 +450,20 @@ impl state::Backend for StateDB {
 	}
 
 	fn get_cached_code(&self, hash: &H256) -> Option<Arc<Vec<u8>>> {
-		let mut cache = self.code_cache.lock();
+		let mut cache = self.code_cache.lock().unwrap();
 
 		cache.get_mut(hash).map(|code| code.clone())
 	}
 
 	fn note_non_null_account(&self, address: &Address) {
 		trace!(target: "account_bloom", "Note account bloom: {:?}", address);
-		let mut bloom = self.account_bloom.lock();
+		let mut bloom = self.account_bloom.lock().unwrap();
 		bloom.set(&*keccak(address));
 	}
 
 	fn is_known_null(&self, address: &Address) -> bool {
 		trace!(target: "account_bloom", "Check account bloom: {:?}", address);
-		let bloom = self.account_bloom.lock();
+		let bloom = self.account_bloom.lock().unwrap();
 		let is_null = !bloom.check(&*keccak(address));
 		is_null
 	}
