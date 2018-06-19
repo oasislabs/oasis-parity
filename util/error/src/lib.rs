@@ -69,14 +69,8 @@ error_chain! {
 
 	foreign_links {
 		// Io(::std::io::Error);
-		// FromHex(FromHexError);
+		FromHex(FromHexError);
 		Decoder(DecoderError);
-		// BaseData(BaseDataError);
-	}
-}
-
-impl From<BaseDataError> for UtilError {
-	fn from(err: BaseDataError) -> Self {
-		panic!()
+		BaseData(BaseDataError);
 	}
 }
