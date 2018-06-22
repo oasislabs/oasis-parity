@@ -6,7 +6,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 byteorder = "1.0"
 edit-distance = "2.0"
-libsecp256k1 = { git = "https://github.com/ekiden/libsecp256k1-rs", branch = "ekiden" }
+secp256k1-plus = { git = "https://github.com/ekiden/rust-secp256k1", branch = "feature/rand_optional" }
 ethereum-types = { git = "https://github.com/ekiden/primitives", branch = "ekiden" }
 lazy_static = "1.0"
 log = "0.3"

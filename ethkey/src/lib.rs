@@ -67,9 +67,9 @@ use ethereum_types::H256;
 pub use ethereum_types::{Address, Public};
 pub type Message = H256;
 
-// lazy_static! {
-// 	pub static ref SECP256K1: secp256k1::Secp256k1 = secp256k1::Secp256k1::new();
-// }
+lazy_static! {
+	pub static ref SECP256K1: secp256k1::Secp256k1 = secp256k1::Secp256k1::new();
+}
 
 // /// Uninstantiatable error type for infallible generators.
 // #[derive(Debug)]
