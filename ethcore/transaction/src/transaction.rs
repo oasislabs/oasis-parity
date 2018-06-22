@@ -460,21 +460,21 @@ impl From<SignedTransaction> for UnverifiedTransaction {
 impl SignedTransaction {
 	/// Try to verify transaction and recover sender.
 	pub fn new(transaction: UnverifiedTransaction) -> Result<Self, ethkey::Error> {
-		// if transaction.is_unsigned() {
+		if transaction.is_unsigned() {
 			Ok(SignedTransaction {
 				transaction: transaction,
 				sender: UNSIGNED_SENDER,
 				public: None,
 			})
-		// } else {
-		// 	// let public = transaction.recover_public()?;
-		// 	// let sender = public_to_address(&public);
-		// 	// Ok(SignedTransaction {
-		// 	// 	transaction: transaction,
-		// 	// 	sender: sender,
-		// 	// 	public: Some(public),
-		// 	// })
-		// }
+		} else {
+			let public = transaction.recover_public()?;
+			let sender = public_to_address(&public);
+			Ok(SignedTransaction {
+				transaction: transaction,
+				sender: sender,
+				public: Some(public),
+			})
+		}
 	}
 
 	/// Returns transaction sender.
