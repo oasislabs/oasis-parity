@@ -142,6 +142,8 @@ pub struct CommonParams {
 	pub transaction_permission_contract: Option<Address>,
 	/// Maximum size of transaction's RLP payload
 	pub max_transaction_size: usize,
+	/// Whether to run in benchmarking/debug mode.
+	pub benchmarking: bool,
 }
 
 impl CommonParams {
@@ -284,6 +286,7 @@ impl From<ethjson::spec::Params> for CommonParams {
 				BlockNumber::max_value,
 				Into::into
 			),
+			benchmarking: p.benchmarking.unwrap_or(false),
 		}
 	}
 }

@@ -707,7 +707,10 @@ impl<B: Backend> State<B> {
 		T: trace::Tracer,
 		V: trace::VMTracer,
 	{
-		let options = TransactOptions::new(tracer, vm_tracer);
+		let options = match machine.params().benchmarking {
+			true => TransactOptions::new(tracer, vm_tracer).dont_check_nonce(),
+			false => TransactOptions::new(tracer, vm_tracer)
+		};
 		let e = self.execute(env_info, machine, t, options, false)?;
 		let params = machine.params();
 
