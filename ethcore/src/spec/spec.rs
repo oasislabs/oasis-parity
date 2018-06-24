@@ -33,7 +33,7 @@ use vm::{EnvInfo, CallType, ActionValue, ActionParams, ParamsType};
 
 use builtin::Builtin;
 use encoded;
-// use engines::{EthEngine, NullEngine, InstantSeal, BasicAuthority, AuthorityRound, Tendermint, DEFAULT_BLOCKHASH_CONTRACT};
+use engines::{EthEngine, NullEngine, InstantSeal};//, BasicAuthority, AuthorityRound, Tendermint, DEFAULT_BLOCKHASH_CONTRACT};
 use error::Error;
 use executive::Executive;
 use factory::Factories;
@@ -47,6 +47,7 @@ use state::{Backend, State, Substate};
 use trace::{NoopTracer, NoopVMTracer};
 
 // pub use ethash::OptimizeFor;
+type OptimizeFor = u64;
 
 const MAX_TRANSACTION_SIZE: usize = 300 * 1024;
 
@@ -287,50 +288,56 @@ impl From<ethjson::spec::Params> for CommonParams {
 	}
 }
 
-// /// Runtime parameters for the spec that are related to how the software should run the chain,
-// /// rather than integral properties of the chain itself.
-// #[derive(Debug, Clone, Copy)]
-// pub struct SpecParams<'a> {
-// 	/// The path to the folder used to cache nodes. This is typically /tmp/ on Unix-like systems
-// 	pub cache_dir: &'a Path,
-// 	/// Whether to run slower at the expense of better memory usage, or run faster while using
-// 	/// more
-// 	/// memory. This may get more fine-grained in the future but for now is simply a binary
-// 	/// option.
-// 	pub optimization_setting: Option<OptimizeFor>,
-// }
-//
-// impl<'a> SpecParams<'a> {
-// 	/// Create from a cache path, with null values for the other fields
-// 	pub fn from_path(path: &'a Path) -> Self {
-// 		SpecParams {
-// 			cache_dir: path,
-// 			optimization_setting: None,
-// 		}
-// 	}
-//
-// 	/// Create from a cache path and an optimization setting
-// 	pub fn new(path: &'a Path, optimization: OptimizeFor) -> Self {
-// 		SpecParams {
-// 			cache_dir: path,
-// 			optimization_setting: Some(optimization),
-// 		}
-// 	}
-// }
-//
-// impl<'a, T: AsRef<Path>> From<&'a T> for SpecParams<'a> {
-// 	fn from(path: &'a T) -> Self {
-// 		Self::from_path(path.as_ref())
-// 	}
-// }
+/// Runtime parameters for the spec that are related to how the software should run the chain,
+/// rather than integral properties of the chain itself.
+#[derive(Debug, Clone, Copy)]
+pub struct SpecParams<'a> {
+	/// The path to the folder used to cache nodes. This is typically /tmp/ on Unix-like systems
+	pub cache_dir: &'a Path,
+	/// Whether to run slower at the expense of better memory usage, or run faster while using
+	/// more
+	/// memory. This may get more fine-grained in the future but for now is simply a binary
+	/// option.
+	pub optimization_setting: Option<OptimizeFor>,
+}
+
+impl<'a> Default for SpecParams<'a> {
+    fn default() -> Self {
+	Self::from_path(Path::new(""))
+    }
+}
+
+impl<'a> SpecParams<'a> {
+	/// Create from a cache path, with null values for the other fields
+	pub fn from_path(path: &'a Path) -> Self {
+		SpecParams {
+			cache_dir: path,
+			optimization_setting: None,
+		}
+	}
+
+	/// Create from a cache path and an optimization setting
+	pub fn new(path: &'a Path, optimization: OptimizeFor) -> Self {
+		SpecParams {
+			cache_dir: path,
+			optimization_setting: Some(optimization),
+		}
+	}
+}
+
+impl<'a, T: AsRef<Path>> From<&'a T> for SpecParams<'a> {
+	fn from(path: &'a T) -> Self {
+		Self::from_path(path.as_ref())
+	}
+}
 
 /// Parameters for a block chain; includes both those intrinsic to the design of the
 /// chain and those to be interpreted by the active chain engine.
 pub struct Spec {
 	/// User friendly spec name
 	pub name: String,
-	// /// What engine are we using for this?
-	// pub engine: Arc<EthEngine>,
+	/// What engine are we using for this?
+	pub engine: Arc<EthEngine>,
 	/// Name of the subdir inside the main data dir to use for chain data and settings.
 	pub data_dir: String,
 
@@ -365,7 +372,7 @@ pub struct Spec {
 	constructors: Vec<(Address, Bytes)>,
 
 	/// May be prepopulated if we know this in advance.
-	state_root_memo: RwLock<H256>,
+	pub state_root_memo: RwLock<H256>,
 
 	/// Genesis state as plain old data.
 	genesis_state: PodState,
@@ -444,71 +451,71 @@ fn load_machine_from(s: ethjson::spec::Spec) -> EthereumMachine {
 }
 
 /// Load from JSON object.
-// fn load_from(spec_params: SpecParams, s: ethjson::spec::Spec) -> Result<Spec, Error> {
-// 	let builtins = s.accounts
-// 		.builtins()
-// 		.into_iter()
-// 		.map(|p| (p.0.into(), From::from(p.1)))
-// 		.collect();
-// 	let g = Genesis::from(s.genesis);
-// 	let GenericSeal(seal_rlp) = g.seal.into();
-// 	let params = CommonParams::from(s.params);
-//
-// 	let hardcoded_sync = if let Some(ref hs) = s.hardcoded_sync {
-// 		if let Ok(header) = hs.header.from_hex() {
-// 			Some(SpecHardcodedSync {
-// 				header: encoded::Header::new(header),
-// 				total_difficulty: hs.total_difficulty.into(),
-// 				chts: s.hardcoded_sync
-// 					.as_ref()
-// 					.map(|s| s.chts.iter().map(|c| c.clone().into()).collect())
-// 					.unwrap_or(Vec::new()),
-// 			})
-// 		} else {
-// 			None
-// 		}
-// 	} else {
-// 		None
-// 	};
-//
-// 	let mut s = Spec {
-// 		name: s.name.clone().into(),
-// 		engine: Spec::engine(spec_params, s.engine, params, builtins),
-// 		data_dir: s.data_dir.unwrap_or(s.name).into(),
-// 		nodes: s.nodes.unwrap_or_else(Vec::new),
-// 		parent_hash: g.parent_hash,
-// 		transactions_root: g.transactions_root,
-// 		receipts_root: g.receipts_root,
-// 		author: g.author,
-// 		difficulty: g.difficulty,
-// 		gas_limit: g.gas_limit,
-// 		gas_used: g.gas_used,
-// 		timestamp: g.timestamp,
-// 		extra_data: g.extra_data,
-// 		seal_rlp: seal_rlp,
-// 		hardcoded_sync: hardcoded_sync,
-// 		constructors: s.accounts
-// 			.constructors()
-// 			.into_iter()
-// 			.map(|(a, c)| (a.into(), c.into()))
-// 			.collect(),
-// 		state_root_memo: RwLock::new(Default::default()), // will be overwritten right after.
-// 		genesis_state: s.accounts.into(),
-// 	};
-//
-// 	// use memoized state root if provided.
-// 	match g.state_root {
-// 		Some(root) => *s.state_root_memo.get_mut() = root,
-// 		None => {
-// 			let _ = s.run_constructors(
-// 				&Default::default(),
-// 				BasicBackend(MemoryDB::new()),
-// 			)?;
-// 		}
-// 	}
-//
-// 	Ok(s)
-// }
+fn load_from(spec_params: SpecParams, s: ethjson::spec::Spec) -> Result<Spec, Error> {
+	let builtins = s.accounts
+		.builtins()
+		.into_iter()
+		.map(|p| (p.0.into(), From::from(p.1)))
+		.collect();
+	let g = Genesis::from(s.genesis);
+	let GenericSeal(seal_rlp) = g.seal.into();
+	let params = CommonParams::from(s.params);
+
+	let hardcoded_sync = if let Some(ref hs) = s.hardcoded_sync {
+		if let Ok(header) = hs.header.from_hex() {
+			Some(SpecHardcodedSync {
+				header: encoded::Header::new(header),
+				total_difficulty: hs.total_difficulty.into(),
+				chts: s.hardcoded_sync
+					.as_ref()
+					.map(|s| s.chts.iter().map(|c| c.clone().into()).collect())
+					.unwrap_or(Vec::new()),
+			})
+		} else {
+			None
+		}
+	} else {
+		None
+	};
+
+	let mut s = Spec {
+		name: s.name.clone().into(),
+		engine: Spec::engine(spec_params, s.engine, params, builtins),
+		data_dir: s.data_dir.unwrap_or(s.name).into(),
+		nodes: s.nodes.unwrap_or_else(Vec::new),
+		parent_hash: g.parent_hash,
+		transactions_root: g.transactions_root,
+		receipts_root: g.receipts_root,
+		author: g.author,
+		difficulty: g.difficulty,
+		gas_limit: g.gas_limit,
+		gas_used: g.gas_used,
+		timestamp: g.timestamp,
+		extra_data: g.extra_data,
+		seal_rlp: seal_rlp,
+		hardcoded_sync: hardcoded_sync,
+		constructors: s.accounts
+			.constructors()
+			.into_iter()
+			.map(|(a, c)| (a.into(), c.into()))
+			.collect(),
+		state_root_memo: RwLock::new(Default::default()), // will be overwritten right after.
+		genesis_state: s.accounts.into(),
+	};
+
+	// use memoized state root if provided.
+	match g.state_root {
+		Some(root) => *s.state_root_memo.get_mut().unwrap() = root,
+		None => {
+			let _ = s.run_constructors(
+				&Default::default(),
+				BasicBackend(MemoryDB::new()),
+			)?;
+		}
+	}
+
+	Ok(s)
+}
 
 // macro_rules! load_bundled {
 // 	($e:expr) => {
@@ -544,143 +551,144 @@ impl Spec {
 
 	/// Convert engine spec into a arc'd Engine of the right underlying type.
 	/// TODO avoid this hard-coded nastiness - use dynamic-linked plugin framework instead.
-	// fn engine(
-	// 	spec_params: SpecParams,
-	// 	engine_spec: ethjson::spec::Engine,
-	// 	params: CommonParams,
-	// 	builtins: BTreeMap<Address, Builtin>,
-	// ) -> Arc<EthEngine> {
-	// 	let machine = Self::machine(&engine_spec, params, builtins);
-    //
-	// 	match engine_spec {
-	// 		ethjson::spec::Engine::Null(null) => Arc::new(NullEngine::new(null.params.into(), machine)),
-	// 		ethjson::spec::Engine::Ethash(ethash) => Arc::new(::ethereum::Ethash::new(spec_params.cache_dir, ethash.params.into(), machine, spec_params.optimization_setting)),
-	// 		ethjson::spec::Engine::InstantSeal => Arc::new(InstantSeal::new(machine)),
-	// 		ethjson::spec::Engine::BasicAuthority(basic_authority) => Arc::new(BasicAuthority::new(basic_authority.params.into(), machine)),
-	// 		ethjson::spec::Engine::AuthorityRound(authority_round) => AuthorityRound::new(authority_round.params.into(), machine)
-	// 			.expect("Failed to start AuthorityRound consensus engine."),
-	// 		ethjson::spec::Engine::Tendermint(tendermint) => Tendermint::new(tendermint.params.into(), machine)
-	// 			.expect("Failed to start the Tendermint consensus engine."),
-	// 	}
-	// }
+	fn engine(
+		spec_params: SpecParams,
+		engine_spec: ethjson::spec::Engine,
+		params: CommonParams,
+		builtins: BTreeMap<Address, Builtin>,
+	) -> Arc<EthEngine> {
+		let machine = Self::machine(&engine_spec, params, builtins);
+
+		match engine_spec {
+			ethjson::spec::Engine::InstantSeal => Arc::new(InstantSeal::new(machine)),
+			ethjson::spec::Engine::Null(null) => Arc::new(NullEngine::new(null.params.into(), machine)),
+			// ethjson::spec::Engine::Ethash(ethash) => Arc::new(::ethereum::Ethash::new(spec_params.cache_dir, ethash.params.into(), machine, spec_params.optimization_setting)),
+			// ethjson::spec::Engine::BasicAuthority(basic_authority) => Arc::new(BasicAuthority::new(basic_authority.params.into(), machine)),
+			// ethjson::spec::Engine::AuthorityRound(authority_round) => AuthorityRound::new(authority_round.params.into(), machine)
+			// 	.expect("Failed to start AuthorityRound consensus engine."),
+			// ethjson::spec::Engine::Tendermint(tendermint) => Tendermint::new(tendermint.params.into(), machine)
+			// 	.expect("Failed to start the Tendermint consensus engine."),
+			_ => panic!("Engine not supported")
+		}
+	}
 
 	// given a pre-constructor state, run all the given constructors and produce a new state and
 	// state root.
-	// fn run_constructors<T: Backend>(&self, factories: &Factories, mut db: T) -> Result<T, Error> {
-	// 	let mut root = KECCAK_NULL_RLP;
-        //
-	// 	// basic accounts in spec.
-	// 	{
-	// 		let mut t = factories.trie.create(db.as_hashdb_mut(), &mut root);
-        //
-	// 		for (address, account) in self.genesis_state.get().iter() {
-	// 			t.insert(&**address, &account.rlp())?;
-	// 		}
-	// 	}
-        //
-	// 	for (address, account) in self.genesis_state.get().iter() {
-	// 		db.note_non_null_account(address);
-	// 		account.insert_additional(
-	// 			&mut *factories.accountdb.create(
-	// 				db.as_hashdb_mut(),
-	// 				keccak(address),
-	// 			),
-	// 			&factories.trie,
-	// 		);
-	// 	}
-        //
-	// 	let start_nonce = self.engine.account_start_nonce(0);
-        //
-	// 	let (root, db) = {
-	// 		let mut state = State::from_existing(db, root, start_nonce, factories.clone())?;
-        //
-	// 		// Execute contract constructors.
-	// 		let env_info = EnvInfo {
-	// 			number: 0,
-	// 			author: self.author,
-	// 			timestamp: self.timestamp,
-	// 			difficulty: self.difficulty,
-	// 			last_hashes: Default::default(),
-	// 			gas_used: U256::zero(),
-	// 			gas_limit: U256::max_value(),
-	// 		};
-        //
-	// 		let from = Address::default();
-	// 		for &(ref address, ref constructor) in self.constructors.iter() {
-	// 			trace!(target: "spec", "run_constructors: Creating a contract at {}.", address);
-	// 			trace!(target: "spec", "  .. root before = {}", state.root());
-	// 			let params = ActionParams {
-	// 				code_address: address.clone(),
-	// 				code_hash: Some(keccak(constructor)),
-	// 				address: address.clone(),
-	// 				sender: from.clone(),
-	// 				origin: from.clone(),
-	// 				gas: U256::max_value(),
-	// 				gas_price: Default::default(),
-	// 				value: ActionValue::Transfer(Default::default()),
-	// 				code: Some(Arc::new(constructor.clone())),
-	// 				data: None,
-	// 				call_type: CallType::None,
-	// 				params_type: ParamsType::Embedded,
-	// 			};
-        //
-	// 			let mut substate = Substate::new();
-        //
-	// 			{
-	// 				let mut exec = Executive::new(&mut state, &env_info, self.engine.machine());
-	// 				if let Err(e) = exec.create(params, &mut substate, &mut None, &mut NoopTracer, &mut NoopVMTracer) {
-	// 					warn!(target: "spec", "Genesis constructor execution at {} failed: {}.", address, e);
-	// 				}
-	// 			}
-        //
-	// 			if let Err(e) = state.commit() {
-	// 				warn!(target: "spec", "Genesis constructor trie commit at {} failed: {}.", address, e);
-	// 			}
-        //
-	// 			trace!(target: "spec", "  .. root after = {}", state.root());
-	// 		}
-        //
-	// 		state.drop()
-	// 	};
-        //
-	// 	*self.state_root_memo.write() = root;
-	// 	Ok(db)
-	// }
+	fn run_constructors<T: Backend>(&self, factories: &Factories, mut db: T) -> Result<T, Error> {
+		let mut root = KECCAK_NULL_RLP;
+
+		// basic accounts in spec.
+		{
+			let mut t = factories.trie.create(db.as_hashdb_mut(), &mut root);
+
+			for (address, account) in self.genesis_state.get().iter() {
+				t.insert(&**address, &account.rlp())?;
+			}
+		}
+
+		for (address, account) in self.genesis_state.get().iter() {
+			db.note_non_null_account(address);
+			account.insert_additional(
+				&mut *factories.accountdb.create(
+					db.as_hashdb_mut(),
+					keccak(address),
+				),
+				&factories.trie,
+			);
+		}
+
+		let start_nonce = self.engine.account_start_nonce(0);
+
+		let (root, db) = {
+			let mut state = State::from_existing(db, root, start_nonce, factories.clone())?;
+
+			// Execute contract constructors.
+			let env_info = EnvInfo {
+				number: 0,
+				author: self.author,
+				timestamp: self.timestamp,
+				difficulty: self.difficulty,
+				last_hashes: Default::default(),
+				gas_used: U256::zero(),
+				gas_limit: U256::max_value(),
+			};
+
+			let from = Address::default();
+			for &(ref address, ref constructor) in self.constructors.iter() {
+				trace!(target: "spec", "run_constructors: Creating a contract at {}.", address);
+				trace!(target: "spec", "  .. root before = {}", state.root());
+				let params = ActionParams {
+					code_address: address.clone(),
+					code_hash: Some(keccak(constructor)),
+					address: address.clone(),
+					sender: from.clone(),
+					origin: from.clone(),
+					gas: U256::max_value(),
+					gas_price: Default::default(),
+					value: ActionValue::Transfer(Default::default()),
+					code: Some(Arc::new(constructor.clone())),
+					data: None,
+					call_type: CallType::None,
+					params_type: ParamsType::Embedded,
+				};
+
+				let mut substate = Substate::new();
+
+				{
+					let mut exec = Executive::new(&mut state, &env_info, self.engine.machine());
+					if let Err(e) = exec.create(params, &mut substate, &mut None, &mut NoopTracer, &mut NoopVMTracer) {
+						warn!(target: "spec", "Genesis constructor execution at {} failed: {}.", address, e);
+					}
+				}
+
+				if let Err(e) = state.commit() {
+					warn!(target: "spec", "Genesis constructor trie commit at {} failed: {}.", address, e);
+				}
+
+				trace!(target: "spec", "  .. root after = {}", state.root());
+			}
+
+			state.drop()
+		};
+
+		*self.state_root_memo.write().unwrap() = root;
+		Ok(db)
+	}
 
 	/// Return the state root for the genesis state, memoising accordingly.
 	pub fn state_root(&self) -> H256 {
 		self.state_root_memo.read().unwrap().clone()
 	}
 
-	// /// Get common blockchain parameters.
-	// pub fn params(&self) -> &CommonParams {
-	// 	&self.engine.params()
-	// }
+	/// Get common blockchain parameters.
+	pub fn params(&self) -> &CommonParams {
+		&self.engine.params()
+	}
 
 	/// Get the known knodes of the network in enode format.
 	pub fn nodes(&self) -> &[String] {
 		&self.nodes
 	}
 
-	// /// Get the configured Network ID.
-	// pub fn network_id(&self) -> u64 {
-	// 	self.params().network_id
-	// }
+	/// Get the configured Network ID.
+	pub fn network_id(&self) -> u64 {
+		self.params().network_id
+	}
 
-	// /// Get the chain ID used for signing.
-	// pub fn chain_id(&self) -> u64 {
-	// 	self.params().chain_id
-	// }
-        //
-	// /// Get the configured subprotocol name.
-	// pub fn subprotocol_name(&self) -> String {
-	// 	self.params().subprotocol_name.clone()
-	// }
-        //
-	// /// Get the configured network fork block.
-	// pub fn fork_block(&self) -> Option<(BlockNumber, H256)> {
-	// 	self.params().fork_block
-	// }
+	/// Get the chain ID used for signing.
+	pub fn chain_id(&self) -> u64 {
+		self.params().chain_id
+	}
+
+	/// Get the configured subprotocol name.
+	pub fn subprotocol_name(&self) -> String {
+		self.params().subprotocol_name.clone()
+	}
+
+	/// Get the configured network fork block.
+	pub fn fork_block(&self) -> Option<(BlockNumber, H256)> {
+		self.params().fork_block
+	}
 
 	/// Get the header of the genesis block.
 	pub fn genesis_header(&self) -> Header {
@@ -733,15 +741,15 @@ impl Spec {
 	}
 
 	// /// Alter the value of the genesis state.
-	// pub fn set_genesis_state(&mut self, s: PodState) -> Result<(), Error> {
-	// 	self.genesis_state = s;
-	// 	let _ = self.run_constructors(
-	// 		&Default::default(),
-	// 		BasicBackend(MemoryDB::new()),
-	// 	)?;
-        //
-	// 	Ok(())
-	// }
+	pub fn set_genesis_state(&mut self, s: PodState) -> Result<(), Error> {
+		self.genesis_state = s;
+		let _ = self.run_constructors(
+			&Default::default(),
+			BasicBackend(MemoryDB::new()),
+		)?;
+
+		Ok(())
+	}
 
 	/// Returns `false` if the memoized state root is invalid. `true` otherwise.
 	pub fn is_state_root_valid(&self) -> bool {
@@ -752,16 +760,16 @@ impl Spec {
 	}
 
 	// /// Ensure that the given state DB has the trie nodes in for the genesis state.
-	// pub fn ensure_db_good<T: Backend>(&self, db: T, factories: &Factories) -> Result<T, Error> {
-	// 	if db.as_hashdb().contains(&self.state_root()) {
-	// 		return Ok(db);
-	// 	}
-        //
-	// 	// TODO: could optimize so we don't re-run, but `ensure_db_good` is barely ever
-	// 	// called anyway.
-	// 	let db = self.run_constructors(factories, db)?;
-	// 	Ok(db)
-	// }
+	pub fn ensure_db_good<T: Backend>(&self, db: T, factories: &Factories) -> Result<T, Error> {
+		if db.as_hashdb().contains(&self.state_root()) {
+			return Ok(db);
+		}
+
+		// TODO: could optimize so we don't re-run, but `ensure_db_good` is barely ever
+		// called anyway.
+		let db = self.run_constructors(factories, db)?;
+		Ok(db)
+	}
 
 	/// Loads just the state machine from a json file.
 	pub fn load_machine<R: Read>(reader: R) -> Result<EthereumMachine, String> {
@@ -773,16 +781,16 @@ impl Spec {
 
 	/// Loads spec from json file. Provide factories for executing contracts and ensuring
 	/// storage goes to the right place.
-	// pub fn load<'a, T: Into<SpecParams<'a>>, R>(params: T, reader: R) -> Result<Self, String>
-	// where
-	// 	R: Read,
-	// {
-	// 	ethjson::spec::Spec::load(reader).map_err(fmt_err).and_then(
-	// 		|x| {
-	// 			load_from(params.into(), x).map_err(fmt_err)
-	// 		},
-	// 	)
-	// }
+	pub fn load<'a, R>(reader: R) -> Result<Self, String>
+	where
+		R: Read,
+	{
+		ethjson::spec::Spec::load(reader).map_err(fmt_err).and_then(
+			|x| {
+				load_from(Default::default(), x).map_err(fmt_err)
+			},
+		)
+	}
 
 	// /// initialize genesis epoch data, using in-memory database for
 	// /// constructor.
@@ -849,12 +857,12 @@ impl Spec {
 	// 	load_bundled!("instant_seal")
 	// }
 
-	// /// Create a new Spec which conforms to the Frontier-era Morden chain except that it's a
-	// /// NullEngine consensus.
-	// #[cfg(any(test, feature = "test-helpers"))]
-	// pub fn new_test() -> Spec {
-	// 	load_bundled!("null_morden")
-	// }
+	/// Create a new Spec which conforms to the Frontier-era Morden chain except that it's a
+	/// NullEngine consensus.
+	#[cfg(any(test, feature = "test-helpers"))]
+	pub fn new_test() -> Spec {
+		load_bundled!("null_morden")
+	}
 
 	/// Create the EthereumMachine corresponding to Spec::new_test.
 	#[cfg(any(test, feature = "test-helpers"))]

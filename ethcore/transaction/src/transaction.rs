@@ -26,8 +26,8 @@ use hash::keccak;
 use heapsize::HeapSizeOf;
 use rlp::{self, RlpStream, Rlp, DecoderError, Encodable};
 
-type Bytes = Vec<u8>;
-type BlockNumber = u64;
+pub type Bytes = Vec<u8>;
+pub type BlockNumber = u64;
 
 /// Fake address for unsigned transactions as defined by EIP-86.
 pub const UNSIGNED_SENDER: Address = H160([0xff; 20]);
