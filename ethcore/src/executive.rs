@@ -254,6 +254,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 			return Err(ExecutionError::SenderMustExist);
 		}
 
+		//println!("gas: {:?}, gas_required: {:?}", t.gas, base_gas_required);
 		let init_gas = t.gas - base_gas_required;
 
 		// validate transaction nonce
@@ -325,6 +326,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					params_type: vm::ParamsType::Separate,
 				};
 				let mut out = vec![];
+				//println!("running call");
 				(self.call(params, &mut substate, BytesRef::Flexible(&mut out), &mut tracer, &mut vm_tracer), out)
 			}
 		};
@@ -350,6 +352,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		let mut ext = self.as_externalities(OriginInfo::from(&params), unconfirmed_substate, output_policy, tracer, vm_tracer, static_call);
 		trace!(target: "executive", "ext.schedule.have_delegate_call: {}", ext.schedule().have_delegate_call);
 		let mut vm = vm_factory.create(&params, &schedule);
+		//println!("running vm exec");
 		return vm.exec(params, &mut ext).finalize(ext);
 	}
 
@@ -376,6 +379,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 
 		// backup used in case of running out of gas
 		self.state.checkpoint();
+		//println!("created checkpoint");
 
 		let schedule = self.machine.schedule(self.info.number);
 
@@ -386,6 +390,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 
 		// if destination is builtin, try to execute it
 		if let Some(builtin) = self.machine.builtin(&params.code_address, self.info.number) {
+			//println!("destination is builtin");
 			// Engines aren't supposed to return builtins until activation, but
 			// prefer to fail rather than silently break consensus.
 			if !builtin.is_active(self.info.number) {
@@ -444,12 +449,14 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 			} else {
 				// just drain the whole gas
 				self.state.revert_to_checkpoint();
+				//println!("cost too high");
 
 				tracer.trace_failed_call(trace_info, vec![], vm::Error::OutOfGas.into());
 
 				Err(vm::Error::OutOfGas)
 			}
 		} else {
+			//println!("destination not builtin");
 			let trace_info = tracer.prepare_trace_call(&params);
 			let mut trace_output = tracer.prepare_trace_output();
 			let mut subtracer = tracer.subtracer();
@@ -457,6 +464,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 			let gas = params.gas;
 
 			if params.code.is_some() {
+				//println!("param code is some");
 				// part of substate that may be reverted
 				let mut unconfirmed_substate = Substate::new();
 
@@ -489,6 +497,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 				trace!(target: "executive", "enacted: substate={:?}\n", substate);
 				res
 			} else {
+				//println!("param code is not some");
 				// otherwise it's just a basic transaction, only do tracing, if necessary.
 				self.state.discard_checkpoint();
 
@@ -513,6 +522,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		tracer: &mut T,
 		vm_tracer: &mut V,
 	) -> vm::Result<FinalizationResult> where T: Tracer, V: VMTracer {
+		//println!("creating contract");
 
 		// EIP-684: If a contract creation is attempted, due to either a creation transaction or the
 		// CREATE (or future CREATE2) opcode, and the destination address already has either
@@ -520,6 +530,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		// the same behavior as would arise if the first byte in the init code were an invalid
 		// opcode. This applies retroactively starting from genesis.
 		if self.state.exists_and_has_code_or_nonce(&params.address)? {
+			//println!("state exists and has code or nonce");
 			return Err(vm::Error::OutOfGas);
 		}
 
@@ -555,6 +566,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 
 		let mut subvmtracer = vm_tracer.prepare_subtrace(params.code.as_ref().expect("two ways into create (Externalities::create and Executive::transact_with_tracer); both place `Some(...)` `code` in `params`; qed"));
 
+		//println!("running exec_vm");
 		let res = self.exec_vm(
 			schedule,
 			params,
@@ -563,6 +575,8 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 			&mut subtracer,
 			&mut subvmtracer
 		);
+
+		//println!("res: {:?}", res);
 
 		vm_tracer.done_subtrace(subvmtracer);
 

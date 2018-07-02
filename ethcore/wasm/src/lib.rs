@@ -86,9 +86,12 @@ enum ExecutionOutcome {
 impl vm::Vm for WasmInterpreter {
 
 	fn exec(&mut self, params: ActionParams, ext: &mut vm::Ext) -> vm::Result<GasLeft> {
-		let (module, data) = parser::payload(&params, ext.schedule().wasm())?;
+		println!("executing using wasm interpreter");
+		let (module, data) = parser::payload(&params, ext.schedule().wasm()).unwrap();
+		println!("payload loaded");
 
-		let loaded_module = wasmi::Module::from_parity_wasm_module(module).map_err(Error::Interpreter)?;
+		let loaded_module = wasmi::Module::from_parity_wasm_module(module).unwrap();
+		println!("loaded wasmi module");
 
 		let instantiation_resolver = env::ImportResolver::with_limit(16);
 
@@ -96,7 +99,10 @@ impl vm::Vm for WasmInterpreter {
 			&loaded_module,
 			&wasmi::ImportsBuilder::new().with_resolver("env", &instantiation_resolver)
 		).map_err(Error::Interpreter)?;
+		println!("initiated wasmi module instance");
 
+		/*
+		println!("{:?}, {:?}, {:?}", params.gas, U256::from(ext.schedule().wasm().opcodes_div), U256::from(ext.schedule().wasm().opcodes_mul));
 		let adjusted_gas = params.gas * U256::from(ext.schedule().wasm().opcodes_div) /
 			U256::from(ext.schedule().wasm().opcodes_mul);
 
@@ -104,6 +110,7 @@ impl vm::Vm for WasmInterpreter {
 		{
 			return Err(vm::Error::Wasm("Wasm interpreter cannot run contracts with gas (wasm adjusted) >= 2^64".to_owned()));
 		}
+		*/
 
 		let initial_memory = instantiation_resolver.memory_size().map_err(Error::Interpreter)?;
 		trace!(target: "wasm", "Contract requested {:?} pages of initial memory", initial_memory);
@@ -113,7 +120,7 @@ impl vm::Vm for WasmInterpreter {
 				ext,
 				instantiation_resolver.memory_ref(),
 				// cannot overflow, checked above
-				adjusted_gas.low_u64(),
+				params.gas.low_u64(),
 				data.to_vec(),
 				RuntimeContext {
 					address: params.address,
@@ -161,15 +168,26 @@ impl vm::Vm for WasmInterpreter {
 			)
 		};
 
+		println!("gas left: {:?}", gas_left);
+
 		let gas_left =
 			U256::from(gas_left) * U256::from(ext.schedule().wasm().opcodes_mul)
 				/ U256::from(ext.schedule().wasm().opcodes_div);
+		println!("gas left after: {:?}", gas_left);
 
 		if result.is_empty() {
 			trace!(target: "wasm", "Contract execution result is empty.");
 			Ok(GasLeft::Known(gas_left))
 		} else {
+			println!("result not empty");
 			let len = result.len();
+			println!("len: {:?}", len);
+			let temp = GasLeft::NeedsReturn {
+				gas_left: gas_left,
+				data: ReturnData::new(result.clone(), 0, len),
+				apply_state: true,
+			};
+			//println!("return data: {:?}", temp);
 			Ok(GasLeft::NeedsReturn {
 				gas_left: gas_left,
 				data: ReturnData::new(

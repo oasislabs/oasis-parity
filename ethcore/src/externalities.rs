@@ -281,12 +281,15 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 			},
 			OutputPolicy::InitContract(ref mut copy) if apply_state => {
 				let return_cost = U256::from(data.len()) * U256::from(self.schedule.create_data_gas);
+				//println!("checking exceptional_failed_code_deposit");
+				//println!("return_cost: {:?}, gas: {:?}, data.len: {:?}, create_data_limit: {:?}", return_cost, *gas, data.len(), self.schedule.create_data_limit);
 				if return_cost > *gas || data.len() > self.schedule.create_data_limit {
 					return match self.schedule.exceptional_failed_code_deposit {
 						true => Err(vm::Error::OutOfGas),
 						false => Ok(*gas)
 					}
 				}
+				//println!("done checking exceptional_failed_code_deposit");
 				handle_copy(copy);
 				self.state.init_code(&self.origin_info.address, data.to_vec())?;
 				Ok(*gas - return_cost)

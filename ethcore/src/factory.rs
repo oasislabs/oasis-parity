@@ -31,8 +31,10 @@ pub struct VmFactory {
 impl VmFactory {
 	pub fn create(&self, params: &ActionParams, schedule: &Schedule) -> Box<Vm> {
 		if schedule.wasm.is_some() && params.code.as_ref().map_or(false, |code| code.len() > 4 && &code[0..4] == WASM_MAGIC_NUMBER) {
+			println!("Creating wasm VM");
 			Box::new(WasmInterpreter)
 		} else {
+			println!("Creating non-wasm VM");
 			self.evm.create(&params.gas)
 		}
 	}
