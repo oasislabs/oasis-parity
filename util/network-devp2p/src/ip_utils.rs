@@ -109,7 +109,7 @@ impl SocketAddrExt for Ipv4Addr {
 
 	fn is_within(&self, ipnet: &IpNetwork) -> bool {
 		match ipnet {
-			IpNetwork::V4(ipnet) => ipnet.contains(*self),
+			&IpNetwork::V4(ipnet) => ipnet.contains(*self),
 			_ => false
 		}
 	}
@@ -167,7 +167,7 @@ impl SocketAddrExt for Ipv6Addr {
 
 	fn is_within(&self, ipnet: &IpNetwork) -> bool {
 		match ipnet {
-			IpNetwork::V6(ipnet) => ipnet.contains(*self),
+			&IpNetwork::V6(ipnet) => ipnet.contains(*self),
 			_ => false
 		}
 	}
@@ -297,16 +297,16 @@ pub fn select_public_address(port: u16) -> SocketAddr {
 			//prefer IPV4 bindings
 			for addr in &list { //TODO: use better criteria than just the first in the list
 				match addr {
-					IpAddr::V4(a) if !a.is_reserved() => {
-						return SocketAddr::V4(SocketAddrV4::new(*a, port));
+					&IpAddr::V4(a) if !a.is_reserved() => {
+						return SocketAddr::V4(SocketAddrV4::new(a, port));
 					},
 					_ => {},
 				}
 			}
 			for addr in &list {
 				match addr {
-					IpAddr::V6(a) if !a.is_reserved() => {
-						return SocketAddr::V6(SocketAddrV6::new(*a, port, 0, 0));
+					&IpAddr::V6(a) if !a.is_reserved() => {
+						return SocketAddr::V6(SocketAddrV6::new(a, port, 0, 0));
 					},
 					_ => {},
 				}

@@ -352,7 +352,7 @@ impl Host {
 		if &info.config.non_reserved_mode != mode {
 			info.config.non_reserved_mode = mode.clone();
 			drop(info);
-			if let NonReservedPeerMode::Deny = mode {
+			if let &NonReservedPeerMode::Deny = mode {
 				// disconnect all non-reserved peers here.
 				let reserved: HashSet<NodeId> = self.reserved_nodes.read().clone();
 				let mut to_kill = Vec::new();

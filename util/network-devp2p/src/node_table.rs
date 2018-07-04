@@ -61,10 +61,10 @@ impl NodeEndpoint {
 
 	pub fn is_allowed_by_predefined(&self, filter: &AllowIP) -> bool {
 		match filter {
-			AllowIP::All => true,
-			AllowIP::Private => self.address.ip().is_usable_private(),
-			AllowIP::Public => self.address.ip().is_usable_public(),
-			AllowIP::None => false,
+			&AllowIP::All => true,
+			&AllowIP::Private => self.address.ip().is_usable_private(),
+			&AllowIP::Public => self.address.ip().is_usable_public(),
+			&AllowIP::None => false,
 		}
 	}
 
