@@ -16,6 +16,8 @@
 
 //! Parity RPC.
 
+#![feature(conservative_impl_trait)]
+
 #![warn(missing_docs)]
 
 #[macro_use]
