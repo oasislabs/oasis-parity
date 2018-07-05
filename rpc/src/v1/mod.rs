@@ -30,9 +30,9 @@ macro_rules! try_bf {
 }
 
 #[macro_use]
-mod helpers;
-mod impls;
-mod types;
+pub mod helpers;
+pub mod impls;
+pub mod types;
 #[cfg(test)]
 mod tests;
 

@@ -17,7 +17,7 @@
 //! Ethereum rpc interface implementation.
 
 mod eth;
-mod eth_filter;
+pub mod eth_filter;
 mod eth_pubsub;
 mod net;
 mod parity;
