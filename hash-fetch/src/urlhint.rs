@@ -162,7 +162,8 @@ fn decode_urlhint_output(output: (String, [u8; 20], Address)) -> Option<URLHintR
 
 impl URLHint for URLHintContract {
 	fn resolve(&self, id: H256) -> Box<Future<Item = Option<URLHintResult>, Error = String> + Send> {
-		let entries = self.urlhint.functions().entries();
+        /*
+        let entries = self.urlhint.functions().entries();
 		let client = self.client.clone();
 
 		let future = self.registrar.get_address(GITHUB_HINT)
@@ -176,6 +177,8 @@ impl URLHint for URLHintContract {
 				Either::A(future::ok(None))
 		});
 		Box::new(future)
+        */
+        unimplemented!();
 	}
 }
 

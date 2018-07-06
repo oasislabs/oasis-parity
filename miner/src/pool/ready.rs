@@ -95,7 +95,7 @@ impl<C: NonceClient> txpool::Ready<VerifiedTransaction> for State<C> {
 			},
 			cmp::Ordering::Less => txpool::Readiness::Stale,
 			cmp::Ordering::Equal => {
-				*nonce = *nonce + 1.into();
+				*nonce = *nonce + U256::from(1);
 				txpool::Readiness::Ready
 			},
 		}

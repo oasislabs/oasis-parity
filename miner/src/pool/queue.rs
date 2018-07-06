@@ -62,7 +62,7 @@ impl fmt::Display for Status {
 			senders = self.status.senders,
 			mem = self.status.mem_usage / 1024,
 			mem_max = self.limits.max_mem_usage / 1024,
-			gp = self.options.minimal_gas_price / 1_000_000.into(),
+			gp = self.options.minimal_gas_price / U256::from(1_000_000),
 			max_gas = cmp::min(self.options.block_gas_limit, self.options.tx_gas_limit),
 		)
 	}
@@ -313,7 +313,7 @@ impl TransactionQueue {
 
 		self.pool.read().pending_from_sender(state_readiness, address)
 			.last()
-			.map(|tx| tx.signed().nonce + 1.into())
+			.map(|tx| tx.signed().nonce + U256::from(1))
 	}
 
 	/// Retrieve a transaction from the pool.

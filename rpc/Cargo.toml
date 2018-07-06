@@ -47,7 +47,7 @@ ethcore-miner = { path = "../miner" }
 ethcore-private-tx = { path = "../ethcore/private-tx" }
 ethcore-sync = { path = "../ethcore/sync" }
 ethcore-transaction = { path = "../ethcore/transaction" }
-ethereum-types = "0.3.2"
+ethereum-types = { git = "https://github.com/ekiden/primitives", branch = "ekiden" }
 
 ethjson = { path = "../json" }
 ethkey = { path = "../ethkey" }

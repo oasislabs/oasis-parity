@@ -105,7 +105,8 @@ impl Manager {
 
 	/// Add a new polled filter.
 	pub fn insert_polled(&self, filter: Filter) -> Result<H256, &'static str> {
-		let buffer = Arc::new(Mutex::new(Vec::new()));
+        /*
+        let buffer = Arc::new(Mutex::new(Vec::new()));
 		let entry = FilterEntry::Poll(Arc::new(filter), buffer);
 		let id = OsRng::new()
 			.map_err(|_| "unable to acquire secure randomness")?
@@ -113,6 +114,8 @@ impl Manager {
 
 		self.filters.write().insert(id, entry);
 		Ok(id)
+        */
+        unimplemented!();
 	}
 
 	/// Insert new subscription filter. Generates a secure ID and sends it to
@@ -120,6 +123,7 @@ impl Manager {
 	pub fn insert_subscription(&self, filter: Filter, sub: Subscriber<FilterItem>)
 		-> Result<(), &'static str>
 	{
+        /*
 		let id: H256 = OsRng::new()
 			.map_err(|_| "unable to acquire secure randomness")?
 			.gen();
@@ -130,6 +134,8 @@ impl Manager {
 				self.filters.write().insert(id, entry);
 			})
 			.map_err(|_| "subscriber disconnected")
+        */
+        unimplemented!();
 	}
 
 	/// Poll changes on filter identified by ID.

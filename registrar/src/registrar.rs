@@ -45,7 +45,8 @@ impl Registrar {
 
 	/// Generate an address for the given key
 	pub fn get_address<'a>(&self, key: &'a str) -> Box<Future<Item = Address, Error = String> + Send> {
-		// Address of the registrar itself
+        /*
+        // Address of the registrar itself
 		let registrar_address = match self.client.registrar_address() {
 			Ok(a) => a,
 			Err(e) => return Box::new(future::err(e)),
@@ -60,6 +61,8 @@ impl Registrar {
 		.map_err(|e| e.to_string()));
 
 		Box::new(future)
+        */
+        unimplemented!();
 	}
 }
 

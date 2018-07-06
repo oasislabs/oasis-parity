@@ -206,15 +206,19 @@ impl OperationsContractClient {
 	/// Get the hash of the latest release for the given track
 	fn latest_hash<F>(&self, track: ReleaseTrack, do_call: &F) -> Result<H256, String>
 	where F: Fn(Vec<u8>) -> Result<Vec<u8>, String> {
-		self.operations_contract.functions()
+        /*
+        self.operations_contract.functions()
 			.latest_in_track()
 			.call(*CLIENT_ID_HASH, u8::from(track), do_call)
 			.map_err(|e| format!("{:?}", e))
+        */
+        unimplemented!();
 	}
 
 	/// Get release info for the given release
 	fn release_info<F>(&self, release_id: H256, do_call: &F) -> Result<ReleaseInfo, String>
 	where F: Fn(Vec<u8>) -> Result<Vec<u8>, String> {
+        /*
 		let (fork, track, semver, is_critical) = self.operations_contract.functions()
 			.release()
 			.call(*CLIENT_ID_HASH, release_id, &do_call)
@@ -233,11 +237,14 @@ impl OperationsContractClient {
 			fork,
 			binary: if latest_binary.is_zero() { None } else { Some(latest_binary) },
 		})
+        */
+        unimplemented!();
 	}
 }
 
 impl OperationsClient for OperationsContractClient {
 	fn latest(&self, this: &VersionInfo, track: ReleaseTrack) -> Result<OperationsInfo, String> {
+        /*
 		if track == ReleaseTrack::Unknown {
 			return Err(format!("Current executable ({}) is unreleased.", this.hash));
 		}
@@ -292,9 +299,12 @@ impl OperationsClient for OperationsContractClient {
 			track: in_track,
 			minor: in_minor,
 		})
+        */
+        unimplemented!();
 	}
 
 	fn release_block_number(&self, from: BlockNumber, release: &ReleaseInfo) -> Option<BlockNumber> {
+        /*
 		let client = self.client.upgrade()?;
 		let address = client.registry_address("operations".into(), BlockId::Latest)?;
 
@@ -324,6 +334,8 @@ impl OperationsClient for OperationsContractClient {
 				}
 			})
 			.last()
+        */
+        unimplemented!();
 	}
 }
 

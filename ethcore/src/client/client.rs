@@ -1360,7 +1360,8 @@ impl BlockChainTrait for Client {}
 
 impl RegistryInfo for Client {
 	fn registry_address(&self, name: String, block: BlockId) -> Option<Address> {
-		let address = self.registrar_address?;
+        /*
+        let address = self.registrar_address?;
 
 		self.registrar.functions()
 			.get_address()
@@ -1371,6 +1372,8 @@ impl RegistryInfo for Client {
 			} else {
 				Some(a)
 			})
+        */
+        unimplemented!();
 	}
 }
 
@@ -1516,7 +1519,7 @@ impl Call for Client {
 			where F: FnMut(U256) -> Result<bool, E>
 		{
 			while upper - lower > 1.into() {
-				let mid = (lower + upper) / 2.into();
+				let mid = (lower + upper) / U256::from(2);
 				trace!(target: "estimate_gas", "{} .. {} .. {}", lower, mid, upper);
 				let c = cond(mid)?;
 				match c {

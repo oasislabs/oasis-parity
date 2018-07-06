@@ -96,6 +96,7 @@ fn encode_first_proof(header: &Header, state_items: &[Vec<u8>]) -> Bytes {
 fn check_first_proof(machine: &EthereumMachine, provider: &validator_set::ValidatorSet, contract_address: Address, old_header: Header, state_items: &[DBValue])
 	-> Result<Vec<Address>, String>
 {
+    /*
 	use transaction::{Action, Transaction};
 
 	// TODO: match client contract_call_tx more cleanly without duplication.
@@ -143,6 +144,8 @@ fn check_first_proof(machine: &EthereumMachine, provider: &validator_set::Valida
 			::state::ProvedExecution::Complete(e) => Ok(e.output),
 		}
 	}).map_err(|err| err.to_string())
+    */
+    unimplemented!();
 }
 
 fn decode_first_proof(rlp: &Rlp) -> Result<(Header, Vec<DBValue>), ::error::Error> {
@@ -172,7 +175,8 @@ fn decode_proof(rlp: &Rlp) -> Result<(Header, Vec<Receipt>), ::error::Error> {
 // given a provider and caller, generate proof. this will just be a state proof
 // of `getValidators`.
 fn prove_initial(provider: &validator_set::ValidatorSet, contract_address: Address, header: &Header, caller: &Call) -> Result<Vec<u8>, String> {
-	use std::cell::RefCell;
+    /*
+    use std::cell::RefCell;
 
 	let epoch_proof = RefCell::new(None);
 	let res = {
@@ -197,6 +201,8 @@ fn prove_initial(provider: &validator_set::ValidatorSet, contract_address: Addre
 
 		proof
 	})
+    */
+    unimplemented!();
 }
 
 impl ValidatorSafeContract {
@@ -211,7 +217,8 @@ impl ValidatorSafeContract {
 
 	/// Queries the state and gets the set of validators.
 	fn get_list(&self, caller: &Call) -> Option<SimpleList> {
-		let contract_address = self.contract_address;
+        /*
+        let contract_address = self.contract_address;
 		let caller = move |data| caller(contract_address, data).map(|x| x.0);
 		match self.provider.functions().get_validators().call(&caller) {
 			Ok(new) => {
@@ -223,6 +230,8 @@ impl ValidatorSafeContract {
 				None
 			},
 		}
+        */
+        unimplemented!();
 	}
 
 	// Whether the header matches the expected bloom.
@@ -256,7 +265,8 @@ impl ValidatorSafeContract {
 	// check receipts for log event. bloom should be `expected_bloom` for the
 	// header the receipts correspond to.
 	fn extract_from_event(&self, bloom: Bloom, header: &Header, receipts: &[Receipt]) -> Option<SimpleList> {
-		let check_log = |log: &LogEntry| {
+        /*
+        let check_log = |log: &LogEntry| {
 			log.address == self.contract_address &&
 				log.topics.len() == 2 &&
 				log.topics[0] == *EVENT_NAME_HASH &&
@@ -281,6 +291,8 @@ impl ValidatorSafeContract {
 			None => None,
 			Some(matched_event) => Some(SimpleList::new(matched_event.new_set))
 		}
+        */
+        unimplemented!();
 	}
 }
 
@@ -300,11 +312,14 @@ impl ValidatorSet for ValidatorSafeContract {
 	}
 
 	fn on_epoch_begin(&self, _first: bool, _header: &Header, caller: &mut SystemCall) -> Result<(), ::error::Error> {
-		let data = self.provider.functions().finalize_change().input();
+        /*
+        let data = self.provider.functions().finalize_change().input();
 		caller(self.contract_address, data)
 			.map(|_| ())
 			.map_err(::engines::EngineError::FailedSystemCall)
 			.map_err(Into::into)
+        */
+        unimplemented!();
 	}
 
 	fn genesis_epoch_data(&self, header: &Header, call: &Call) -> Result<Vec<u8>, String> {

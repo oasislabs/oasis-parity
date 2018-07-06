@@ -356,31 +356,40 @@ impl Provider where {
 	}
 
 	fn get_decrypted_state(&self, address: &Address, block: BlockId) -> Result<Bytes, Error> {
-		let contract = private::PrivateContract::default();
+        /*
+        let contract = private::PrivateContract::default();
 		let state = contract.functions()
 			.state()
 			.call(&|data| self.client.call_contract(block, *address, data))
 			.map_err(|e| ErrorKind::Call(format!("Contract call failed {:?}", e)))?;
 
 		self.decrypt(address, &state)
+        */
+        unimplemented!();
 	}
 
 	fn get_decrypted_code(&self, address: &Address, block: BlockId) -> Result<Bytes, Error> {
-		let contract = private::PrivateContract::default();
+        /*
+        let contract = private::PrivateContract::default();
 		let code = contract.functions()
 			.code()
 			.call(&|data| self.client.call_contract(block, *address, data))
 			.map_err(|e| ErrorKind::Call(format!("Contract call failed {:?}", e)))?;
 
 		self.decrypt(address, &code)
+        */
+        unimplemented!();
 	}
 
 	pub fn get_contract_nonce(&self, address: &Address, block: BlockId) -> Result<U256, Error> {
-		let contract = private::PrivateContract::default();
+        /*
+        let contract = private::PrivateContract::default();
 		Ok(contract.functions()
 			.nonce()
 			.call(&|data| self.client.call_contract(block, *address, data))
 			.map_err(|e| ErrorKind::Call(format!("Contract call failed {:?}", e)))?)
+        */
+        unimplemented!();
 	}
 
 	fn snapshot_to_storage(raw: Bytes) -> HashMap<H256, H256> {
@@ -452,13 +461,17 @@ impl Provider where {
 	}
 
 	fn generate_constructor(validators: &[Address], code: Bytes, storage: Bytes) -> Bytes {
-		let constructor_code = DEFAULT_STUB_CONTRACT.from_hex().expect("Default contract code is valid");
+        /*
+        let constructor_code = DEFAULT_STUB_CONTRACT.from_hex().expect("Default contract code is valid");
 		let private = private::PrivateContract::default();
 		private.constructor(constructor_code, validators.iter().map(|a| *a).collect::<Vec<Address>>(), code, storage)
+        */
+        unimplemented!();
 	}
 
 	fn generate_set_state_call(signatures: &[Signature], storage: Bytes) -> Bytes {
-		let private = private::PrivateContract::default();
+        /*
+        let private = private::PrivateContract::default();
 		private.functions().set_state().input(
 			storage,
 			signatures.iter().map(|s| {
@@ -469,6 +482,8 @@ impl Provider where {
 			signatures.iter().map(|s| s.r()).collect::<Vec<&[u8]>>(),
 			signatures.iter().map(|s| s.s()).collect::<Vec<&[u8]>>()
 		)
+        */
+        unimplemented!();
 	}
 
 	/// Returns the key from the key server associated with the contract
@@ -533,11 +548,14 @@ impl Provider where {
 
 	/// Returns private validators for a contract.
 	pub fn get_validators(&self, block: BlockId, address: &Address) -> Result<Vec<Address>, Error> {
-		let contract = private::PrivateContract::default();
+        /*
+        let contract = private::PrivateContract::default();
 		Ok(contract.functions()
 			.get_validators()
 			.call(&|data| self.client.call_contract(block, *address, data))
 			.map_err(|e| ErrorKind::Call(format!("Contract call failed {:?}", e)))?)
+        */
+        unimplemented!();
 	}
 }
 

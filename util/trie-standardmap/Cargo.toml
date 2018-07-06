@@ -6,6 +6,6 @@ description = "Standard test map for profiling tries"
 
 [dependencies]
 ethcore-bytes = { path = "../bytes" }
-ethereum-types = "0.3"
+ethereum-types = { git = "https://github.com/ekiden/primitives", branch = "ekiden" }
 keccak-hash = { path = "../hash" }
 rlp = { path = "../rlp" }

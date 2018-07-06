@@ -59,7 +59,8 @@ impl TransactionFilter {
 
 	/// Check if transaction is allowed at given block.
 	pub fn transaction_allowed<C: BlockInfo + CallContract>(&self, parent_hash: &H256, transaction: &SignedTransaction, client: &C) -> bool {
-		let mut cache = self.permission_cache.lock();
+        /*
+        let mut cache = self.permission_cache.lock();
 
 		let tx_type = match transaction.action {
 			Action::Create => tx_permissions::CREATE,
@@ -91,6 +92,8 @@ impl TransactionFilter {
 
 		trace!("Permissions required: {}, got: {}", tx_type, permissions);
 		permissions & tx_type != 0
+        */
+        unimplemented!();
 	}
 }
 

@@ -111,19 +111,25 @@ impl ValidatorSet for ValidatorContract {
 	}
 
 	fn report_malicious(&self, address: &Address, _set_block: BlockNumber, block: BlockNumber, proof: Bytes) {
-		let data = self.provider.functions().report_malicious().input(*address, block, proof);
+        /*
+        let data = self.provider.functions().report_malicious().input(*address, block, proof);
 		match self.transact(data) {
 			Ok(_) => warn!(target: "engine", "Reported malicious validator {}", address),
 			Err(s) => warn!(target: "engine", "Validator {} could not be reported {}", address, s),
 		}
+        */
+        unimplemented!();
 	}
 
 	fn report_benign(&self, address: &Address, _set_block: BlockNumber, block: BlockNumber) {
-		let data = self.provider.functions().report_benign().input(*address, block);
+        /*
+        let data = self.provider.functions().report_benign().input(*address, block);
 		match self.transact(data) {
 			Ok(_) => warn!(target: "engine", "Reported benign validator misbehaviour {}", address),
 			Err(s) => warn!(target: "engine", "Validator {} could not be reported {}", address, s),
 		}
+        */
+        unimplemented!();
 	}
 
 	fn register_client(&self, client: Weak<EngineClient>) {

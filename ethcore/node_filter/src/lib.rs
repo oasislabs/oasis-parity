@@ -73,7 +73,8 @@ impl NodeFilter {
 
 impl ConnectionFilter for NodeFilter {
 	fn connection_allowed(&self, own_id: &NodeId, connecting_id: &NodeId, _direction: ConnectionDirection) -> bool {
-		let client = match self.client.upgrade() {
+        /*
+        let client = match self.client.upgrade() {
 			Some(client) => client,
 			None => return false,
 		};
@@ -106,6 +107,8 @@ impl ConnectionFilter for NodeFilter {
 
 		cache.insert(key, allowed);
 		allowed
+        */
+        unimplemented!();
 	}
 }
 

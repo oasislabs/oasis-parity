@@ -30,6 +30,7 @@ use ethcore::client::{
 use ethcore::header::BlockNumber;
 use ethcore::snapshot::{RestorationStatus, SnapshotService as SS};
 use ethcore::snapshot::service::Service as SnapshotService;
+use ethereum_types::U256;
 use sync::{LightSyncProvider, LightSync, SyncProvider, ManageNetwork};
 use io::{TimerToken, IoContext, IoHandler};
 use light::Cache as LightDataCache;
@@ -306,7 +307,7 @@ impl<T: InformantData> Informant<T> {
 							format!("{} blk/s {} tx/s {} Mgas/s",
 								paint(Yellow.bold(), format!("{:7.2}", (client_report.blocks_imported * 1000) as f64 / elapsed.as_milliseconds() as f64)),
 								paint(Yellow.bold(), format!("{:6.1}", (client_report.transactions_applied * 1000) as f64 / elapsed.as_milliseconds() as f64)),
-								paint(Yellow.bold(), format!("{:4}", (client_report.gas_processed / From::from(elapsed.as_milliseconds() * 1000)).low_u64()))
+								paint(Yellow.bold(), format!("{:4}", (client_report.gas_processed / U256::from(elapsed.as_milliseconds() * 1000)).low_u64()))
 							)
 						} else {
 							format!("{} hdr/s",

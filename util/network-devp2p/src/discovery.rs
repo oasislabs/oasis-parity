@@ -204,10 +204,13 @@ impl Discovery {
 
 	/// Starts the discovery process at round 0
 	fn start(&mut self) {
-		trace!(target: "discovery", "Starting discovery");
+        /*
+        trace!(target: "discovery", "Starting discovery");
 		self.discovery_round = 0;
 		self.discovery_id.randomize(); //TODO: use cryptographic nonce
 		self.discovery_nodes.clear();
+        */
+        unimplemented!();
 	}
 
 	fn update_new_nodes(&mut self) {

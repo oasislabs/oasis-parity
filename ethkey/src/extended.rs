@@ -85,8 +85,9 @@ impl ExtendedSecret {
 
 	/// New extended key from given secret with the random chain code.
 	pub fn new_random(secret: Secret) -> ExtendedSecret {
-		ExtendedSecret::with_code(secret, H256::random())
-	}
+		//ExtendedSecret::with_code(secret, H256::random())
+        unimplemented!();
+    }
 
 	/// New extended key from given secret.
 	/// Chain code will be derived from the secret itself (in a deterministic way).

@@ -7,7 +7,7 @@ license = "GPL3"
 
 [dependencies]
 ethcore-bytes = { path = "../bytes" }
-ethereum-types = "0.3"
+ethereum-types = { git = "https://github.com/ekiden/primitives", branch = "ekiden" }
 hashdb = { path = "../hashdb" }
 heapsize = "0.4"
 kvdb = { path = "../kvdb" }
