@@ -523,11 +523,8 @@ impl LocalizedTransaction {
 		if self.is_unsigned() {
 			return UNSIGNED_SENDER.clone();
 		}
-		let sender = match self.recover_public() {
-			Ok(public) => public_to_address(&public),
-			Err(_) => UNSIGNED_SENDER.clone(),
-		};
-			// .expect("LocalizedTransaction is always constructed from transaction from blockchain; Blockchain only stores verified transactions; qed"));
+		let sender = public_to_address(&self.recover_public()
+			.expect("LocalizedTransaction is always constructed from transaction from blockchain; Blockchain only stores verified transactions; qed"));
 		self.cached_sender = Some(sender);
 		sender
 	}
