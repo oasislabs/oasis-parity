@@ -23,7 +23,7 @@ use secp256k1::{Message as SecpMessage, RecoverableSignature, RecoveryId, Error 
 use secp256k1::key::{SecretKey, PublicKey};
 use rustc_hex::{ToHex, FromHex};
 use ethereum_types::{H520, H256};
-use {Public, SECP256K1, Error, Message, public_to_address, Address};
+use {Secret, Public, SECP256K1, Error, Message, public_to_address, Address};
 
 /// Signature encoded as RSV components
 #[repr(C)]
@@ -188,18 +188,18 @@ impl DerefMut for Signature {
 	}
 }
 
-// pub fn sign(secret: &Secret, message: &Message) -> Result<Signature, Error> {
-// 	let context = &SECP256K1;
-// 	let sec = SecretKey::from_slice(context, &secret)?;
-// 	let s = context.sign_recoverable(&SecpMessage::from_slice(&message[..])?, &sec)?;
-// 	let (rec_id, data) = s.serialize_compact(context);
-// 	let mut data_arr = [0; 65];
-//
-// 	// no need to check if s is low, it always is
-// 	data_arr[0..64].copy_from_slice(&data[0..64]);
-// 	data_arr[64] = rec_id.to_i32() as u8;
-// 	Ok(Signature(data_arr))
-// }
+pub fn sign(secret: &Secret, message: &Message) -> Result<Signature, Error> {
+	let context = &SECP256K1;
+	let sec = SecretKey::from_slice(context, &secret)?;
+	let s = context.sign_recoverable(&SecpMessage::from_slice(&message[..])?, &sec)?;
+	let (rec_id, data) = s.serialize_compact(context);
+	let mut data_arr = [0; 65];
+
+	// no need to check if s is low, it always is
+	data_arr[0..64].copy_from_slice(&data[0..64]);
+	data_arr[64] = rec_id.to_i32() as u8;
+	Ok(Signature(data_arr))
+}
 
 pub fn verify_public(public: &Public, signature: &Signature, message: &Message) -> Result<bool, Error> {
 	let context = &SECP256K1;

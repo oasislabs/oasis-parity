@@ -20,7 +20,7 @@ use std::ops::Deref;
 use ethereum_types::{H256, H160, Address, U256};
 use error;
 use ethjson;
-use ethkey::{self, Signature, Public, recover, public_to_address};
+use ethkey::{self, Secret, Signature, Public, recover, public_to_address};
 use evm::Schedule;
 use hash::keccak;
 use heapsize::HeapSizeOf;
@@ -191,13 +191,13 @@ impl Transaction {
 		keccak(stream.as_raw())
 	}
 
-	// /// Signs the transaction as coming from `sender`.
-	// pub fn sign(self, secret: &Secret, chain_id: Option<u64>) -> SignedTransaction {
-	// 	let sig = ::ethkey::sign(secret, &self.hash(chain_id))
-	// 		.expect("data is valid and context has signing capabilities; qed");
-	// 	SignedTransaction::new(self.with_signature(sig, chain_id))
-	// 		.expect("secret is valid so it's recoverable")
-	// }
+	/// Signs the transaction as coming from `sender`.
+	pub fn sign(self, secret: &Secret, chain_id: Option<u64>) -> SignedTransaction {
+		let sig = ::ethkey::sign(secret, &self.hash(chain_id))
+			.expect("data is valid and context has signing capabilities; qed");
+		SignedTransaction::new(self.with_signature(sig, chain_id))
+			.expect("secret is valid so it's recoverable")
+	}
 
 	/// Signs the transaction with signature.
 	pub fn with_signature(self, sig: Signature, chain_id: Option<u64>) -> UnverifiedTransaction {
