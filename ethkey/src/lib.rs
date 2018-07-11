@@ -53,7 +53,7 @@ mod secret;
 // pub use self::brain::Brain;
 // pub use self::brain_prefix::BrainPrefix;
 pub use self::error::Error;
-pub use self::keypair::{public_to_address};
+pub use self::keypair::{KeyPair, public_to_address};
 // pub use self::math::public_is_valid;
 // pub use self::prefix::Prefix;
 // pub use self::random::Random;
