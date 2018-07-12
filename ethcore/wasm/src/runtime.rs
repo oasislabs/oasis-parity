@@ -13,6 +13,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
+use std::mem;
 
 use ethereum_types::{U256, H256, Address};
 use vm::{self, CallType};
@@ -378,6 +379,35 @@ impl<'a> Runtime<'a> {
 		Err(Error::Panic(msg).into())
 	}
 
+	/// Rust syscall
+	fn syscall(&mut self, args: RuntimeArgs) -> Result<RuntimeValue>
+	{
+		let syscall_id: u32 = args.nth_checked(0)?;
+		let data_ptr: u32 = args.nth_checked(1)?;
+		Ok(match syscall_id {
+			// https://github.com/rust-lang/rust/blob/master/src/etc/wasm32-shim.js
+			1 => {
+				let mem_bytes = self.memory.get(data_ptr, 4 * 3)?; // 3 words
+				let payload = unsafe { mem::transmute::<Vec<u8>, Vec<u32>>(mem_bytes) };
+				let out_str = String::from_utf8(
+					self.memory.get(payload[1] as u32, payload[2] as usize)?)
+					.map_err(|_| Error::BadUtf8)?;
+				match payload[0] {
+					1 => print!("{}", out_str),
+					2 => print!("{}", out_str),
+					_ => panic!("invalid output stream {}", payload[0])
+				};
+				1
+			},
+			2 => panic!("syscall exit with code {}", args.nth_checked::<u32>(1)?),
+			3 => unimplemented!(), // args
+			4 => 0, //unimplemented!(), // getenv
+			5 => unreachable!(),   // doesn't exist?
+			6 => unimplemented!(), // time
+			_ => unimplemented!()
+		}.into())
+	}
+
 	fn do_call(
 		&mut self,
 		use_val: bool,
@@ -728,6 +758,7 @@ mod ext_impl {
 				FETCH_INPUT_FUNC => void!(self.fetch_input(args)),
 				PANIC_FUNC => void!(self.panic(args)),
 				DEBUG_FUNC => void!(self.debug(args)),
+				SYSCALL_FUNC => some!(self.syscall(args)),
 				CCALL_FUNC => some!(self.ccall(args)),
 				DCALL_FUNC => some!(self.dcall(args)),
 				SCALL_FUNC => some!(self.scall(args)),
