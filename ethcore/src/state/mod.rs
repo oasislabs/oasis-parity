@@ -41,6 +41,7 @@ use types::state_diff::StateDiff;
 use transaction::SignedTransaction;
 use state_db::StateDB;
 use factory::VmFactory;
+use journaldb::overlaydb::OverlayDB;
 
 use ethereum_types::{H256, U256, Address};
 use hashdb::{HashDB, AsHashDB};
@@ -57,7 +58,7 @@ mod substate;
 pub mod backend;
 
 pub use self::account::Account;
-pub use self::backend::Backend;
+pub use self::backend::{Backend, Basic as BasicBackend};
 pub use self::substate::Substate;
 
 /// Used to return information about an `State::apply` operation.
@@ -706,7 +707,10 @@ impl<B: Backend> State<B> {
 		T: trace::Tracer,
 		V: trace::VMTracer,
 	{
-		let options = TransactOptions::new(tracer, vm_tracer);
+		let options = match machine.params().benchmarking {
+			true => TransactOptions::new(tracer, vm_tracer).dont_check_nonce(),
+			false => TransactOptions::new(tracer, vm_tracer)
+		};
 		let e = self.execute(env_info, machine, t, options, false)?;
 		let params = machine.params();
 
@@ -1112,6 +1116,28 @@ impl Clone for State<StateDB> {
 
 		State {
 			db: self.db.boxed_clone(),
+			root: self.root.clone(),
+			cache: RefCell::new(cache),
+			checkpoints: RefCell::new(Vec::new()),
+			account_start_nonce: self.account_start_nonce.clone(),
+			factories: self.factories.clone(),
+		}
+	}
+}
+
+impl<B: Backend + Clone> Clone for State<B> {
+	fn clone(&self) -> State<B> {
+		let cache = {
+			let mut cache: HashMap<Address, AccountEntry> = HashMap::new();
+			for (key, val) in self.cache.borrow().iter() {
+				if let Some(entry) = val.clone_if_dirty() {
+					cache.insert(key.clone(), entry);
+				}
+			}
+			cache
+		};
+		State {
+			db: self.db.clone(),
 			root: self.root.clone(),
 			cache: RefCell::new(cache),
 			checkpoints: RefCell::new(Vec::new()),

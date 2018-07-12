@@ -42,7 +42,7 @@ mod keccak;
 // mod prefix;
 // mod random;
 mod signature;
-// mod secret;
+mod secret;
 // mod extended;
 //
 // pub mod brain_recover;
@@ -53,13 +53,13 @@ mod signature;
 // pub use self::brain::Brain;
 // pub use self::brain_prefix::BrainPrefix;
 pub use self::error::Error;
-pub use self::keypair::{public_to_address};
+pub use self::keypair::{KeyPair, public_to_address};
 // pub use self::math::public_is_valid;
 // pub use self::prefix::Prefix;
 // pub use self::random::Random;
-// pub use self::signature::{sign, verify_public, verify_address, recover, Signature};
-pub use self::signature::{recover, Signature};
-// pub use self::secret::Secret;
+pub use self::signature::{sign, verify_public, verify_address, recover, Signature};
+//pub use self::signature::{recover, Signature};
+pub use self::secret::Secret;
 // pub use self::extended::{ExtendedPublic, ExtendedSecret, ExtendedKeyPair, DerivationError, Derivation};
 
 use ethereum_types::H256;

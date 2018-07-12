@@ -87,36 +87,36 @@ pub trait LiveBlock: 'static {
 }
 
 // /// Trait for blocks which have a transaction type.
-// pub trait Transactions: LiveBlock {
-// 	/// The transaction type.
-// 	type Transaction;
-//
-// 	/// Get a reference to the transactions in this block.
-// 	fn transactions(&self) -> &[Self::Transaction];
-// }
+pub trait Transactions: LiveBlock {
+	/// The transaction type.
+	type Transaction;
+
+	/// Get a reference to the transactions in this block.
+	fn transactions(&self) -> &[Self::Transaction];
+}
 
 // /// Trait for blocks which have finalized information.
-// pub trait Finalizable: LiveBlock {
-// 	/// Get whether the block is finalized.
-// 	fn is_finalized(&self) -> bool;
-// 	/// Mark the block as finalized.
-// 	fn mark_finalized(&mut self);
-// }
+pub trait Finalizable: LiveBlock {
+	/// Get whether the block is finalized.
+	fn is_finalized(&self) -> bool;
+	/// Mark the block as finalized.
+	fn mark_finalized(&mut self);
+}
 
 // /// A state machine with block metadata.
-// pub trait WithMetadata: LiveBlock {
-// 	/// Get the current live block metadata.
-// 	fn metadata(&self) -> Option<&[u8]>;
-// 	/// Set the current live block metadata.
-// 	fn set_metadata(&mut self, value: Option<Vec<u8>>);
-// }
+pub trait WithMetadata: LiveBlock {
+	/// Get the current live block metadata.
+	fn metadata(&self) -> Option<&[u8]>;
+	/// Set the current live block metadata.
+	fn set_metadata(&mut self, value: Option<Vec<u8>>);
+}
 
 /// Generalization of types surrounding blockchain-suitable state machines.
 pub trait Machine: for<'a> LocalizedMachine<'a> {
 	/// The block header type.
 	type Header: Header;
 	// /// The live block type.
-	// type LiveBlock: LiveBlock<Header=Self::Header>;
+	type LiveBlock: LiveBlock<Header=Self::Header>;
 	/// Block header with metadata information.
 	type ExtendedHeader: Header;
 	// /// A handle to a blockchain client for this machine.
@@ -140,12 +140,12 @@ pub trait LocalizedMachine<'a>: Sync + Send {
 	type StateContext: ?Sized + 'a;
 }
 
-// /// A state machine that uses balances.
-// pub trait WithBalances: Machine {
-// 	/// Get the balance, in base units, associated with an account.
-// 	/// Extracts data from the live block.
-// 	fn balance(&self, live: &Self::LiveBlock, address: &Address) -> Result<U256, Self::Error>;
-//
-// 	/// Increment the balance of an account in the state of the live block.
-// 	fn add_balance(&self, live: &mut Self::LiveBlock, address: &Address, amount: &U256) -> Result<(), Self::Error>;
-// }
+/// A state machine that uses balances.
+pub trait WithBalances: Machine {
+	/// Get the balance, in base units, associated with an account.
+	/// Extracts data from the live block.
+	fn balance(&self, live: &Self::LiveBlock, address: &Address) -> Result<U256, Self::Error>;
+
+	/// Increment the balance of an account in the state of the live block.
+	fn add_balance(&self, live: &mut Self::LiveBlock, address: &Address, amount: &U256) -> Result<(), Self::Error>;
+}

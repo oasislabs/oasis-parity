@@ -20,7 +20,7 @@ use std::ops;
 use std::io::Write;
 use blooms::{GroupPosition, BloomGroup};
 use db::Key;
-use engines::epoch::{Transition as EpochTransition};
+// use engines::epoch::{Transition as EpochTransition};
 use header::BlockNumber;
 use receipt::Receipt;
 use rlp;
@@ -128,13 +128,13 @@ impl Key<BlockReceipts> for H256 {
 	}
 }
 
-impl Key<::engines::epoch::PendingTransition> for H256 {
-	type Target = H264;
-
-	fn key(&self) -> H264 {
-		with_index(self, ExtrasIndex::PendingEpochTransition)
-	}
-}
+// impl Key<::engines::epoch::PendingTransition> for H256 {
+// 	type Target = H264;
+//
+// 	fn key(&self) -> H264 {
+// 		with_index(self, ExtrasIndex::PendingEpochTransition)
+// 	}
+// }
 
 /// length of epoch keys.
 pub const EPOCH_KEY_LEN: usize = DB_PREFIX_LEN + 16;
@@ -153,19 +153,19 @@ impl ops::Deref for EpochTransitionsKey {
 	fn deref(&self) -> &[u8] { &self.0[..] }
 }
 
-impl Key<EpochTransitions> for u64 {
-	type Target = EpochTransitionsKey;
-
-	fn key(&self) -> Self::Target {
-		let mut arr = [0u8; EPOCH_KEY_LEN];
-		arr[..DB_PREFIX_LEN].copy_from_slice(&EPOCH_KEY_PREFIX[..]);
-
-		write!(&mut arr[DB_PREFIX_LEN..], "{:016x}", self)
-			.expect("format arg is valid; no more than 16 chars will be written; qed");
-
-		EpochTransitionsKey(arr)
-	}
-}
+// impl Key<EpochTransitions> for u64 {
+// 	type Target = EpochTransitionsKey;
+//
+// 	fn key(&self) -> Self::Target {
+// 		let mut arr = [0u8; EPOCH_KEY_LEN];
+// 		arr[..DB_PREFIX_LEN].copy_from_slice(&EPOCH_KEY_PREFIX[..]);
+//
+// 		write!(&mut arr[DB_PREFIX_LEN..], "{:016x}", self)
+// 			.expect("format arg is valid; no more than 16 chars will be written; qed");
+//
+// 		EpochTransitionsKey(arr)
+// 	}
+// }
 
 /// Familial details concerning a block
 #[derive(Debug, Clone)]
@@ -271,11 +271,11 @@ impl HeapSizeOf for BlockReceipts {
 }
 
 /// Candidate transitions to an epoch with specific number.
-#[derive(Clone, RlpEncodable, RlpDecodable)]
-pub struct EpochTransitions {
-	pub number: u64,
-	pub candidates: Vec<EpochTransition>,
-}
+// #[derive(Clone, RlpEncodable, RlpDecodable)]
+// pub struct EpochTransitions {
+// 	pub number: u64,
+// 	pub candidates: Vec<EpochTransition>,
+// }
 
 #[cfg(test)]
 mod tests {

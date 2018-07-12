@@ -143,6 +143,9 @@ pub struct Params {
 	/// Wasm activation block height, if not activated from start
 	#[serde(rename="wasmActivationTransition")]
 	pub wasm_activation_transition: Option<Uint>,
+
+	/// Whether to run in benchmarking/debug mode.
+	pub benchmarking: Option<bool>,
 }
 
 #[cfg(test)]

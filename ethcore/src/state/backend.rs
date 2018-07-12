@@ -227,6 +227,7 @@ pub trait Backend: Send {
 
 /// A basic backend. Just wraps the given database, directly inserting into and deleting from
 /// it. Doesn't cache anything.
+#[derive(Clone)]
 pub struct Basic<H>(pub H);
 
 impl<H: AsHashDB + Send + Sync> Backend for Basic<H> {

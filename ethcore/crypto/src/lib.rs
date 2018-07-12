@@ -16,7 +16,7 @@
 
 //! Crypto utils used ethstore and network.
 
-// extern crate crypto as rcrypto;
+extern crate crypto as rcrypto;
 extern crate ethereum_types;
 #[macro_use]
 extern crate quick_error;
