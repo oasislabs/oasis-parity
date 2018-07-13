@@ -192,16 +192,17 @@ impl<'a> Runtime<'a> {
 	/// Returns false if gas limit exceeded and true if not.
 	/// Intuition about the return value sense is to aswer the question 'are we allowed to continue?'
 	fn charge_gas(&mut self, amount: u64) -> bool {
-		let prev = self.gas_counter;
-		match prev.checked_add(amount) {
-			// gas charge overflow protection
-			None => false,
-			Some(val) if val > self.gas_limit => false,
-			Some(_) => {
-				self.gas_counter = prev + amount;
-				true
-			}
-		}
+		true
+		// let prev = self.gas_counter;
+		// match prev.checked_add(amount) {
+		// 	// gas charge overflow protection
+		// 	None => false,
+		// 	Some(val) if val > self.gas_limit => false,
+		// 	Some(_) => {
+		// 		self.gas_counter = prev + amount;
+		// 		true
+		// 	}
+		// }
 	}
 
 	/// Charge gas according to closure
@@ -394,7 +395,11 @@ impl<'a> Runtime<'a> {
 					.map_err(|_| Error::BadUtf8)?;
 				match payload[0] {
 					1 => print!("{}", out_str),
+<<<<<<< HEAD
 					2 => print!("{}", out_str),
+=======
+					2 => print!("error: {}", out_str),
+>>>>>>> origin/ekiden-inf-gas
 					_ => panic!("invalid output stream {}", payload[0])
 				};
 				1
@@ -484,18 +489,18 @@ impl<'a> Runtime<'a> {
 		match call_result {
 			vm::MessageCallResult::Success(gas_left, _) => {
 				// cannot overflow, before making call gas_counter was incremented with gas, and gas_left < gas
-				self.gas_counter = self.gas_counter -
-					gas_left.low_u64() * self.ext.schedule().wasm().opcodes_div as u64
-						/ self.ext.schedule().wasm().opcodes_mul as u64;
+				// self.gas_counter = self.gas_counter -
+				// 	gas_left.low_u64() * self.ext.schedule().wasm().opcodes_div as u64
+				// 		/ self.ext.schedule().wasm().opcodes_mul as u64;
 
 				self.memory.set(result_ptr, &result)?;
 				Ok(0i32.into())
 			},
 			vm::MessageCallResult::Reverted(gas_left, _) => {
 				// cannot overflow, before making call gas_counter was incremented with gas, and gas_left < gas
-				self.gas_counter = self.gas_counter -
-					gas_left.low_u64() * self.ext.schedule().wasm().opcodes_div as u64
-						/ self.ext.schedule().wasm().opcodes_mul as u64;
+				// self.gas_counter = self.gas_counter -
+				// 	gas_left.low_u64() * self.ext.schedule().wasm().opcodes_div as u64
+				// 		/ self.ext.schedule().wasm().opcodes_mul as u64;
 
 				self.memory.set(result_ptr, &result)?;
 				Ok((-1i32).into())
@@ -576,11 +581,11 @@ impl<'a> Runtime<'a> {
 		match self.ext.create(&gas_left, &endowment, &code, vm::CreateContractAddress::FromSenderAndCodeHash) {
 			vm::ContractCreateResult::Created(address, gas_left) => {
 				self.memory.set(result_ptr, &*address)?;
-				self.gas_counter = self.gas_limit -
-					// this cannot overflow, since initial gas is in [0..u64::max) range,
-					// and gas_left cannot be bigger
-					gas_left.low_u64() * self.ext.schedule().wasm().opcodes_div as u64
-						/ self.ext.schedule().wasm().opcodes_mul as u64;
+				// self.gas_counter = self.gas_limit -
+				// 	// this cannot overflow, since initial gas is in [0..u64::max) range,
+				// 	// and gas_left cannot be bigger
+				// 	gas_left.low_u64() * self.ext.schedule().wasm().opcodes_div as u64
+				// 		/ self.ext.schedule().wasm().opcodes_mul as u64;
 				trace!(target: "wasm", "runtime: create contract success (@{:?})", address);
 				Ok(0i32.into())
 			},
@@ -590,11 +595,11 @@ impl<'a> Runtime<'a> {
 			},
 			vm::ContractCreateResult::Reverted(gas_left, _) => {
 				trace!(target: "wasm", "runtime: create contract reverted");
-				self.gas_counter = self.gas_limit -
-					// this cannot overflow, since initial gas is in [0..u64::max) range,
-					// and gas_left cannot be bigger
-					gas_left.low_u64() * self.ext.schedule().wasm().opcodes_div as u64
-						/ self.ext.schedule().wasm().opcodes_mul as u64;
+				// self.gas_counter = self.gas_limit -
+				// 	// this cannot overflow, since initial gas is in [0..u64::max) range,
+				// 	// and gas_left cannot be bigger
+				// 	gas_left.low_u64() * self.ext.schedule().wasm().opcodes_div as u64
+				// 		/ self.ext.schedule().wasm().opcodes_mul as u64;
 
 				Ok((-1i32).into())
 			},
