@@ -86,12 +86,12 @@ enum ExecutionOutcome {
 impl vm::Vm for WasmInterpreter {
 
 	fn exec(&mut self, params: ActionParams, ext: &mut vm::Ext) -> vm::Result<GasLeft> {
-		println!("executing using wasm interpreter");
+		//println!("executing using wasm interpreter");
 		let (module, data) = parser::payload(&params, ext.schedule().wasm()).unwrap();
-		println!("payload loaded");
+		//println!("payload loaded");
 
 		let loaded_module = wasmi::Module::from_parity_wasm_module(module).unwrap();
-		println!("loaded wasmi module");
+		//println!("loaded wasmi module");
 
 		let instantiation_resolver = env::ImportResolver::with_limit(16);
 
@@ -99,7 +99,7 @@ impl vm::Vm for WasmInterpreter {
 			&loaded_module,
 			&wasmi::ImportsBuilder::new().with_resolver("env", &instantiation_resolver)
 		).map_err(Error::Interpreter)?;
-		println!("initiated wasmi module instance");
+		//println!("initiated wasmi module instance");
 
 		/*
 		println!("{:?}, {:?}, {:?}", params.gas, U256::from(ext.schedule().wasm().opcodes_div), U256::from(ext.schedule().wasm().opcodes_mul));
@@ -168,20 +168,20 @@ impl vm::Vm for WasmInterpreter {
 			)
 		};
 
-		println!("gas left: {:?}", gas_left);
+		//println!("gas left: {:?}", gas_left);
 
 		let gas_left =
 			U256::from(gas_left) * U256::from(ext.schedule().wasm().opcodes_mul)
 				/ U256::from(ext.schedule().wasm().opcodes_div);
-		println!("gas left after: {:?}", gas_left);
+		//println!("gas left after: {:?}", gas_left);
 
 		if result.is_empty() {
 			trace!(target: "wasm", "Contract execution result is empty.");
 			Ok(GasLeft::Known(gas_left))
 		} else {
-			println!("result not empty");
+			//println!("result not empty");
 			let len = result.len();
-			println!("len: {:?}", len);
+			//println!("len: {:?}", len);
 			let temp = GasLeft::NeedsReturn {
 				gas_left: gas_left,
 				data: ReturnData::new(result.clone(), 0, len),

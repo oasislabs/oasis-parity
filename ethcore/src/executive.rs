@@ -244,6 +244,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		let nonce = self.state.nonce(&sender)?;
 
 		let schedule = self.machine.schedule(self.info.number);
+		//println!("{:?}", schedule);
 		let base_gas_required = U256::from(t.gas_required(&schedule));
 
 		if t.gas < base_gas_required {
@@ -290,6 +291,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		}
 		self.state.sub_balance(&sender, &U256::from(gas_cost), &mut substate.to_cleanup_mode(&schedule))?;
 
+		println!("checkpoint");
 		let (result, output) = match t.action {
 			Action::Create => {
 				let (new_address, code_hash) = contract_address(self.machine.create_address_scheme(self.info.number), &sender, &nonce, &t.data);
@@ -344,6 +346,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		tracer: &mut T,
 		vm_tracer: &mut V
 	) -> vm::Result<FinalizationResult> where T: Tracer, V: VMTracer {
+		println!("exec_vm");
 		let local_stack_size = ::std::usize::MAX;
 		let depth_threshold = local_stack_size.saturating_sub(STACK_SIZE_ENTRY_OVERHEAD) / STACK_SIZE_PER_DEPTH;
 		let static_call = params.call_type == CallType::StaticCall;
@@ -368,6 +371,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		tracer: &mut T,
 		vm_tracer: &mut V
 	) -> vm::Result<FinalizationResult> where T: Tracer, V: VMTracer {
+		println!("call");
 
 		trace!("Executive::call(params={:?}) self.env_info={:?}, static={}", params, self.info, self.static_flag);
 		if (params.call_type == CallType::StaticCall ||
@@ -396,6 +400,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 			if !builtin.is_active(self.info.number) {
 				panic!("Consensus failure: engine implementation prematurely enabled built-in at {}", params.code_address);
 			}
+			//println!("builtin");
 
 			let default = [];
 			let data = if let Some(ref d) = params.data { d as &[u8] } else { &default as &[u8] };
@@ -456,13 +461,14 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 				Err(vm::Error::OutOfGas)
 			}
 		} else {
-			//println!("destination not builtin");
+			println!("destination not builtin");
 			let trace_info = tracer.prepare_trace_call(&params);
 			let mut trace_output = tracer.prepare_trace_output();
 			let mut subtracer = tracer.subtracer();
 
 			let gas = params.gas;
 
+			println!("params.code.is_some(): {:?}", params.code.is_some());
 			if params.code.is_some() {
 				//println!("param code is some");
 				// part of substate that may be reverted
@@ -606,6 +612,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		trace: Vec<T>,
 		vm_trace: Option<V>
 	) -> Result<Executed<T, V>, ExecutionError> {
+		println!("finalize");
 		let schedule = self.machine.schedule(self.info.number);
 
 		// refunds from SSTORE nonzero -> zero

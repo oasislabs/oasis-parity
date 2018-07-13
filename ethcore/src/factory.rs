@@ -34,7 +34,7 @@ impl VmFactory {
 			println!("Creating wasm VM");
 			Box::new(WasmInterpreter)
 		} else {
-			println!("Creating non-wasm VM");
+			//println!("Creating non-wasm VM");
 			self.evm.create(&params.gas)
 		}
 	}

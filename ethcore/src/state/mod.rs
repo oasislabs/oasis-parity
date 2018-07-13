@@ -956,7 +956,7 @@ impl<B: Backend> State<B> {
 				Self::update_account_cache(require, account, &self.db, accountdb.as_hashdb());
 				return Ok(f(Some(account)));
 			}
-			println!("cached None");
+			//println!("cached None");
 			return Ok(f(None));
 		}
 		// check global cache
