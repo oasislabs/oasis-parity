@@ -395,7 +395,7 @@ impl<'a> Runtime<'a> {
 					.map_err(|_| Error::BadUtf8)?;
 				match payload[0] {
 					1 => print!("{}", out_str),
-					2 => eprint!("{}", out_str),
+					2 => print!("error: {}", out_str),
 					_ => panic!("invalid output stream {}", payload[0])
 				};
 				1

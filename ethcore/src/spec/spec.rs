@@ -49,7 +49,7 @@ use trace::{NoopTracer, NoopVMTracer};
 // pub use ethash::OptimizeFor;
 type OptimizeFor = u64;
 
-const MAX_TRANSACTION_SIZE: usize = 300 * 1024;
+const MAX_TRANSACTION_SIZE: usize = 4096 * 1024;
 
 /// Default EIP-210 contract code.
 /// As defined in https://github.com/ethereum/EIPs/pull/210

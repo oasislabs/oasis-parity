@@ -35,11 +35,11 @@ pub use executed::{Executed, ExecutionResult};
 
 #[cfg(debug_assertions)]
 /// Roughly estimate what stack size each level of evm depth will use. (Debug build)
-const STACK_SIZE_PER_DEPTH: usize = 128 * 1024;
+const STACK_SIZE_PER_DEPTH: usize = 1024 * 1024;
 
 #[cfg(not(debug_assertions))]
 /// Roughly estimate what stack size each level of evm depth will use.
-const STACK_SIZE_PER_DEPTH: usize = 24 * 1024;
+const STACK_SIZE_PER_DEPTH: usize = 1024 * 1024;
 
 #[cfg(debug_assertions)]
 /// Entry stack overhead prior to execution. (Debug build)
