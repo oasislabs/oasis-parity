@@ -101,23 +101,16 @@ impl vm::Vm for WasmInterpreter {
 		).map_err(Error::Interpreter)?;
 		//println!("initiated wasmi module instance");
 
-		/*
-		println!("{:?}, {:?}, {:?}", params.gas, U256::from(ext.schedule().wasm().opcodes_div), U256::from(ext.schedule().wasm().opcodes_mul));
 		let adjusted_gas = params.gas * U256::from(ext.schedule().wasm().opcodes_div) /
 			U256::from(ext.schedule().wasm().opcodes_mul);
+		/*
+		println!("{:?}, {:?}, {:?}", params.gas, U256::from(ext.schedule().wasm().opcodes_div), U256::from(ext.schedule().wasm().opcodes_mul));
 
-<<<<<<< HEAD
 		if adjusted_gas > ::std::u64::MAX.into()
 		{
 			return Err(vm::Error::Wasm("Wasm interpreter cannot run contracts with gas (wasm adjusted) >= 2^64".to_owned()));
 		}
 		*/
-=======
-		// if adjusted_gas > ::std::u64::MAX.into()
-		// {
-		// 	return Err(vm::Error::Wasm("Wasm interpreter cannot run contracts with gas (wasm adjusted) >= 2^64".to_owned()));
-		// }
->>>>>>> origin/ekiden-inf-gas
 
 		let initial_memory = instantiation_resolver.memory_size().map_err(Error::Interpreter)?;
 		trace!(target: "wasm", "Contract requested {:?} pages of initial memory", initial_memory);

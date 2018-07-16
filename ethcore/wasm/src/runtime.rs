@@ -323,7 +323,7 @@ impl<'a> Runtime<'a> {
 		if self.gas_counter > self.gas_limit { return Err(Error::InvalidGasState); }
 		Ok(self.gas_limit - self.gas_counter)
 	}
-	
+
 	/// General gas charging extern.
 	fn gas(&mut self, args: RuntimeArgs) -> Result<()> {
 		let amount: u32 = args.nth_checked(0)?;
@@ -395,11 +395,7 @@ impl<'a> Runtime<'a> {
 					.map_err(|_| Error::BadUtf8)?;
 				match payload[0] {
 					1 => print!("{}", out_str),
-<<<<<<< HEAD
-					2 => print!("{}", out_str),
-=======
 					2 => print!("error: {}", out_str),
->>>>>>> origin/ekiden-inf-gas
 					_ => panic!("invalid output stream {}", payload[0])
 				};
 				1
