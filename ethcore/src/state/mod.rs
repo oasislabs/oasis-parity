@@ -40,6 +40,7 @@ use executed::{Executed, ExecutionError};
 use types::state_diff::StateDiff;
 use transaction::SignedTransaction;
 use state_db::StateDB;
+use storage::DummyStorage;
 use factory::VmFactory;
 use journaldb::overlaydb::OverlayDB;
 
@@ -749,7 +750,8 @@ impl<B: Backend> State<B> {
 	fn execute<T, V>(&mut self, env_info: &EnvInfo, machine: &Machine, t: &SignedTransaction, options: TransactOptions<T, V>, virt: bool)
 		-> Result<Executed<T::Output, V::Output>, ExecutionError> where T: trace::Tracer, V: trace::VMTracer,
 	{
-		let mut e = Executive::new(self, env_info, machine);
+		let mut dummy_storage = DummyStorage::new();
+		let mut e = Executive::new(self, env_info, machine, &mut dummy_storage);
 
 		match virt {
 			true => e.transact_virtual(t, options),
