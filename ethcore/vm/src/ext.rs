@@ -149,7 +149,5 @@ pub trait Ext {
 	/// Check if running in static context.
 	fn is_static(&self) -> bool;
 
-	fn request_bytes(&mut self, key: H256) -> Option<Vec<u8>>;
-
-	fn store_bytes(&mut self, key: H256, bytes: &[u8]);
+	fn request_bytes(&mut self, key: &[u8]) -> Option<Vec<u8>>;
 }

@@ -169,12 +169,12 @@ pub struct Executive<'a, B: 'a + StateBackend> {
 	machine: &'a Machine,
 	depth: usize,
 	static_flag: bool,
-	storage: &'a mut Storage,
+	storage: &'a Storage,
 }
 
 impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 	/// Basic constructor.
-	pub fn new(state: &'a mut State<B>, info: &'a EnvInfo, machine: &'a Machine, storage: &'a mut Storage) -> Self {
+	pub fn new(state: &'a mut State<B>, info: &'a EnvInfo, machine: &'a Machine, storage: &'a Storage) -> Self {
 		Executive {
 			state: state,
 			info: info,
@@ -186,7 +186,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 	}
 
 	/// Populates executive from parent properties. Increments executive depth.
-	pub fn from_parent(state: &'a mut State<B>, info: &'a EnvInfo, machine: &'a Machine, parent_depth: usize, static_flag: bool, storage: &'a mut Storage) -> Self {
+	pub fn from_parent(state: &'a mut State<B>, info: &'a EnvInfo, machine: &'a Machine, parent_depth: usize, static_flag: bool, storage: &'a Storage) -> Self {
 		Executive {
 			state: state,
 			info: info,
