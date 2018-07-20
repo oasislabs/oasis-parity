@@ -378,6 +378,10 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 	fn request_bytes(&mut self, key: H256) -> Option<Vec<u8>> {
 		self.storage.request_bytes(key)
 	}
+
+	fn store_bytes(&mut self, key: H256, bytes: &[u8]) {
+		self.storage.store_bytes(key, bytes)
+	}
 }
 
 #[cfg(test)]
