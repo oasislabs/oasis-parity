@@ -216,4 +216,8 @@ impl Ext for FakeExt {
 	fn trace_next_instruction(&mut self, _pc: usize, _instruction: u8, _gas: U256) -> bool {
 		self.tracing
 	}
+
+	fn request_bytes(&mut self, key: &[u8]) -> Option<Vec<u8>> {
+		Some(Vec::new())
+	}
 }
