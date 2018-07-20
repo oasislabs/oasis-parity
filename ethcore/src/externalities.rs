@@ -78,7 +78,7 @@ pub struct Externalities<'a, T: 'a, V: 'a, B: 'a>
 	tracer: &'a mut T,
 	vm_tracer: &'a mut V,
 	static_flag: bool,
-	storage: &'a Storage,
+	storage: &'a mut Storage,
 }
 
 impl<'a, T: 'a, V: 'a, B: 'a> Externalities<'a, T, V, B>
@@ -95,7 +95,7 @@ impl<'a, T: 'a, V: 'a, B: 'a> Externalities<'a, T, V, B>
 		tracer: &'a mut T,
 		vm_tracer: &'a mut V,
 		static_flag: bool,
-		storage: &'a Storage,
+		storage: &'a mut Storage,
 	) -> Self {
 		Externalities {
 			state: state,
@@ -246,7 +246,7 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 			params.value = ActionValue::Transfer(value);
 		}
 
-		let mut ex = Executive::from_parent(self.state, self.env_info, self.machine, self.depth, self.static_flag);
+		let mut ex = Executive::from_parent(self.state, self.env_info, self.machine, self.depth, self.static_flag, self.storage);
 
 		match ex.call(params, self.substate, BytesRef::Fixed(output), self.tracer, self.vm_tracer) {
 			Ok(FinalizationResult{ gas_left, return_data, apply_state: true }) => MessageCallResult::Success(gas_left, return_data),
