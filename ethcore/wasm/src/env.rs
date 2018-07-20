@@ -47,6 +47,7 @@ pub mod ids {
 	pub const SENDER_FUNC: usize = 190;
 	pub const ORIGIN_FUNC: usize = 200;
 	pub const ELOG_FUNC: usize = 210;
+	pub const REQUESTBYTES_FUNC: usize = 220;
 
 	pub const PANIC_FUNC: usize = 1000;
 	pub const DEBUG_FUNC: usize = 1010;
@@ -186,6 +187,11 @@ pub mod signatures {
 		None,
 	);
 
+	pub const REQUESTBYTES: StaticSignature = StaticSignature(
+		&[I32, I32],
+		None,
+	);
+
 	impl Into<wasmi::Signature> for StaticSignature {
 		fn into(self) -> wasmi::Signature {
 			wasmi::Signature::new(self.0, self.1)
@@ -270,6 +276,7 @@ impl wasmi::ModuleImportResolver for ImportResolver {
 			"sender" => host(signatures::SENDER, ids::SENDER_FUNC),
 			"origin" => host(signatures::ORIGIN, ids::ORIGIN_FUNC),
 			"elog" => host(signatures::ELOG, ids::ELOG_FUNC),
+			"request_bytes" => host(signatures::REQUESTBYTES, ids::REQUESTBYTES_FUNC),
 			_ => {
 				return Err(wasmi::Error::Instantiation(
 					format!("Export {} not found", field_name),
