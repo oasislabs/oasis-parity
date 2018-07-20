@@ -78,7 +78,7 @@ pub struct Externalities<'a, T: 'a, V: 'a, B: 'a>
 	tracer: &'a mut T,
 	vm_tracer: &'a mut V,
 	static_flag: bool,
-	storage: &'a Storage,
+	storage: &'a mut Storage,
 }
 
 impl<'a, T: 'a, V: 'a, B: 'a> Externalities<'a, T, V, B>
@@ -95,7 +95,7 @@ impl<'a, T: 'a, V: 'a, B: 'a> Externalities<'a, T, V, B>
 		tracer: &'a mut T,
 		vm_tracer: &'a mut V,
 		static_flag: bool,
-		storage: &'a Storage,
+		storage: &'a mut Storage,
 	) -> Self {
 		Externalities {
 			state: state,
