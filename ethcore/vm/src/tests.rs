@@ -217,9 +217,7 @@ impl Ext for FakeExt {
 		self.tracing
 	}
 
-	fn request_bytes(&mut self, _key: H256) -> Option<Vec<u8>> {
+	fn request_bytes(&mut self, key: &[u8]) -> Option<Vec<u8>> {
 		Some(Vec::new())
 	}
-
-	fn store_bytes(&mut self, _key: H256, _bytes: &[u8]) {}
 }
