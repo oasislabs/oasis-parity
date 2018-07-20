@@ -734,6 +734,17 @@ impl<'a> Runtime<'a> {
 
 		Ok(())
 	}
+
+	/// Signature: `fn store_bytes(key: *const u8, bytes: *const u8, len: u64)`
+	pub fn store_bytes(&mut self, args: RuntimeArgs) -> Result<()> {
+		let key = self.h256_at(args.nth_checked(0)?)?;
+		let bytes_ptr: u32 = args.nth_checked(1)?;
+		let len: u64 = args.nth_checked(2)?;
+		let bytes = self.memory.get(bytes_ptr, len as usize)?;
+		self.ext.store_bytes(key, &bytes);
+
+		Ok(())
+	}
 }
 
 mod ext_impl {
@@ -785,6 +796,8 @@ mod ext_impl {
 				SENDER_FUNC => void!(self.sender(args)),
 				ORIGIN_FUNC => void!(self.origin(args)),
 				ELOG_FUNC => void!(self.elog(args)),
+				REQUESTBYTES_FUNC => void!(self.request_bytes(args)),
+				STOREBYTES_FUNC => void!(self.store_bytes(args)),
 				_ => panic!("env module doesn't provide function at index {}", index),
 			}
 		}
