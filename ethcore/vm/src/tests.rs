@@ -15,6 +15,7 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::sync::Arc;
+use std::result::Result as StdResult;
 use std::collections::{HashMap, HashSet};
 
 use ethereum_types::{U256, H256, Address};
@@ -217,9 +218,11 @@ impl Ext for FakeExt {
 		self.tracing
 	}
 
-	fn request_bytes(&mut self, _key: H256) -> Option<Vec<u8>> {
-		Some(Vec::new())
+	fn request_bytes(&mut self, _key: H256) -> StdResult<Vec<u8>, String> {
+		Ok(Vec::new())
 	}
 
-	fn store_bytes(&mut self, _key: H256, _bytes: &[u8]) {}
+	fn store_bytes(&mut self, _key: H256, _bytes: &[u8]) -> StdResult<(), String> {
+		Ok(())
+	}
 }

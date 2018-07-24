@@ -17,6 +17,7 @@
 //! Interface for Evm externalities.
 
 use std::sync::Arc;
+use std::result::Result as StdResult;
 use ethereum_types::{U256, H256, Address};
 use bytes::Bytes;
 use call_type::CallType;
@@ -149,7 +150,7 @@ pub trait Ext {
 	/// Check if running in static context.
 	fn is_static(&self) -> bool;
 
-	fn request_bytes(&mut self, key: H256) -> Option<Vec<u8>>;
+	fn request_bytes(&mut self, key: H256) -> StdResult<Vec<u8>, String>;
 
-	fn store_bytes(&mut self, key: H256, bytes: &[u8]);
+	fn store_bytes(&mut self, key: H256, bytes: &[u8]) -> StdResult<(), String>;
 }
