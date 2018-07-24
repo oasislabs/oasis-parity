@@ -194,7 +194,7 @@ pub mod signatures {
 	);
 
 	pub const STOREBYTES: StaticSignature = StaticSignature(
-		&[I32, I32, I64],
+		&[I32, I64, I32],
 		None,
 	);
 

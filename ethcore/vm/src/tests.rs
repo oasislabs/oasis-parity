@@ -222,7 +222,7 @@ impl Ext for FakeExt {
 		Ok(Vec::new())
 	}
 
-	fn store_bytes(&mut self, _key: H256, _bytes: &[u8]) -> StdResult<(), String> {
-		Ok(())
+	fn store_bytes(&mut self, _bytes: &[u8]) -> StdResult<H256, String> {
+		Ok(H256::zero())
 	}
 }

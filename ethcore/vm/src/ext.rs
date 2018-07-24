@@ -152,5 +152,5 @@ pub trait Ext {
 
 	fn request_bytes(&mut self, key: H256) -> StdResult<Vec<u8>, String>;
 
-	fn store_bytes(&mut self, key: H256, bytes: &[u8]) -> StdResult<(), String>;
+	fn store_bytes(&mut self, bytes: &[u8]) -> StdResult<H256, String>;
 }
