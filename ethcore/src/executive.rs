@@ -700,6 +700,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 				| Err(vm::Error::MutableCallInStaticContext)
 				| Err(vm::Error::OutOfBounds)
 				| Err(vm::Error::Reverted)
+				| Err(vm::Error::Storage {..})
 				| Ok(FinalizationResult { apply_state: false, .. }) => {
 					self.state.revert_to_checkpoint();
 			},

@@ -639,7 +639,7 @@ impl Spec {
 				let mut substate = Substate::new();
 
 				{
-					let mut dummy_storage = DummyStorage {};
+					let mut dummy_storage = DummyStorage::new();
 					let mut exec = Executive::new(&mut state, &env_info, self.engine.machine(), &mut dummy_storage);
 					if let Err(e) = exec.create(params, &mut substate, &mut None, &mut NoopTracer, &mut NoopVMTracer) {
 						warn!(target: "spec", "Genesis constructor execution at {} failed: {}.", address, e);

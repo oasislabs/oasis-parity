@@ -146,7 +146,7 @@ impl EthereumMachine {
 			call_type: CallType::Call,
 			params_type: ParamsType::Separate,
 		};
-		let mut dummy_storage = DummyStorage {};
+		let mut dummy_storage = DummyStorage::new();
 		let mut ex = Executive::new(&mut state, &env_info, self, &mut dummy_storage);
 		let mut substate = Substate::new();
 		let mut output = Vec::new();
