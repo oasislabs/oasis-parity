@@ -740,7 +740,7 @@ impl<'a> Runtime<'a> {
 		let bytes_ptr: u32 = args.nth_checked(0)?;
 		let len: u64 = args.nth_checked(1)?;
 		let bytes = self.memory.get(bytes_ptr, len as usize)?;
-		let key = self.ext.store_bytes(&bytes).unwrap();
+		let key = self.ext.store_bytes(&bytes).expect("Failed to generate key");
 		self.memory.set(args.nth_checked(2)?, &*key);
 
 		Ok(())
@@ -796,8 +796,8 @@ mod ext_impl {
 				SENDER_FUNC => void!(self.sender(args)),
 				ORIGIN_FUNC => void!(self.origin(args)),
 				ELOG_FUNC => void!(self.elog(args)),
-				REQUESTBYTES_FUNC => void!(self.request_bytes(args)),
-				STOREBYTES_FUNC => void!(self.store_bytes(args)),
+				REQUEST_BYTES_FUNC => void!(self.request_bytes(args)),
+				STORE_BYTES_FUNC => void!(self.store_bytes(args)),
 				_ => panic!("env module doesn't provide function at index {}", index),
 			}
 		}
