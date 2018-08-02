@@ -484,7 +484,6 @@ impl<'x> OpenBlock<'x> {
 		}
 	}
 
-	#[cfg(test)]
 	/// Return mutable block reference. To be used in tests only.
 	pub fn block_mut(&mut self) -> &mut ExecutedBlock { &mut self.block }
 }
