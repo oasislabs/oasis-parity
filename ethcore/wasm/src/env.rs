@@ -289,7 +289,7 @@ impl wasmi::ModuleImportResolver for ImportResolver {
 			let effective_max = descriptor.maximum().unwrap_or(self.max_memory + 1);
 			if descriptor.initial() > self.max_memory || effective_max > self.max_memory
 			{
-				Err(Error::Instantiation("Module requested too much memory".to_owned()))
+				Err(Error::Instantiation(format!("Module requested too much memory: initial={}, effective={}, max={}", descriptor.initial(), effective_max, self.max_memory)))
 			} else {
 				let mem = MemoryInstance::alloc(
 					memory_units::Pages(descriptor.initial() as usize),
