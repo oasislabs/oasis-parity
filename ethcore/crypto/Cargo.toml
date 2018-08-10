@@ -4,9 +4,9 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-ethereum-types = { git = "https://github.com/ekiden/primitives", branch = "ekiden" }
+ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
 quick-error = "1.2"
-ring = { git = "https://github.com/ekiden/ring", default-features = false, features = [ "rsa_signing" ], branch = "0.12.1-ekiden" }
+ring = { git = "https://github.com/oasislabs/ring", default-features = false, features = [ "rsa_signing" ], branch = "0.12.1-ekiden" }
 rust-crypto = "0.2.36"
 tiny-keccak = "1.4"
 

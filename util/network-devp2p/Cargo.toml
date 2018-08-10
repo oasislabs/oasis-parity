@@ -24,7 +24,7 @@ ethcore-bytes = { path = "../bytes" }
 ethcore-crypto = { path = "../../ethcore/crypto" }
 ethcore-logger = { path ="../../logger" }
 ethcore-network = { path = "../network" }
-ethereum-types = { git = "https://github.com/ekiden/primitives", branch = "ekiden" }
+ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
 ethkey = { path = "../../ethkey" }
 rlp = { path = "../rlp" }
 path = { path = "../path" }

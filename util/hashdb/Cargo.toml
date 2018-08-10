@@ -7,4 +7,4 @@ license = "GPL-3.0"
 
 [dependencies]
 elastic-array = "0.10"
-ethereum-types = { git = "https://github.com/ekiden/primitives", branch = "ekiden" }
+ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }

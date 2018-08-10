@@ -9,7 +9,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 # ansi_term = "0.10"
 bloomchain = { path = "../util/bloomchain" }
-bn = { git = "https://github.com/ekiden/bn", branch = "ekiden", default-features = false }
+bn = { git = "https://github.com/oasislabs/bn", branch = "ekiden", default-features = false }
 byteorder = "1.0"
 common-types = { path = "types" }
 # crossbeam = "0.3"
@@ -27,11 +27,11 @@ error-chain = { version = "0.10", default-features = false }
 # ethcore-miner = { path = "../miner" }
 # ethcore-stratum = { path = "./stratum" }
 ethcore-transaction = { path = "./transaction" }
-ethereum-types = { git = "https://github.com/ekiden/primitives", branch = "ekiden" }
+ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
 memory-cache = { path = "../util/memory_cache" }
-ethabi = { git = "https://github.com/ekiden/ethabi", branch = "ekiden" }
-ethabi-derive = { git = "https://github.com/ekiden/ethabi", branch = "ekiden" }
-ethabi-contract = { git = "https://github.com/ekiden/ethabi", branch = "ekiden" }
+ethabi = { git = "https://github.com/oasislabs/ethabi", branch = "ekiden" }
+ethabi-derive = { git = "https://github.com/oasislabs/ethabi", branch = "ekiden" }
+ethabi-contract = { git = "https://github.com/oasislabs/ethabi", branch = "ekiden" }
 ethjson = { path = "../json" }
 ethkey = { path = "../ethkey" }
 # ethstore = { path = "../ethstore" }
