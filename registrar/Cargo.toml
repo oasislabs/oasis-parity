@@ -7,7 +7,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 futures = "0.1"
-ethabi = { git = "https://github.com/ekiden/ethabi", branch = "ekiden" }
-ethabi-derive = { git = "https://github.com/ekiden/ethabi", branch = "ekiden" }
-ethabi-contract = { git = "https://github.com/ekiden/ethabi", branch = "ekiden" }
+ethabi = { git = "https://github.com/oasislabs/ethabi", branch = "ekiden" }
+ethabi-derive = { git = "https://github.com/oasislabs/ethabi", branch = "ekiden" }
+ethabi-contract = { git = "https://github.com/oasislabs/ethabi", branch = "ekiden" }
 keccak-hash = { path = "../util/hash" }

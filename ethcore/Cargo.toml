@@ -27,11 +27,11 @@ ethcore-logger = { path = "../logger" }
 ethcore-miner = { path = "../miner" }
 ethcore-stratum = { path = "./stratum" }
 ethcore-transaction = { path = "./transaction" }
-ethereum-types = { git = "https://github.com/ekiden/primitives", branch = "ekiden" }
+ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
 memory-cache = { path = "../util/memory_cache" }
-ethabi = { git = "https://github.com/ekiden/ethabi", branch = "ekiden" }
-ethabi-derive = { git = "https://github.com/ekiden/ethabi", branch = "ekiden" }
-ethabi-contract = { git = "https://github.com/ekiden/ethabi", branch = "ekiden" }
+ethabi = { git = "https://github.com/oasislabs/ethabi", branch = "ekiden" }
+ethabi-derive = { git = "https://github.com/oasislabs/ethabi", branch = "ekiden" }
+ethabi-contract = { git = "https://github.com/oasislabs/ethabi", branch = "ekiden" }
 ethjson = { path = "../json" }
 ethkey = { path = "../ethkey" }
 ethstore = { path = "../ethstore" }
