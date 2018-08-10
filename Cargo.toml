@@ -42,7 +42,7 @@ ethcore-private-tx = { path = "ethcore/private-tx" }
 ethcore-service = { path = "ethcore/service" }
 ethcore-sync = { path = "ethcore/sync" }
 ethcore-transaction = { path = "ethcore/transaction" }
-ethereum-types = { git = "https://github.com/ekiden/primitives", branch = "ekiden" }
+ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
 node-filter = { path = "ethcore/node_filter" }
 ethkey = { path = "ethkey" }
 node-health = { path = "dapps/node-health" }
@@ -131,4 +131,4 @@ members = [
 ]
 
 [patch.crates-io]
-ring = { git = "https://github.com/ekiden/ring", branch = "0.12.1-ekiden" }
+ring = { git = "https://github.com/oasislabs/ring", branch = "0.12.1-ekiden" }
