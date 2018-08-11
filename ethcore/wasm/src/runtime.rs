@@ -409,6 +409,11 @@ impl<'a> Runtime<'a> {
 		}.into())
 	}
 
+	fn expf(&mut self, args: RuntimeArgs) -> Result<RuntimeValue> {
+		let x: wasmi::nan_preserving_float::F32 = args.nth_checked(0)?;
+		Ok(RuntimeValue::F32(wasmi::nan_preserving_float::F32::from_float(x.to_float().exp())))
+	}
+
 	fn do_call(
 		&mut self,
 		use_val: bool,
@@ -760,6 +765,7 @@ mod ext_impl {
 				PANIC_FUNC => void!(self.panic(args)),
 				DEBUG_FUNC => void!(self.debug(args)),
 				SYSCALL_FUNC => some!(self.syscall(args)),
+				EXPF_FUNC => some!(self.expf(args)),
 				CCALL_FUNC => some!(self.ccall(args)),
 				DCALL_FUNC => some!(self.dcall(args)),
 				SCALL_FUNC => some!(self.scall(args)),

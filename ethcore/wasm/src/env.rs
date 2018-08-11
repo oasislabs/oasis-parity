@@ -51,6 +51,8 @@ pub mod ids {
 	pub const PANIC_FUNC: usize = 1000;
 	pub const DEBUG_FUNC: usize = 1010;
 	pub const SYSCALL_FUNC: usize = 1020;
+
+	pub const EXPF_FUNC: usize = 1100;
 }
 
 /// Signatures of all functions runtime supports. The actual dispatch happens at
@@ -119,6 +121,11 @@ pub mod signatures {
 	pub const SYSCALL: StaticSignature = StaticSignature(
 		&[I32, I32],
 		Some(I32),
+	);
+
+	pub const EXPF: StaticSignature = StaticSignature(
+		&[F32],
+		Some(F32),
 	);
 
 	pub const VALUE: StaticSignature = StaticSignature(
@@ -245,6 +252,7 @@ impl ImportResolver {
 impl wasmi::ModuleImportResolver for ImportResolver {
 	fn resolve_func(&self, field_name: &str, _signature: &Signature) -> Result<FuncRef, Error> {
 		let func_ref = match field_name {
+			"expf" => host(signatures::EXPF, ids::EXPF_FUNC),
 			"rust_wasm_syscall" => host(signatures::SYSCALL, ids::SYSCALL_FUNC),
 			"storage_read" => host(signatures::STORAGE_READ, ids::STORAGE_READ_FUNC),
 			"storage_write" => host(signatures::STORAGE_WRITE, ids::STORAGE_WRITE_FUNC),
