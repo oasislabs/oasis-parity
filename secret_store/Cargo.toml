@@ -29,14 +29,14 @@ ethcore-crypto = { path = "../ethcore/crypto" }
 ethcore-logger = { path = "../logger" }
 ethcore-sync = { path = "../ethcore/sync" }
 ethcore-transaction = { path = "../ethcore/transaction" }
-ethereum-types = { git = "https://github.com/ekiden/primitives", branch = "ekiden" }
+ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
 kvdb = { path = "../util/kvdb" }
 keccak-hash = { path = "../util/hash" }
 ethkey = { path = "../ethkey" }
 lazy_static = "1.0"
-ethabi = "5.1"
-ethabi-derive = "5.0"
-ethabi-contract = "5.0"
+ethabi = { git = "https://github.com/oasislabs/ethabi", branch = "ekiden" }
+ethabi-derive = { git = "https://github.com/oasislabs/ethabi", branch = "ekiden" }
+ethabi-contract = { git = "https://github.com/oasislabs/ethabi", branch = "ekiden" }
 
 [dev-dependencies]
 tempdir = "0.3"

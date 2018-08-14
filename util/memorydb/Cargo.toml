@@ -8,7 +8,7 @@ license = "GPL-3.0"
 [dependencies]
 elastic-array = "0.10"
 heapsize = "0.4"
-ethereum-types = { git = "https://github.com/ekiden/primitives", branch = "ekiden" }
+ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
 keccak-hash = { version = "0.1.0", path = "../hash" }
 hashdb = { version = "0.1.1", path = "../hashdb" }
 plain_hasher = { path = "../plain_hasher" }

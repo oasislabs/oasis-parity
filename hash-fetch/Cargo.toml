@@ -16,14 +16,14 @@ rand = "0.4"
 rustc-hex = "1.0"
 fetch = { path = "../util/fetch" }
 ethcore-bytes = { path = "../util/bytes" }
-ethereum-types = { git = "https://github.com/ekiden/primitives", branch = "ekiden" }
+ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
 parity-reactor = { path = "../util/reactor" }
 keccak-hash = { path = "../util/hash" }
 registrar = { path = "../registrar" }
 
-ethabi = "5.1"
-ethabi-derive = "5.0"
-ethabi-contract = "5.0"
+ethabi = { git = "https://github.com/oasislabs/ethabi", branch = "ekiden" }
+ethabi-derive = { git = "https://github.com/oasislabs/ethabi", branch = "ekiden" }
+ethabi-contract = { git = "https://github.com/oasislabs/ethabi", branch = "ekiden" }
 
 [dev-dependencies]
 hyper = "0.11"
