@@ -631,6 +631,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		match result {
 			Err(vm::Error::Internal(msg)) => Err(ExecutionError::Internal(msg)),
 			Err(exception) => {
+				trace!("Executive::finalize: exception={}", exception);
 				Ok(Executed {
 					exception: Some(exception),
 					gas: t.gas,
