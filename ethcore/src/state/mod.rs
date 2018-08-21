@@ -40,7 +40,7 @@ use executed::{Executed, ExecutionError};
 use types::state_diff::StateDiff;
 use transaction::SignedTransaction;
 use state_db::StateDB;
-use storage::Storage;
+use storage::{Storage, DummyStorage};
 use factory::VmFactory;
 
 use ethereum_types::{H256, U256, Address};
@@ -216,7 +216,8 @@ pub fn check_proof(
 	};
 
 	let options = TransactOptions::with_no_tracing().save_output_from_contract();
-	match state.execute(env_info, machine, transaction, options, true) {
+	let mut storage = DummyStorage::new();
+	match state.execute(env_info, machine, transaction, options, true, &mut storage) {
 		Ok(executed) => ProvedExecution::Complete(executed),
 		Err(ExecutionError::Internal(_)) => ProvedExecution::BadProof,
 		Err(e) => ProvedExecution::Failed(e),
@@ -251,7 +252,8 @@ pub fn prove_transaction<H: AsHashDB + Send + Sync>(
 	};
 
 	let options = TransactOptions::with_no_tracing().dont_check_nonce().save_output_from_contract();
-	match state.execute(env_info, machine, transaction, options, virt) {
+	let mut storage = DummyStorage::new();
+	match state.execute(env_info, machine, transaction, options, virt, &mut storage) {
 		Err(ExecutionError::Internal(_)) => None,
 		Err(e) => {
 			trace!(target: "state", "Proved call failed: {}", e);
@@ -708,10 +710,7 @@ impl<B: Backend> State<B> {
 		T: trace::Tracer,
 		V: trace::VMTracer,
 	{
-		let options = match machine.params().benchmarking {
-			true => TransactOptions::new(tracer, vm_tracer).dont_check_nonce(),
-			false => TransactOptions::new(tracer, vm_tracer)
-		};
+		let options = TransactOptions::new(tracer, vm_tracer);
 		let e = self.execute(env_info, machine, t, options, false, storage)?;
 		let params = machine.params();
 

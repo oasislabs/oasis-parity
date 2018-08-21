@@ -35,8 +35,8 @@ use header::{Header, ExtendedHeader};
 use receipt::{Receipt, TransactionOutcome};
 use state::State;
 use state::backend::{Basic as BasicBackend, Backend};
-use storage::Storage;
-// use state_db::StateDB;
+use storage::{Storage, DummyStorage};
+use state_db::StateDB;
 use trace::Tracing;
 use transaction::{UnverifiedTransaction, SignedTransaction, Error as TransactionError};
 use verification::PreverifiedBlock;
@@ -647,8 +647,10 @@ fn enact(
 		ancestry,
 	)?;
 
+	let mut storage = DummyStorage::new();
+
 	b.populate_from(&header);
-	b.push_transactions(transactions)?;
+	b.push_transactions(transactions, &mut storage)?;
 
 	for u in uncles {
 		b.push_uncle(u)?;

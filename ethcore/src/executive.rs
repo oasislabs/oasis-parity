@@ -31,6 +31,7 @@ use vm::{
 use externalities::*;
 use trace::{self, Tracer, VMTracer};
 use transaction::{Action, SignedTransaction};
+use crossbeam;
 use storage::Storage;
 pub use executed::{Executed, ExecutionResult};
 

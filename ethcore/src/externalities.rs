@@ -176,7 +176,7 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 			};
 
 			let mut output = H256::new();
-			let mut ex = Executive::new(self.state, self.env_info, self.machine);
+			let mut ex = Executive::new(self.state, self.env_info, self.machine, self.storage);
 			let r = ex.call(params, self.substate, BytesRef::Fixed(&mut output), self.tracer, self.vm_tracer);
 			trace!("ext: blockhash contract({}) -> {:?}({}) self.env_info.number={}\n", number, r, output, self.env_info.number);
 			output
