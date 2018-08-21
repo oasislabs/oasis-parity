@@ -36,6 +36,7 @@ use journaldb::overlaydb::OverlayDB;
 use receipt::{Receipt, TransactionOutcome};
 use state::State;
 use state::backend::{Basic as BasicBackend, Backend};
+use storage::Storage;
 // use state_db::StateDB;
 use trace::Tracing;
 use transaction::{UnverifiedTransaction, SignedTransaction, Error as TransactionError};
@@ -350,13 +351,13 @@ impl<'x> OpenBlock<'x> {
 	/// Push a transaction into the block.
 	///
 	/// If valid, it will be executed, and archived together with the receipt.
-	pub fn push_transaction(&mut self, t: SignedTransaction, h: Option<H256>) -> Result<&Receipt, Error> {
+	pub fn push_transaction(&mut self, t: SignedTransaction, h: Option<H256>, storage: &mut Storage) -> Result<&Receipt, Error> {
 		if self.block.transactions_set.contains(&t.hash()) {
 			return Err(TransactionError::AlreadyImported.into());
 		}
 
 		let env_info = self.env_info();
-		let outcome = self.block.state.apply(&env_info, self.engine.machine(), &t, self.block.traces.is_enabled())?;
+		let outcome = self.block.state.apply(&env_info, self.engine.machine(), &t, self.block.traces.is_enabled(), storage)?;
 
 		self.block.transactions_set.insert(h.unwrap_or_else(||t.hash()));
 		self.block.transactions.push(t.into());
@@ -369,23 +370,23 @@ impl<'x> OpenBlock<'x> {
 
 	/// Push transactions onto the block.
 	#[cfg(not(feature = "slow-blocks"))]
-	fn push_transactions(&mut self, transactions: Vec<SignedTransaction>) -> Result<(), Error> {
+	fn push_transactions(&mut self, transactions: Vec<SignedTransaction>, storage: &mut Storage) -> Result<(), Error> {
 		for t in transactions {
-			self.push_transaction(t, None)?;
+			self.push_transaction(t, None, storage)?;
 		}
 		Ok(())
 	}
 
 	/// Push transactions onto the block.
 	#[cfg(feature = "slow-blocks")]
-	fn push_transactions(&mut self, transactions: Vec<SignedTransaction>) -> Result<(), Error> {
+	fn push_transactions(&mut self, transactions: Vec<SignedTransaction>, storage: &mut Storage) -> Result<(), Error> {
 		use std::time;
 
 		let slow_tx = option_env!("SLOW_TX_DURATION").and_then(|v| v.parse().ok()).unwrap_or(100);
 		for t in transactions {
 			let hash = t.hash();
 			let start = time::Instant::now();
-			self.push_transaction(t, None)?;
+			self.push_transaction(t, None, storage)?;
 			let took = start.elapsed();
 			let took_ms = took.as_secs() * 1000 + took.subsec_nanos() as u64 / 1000000;
 			if took > time::Duration::from_millis(slow_tx) {
