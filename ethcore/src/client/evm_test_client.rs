@@ -197,7 +197,7 @@ impl<'a> EvmTestClient<'a> {
 		let mut storage = NullStorage::new();
 		let mut substate = state::Substate::new();
 		let mut output = vec![];
-		let mut executive = executive::Executive::new(&mut self.state, &info, self.spec.engine.machine());
+		let mut executive = executive::Executive::new(&mut self.state, &info, self.spec.engine.machine(), &mut storage);
 		executive.call(
 			params,
 			&mut substate,

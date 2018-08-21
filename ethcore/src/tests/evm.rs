@@ -64,7 +64,7 @@ fn test_blockhash_eip210(factory: Factory) {
 			call_type: CallType::Call,
 			params_type: ParamsType::Separate,
 		};
-		let mut ex = Executive::new(&mut state, &env_info, &machine);
+		let mut ex = Executive::new(&mut state, &env_info, &machine, &mut storage);
 		let mut substate = Substate::new();
 		let mut output = [];
 		if let Err(e) = ex.call(params, &mut substate, BytesRef::Fixed(&mut output), &mut NoopTracer, &mut NoopVMTracer) {
@@ -87,7 +87,7 @@ fn test_blockhash_eip210(factory: Factory) {
 		call_type: CallType::Call,
 		params_type: ParamsType::Separate,
 	};
-	let mut ex = Executive::new(&mut state, &env_info, &machine);
+	let mut ex = Executive::new(&mut state, &env_info, &machine, &mut storage);
 	let mut substate = Substate::new();
 	let mut output = H256::new();
 	if let Err(e) = ex.call(params, &mut substate, BytesRef::Fixed(&mut output), &mut NoopTracer, &mut NoopVMTracer) {

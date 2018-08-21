@@ -752,7 +752,7 @@ mod tests {
 		let mut storage = NullStorage::new();
 
 		let FinalizationResult { gas_left, .. } = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			ex.create(params, &mut substate, &mut None, &mut NoopTracer, &mut NoopVMTracer).unwrap()
 		};
 
@@ -810,7 +810,7 @@ mod tests {
 		let mut storage = NullStorage::new();
 
 		let FinalizationResult { gas_left, .. } = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			ex.create(params, &mut substate, &mut None, &mut NoopTracer, &mut NoopVMTracer).unwrap()
 		};
 
@@ -854,7 +854,7 @@ mod tests {
 		let mut vm_tracer = ExecutiveVMTracer::toplevel();
 		let mut storage = NullStorage::new();
 
-		let mut ex = Executive::new(&mut state, &info, &machine);
+		let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 		let output = BytesRef::Fixed(&mut[0u8;0]);
 		ex.call(params, &mut substate, output, &mut tracer, &mut vm_tracer).unwrap();
 
@@ -940,7 +940,7 @@ mod tests {
 		let mut storage = NullStorage::new();
 
 		let FinalizationResult { gas_left, .. } = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			let output = BytesRef::Fixed(&mut[0u8;0]);
 			ex.call(params, &mut substate, output, &mut tracer, &mut vm_tracer).unwrap()
 		};
@@ -1057,7 +1057,7 @@ mod tests {
 		let mut storage = NullStorage::new();
 
 		let FinalizationResult { gas_left, .. } = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			let output = BytesRef::Fixed(&mut[0u8;0]);
 			ex.call(params, &mut substate, output, &mut tracer, &mut vm_tracer).unwrap()
 		};
@@ -1130,7 +1130,7 @@ mod tests {
 		let mut storage = NullStorage::new();
 
 		let FinalizationResult { gas_left, .. } = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			ex.create(params.clone(), &mut substate, &mut None, &mut tracer, &mut vm_tracer).unwrap()
 		};
 
@@ -1216,7 +1216,7 @@ mod tests {
 		let mut storage = NullStorage::new();
 
 		let FinalizationResult { gas_left, .. } = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			ex.create(params, &mut substate, &mut None, &mut NoopTracer, &mut NoopVMTracer).unwrap()
 		};
 
@@ -1268,7 +1268,7 @@ mod tests {
 		let mut storage = NullStorage::new();
 
 		{
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			ex.create(params, &mut substate, &mut None, &mut NoopTracer, &mut NoopVMTracer).unwrap();
 		}
 
@@ -1329,7 +1329,7 @@ mod tests {
 		let mut storage = NullStorage::new();
 
 		let FinalizationResult { gas_left, .. } = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			ex.call(params, &mut substate, BytesRef::Fixed(&mut []), &mut NoopTracer, &mut NoopVMTracer).unwrap()
 		};
 
@@ -1374,7 +1374,7 @@ mod tests {
 		let mut storage = NullStorage::new();
 
 		let FinalizationResult { gas_left, .. } = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			ex.call(params, &mut substate, BytesRef::Fixed(&mut []), &mut NoopTracer, &mut NoopVMTracer).unwrap()
 		};
 
@@ -1407,7 +1407,7 @@ mod tests {
 		let mut storage = NullStorage::new();
 
 		let executed = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			let opts = TransactOptions::with_no_tracing();
 			ex.transact(&t, opts).unwrap()
 		};
@@ -1445,7 +1445,7 @@ mod tests {
 		let mut storage = NullStorage::new();
 
 		let res = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			let opts = TransactOptions::with_no_tracing();
 			ex.transact(&t, opts)
 		};
@@ -1479,7 +1479,7 @@ mod tests {
 		let mut storage = NullStorage::new();
 
 		let res = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			let opts = TransactOptions::with_no_tracing();
 			ex.transact(&t, opts)
 		};
@@ -1513,7 +1513,7 @@ mod tests {
 		let mut storage = NullStorage::new();
 
 		let res = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			let opts = TransactOptions::with_no_tracing();
 			ex.transact(&t, opts)
 		};
@@ -1548,7 +1548,7 @@ mod tests {
 		let mut storage = NullStorage::new();
 
 		let result = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			ex.create(params, &mut substate, &mut None, &mut NoopTracer, &mut NoopVMTracer)
 		};
 
@@ -1583,7 +1583,7 @@ mod tests {
 
 		let mut output = [0u8; 14];
 		let FinalizationResult { gas_left: result, .. } = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			ex.call(params, &mut substate, BytesRef::Fixed(&mut output), &mut NoopTracer, &mut NoopVMTracer).unwrap()
 		};
 
@@ -1627,7 +1627,7 @@ mod tests {
 
 		let mut output = [0u8; 20];
 		let FinalizationResult { gas_left: result, .. } = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			ex.call(params.clone(), &mut Substate::new(), BytesRef::Fixed(&mut output), &mut NoopTracer, &mut NoopVMTracer).unwrap()
 		};
 
@@ -1640,7 +1640,7 @@ mod tests {
 
 		let mut output = [0u8; 20];
 		let FinalizationResult { gas_left: result, .. } = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			ex.call(params, &mut Substate::new(), BytesRef::Fixed(&mut output), &mut NoopTracer, &mut NoopVMTracer).unwrap()
 		};
 

@@ -385,7 +385,7 @@ fn transaction_proof() {
 	let mut storage = NullStorage::new();
 
 	let mut state = State::from_existing(backend, root, 0.into(), factories.clone()).unwrap();
-	Executive::new(&mut state, &client.latest_env_info(), test_spec.engine.machine())
+	Executive::new(&mut state, &client.latest_env_info(), test_spec.engine.machine(), &mut storage)
 		.transact(&transaction, TransactOptions::with_no_tracing().dont_check_nonce()).unwrap();
 
 	assert_eq!(state.balance(&Address::default()).unwrap(), 5.into());
