@@ -40,7 +40,7 @@ use executed::{Executed, ExecutionError};
 use types::state_diff::StateDiff;
 use transaction::SignedTransaction;
 use state_db::StateDB;
-use storage::{Storage, DummyStorage};
+use storage::{Storage, NullStorage};
 use factory::VmFactory;
 
 use ethereum_types::{H256, U256, Address};
@@ -216,7 +216,7 @@ pub fn check_proof(
 	};
 
 	let options = TransactOptions::with_no_tracing().save_output_from_contract();
-	let mut storage = DummyStorage::new();
+	let mut storage = NullStorage::new();
 	match state.execute(env_info, machine, transaction, options, true, &mut storage) {
 		Ok(executed) => ProvedExecution::Complete(executed),
 		Err(ExecutionError::Internal(_)) => ProvedExecution::BadProof,
@@ -252,7 +252,7 @@ pub fn prove_transaction<H: AsHashDB + Send + Sync>(
 	};
 
 	let options = TransactOptions::with_no_tracing().dont_check_nonce().save_output_from_contract();
-	let mut storage = DummyStorage::new();
+	let mut storage = NullStorage::new();
 	match state.execute(env_info, machine, transaction, options, virt, &mut storage) {
 		Err(ExecutionError::Internal(_)) => None,
 		Err(e) => {

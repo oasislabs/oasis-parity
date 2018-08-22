@@ -28,7 +28,7 @@ use executive::Executive;
 use header::{BlockNumber, Header, ExtendedHeader};
 use spec::CommonParams;
 use state::{CleanupMode, Substate};
-use storage::DummyStorage;
+use storage::NullStorage;
 use trace::{NoopTracer, NoopVMTracer, Tracer, ExecutiveTracer, RewardType, Tracing};
 use transaction::{self, SYSTEM_ADDRESS, UnverifiedTransaction, SignedTransaction};
 use tx_filter::TransactionFilter;
@@ -146,7 +146,7 @@ impl EthereumMachine {
 			call_type: CallType::Call,
 			params_type: ParamsType::Separate,
 		};
-		let mut dummy_storage = DummyStorage::new();
+		let mut dummy_storage = NullStorage::new();
 		let mut ex = Executive::new(&mut state, &env_info, self, &mut dummy_storage);
 		let mut substate = Substate::new();
 		let mut output = Vec::new();

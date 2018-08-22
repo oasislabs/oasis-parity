@@ -68,7 +68,7 @@ use snapshot::{self, io as snapshot_io};
 use spec::Spec;
 use state_db::StateDB;
 use state::{self, State};
-use storage::DummyStorage;
+use storage::NullStorage;
 use trace;
 use trace::{TraceDB, ImportRequest as TraceImportRequest, LocalizedTrace, Database as TraceDatabase};
 use transaction::{self, LocalizedTransaction, UnverifiedTransaction, SignedTransaction, Transaction, Action};
@@ -623,7 +623,7 @@ impl Importer {
 							).expect("state known to be available for just-imported block; qed");
 
 							let options = TransactOptions::with_no_tracing().dont_check_nonce();
-							let mut storage = DummyStorage::new();
+							let mut storage = NullStorage::new();
 							let res = Executive::new(&mut state, &env_info, self.engine.machine(), &mut storage)
 								.transact(&transaction, options);
 
@@ -1239,7 +1239,7 @@ impl Client {
 				.dont_check_nonce()
 				.save_output_from_contract();
 			let original_state = if state_diff { Some(state.clone()) } else { None };
-			let mut storage = DummyStorage::new();
+			let mut storage = NullStorage::new();
 
 			let mut ret = Executive::new(state, env_info, machine, &mut storage).transact_virtual(transaction, options)?;
 
@@ -1494,7 +1494,7 @@ impl Call for Client {
 			tx.gas = gas;
 			let tx = tx.fake_sign(sender);
 
-			let mut storage = DummyStorage::new();
+			let mut storage = NullStorage::new();
 			let mut clone = state.clone();
 			Ok(Executive::new(&mut clone, &env_info, self.engine.machine(), &mut storage)
 				.transact_virtual(&tx, options())

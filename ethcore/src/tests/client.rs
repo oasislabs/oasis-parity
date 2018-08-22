@@ -20,7 +20,7 @@ use hash::keccak;
 use io::IoChannel;
 use client::{BlockChainClient, Client, ClientConfig, BlockId, ChainInfo, BlockInfo, PrepareOpenBlock, ImportSealedBlock, ImportBlock};
 use state::{self, State, CleanupMode};
-use storage::DummyStorage;
+use storage::NullStorage;
 use executive::{Executive, TransactOptions};
 use ethereum;
 use block::IsBlock;
@@ -382,7 +382,7 @@ fn transaction_proof() {
 	let mut factories = ::factory::Factories::default();
 	factories.accountdb = ::account_db::Factory::Plain; // raw state values, no mangled keys.
 	let root = *client.best_block_header().state_root();
-	let mut storage = DummyStorage::new();
+	let mut storage = NullStorage::new();
 
 	let mut state = State::from_existing(backend, root, 0.into(), factories.clone()).unwrap();
 	Executive::new(&mut state, &client.latest_env_info(), test_spec.engine.machine(), &mut storage)

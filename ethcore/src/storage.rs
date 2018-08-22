@@ -6,15 +6,15 @@ pub trait Storage: Send + Sync {
 	fn store_bytes(&mut self, bytes: &[u8]) -> Result<H256>;
 }
 
-pub struct DummyStorage {}
+pub struct NullStorage;
 
-impl DummyStorage {
+impl NullStorage {
 	pub fn new() -> Self {
-		DummyStorage {}
+		NullStorage {}
 	}
 }
 
-impl Storage for DummyStorage {
+impl Storage for NullStorage {
 	fn request_bytes(&mut self, _key: H256) -> Result<Vec<u8>> {
 		unimplemented!();
 	}
