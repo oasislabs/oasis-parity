@@ -32,6 +32,7 @@ use externalities::*;
 use trace::{self, Tracer, VMTracer};
 use transaction::{Action, SignedTransaction};
 use storage::Storage;
+use storage::NullStorage;
 pub use executed::{Executed, ExecutionResult};
 
 #[cfg(debug_assertions)]
@@ -748,6 +749,7 @@ mod tests {
 		let info = EnvInfo::default();
 		let machine = make_frontier_machine(0);
 		let mut substate = Substate::new();
+		let mut storage = NullStorage::new();
 
 		let FinalizationResult { gas_left, .. } = {
 			let mut ex = Executive::new(&mut state, &info, &machine);
@@ -805,6 +807,7 @@ mod tests {
 		let info = EnvInfo::default();
 		let machine = make_frontier_machine(0);
 		let mut substate = Substate::new();
+		let mut storage = NullStorage::new();
 
 		let FinalizationResult { gas_left, .. } = {
 			let mut ex = Executive::new(&mut state, &info, &machine);
@@ -849,6 +852,7 @@ mod tests {
 		let mut substate = Substate::new();
 		let mut tracer = ExecutiveTracer::default();
 		let mut vm_tracer = ExecutiveVMTracer::toplevel();
+		let mut storage = NullStorage::new();
 
 		let mut ex = Executive::new(&mut state, &info, &machine);
 		let output = BytesRef::Fixed(&mut[0u8;0]);
@@ -933,6 +937,7 @@ mod tests {
 		let mut substate = Substate::new();
 		let mut tracer = ExecutiveTracer::default();
 		let mut vm_tracer = ExecutiveVMTracer::toplevel();
+		let mut storage = NullStorage::new();
 
 		let FinalizationResult { gas_left, .. } = {
 			let mut ex = Executive::new(&mut state, &info, &machine);
@@ -1049,6 +1054,7 @@ mod tests {
 		let mut substate = Substate::new();
 		let mut tracer = ExecutiveTracer::default();
 		let mut vm_tracer = ExecutiveVMTracer::toplevel();
+		let mut storage = NullStorage::new();
 
 		let FinalizationResult { gas_left, .. } = {
 			let mut ex = Executive::new(&mut state, &info, &machine);
@@ -1121,6 +1127,7 @@ mod tests {
 		let mut substate = Substate::new();
 		let mut tracer = ExecutiveTracer::default();
 		let mut vm_tracer = ExecutiveVMTracer::toplevel();
+		let mut storage = NullStorage::new();
 
 		let FinalizationResult { gas_left, .. } = {
 			let mut ex = Executive::new(&mut state, &info, &machine);
@@ -1206,6 +1213,7 @@ mod tests {
 		let info = EnvInfo::default();
 		let machine = make_frontier_machine(0);
 		let mut substate = Substate::new();
+		let mut storage = NullStorage::new();
 
 		let FinalizationResult { gas_left, .. } = {
 			let mut ex = Executive::new(&mut state, &info, &machine);
@@ -1257,6 +1265,7 @@ mod tests {
 		let info = EnvInfo::default();
 		let machine = make_frontier_machine(1024);
 		let mut substate = Substate::new();
+		let mut storage = NullStorage::new();
 
 		{
 			let mut ex = Executive::new(&mut state, &info, &machine);
@@ -1317,6 +1326,7 @@ mod tests {
 		let info = EnvInfo::default();
 		let machine = make_frontier_machine(0);
 		let mut substate = Substate::new();
+		let mut storage = NullStorage::new();
 
 		let FinalizationResult { gas_left, .. } = {
 			let mut ex = Executive::new(&mut state, &info, &machine);
@@ -1361,6 +1371,7 @@ mod tests {
 		let info = EnvInfo::default();
 		let machine = make_frontier_machine(0);
 		let mut substate = Substate::new();
+		let mut storage = NullStorage::new();
 
 		let FinalizationResult { gas_left, .. } = {
 			let mut ex = Executive::new(&mut state, &info, &machine);
@@ -1393,6 +1404,7 @@ mod tests {
 		let mut info = EnvInfo::default();
 		info.gas_limit = U256::from(100_000);
 		let machine = make_frontier_machine(0);
+		let mut storage = NullStorage::new();
 
 		let executed = {
 			let mut ex = Executive::new(&mut state, &info, &machine);
@@ -1430,6 +1442,7 @@ mod tests {
 		let mut info = EnvInfo::default();
 		info.gas_limit = U256::from(100_000);
 		let machine = make_frontier_machine(0);
+		let mut storage = NullStorage::new();
 
 		let res = {
 			let mut ex = Executive::new(&mut state, &info, &machine);
@@ -1463,6 +1476,7 @@ mod tests {
 		info.gas_used = U256::from(20_000);
 		info.gas_limit = U256::from(100_000);
 		let machine = make_frontier_machine(0);
+		let mut storage = NullStorage::new();
 
 		let res = {
 			let mut ex = Executive::new(&mut state, &info, &machine);
@@ -1496,6 +1510,7 @@ mod tests {
 		let mut info = EnvInfo::default();
 		info.gas_limit = U256::from(100_000);
 		let machine = make_frontier_machine(0);
+		let mut storage = NullStorage::new();
 
 		let res = {
 			let mut ex = Executive::new(&mut state, &info, &machine);
@@ -1530,6 +1545,7 @@ mod tests {
 		let info = EnvInfo::default();
 		let machine = make_frontier_machine(0);
 		let mut substate = Substate::new();
+		let mut storage = NullStorage::new();
 
 		let result = {
 			let mut ex = Executive::new(&mut state, &info, &machine);
@@ -1563,6 +1579,7 @@ mod tests {
 		let info = EnvInfo::default();
 		let machine = ::ethereum::new_byzantium_test_machine();
 		let mut substate = Substate::new();
+		let mut storage = NullStorage::new();
 
 		let mut output = [0u8; 14];
 		let FinalizationResult { gas_left: result, .. } = {
@@ -1606,6 +1623,7 @@ mod tests {
 
 		// Network with wasm activated at block 10
 		let machine = ::ethereum::new_kovan_wasm_test_machine();
+		let mut storage = NullStorage::new();
 
 		let mut output = [0u8; 20];
 		let FinalizationResult { gas_left: result, .. } = {

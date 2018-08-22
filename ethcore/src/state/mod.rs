@@ -40,7 +40,7 @@ use executed::{Executed, ExecutionError};
 use types::state_diff::StateDiff;
 use transaction::SignedTransaction;
 use state_db::StateDB;
-use storage::Storage;
+use storage::{Storage, NullStorage};
 use factory::VmFactory;
 use journaldb::overlaydb::OverlayDB;
 

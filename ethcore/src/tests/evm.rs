@@ -22,6 +22,7 @@ use vm::{EnvInfo, ActionParams, ActionValue, CallType, ParamsType};
 use evm::{Factory, VMType};
 use executive::Executive;
 use state::Substate;
+use storage::NullStorage;
 use test_helpers::get_temp_state_with_factory;
 use trace::{NoopVMTracer, NoopTracer};
 use transaction::SYSTEM_ADDRESS;
@@ -41,6 +42,7 @@ fn test_blockhash_eip210(factory: Factory) {
 	let blockhash_contract_code_hash = keccak(blockhash_contract_code.as_ref());
 	let machine = ::ethereum::new_constantinople_test_machine();
 	let mut env_info = EnvInfo::default();
+	let mut storage = NullStorage::new();
 
 	// populate state with 256 last hashes
 	let mut state = get_temp_state_with_factory(factory);
