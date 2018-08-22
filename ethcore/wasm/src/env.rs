@@ -195,12 +195,12 @@ pub mod signatures {
 		None,
 	);
 
-	pub const REQUESTBYTES: StaticSignature = StaticSignature(
+	pub const REQUEST_BYTES: StaticSignature = StaticSignature(
 		&[I32, I32],
 		None,
 	);
 
-	pub const STOREBYTES: StaticSignature = StaticSignature(
+	pub const STORE_BYTES: StaticSignature = StaticSignature(
 		&[I32, I64, I32],
 		None,
 	);
@@ -290,8 +290,8 @@ impl wasmi::ModuleImportResolver for ImportResolver {
 			"sender" => host(signatures::SENDER, ids::SENDER_FUNC),
 			"origin" => host(signatures::ORIGIN, ids::ORIGIN_FUNC),
 			"elog" => host(signatures::ELOG, ids::ELOG_FUNC),
-			"request_bytes" => host(signatures::REQUESTBYTES, ids::REQUEST_BYTES_FUNC),
-			"store_bytes" => host(signatures::STOREBYTES, ids::STORE_BYTES_FUNC),
+			"request_bytes" => host(signatures::REQUEST_BYTES, ids::REQUEST_BYTES_FUNC),
+			"store_bytes" => host(signatures::STORE_BYTES, ids::STORE_BYTES_FUNC),
 			_ => {
 				return Err(wasmi::Error::Instantiation(
 					format!("Export {} not found", field_name),
