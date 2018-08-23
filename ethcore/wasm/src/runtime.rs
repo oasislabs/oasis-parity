@@ -803,7 +803,7 @@ mod ext_impl {
 				ORIGIN_FUNC => void!(self.origin(args)),
 				ELOG_FUNC => void!(self.elog(args)),
 				REQUEST_BYTES_FUNC => void!(self.request_bytes(args)),
-				STORE_BYTES_FUNC => void!(self.store_bytes(args)),
+				// STORE_BYTES_FUNC => void!(self.store_bytes(args)),
 				_ => panic!("env module doesn't provide function at index {}", index),
 			}
 		}
