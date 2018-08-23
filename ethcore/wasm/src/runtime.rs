@@ -735,7 +735,7 @@ impl<'a> Runtime<'a> {
 	pub fn request_bytes(&mut self, args: RuntimeArgs) -> Result<()> {
 		let key = self.h256_at(args.nth_checked(0)?)?;
 		let bytes = self.ext.request_bytes(key).unwrap();
-		self.memory.set(args.nth_checked(1)?, &bytes);
+		self.memory.set(args.nth_checked(1)?, &bytes)?;
 
 		Ok(())
 	}
@@ -746,7 +746,7 @@ impl<'a> Runtime<'a> {
 		let len: u64 = args.nth_checked(1)?;
 		let bytes = self.memory.get(bytes_ptr, len as usize)?;
 		let key = self.ext.store_bytes(&bytes).expect("Failed to generate key");
-		self.memory.set(args.nth_checked(2)?, &*key);
+		self.memory.set(args.nth_checked(2)?, &*key)?;
 
 		Ok(())
 	}
