@@ -83,6 +83,7 @@ use ethcore::client::{
 };
 use ethcore::account_provider::AccountProvider;
 use ethcore::miner::{self, Miner, MinerService};
+use ethcore::storage::NullStorage;
 use ethcore::trace::{Tracer, VMTracer};
 use rustc_hex::FromHex;
 
@@ -439,7 +440,8 @@ impl Provider where {
 			let (new_address, _) = ethcore_contract_address(engine.create_address_scheme(env_info.number), &sender, &nonce, &transaction.data);
 			Some(new_address)
 		});
-		let result = Executive::new(&mut state, &env_info, engine.machine()).transact_virtual(transaction, options)?;
+		let mut storage = NullStorage::new();
+		let result = Executive::new(&mut state, &env_info, engine.machine(), &mut storage).transact_virtual(transaction, options)?;
 		let (encrypted_code, encrypted_storage) = match contract_address {
 			None => bail!(ErrorKind::ContractDoesNotExist),
 			Some(address) => {

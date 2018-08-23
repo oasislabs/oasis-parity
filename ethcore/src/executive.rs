@@ -32,6 +32,8 @@ use externalities::*;
 use trace::{self, Tracer, VMTracer};
 use transaction::{Action, SignedTransaction};
 use crossbeam;
+use storage::Storage;
+use storage::NullStorage;
 pub use executed::{Executed, ExecutionResult};
 
 #[cfg(debug_assertions)]
@@ -169,28 +171,31 @@ pub struct Executive<'a, B: 'a + StateBackend> {
 	machine: &'a Machine,
 	depth: usize,
 	static_flag: bool,
+	storage: &'a mut Storage,
 }
 
 impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 	/// Basic constructor.
-	pub fn new(state: &'a mut State<B>, info: &'a EnvInfo, machine: &'a Machine) -> Self {
+	pub fn new(state: &'a mut State<B>, info: &'a EnvInfo, machine: &'a Machine, storage: &'a mut Storage) -> Self {
 		Executive {
 			state: state,
 			info: info,
 			machine: machine,
 			depth: 0,
 			static_flag: false,
+			storage: storage,
 		}
 	}
 
 	/// Populates executive from parent properties. Increments executive depth.
-	pub fn from_parent(state: &'a mut State<B>, info: &'a EnvInfo, machine: &'a Machine, parent_depth: usize, static_flag: bool) -> Self {
+	pub fn from_parent(state: &'a mut State<B>, info: &'a EnvInfo, machine: &'a Machine, parent_depth: usize, static_flag: bool, storage: &'a mut Storage) -> Self {
 		Executive {
 			state: state,
 			info: info,
 			machine: machine,
 			depth: parent_depth + 1,
 			static_flag: static_flag,
+			storage: storage,
 		}
 	}
 
@@ -205,7 +210,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		static_call: bool,
 	) -> Externalities<'any, T, V, B> where T: Tracer, V: VMTracer {
 		let is_static = self.static_flag || static_call;
-		Externalities::new(self.state, self.info, self.machine, self.depth, origin_info, substate, output, tracer, vm_tracer, is_static)
+		Externalities::new(self.state, self.info, self.machine, self.depth, origin_info, substate, output, tracer, vm_tracer, is_static, self.storage)
 	}
 
 	/// This function should be used to execute transaction.
@@ -690,6 +695,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 				| Err(vm::Error::MutableCallInStaticContext)
 				| Err(vm::Error::OutOfBounds)
 				| Err(vm::Error::Reverted)
+				| Err(vm::Error::Storage {..})
 				| Ok(FinalizationResult { apply_state: false, .. }) => {
 					self.state.revert_to_checkpoint();
 			},
@@ -757,9 +763,10 @@ mod tests {
 		let info = EnvInfo::default();
 		let machine = make_frontier_machine(0);
 		let mut substate = Substate::new();
+		let mut storage = NullStorage::new();
 
 		let FinalizationResult { gas_left, .. } = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			ex.create(params, &mut substate, &mut None, &mut NoopTracer, &mut NoopVMTracer).unwrap()
 		};
 
@@ -814,9 +821,10 @@ mod tests {
 		let info = EnvInfo::default();
 		let machine = make_frontier_machine(0);
 		let mut substate = Substate::new();
+		let mut storage = NullStorage::new();
 
 		let FinalizationResult { gas_left, .. } = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			ex.create(params, &mut substate, &mut None, &mut NoopTracer, &mut NoopVMTracer).unwrap()
 		};
 
@@ -858,8 +866,9 @@ mod tests {
 		let mut substate = Substate::new();
 		let mut tracer = ExecutiveTracer::default();
 		let mut vm_tracer = ExecutiveVMTracer::toplevel();
+		let mut storage = NullStorage::new();
 
-		let mut ex = Executive::new(&mut state, &info, &machine);
+		let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 		let output = BytesRef::Fixed(&mut[0u8;0]);
 		ex.call(params, &mut substate, output, &mut tracer, &mut vm_tracer).unwrap();
 
@@ -942,9 +951,10 @@ mod tests {
 		let mut substate = Substate::new();
 		let mut tracer = ExecutiveTracer::default();
 		let mut vm_tracer = ExecutiveVMTracer::toplevel();
+		let mut storage = NullStorage::new();
 
 		let FinalizationResult { gas_left, .. } = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			let output = BytesRef::Fixed(&mut[0u8;0]);
 			ex.call(params, &mut substate, output, &mut tracer, &mut vm_tracer).unwrap()
 		};
@@ -1058,9 +1068,10 @@ mod tests {
 		let mut substate = Substate::new();
 		let mut tracer = ExecutiveTracer::default();
 		let mut vm_tracer = ExecutiveVMTracer::toplevel();
+		let mut storage = NullStorage::new();
 
 		let FinalizationResult { gas_left, .. } = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			let output = BytesRef::Fixed(&mut[0u8;0]);
 			ex.call(params, &mut substate, output, &mut tracer, &mut vm_tracer).unwrap()
 		};
@@ -1130,9 +1141,10 @@ mod tests {
 		let mut substate = Substate::new();
 		let mut tracer = ExecutiveTracer::default();
 		let mut vm_tracer = ExecutiveVMTracer::toplevel();
+		let mut storage = NullStorage::new();
 
 		let FinalizationResult { gas_left, .. } = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			ex.create(params.clone(), &mut substate, &mut None, &mut tracer, &mut vm_tracer).unwrap()
 		};
 
@@ -1215,9 +1227,10 @@ mod tests {
 		let info = EnvInfo::default();
 		let machine = make_frontier_machine(0);
 		let mut substate = Substate::new();
+		let mut storage = NullStorage::new();
 
 		let FinalizationResult { gas_left, .. } = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			ex.create(params, &mut substate, &mut None, &mut NoopTracer, &mut NoopVMTracer).unwrap()
 		};
 
@@ -1266,9 +1279,10 @@ mod tests {
 		let info = EnvInfo::default();
 		let machine = make_frontier_machine(1024);
 		let mut substate = Substate::new();
+		let mut storage = NullStorage::new();
 
 		{
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			ex.create(params, &mut substate, &mut None, &mut NoopTracer, &mut NoopVMTracer).unwrap();
 		}
 
@@ -1326,9 +1340,10 @@ mod tests {
 		let info = EnvInfo::default();
 		let machine = make_frontier_machine(0);
 		let mut substate = Substate::new();
+		let mut storage = NullStorage::new();
 
 		let FinalizationResult { gas_left, .. } = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			ex.call(params, &mut substate, BytesRef::Fixed(&mut []), &mut NoopTracer, &mut NoopVMTracer).unwrap()
 		};
 
@@ -1370,9 +1385,10 @@ mod tests {
 		let info = EnvInfo::default();
 		let machine = make_frontier_machine(0);
 		let mut substate = Substate::new();
+		let mut storage = NullStorage::new();
 
 		let FinalizationResult { gas_left, .. } = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			ex.call(params, &mut substate, BytesRef::Fixed(&mut []), &mut NoopTracer, &mut NoopVMTracer).unwrap()
 		};
 
@@ -1402,9 +1418,10 @@ mod tests {
 		let mut info = EnvInfo::default();
 		info.gas_limit = U256::from(100_000);
 		let machine = make_frontier_machine(0);
+		let mut storage = NullStorage::new();
 
 		let executed = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			let opts = TransactOptions::with_no_tracing();
 			ex.transact(&t, opts).unwrap()
 		};
@@ -1439,9 +1456,10 @@ mod tests {
 		let mut info = EnvInfo::default();
 		info.gas_limit = U256::from(100_000);
 		let machine = make_frontier_machine(0);
+		let mut storage = NullStorage::new();
 
 		let res = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			let opts = TransactOptions::with_no_tracing();
 			ex.transact(&t, opts)
 		};
@@ -1472,9 +1490,10 @@ mod tests {
 		info.gas_used = U256::from(20_000);
 		info.gas_limit = U256::from(100_000);
 		let machine = make_frontier_machine(0);
+		let mut storage = NullStorage::new();
 
 		let res = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			let opts = TransactOptions::with_no_tracing();
 			ex.transact(&t, opts)
 		};
@@ -1505,9 +1524,10 @@ mod tests {
 		let mut info = EnvInfo::default();
 		info.gas_limit = U256::from(100_000);
 		let machine = make_frontier_machine(0);
+		let mut storage = NullStorage::new();
 
 		let res = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			let opts = TransactOptions::with_no_tracing();
 			ex.transact(&t, opts)
 		};
@@ -1539,9 +1559,10 @@ mod tests {
 		let info = EnvInfo::default();
 		let machine = make_frontier_machine(0);
 		let mut substate = Substate::new();
+		let mut storage = NullStorage::new();
 
 		let result = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			ex.create(params, &mut substate, &mut None, &mut NoopTracer, &mut NoopVMTracer)
 		};
 
@@ -1572,10 +1593,11 @@ mod tests {
 		let info = EnvInfo::default();
 		let machine = ::ethereum::new_byzantium_test_machine();
 		let mut substate = Substate::new();
+		let mut storage = NullStorage::new();
 
 		let mut output = [0u8; 14];
 		let FinalizationResult { gas_left: result, .. } = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			ex.call(params, &mut substate, BytesRef::Fixed(&mut output), &mut NoopTracer, &mut NoopVMTracer).unwrap()
 		};
 
@@ -1615,10 +1637,11 @@ mod tests {
 
 		// Network with wasm activated at block 10
 		let machine = ::ethereum::new_kovan_wasm_test_machine();
+		let mut storage = NullStorage::new();
 
 		let mut output = [0u8; 20];
 		let FinalizationResult { gas_left: result, .. } = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			ex.call(params.clone(), &mut Substate::new(), BytesRef::Fixed(&mut output), &mut NoopTracer, &mut NoopVMTracer).unwrap()
 		};
 
@@ -1631,7 +1654,7 @@ mod tests {
 
 		let mut output = [0u8; 20];
 		let FinalizationResult { gas_left: result, .. } = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
 			ex.call(params, &mut Substate::new(), BytesRef::Fixed(&mut output), &mut NoopTracer, &mut NoopVMTracer).unwrap()
 		};
 
