@@ -25,6 +25,7 @@ use {state, state_db, client, executive, trace, transaction, db, spec, pod_state
 use factory::Factories;
 use evm::{VMType, FinalizationResult};
 use vm::{self, ActionParams};
+use storage::NullStorage;
 
 /// EVM test Error.
 #[derive(Debug)]
@@ -193,9 +194,10 @@ impl<'a> EvmTestClient<'a> {
 			gas_used: 0.into(),
 			gas_limit: *genesis.gas_limit(),
 		};
+		let mut storage = NullStorage::new();
 		let mut substate = state::Substate::new();
 		let mut output = vec![];
-		let mut executive = executive::Executive::new(&mut self.state, &info, self.spec.engine.machine());
+		let mut executive = executive::Executive::new(&mut self.state, &info, self.spec.engine.machine(), &mut storage);
 		executive.call(
 			params,
 			&mut substate,
