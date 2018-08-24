@@ -217,7 +217,7 @@ impl Ext for FakeExt {
 		self.tracing
 	}
 
-	fn request_bytes(&self, _key: H256) -> Result<Vec<u8>> {
+	fn fetch_bytes(&self, _key: H256) -> Result<Vec<u8>> {
 		Ok(Vec::new())
 	}
 
