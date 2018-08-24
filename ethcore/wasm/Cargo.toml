@@ -7,9 +7,9 @@ authors = ["Parity Technologies <admin@parity.io>"]
 byteorder = "1.0"
 ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
 log = "0.3"
-parity-wasm = "0.27"
-libc = "0.2"
-pwasm-utils = "0.1"
+parity-wasm = { git = "https://github.com/oasislabs/parity-wasm", branch = "ekiden" }
+# libc = "0.2"
+pwasm-utils = { git = "https://github.com/oasislabs/wasm-utils", branch = "ekiden" }
 vm = { path = "../vm" }
-ethcore-logger = { path = "../../logger" }
-wasmi = { version = "0.2" }
+# ethcore-logger = { path = "../../logger" }
+wasmi = { git = "https://github.com/oasislabs/wasmi", branch = "ekiden" }

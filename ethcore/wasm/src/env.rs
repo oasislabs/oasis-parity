@@ -48,10 +48,13 @@ pub mod ids {
 	pub const ORIGIN_FUNC: usize = 200;
 	pub const ELOG_FUNC: usize = 210;
 	pub const FETCH_BYTES_FUNC: usize = 220;
+	// pub const STORE_BYTES_FUNC: usize = 230;
 
 	pub const PANIC_FUNC: usize = 1000;
 	pub const DEBUG_FUNC: usize = 1010;
 	pub const SYSCALL_FUNC: usize = 1020;
+
+	pub const EXPF_FUNC: usize = 1100;
 }
 
 /// Signatures of all functions runtime supports. The actual dispatch happens at
@@ -115,6 +118,16 @@ pub mod signatures {
 	pub const DEBUG: StaticSignature = StaticSignature(
 		&[I32, I32],
 		None,
+	);
+
+	pub const SYSCALL: StaticSignature = StaticSignature(
+		&[I32, I32],
+		Some(I32),
+	);
+
+	pub const EXPF: StaticSignature = StaticSignature(
+		&[F32],
+		Some(F32),
 	);
 
 	pub const VALUE: StaticSignature = StaticSignature(
@@ -187,10 +200,10 @@ pub mod signatures {
 		None,
 	);
 
-	pub const SYSCALL: StaticSignature = StaticSignature(
-		&[I32, I32],
-		None,
-	);
+	// pub const STORE_BYTES: StaticSignature = StaticSignature(
+	// 	&[I32, I64, I32],
+	// 	None,
+	// );
 
 	impl Into<wasmi::Signature> for StaticSignature {
 		fn into(self) -> wasmi::Signature {
@@ -251,6 +264,7 @@ impl ImportResolver {
 impl wasmi::ModuleImportResolver for ImportResolver {
 	fn resolve_func(&self, field_name: &str, _signature: &Signature) -> Result<FuncRef, Error> {
 		let func_ref = match field_name {
+			"expf" => host(signatures::EXPF, ids::EXPF_FUNC),
 			"rust_wasm_syscall" => host(signatures::SYSCALL, ids::SYSCALL_FUNC),
 			"storage_read" => host(signatures::STORAGE_READ, ids::STORAGE_READ_FUNC),
 			"storage_write" => host(signatures::STORAGE_WRITE, ids::STORAGE_WRITE_FUNC),
@@ -277,6 +291,8 @@ impl wasmi::ModuleImportResolver for ImportResolver {
 			"origin" => host(signatures::ORIGIN, ids::ORIGIN_FUNC),
 			"elog" => host(signatures::ELOG, ids::ELOG_FUNC),
 			"fetch_bytes" => host(signatures::FETCH_BYTES, ids::FETCH_BYTES_FUNC),
+			// "store_bytes" => host(signatures::STORE_BYTES, ids::STORE_BYTES_FUNC),
+			"store_bytes" => unimplemented!(),
 			_ => {
 				return Err(wasmi::Error::Instantiation(
 					format!("Export {} not found", field_name),
@@ -296,7 +312,7 @@ impl wasmi::ModuleImportResolver for ImportResolver {
 			let effective_max = descriptor.maximum().unwrap_or(self.max_memory + 1);
 			if descriptor.initial() > self.max_memory || effective_max > self.max_memory
 			{
-				Err(Error::Instantiation("Module requested too much memory".to_owned()))
+				Err(Error::Instantiation(format!("Module requested too much memory: initial={}, effective={}, max={}", descriptor.initial(), effective_max, self.max_memory)))
 			} else {
 				let mem = MemoryInstance::alloc(
 					memory_units::Pages(descriptor.initial() as usize),
