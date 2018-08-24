@@ -78,7 +78,7 @@ pub struct Externalities<'a, T: 'a, V: 'a, B: 'a>
 	tracer: &'a mut T,
 	vm_tracer: &'a mut V,
 	static_flag: bool,
-	storage: &'a mut Storage,
+	storage: &'a Storage,
 }
 
 impl<'a, T: 'a, V: 'a, B: 'a> Externalities<'a, T, V, B>
@@ -95,7 +95,7 @@ impl<'a, T: 'a, V: 'a, B: 'a> Externalities<'a, T, V, B>
 		tracer: &'a mut T,
 		vm_tracer: &'a mut V,
 		static_flag: bool,
-		storage: &'a mut Storage,
+		storage: &'a Storage,
 	) -> Self {
 		Externalities {
 			state: state,
@@ -412,11 +412,11 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 		self.vm_tracer.trace_executed(gas_used, stack_push, mem_diff, store_diff)
 	}
 
-	fn request_bytes(&mut self, key: H256) -> vm::Result<Vec<u8>> {
+	fn request_bytes(&self, key: H256) -> vm::Result<Vec<u8>> {
 		self.storage.request_bytes(key)
 	}
 
-	fn store_bytes(&mut self, bytes: &[u8]) -> vm::Result<H256> {
+	fn store_bytes(&self, bytes: &[u8]) -> vm::Result<H256> {
 		self.storage.store_bytes(bytes)
 	}
 }

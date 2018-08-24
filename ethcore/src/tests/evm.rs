@@ -42,7 +42,7 @@ fn test_blockhash_eip210(factory: Factory) {
 	let blockhash_contract_code_hash = keccak(blockhash_contract_code.as_ref());
 	let machine = ::ethereum::new_constantinople_test_machine();
 	let mut env_info = EnvInfo::default();
-	let mut storage = NullStorage::new();
+	let storage = NullStorage::new();
 
 	// populate state with 256 last hashes
 	let mut state = get_temp_state_with_factory(factory);
@@ -64,7 +64,7 @@ fn test_blockhash_eip210(factory: Factory) {
 			call_type: CallType::Call,
 			params_type: ParamsType::Separate,
 		};
-		let mut ex = Executive::new(&mut state, &env_info, &machine, &mut storage);
+		let mut ex = Executive::new(&mut state, &env_info, &machine, &storage);
 		let mut substate = Substate::new();
 		let mut output = [];
 		if let Err(e) = ex.call(params, &mut substate, BytesRef::Fixed(&mut output), &mut NoopTracer, &mut NoopVMTracer) {
@@ -87,7 +87,7 @@ fn test_blockhash_eip210(factory: Factory) {
 		call_type: CallType::Call,
 		params_type: ParamsType::Separate,
 	};
-	let mut ex = Executive::new(&mut state, &env_info, &machine, &mut storage);
+	let mut ex = Executive::new(&mut state, &env_info, &machine, &storage);
 	let mut substate = Substate::new();
 	let mut output = H256::new();
 	if let Err(e) = ex.call(params, &mut substate, BytesRef::Fixed(&mut output), &mut NoopTracer, &mut NoopVMTracer) {
