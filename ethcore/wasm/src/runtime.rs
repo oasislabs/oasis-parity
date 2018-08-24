@@ -694,6 +694,15 @@ impl<'a> Runtime<'a> {
 
 		Ok(())
 	}
+
+	/// Signature: `fn fetch_bytes(key: *const u8, result: *mut u8)`
+	pub fn fetch_bytes(&mut self, args: RuntimeArgs) -> Result<()> {
+		let key = self.h256_at(args.nth_checked(0)?)?;
+		let bytes = self.ext.fetch_bytes(&key).unwrap();
+		self.memory.set(args.nth_checked(1)?, &bytes)?;
+
+		Ok(())
+	}
 }
 
 mod ext_impl {
@@ -744,6 +753,7 @@ mod ext_impl {
 				SENDER_FUNC => void!(self.sender(args)),
 				ORIGIN_FUNC => void!(self.origin(args)),
 				ELOG_FUNC => void!(self.elog(args)),
+				FETCH_BYTES_FUNC => void!(self.fetch_bytes(args)),
 				_ => panic!("env module doesn't provide function at index {}", index),
 			}
 		}
