@@ -686,7 +686,7 @@ impl<B: Backend> State<B> {
 
 	/// Execute a given transaction, producing a receipt and an optional trace.
 	/// This will change the state accordingly.
-	pub fn apply(&mut self, env_info: &EnvInfo, machine: &Machine, t: &SignedTransaction, tracing: bool, storage: &mut Storage) -> ApplyResult<FlatTrace, VMTrace> {
+	pub fn apply(&mut self, env_info: &EnvInfo, machine: &Machine, t: &SignedTransaction, tracing: bool, storage: &Storage) -> ApplyResult<FlatTrace, VMTrace> {
 		if tracing {
 			let options = TransactOptions::with_tracing();
 			self.apply_with_tracing(env_info, machine, t, options.tracer, options.vm_tracer, storage)
@@ -705,7 +705,7 @@ impl<B: Backend> State<B> {
 		t: &SignedTransaction,
 		tracer: T,
 		vm_tracer: V,
-		storage: &mut Storage,
+		storage: &Storage,
 	) -> ApplyResult<T::Output, V::Output> where
 		T: trace::Tracer,
 		V: trace::VMTracer,
@@ -746,7 +746,7 @@ impl<B: Backend> State<B> {
 	//
 	// `virt` signals that we are executing outside of a block set and restrictions like
 	// gas limits and gas costs should be lifted.
-	fn execute<T, V>(&mut self, env_info: &EnvInfo, machine: &Machine, t: &SignedTransaction, options: TransactOptions<T, V>, virt: bool, storage: &mut Storage)
+	fn execute<T, V>(&mut self, env_info: &EnvInfo, machine: &Machine, t: &SignedTransaction, options: TransactOptions<T, V>, virt: bool, storage: &Storage)
 		-> Result<Executed<T::Output, V::Output>, ExecutionError> where T: trace::Tracer, V: trace::VMTracer,
 	{
 		let mut e = Executive::new(self, env_info, machine, storage);
