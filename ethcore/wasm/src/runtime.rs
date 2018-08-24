@@ -734,7 +734,7 @@ impl<'a> Runtime<'a> {
 	/// Signature: `fn request_bytes(key: *const u8, result: *mut u8)`
 	pub fn request_bytes(&mut self, args: RuntimeArgs) -> Result<()> {
 		let key = self.h256_at(args.nth_checked(0)?)?;
-		let bytes = self.ext.request_bytes(key).unwrap();
+		let bytes = self.ext.request_bytes(&key).unwrap();
 		self.memory.set(args.nth_checked(1)?, &bytes)?;
 
 		Ok(())
