@@ -372,8 +372,8 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 		self.vm_tracer.trace_executed(gas_used, stack_push, mem_diff, store_diff)
 	}
 
-	fn request_bytes(&self, key: &H256) -> vm::Result<Vec<u8>> {
-		self.storage.request_bytes(key)
+	fn fetch_bytes(&self, key: &H256) -> vm::Result<Vec<u8>> {
+		self.storage.fetch_bytes(key)
 	}
 
 	fn store_bytes(&mut self, bytes: &[u8]) -> vm::Result<H256> {

@@ -2,7 +2,7 @@ use ethereum_types::H256;
 use vm::Result;
 
 pub trait Storage {
-	fn request_bytes(&self, key: &H256) -> Result<Vec<u8>>;
+	fn fetch_bytes(&self, key: &H256) -> Result<Vec<u8>>;
 	fn store_bytes(&mut self, bytes: &[u8]) -> Result<H256>;
 }
 
@@ -15,7 +15,7 @@ impl NullStorage {
 }
 
 impl Storage for NullStorage {
-	fn request_bytes(&self, _key: &H256) -> Result<Vec<u8>> {
+	fn fetch_bytes(&self, _key: &H256) -> Result<Vec<u8>> {
 		unimplemented!();
 	}
 
