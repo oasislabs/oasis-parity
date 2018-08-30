@@ -97,7 +97,7 @@ extern crate unexpected;
 extern crate kvdb;
 extern crate kvdb_memorydb;
 extern crate util_error;
-extern crate snappy;
+extern crate parity_snappy as snappy;
 
 extern crate ethabi;
 extern crate rustc_hex;

@@ -54,7 +54,7 @@ rlp_derive = { path = "../util/rlp_derive" }
 kvdb = { path = "../util/kvdb" }
 kvdb-memorydb = { path = "../util/kvdb-memorydb" }
 util-error = { path = "../util/error" }
-snappy = { git = "https://github.com/paritytech/rust-snappy" }
+parity-snappy = { git = "https://github.com/paritytech/rust-snappy" }
 stop-guard = { path = "../util/stop-guard" }
 macros = { path = "../util/macros" }
 rustc-hex = "1.0"
