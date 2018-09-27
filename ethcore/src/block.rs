@@ -368,8 +368,31 @@ impl<'x> OpenBlock<'x> {
 		Ok(self.block.receipts.last().expect("receipt just pushed; qed"))
 	}
 
-	/// Push transactions onto the block.
-	#[cfg(not(feature = "slow-blocks"))]
+	  pub fn push_transaction_enc(
+        &mut self,
+        t: SignedTransaction,
+        t_enc: SignedTransaction ,
+        h: Option<H256>,
+        storage: &mut Storage
+    ) -> Result<&Receipt, Error> {
+		    if self.block.transactions_set.contains(&t.hash()) {
+			      return Err(TransactionError::AlreadyImported.into());
+		    }
+
+		    let env_info = self.env_info();
+		    let outcome = self.block.state.apply(&env_info, self.engine.machine(), &t, self.block.traces.is_enabled(), storage)?;
+
+		    self.block.transactions_set.insert(h.unwrap_or_else(||t_enc.hash()));
+		    self.block.transactions.push(t_enc.into());
+		    if let Tracing::Enabled(ref mut traces) = self.block.traces {
+			      traces.push(outcome.trace.into());
+		    }
+		    self.block.receipts.push(outcome.receipt);
+		    Ok(self.block.receipts.last().expect("receipt just pushed; qed"))
+	  }
+
+	  /// Push transactions onto the block.
+	  #[cfg(not(feature = "slow-blocks"))]
 	fn push_transactions(&mut self, transactions: Vec<SignedTransaction>, storage: &mut Storage) -> Result<(), Error> {
 		for t in transactions {
 			self.push_transaction(t, None, storage)?;
