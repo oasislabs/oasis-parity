@@ -348,38 +348,41 @@ impl<'x> OpenBlock<'x> {
 		self.block.env_info()
 	}
 
-	pub fn push_transaction(&mut self, t: SignedTransaction, h: Option<H256>, storage: &mut Storage) -> Result<&Receipt, Error> {
-        self._push_transaction(t, None, h, storage)
+	pub fn push_transaction(
+        &mut self, tx: SignedTransaction, h: Option<H256>,
+        storage: &mut Storage
+    ) -> Result<&Receipt, Error> {
+        self._push_transaction(tx, None, h, storage)
 	}
 
 	pub fn push_transaction_enc(
         &mut self,
-        t: SignedTransaction,
-        t_enc: SignedTransaction ,
+        tx: SignedTransaction,
+        tx_encrypted: SignedTransaction ,
         h: Option<H256>,
         storage: &mut Storage
-    ) -> Result<&Receipt, Error> {
-        self._push_transaction(t_enc, Some(t), h, storage)
+	) -> Result<&Receipt, Error> {
+		self._push_transaction(tx_encrypted, Some(tx), h, storage)
 	}
 
-    /// Push a transaction into the block.
+	/// Push a transaction into the block.
 	///
 	/// If valid, it will be executed, and archived together with the receipt.
-    /// tx_block is the transaction to be added to the block and tx_apply is the
-    /// transaction to b e executed over the current state.
-    pub fn _push_transaction(
-        &mut self,
-        tx_block: SignedTransaction,
-        tx_apply: Option<SignedTransaction>,
-        h: Option<H256>,
-        storage: &mut Storage
-    )  -> Result<&Receipt, Error> {
-        let tx_apply = match tx_apply {
-            None => tx_block.clone(),
-            Some(tx_apply) => tx_apply
-        };
-        
-  		if self.block.transactions_set.contains(&tx_block.hash()) {
+	/// tx_block is the transaction to be added to the block and tx_apply is the
+	/// transaction to b e executed over the current state.
+	pub fn _push_transaction(
+		&mut self,
+		tx_block: SignedTransaction,
+		tx_apply: Option<SignedTransaction>,
+		h: Option<H256>,
+		storage: &mut Storage
+	)  -> Result<&Receipt, Error> {
+		let tx_apply = match tx_apply {
+			None => tx_block.clone(),
+			Some(tx_apply) => tx_apply
+		};
+
+		if self.block.transactions_set.contains(&tx_block.hash()) {
 			return Err(TransactionError::AlreadyImported.into());
 		}
 
@@ -393,7 +396,7 @@ impl<'x> OpenBlock<'x> {
 		}
 		self.block.receipts.push(outcome.receipt);
 		Ok(self.block.receipts.last().expect("receipt just pushed; qed"))
-    }
+	}
 
 	/// Push transactions onto the block.
 	#[cfg(not(feature = "slow-blocks"))]
