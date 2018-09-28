@@ -348,19 +348,49 @@ impl<'x> OpenBlock<'x> {
 		self.block.env_info()
 	}
 
+	pub fn push_transaction(
+        &mut self, tx: SignedTransaction, h: Option<H256>,
+        storage: &mut Storage
+    ) -> Result<&Receipt, Error> {
+        self._push_transaction(tx, None, h, storage)
+	}
+
+	pub fn push_transaction_enc(
+        &mut self,
+        tx: SignedTransaction,
+        tx_encrypted: SignedTransaction ,
+        h: Option<H256>,
+        storage: &mut Storage
+	) -> Result<&Receipt, Error> {
+		self._push_transaction(tx_encrypted, Some(tx), h, storage)
+	}
+
 	/// Push a transaction into the block.
 	///
 	/// If valid, it will be executed, and archived together with the receipt.
-	pub fn push_transaction(&mut self, t: SignedTransaction, h: Option<H256>, storage: &mut Storage) -> Result<&Receipt, Error> {
-		if self.block.transactions_set.contains(&t.hash()) {
+	/// tx_block is the transaction to be added to the block and tx_apply is the
+	/// transaction to b e executed over the current state.
+	pub fn _push_transaction(
+		&mut self,
+		tx_block: SignedTransaction,
+		tx_apply: Option<SignedTransaction>,
+		h: Option<H256>,
+		storage: &mut Storage
+	)  -> Result<&Receipt, Error> {
+		let tx_apply = match tx_apply {
+			None => tx_block.clone(),
+			Some(tx_apply) => tx_apply
+		};
+
+		if self.block.transactions_set.contains(&tx_block.hash()) {
 			return Err(TransactionError::AlreadyImported.into());
 		}
 
 		let env_info = self.env_info();
-		let outcome = self.block.state.apply(&env_info, self.engine.machine(), &t, self.block.traces.is_enabled(), storage)?;
+		let outcome = self.block.state.apply(&env_info, self.engine.machine(), &tx_apply, self.block.traces.is_enabled(), storage)?;
 
-		self.block.transactions_set.insert(h.unwrap_or_else(||t.hash()));
-		self.block.transactions.push(t.into());
+		self.block.transactions_set.insert(h.unwrap_or_else(||tx_block.hash()));
+		self.block.transactions.push(tx_block.into());
 		if let Tracing::Enabled(ref mut traces) = self.block.traces {
 			traces.push(outcome.trace.into());
 		}
