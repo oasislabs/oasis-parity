@@ -348,51 +348,55 @@ impl<'x> OpenBlock<'x> {
 		self.block.env_info()
 	}
 
-	/// Push a transaction into the block.
-	///
-	/// If valid, it will be executed, and archived together with the receipt.
 	pub fn push_transaction(&mut self, t: SignedTransaction, h: Option<H256>, storage: &mut Storage) -> Result<&Receipt, Error> {
-		if self.block.transactions_set.contains(&t.hash()) {
-			return Err(TransactionError::AlreadyImported.into());
-		}
-
-		let env_info = self.env_info();
-		let outcome = self.block.state.apply(&env_info, self.engine.machine(), &t, self.block.traces.is_enabled(), storage)?;
-
-		self.block.transactions_set.insert(h.unwrap_or_else(||t.hash()));
-		self.block.transactions.push(t.into());
-		if let Tracing::Enabled(ref mut traces) = self.block.traces {
-			traces.push(outcome.trace.into());
-		}
-		self.block.receipts.push(outcome.receipt);
-		Ok(self.block.receipts.last().expect("receipt just pushed; qed"))
+        self._push_transaction(t, None, h, storage)
 	}
 
-	  pub fn push_transaction_enc(
+	pub fn push_transaction_enc(
         &mut self,
         t: SignedTransaction,
         t_enc: SignedTransaction ,
         h: Option<H256>,
         storage: &mut Storage
     ) -> Result<&Receipt, Error> {
-		    if self.block.transactions_set.contains(&t.hash()) {
-			      return Err(TransactionError::AlreadyImported.into());
-		    }
+        self._push_transaction(t_enc, Some(t), h, storage)
+	}
 
-		    let env_info = self.env_info();
-		    let outcome = self.block.state.apply(&env_info, self.engine.machine(), &t, self.block.traces.is_enabled(), storage)?;
+    /// Push a transaction into the block.
+	///
+	/// If valid, it will be executed, and archived together with the receipt.
+    /// tx_block is the transaction to be added to the block and tx_apply is the
+    /// transaction to b e executed over the current state.
+    pub fn _push_transaction(
+        &mut self,
+        tx_block: SignedTransaction,
+        tx_apply: Option<SignedTransaction>,
+        h: Option<H256>,
+        storage: &mut Storage
+    )  -> Result<&Receipt, Error> {
+        let tx_apply = match tx_apply {
+            None => tx_block.clone(),
+            Some(tx_apply) => tx_apply
+        };
+        
+  		if self.block.transactions_set.contains(&tx_block.hash()) {
+			return Err(TransactionError::AlreadyImported.into());
+		}
 
-		    self.block.transactions_set.insert(h.unwrap_or_else(||t_enc.hash()));
-		    self.block.transactions.push(t_enc.into());
-		    if let Tracing::Enabled(ref mut traces) = self.block.traces {
-			      traces.push(outcome.trace.into());
-		    }
-		    self.block.receipts.push(outcome.receipt);
-		    Ok(self.block.receipts.last().expect("receipt just pushed; qed"))
-	  }
+		let env_info = self.env_info();
+		let outcome = self.block.state.apply(&env_info, self.engine.machine(), &tx_apply, self.block.traces.is_enabled(), storage)?;
 
-	  /// Push transactions onto the block.
-	  #[cfg(not(feature = "slow-blocks"))]
+		self.block.transactions_set.insert(h.unwrap_or_else(||tx_block.hash()));
+		self.block.transactions.push(tx_block.into());
+		if let Tracing::Enabled(ref mut traces) = self.block.traces {
+			traces.push(outcome.trace.into());
+		}
+		self.block.receipts.push(outcome.receipt);
+		Ok(self.block.receipts.last().expect("receipt just pushed; qed"))
+    }
+
+	/// Push transactions onto the block.
+	#[cfg(not(feature = "slow-blocks"))]
 	fn push_transactions(&mut self, transactions: Vec<SignedTransaction>, storage: &mut Storage) -> Result<(), Error> {
 		for t in transactions {
 			self.push_transaction(t, None, storage)?;
