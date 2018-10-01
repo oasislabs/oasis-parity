@@ -164,18 +164,18 @@ impl Default for WasmCosts {
 		// 	opcodes_div: 8,
 		// }
 		WasmCosts {
-			regular: 0,
-			div: 0,
-			mul: 0,
-			mem: 0,
-			static_u256: 0,
-			static_address: 0,
+			regular: 1,
+			div: 16,
+			mul: 4,
+			mem: 2,
+			static_u256: 64,
+			static_address: 40,
 			initial_mem: 1 << 16 - 1,
 			grow_mem: 0,
-			memcpy: 0,
+			memcpy: 1,
 			max_stack_height: 4096*1024,
-			opcodes_mul: 1,
-			opcodes_div: 1,
+			opcodes_mul: 3,
+			opcodes_div: 8,
 		}
 	}
 }
