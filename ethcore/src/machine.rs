@@ -235,6 +235,7 @@ impl EthereumMachine {
 			return
 		}
 
+		// Don't update gas limit dynamically, as this is specific to Parity's miner.
 		//  header.set_gas_limit({
 		//  	let bound_divisor = self.params().gas_limit_bound_divisor;
 		//  	if gas_limit < gas_floor_target {
