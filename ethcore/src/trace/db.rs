@@ -23,7 +23,7 @@ use bloomchain::group::{BloomGroupDatabase, BloomGroupChain, GroupPosition, Bloo
 use heapsize::HeapSizeOf;
 use ethereum_types::{H256, H264};
 use kvdb::{KeyValueDB, DBTransaction};
-use parking_lot::RwLock;
+use std::sync::RwLock;
 use header::BlockNumber;
 use trace::{LocalizedTrace, Config, Filter, Database as TraceDatabase, ImportRequest, DatabaseExtras};
 use db::{self, Key, Writable, Readable, CacheUpdatePolicy};
@@ -153,14 +153,14 @@ impl<T> TraceDB<T> where T: DatabaseExtras {
 	}
 
 	fn cache_size(&self) -> usize {
-		let traces = self.traces.read().heap_size_of_children();
-		let blooms = self.blooms.read().heap_size_of_children();
+		let traces = self.traces.read().unwrap().heap_size_of_children();
+		let blooms = self.blooms.read().unwrap().heap_size_of_children();
 		traces + blooms
 	}
 
 	/// Let the cache system know that a cacheable item has been used.
 	fn note_used(&self, id: CacheId) {
-		let mut cache_manager = self.cache_manager.write();
+		let mut cache_manager = self.cache_manager.write().unwrap();
 		cache_manager.note_used(id);
 	}
 
@@ -168,9 +168,9 @@ impl<T> TraceDB<T> where T: DatabaseExtras {
 	pub fn collect_garbage(&self) {
 		let current_size = self.cache_size();
 
-		let mut traces = self.traces.write();
-		let mut blooms = self.blooms.write();
-		let mut cache_manager = self.cache_manager.write();
+		let mut traces = self.traces.write().unwrap();
+		let mut blooms = self.blooms.write().unwrap();
+		let mut cache_manager = self.cache_manager.write().unwrap();
 
 		cache_manager.collect_garbage(current_size, | ids | {
 			for id in &ids {
@@ -293,7 +293,7 @@ impl<T> TraceDatabase for TraceDB<T> where T: DatabaseExtras {
 				.collect::<HashMap<TraceGroupPosition, blooms::BloomGroup>>();
 
 			let blooms_keys: Vec<_> = blooms_to_insert.keys().cloned().collect();
-			let mut blooms = self.blooms.write();
+			let mut blooms = self.blooms.write().unwrap();
 			batch.extend_with_cache(db::COL_TRACE, &mut *blooms, blooms_to_insert, CacheUpdatePolicy::Remove);
 			// note_used must be called after locking blooms to avoid cache/traces deadlock on garbage collection
 			for key in blooms_keys {
@@ -303,7 +303,7 @@ impl<T> TraceDatabase for TraceDB<T> where T: DatabaseExtras {
 
 		// insert new block traces into the cache and the database
 		{
-			let mut traces = self.traces.write();
+			let mut traces = self.traces.write().unwrap();
 			// it's important to use overwrite here,
 			// cause this value might be queried by hash later
 			batch.write_with_cache(db::COL_TRACE, &mut *traces, request.block_hash, request.traces, CacheUpdatePolicy::Overwrite);

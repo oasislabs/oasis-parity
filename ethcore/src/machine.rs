@@ -22,15 +22,16 @@ use std::sync::Arc;
 
 use block::{ExecutedBlock, IsBlock};
 use builtin::Builtin;
-use client::{BlockInfo, CallContract};
+// use client::{BlockInfo, CallContract};
 use error::Error;
 use executive::Executive;
 use header::{BlockNumber, Header, ExtendedHeader};
 use spec::CommonParams;
 use state::{CleanupMode, Substate};
+use storage::NullStorage;
 use trace::{NoopTracer, NoopVMTracer, Tracer, ExecutiveTracer, RewardType, Tracing};
 use transaction::{self, SYSTEM_ADDRESS, UnverifiedTransaction, SignedTransaction};
-use tx_filter::TransactionFilter;
+// use tx_filter::TransactionFilter;
 
 use ethereum_types::{U256, Address};
 use bytes::BytesRef;
@@ -72,7 +73,7 @@ pub type ScheduleCreationRules = Fn(&mut Schedule, BlockNumber) + Sync + Send;
 pub struct EthereumMachine {
 	params: CommonParams,
 	builtins: Arc<BTreeMap<Address, Builtin>>,
-	tx_filter: Option<Arc<TransactionFilter>>,
+	// tx_filter: Option<Arc<TransactionFilter>>,
 	ethash_extensions: Option<EthashExtensions>,
 	schedule_rules: Option<Box<ScheduleCreationRules>>,
 }
@@ -80,11 +81,11 @@ pub struct EthereumMachine {
 impl EthereumMachine {
 	/// Regular ethereum machine.
 	pub fn regular(params: CommonParams, builtins: BTreeMap<Address, Builtin>) -> EthereumMachine {
-		let tx_filter = TransactionFilter::from_params(&params).map(Arc::new);
+		// let tx_filter = TransactionFilter::from_params(&params).map(Arc::new);
 		EthereumMachine {
 			params: params,
 			builtins: Arc::new(builtins),
-			tx_filter: tx_filter,
+			// tx_filter: tx_filter,
 			ethash_extensions: None,
 			schedule_rules: None,
 		}
@@ -145,7 +146,8 @@ impl EthereumMachine {
 			call_type: CallType::Call,
 			params_type: ParamsType::Separate,
 		};
-		let mut ex = Executive::new(&mut state, &env_info, self);
+		let mut dummy_storage = NullStorage::new();
+		let mut ex = Executive::new(&mut state, &env_info, self, &mut dummy_storage);
 		let mut substate = Substate::new();
 		let mut output = Vec::new();
 		if let Err(e) = ex.call(params, &mut substate, BytesRef::Flexible(&mut output), &mut NoopTracer, &mut NoopVMTracer) {
@@ -204,8 +206,8 @@ impl EthereumMachine {
 		if let Some(ref ethash_params) = self.ethash_extensions {
 			let gas_limit = {
 				let bound_divisor = self.params().gas_limit_bound_divisor;
-				let lower_limit = gas_limit - gas_limit / bound_divisor + 1.into();
-				let upper_limit = gas_limit + gas_limit / bound_divisor - 1.into();
+				let lower_limit = gas_limit - gas_limit / bound_divisor + U256::one();
+				let upper_limit = gas_limit + gas_limit / bound_divisor - U256::one();
 				let gas_limit = if gas_limit < gas_floor_target {
 					let gas_limit = cmp::min(gas_floor_target, upper_limit);
 					round_block_gas_limit(gas_limit, lower_limit, upper_limit)
@@ -216,7 +218,7 @@ impl EthereumMachine {
 					let total_lower_limit = cmp::max(lower_limit, gas_floor_target);
 					let total_upper_limit = cmp::min(upper_limit, gas_ceil_target);
 					let gas_limit = cmp::max(gas_floor_target, cmp::min(total_upper_limit,
-						lower_limit + (header.gas_used().clone() * 6u32 / 5.into()) / bound_divisor));
+						lower_limit + (header.gas_used().clone() * 6u32 / U256::from(5)) / bound_divisor));
 					round_block_gas_limit(gas_limit, total_lower_limit, total_upper_limit)
 				};
 				// ensure that we are not violating protocol limits
@@ -233,14 +235,15 @@ impl EthereumMachine {
 			return
 		}
 
-		header.set_gas_limit({
-			let bound_divisor = self.params().gas_limit_bound_divisor;
-			if gas_limit < gas_floor_target {
-				cmp::min(gas_floor_target, gas_limit + gas_limit / bound_divisor - 1.into())
-			} else {
-				cmp::max(gas_floor_target, gas_limit - gas_limit / bound_divisor + 1.into())
-			}
-		});
+		//  header.set_gas_limit({
+		//  	let bound_divisor = self.params().gas_limit_bound_divisor;
+		//  	if gas_limit < gas_floor_target {
+		//  		cmp::min(gas_floor_target, gas_limit + gas_limit / bound_divisor - U256::one())
+		//  	} else {
+		//  		cmp::max(gas_floor_target, gas_limit - gas_limit / bound_divisor + U256::one())
+		//  	}
+		//  });
+		header.set_gas_limit(gas_limit);
 	}
 
 	/// Get the general parameters of the chain.
@@ -341,18 +344,18 @@ impl EthereumMachine {
 		Ok(())
 	}
 
-	/// Does verification of the transaction against the parent state.
-	pub fn verify_transaction<C: BlockInfo + CallContract>(&self, t: &SignedTransaction, header: &Header, client: &C)
-		-> Result<(), transaction::Error>
-	{
-		if let Some(ref filter) = self.tx_filter.as_ref() {
-			if !filter.transaction_allowed(header.parent_hash(), t, client) {
-				return Err(transaction::Error::NotAllowed.into())
-			}
-		}
-
-		Ok(())
-	}
+	// /// Does verification of the transaction against the parent state.
+	// pub fn verify_transaction<C: BlockInfo + CallContract>(&self, t: &SignedTransaction, header: &Header, client: &C)
+	// 	-> Result<(), transaction::Error>
+	// {
+	// 	if let Some(ref filter) = self.tx_filter.as_ref() {
+	// 		if !filter.transaction_allowed(header.parent_hash(), t, client) {
+	// 			return Err(transaction::Error::NotAllowed.into())
+	// 		}
+	// 	}
+    //
+	// 	Ok(())
+	// }
 
 	/// Additional params.
 	pub fn additional_params(&self) -> HashMap<String, String> {
@@ -402,7 +405,7 @@ impl ::parity_machine::Machine for EthereumMachine {
 	type ExtendedHeader = ExtendedHeader;
 
 	type LiveBlock = ExecutedBlock;
-	type EngineClient = ::client::EngineClient;
+	// type EngineClient = ::client::EngineClient;
 	type AuxiliaryRequest = AuxiliaryRequest;
 	type AncestryAction = ::types::ancestry_action::AncestryAction;
 

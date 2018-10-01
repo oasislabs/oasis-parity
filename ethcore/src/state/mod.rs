@@ -29,7 +29,7 @@ use hash::{KECCAK_NULL_RLP, KECCAK_EMPTY};
 use receipt::{Receipt, TransactionOutcome};
 use machine::EthereumMachine as Machine;
 use vm::EnvInfo;
-use error::Error;
+use error::{Error, ErrorKind};
 use executive::{Executive, TransactOptions};
 use factory::Factories;
 use trace::{self, FlatTrace, VMTrace};
@@ -40,7 +40,9 @@ use executed::{Executed, ExecutionError};
 use types::state_diff::StateDiff;
 use transaction::SignedTransaction;
 use state_db::StateDB;
+use storage::{Storage, NullStorage};
 use factory::VmFactory;
+use journaldb::overlaydb::OverlayDB;
 
 use ethereum_types::{H256, U256, Address};
 use hashdb::{HashDB, AsHashDB};
@@ -57,7 +59,7 @@ mod substate;
 pub mod backend;
 
 pub use self::account::Account;
-pub use self::backend::Backend;
+pub use self::backend::{Backend, Basic as BasicBackend};
 pub use self::substate::Substate;
 
 /// Used to return information about an `State::apply` operation.
@@ -191,74 +193,74 @@ impl AccountEntry {
 /// Check the given proof of execution.
 /// `Err(ExecutionError::Internal)` indicates failure, everything else indicates
 /// a successful proof (as the transaction itself may be poorly chosen).
-pub fn check_proof(
-	proof: &[DBValue],
-	root: H256,
-	transaction: &SignedTransaction,
-	machine: &Machine,
-	env_info: &EnvInfo,
-) -> ProvedExecution {
-	let backend = self::backend::ProofCheck::new(proof);
-	let mut factories = Factories::default();
-	factories.accountdb = ::account_db::Factory::Plain;
+// pub fn check_proof(
+// 	proof: &[DBValue],
+// 	root: H256,
+// 	transaction: &SignedTransaction,
+// 	machine: &Machine,
+// 	env_info: &EnvInfo,
+// ) -> ProvedExecution {
+// 	let backend = self::backend::ProofCheck::new(proof);
+// 	let mut factories = Factories::default();
+// 	factories.accountdb = ::account_db::Factory::Plain;
+//
+// 	let res = State::from_existing(
+// 		backend,
+// 		root,
+// 		machine.account_start_nonce(env_info.number),
+// 		factories
+// 	);
+//
+// 	let mut state = match res {
+// 		Ok(state) => state,
+// 		Err(_) => return ProvedExecution::BadProof,
+// 	};
+//
+// 	let options = TransactOptions::with_no_tracing().save_output_from_contract();
+// 	match state.execute(env_info, machine, transaction, options, true) {
+// 		Ok(executed) => ProvedExecution::Complete(executed),
+// 		Err(ExecutionError::Internal(_)) => ProvedExecution::BadProof,
+// 		Err(e) => ProvedExecution::Failed(e),
+// 	}
+// }
 
-	let res = State::from_existing(
-		backend,
-		root,
-		machine.account_start_nonce(env_info.number),
-		factories
-	);
-
-	let mut state = match res {
-		Ok(state) => state,
-		Err(_) => return ProvedExecution::BadProof,
-	};
-
-	let options = TransactOptions::with_no_tracing().save_output_from_contract();
-	match state.execute(env_info, machine, transaction, options, true) {
-		Ok(executed) => ProvedExecution::Complete(executed),
-		Err(ExecutionError::Internal(_)) => ProvedExecution::BadProof,
-		Err(e) => ProvedExecution::Failed(e),
-	}
-}
-
-/// Prove a transaction on the given state.
-/// Returns `None` when the transacion could not be proved,
-/// and a proof otherwise.
-pub fn prove_transaction<H: AsHashDB + Send + Sync>(
-	db: H,
-	root: H256,
-	transaction: &SignedTransaction,
-	machine: &Machine,
-	env_info: &EnvInfo,
-	factories: Factories,
-	virt: bool,
-) -> Option<(Bytes, Vec<DBValue>)> {
-	use self::backend::Proving;
-
-	let backend = Proving::new(db);
-	let res = State::from_existing(
-		backend,
-		root,
-		machine.account_start_nonce(env_info.number),
-		factories,
-	);
-
-	let mut state = match res {
-		Ok(state) => state,
-		Err(_) => return None,
-	};
-
-	let options = TransactOptions::with_no_tracing().dont_check_nonce().save_output_from_contract();
-	match state.execute(env_info, machine, transaction, options, virt) {
-		Err(ExecutionError::Internal(_)) => None,
-		Err(e) => {
-			trace!(target: "state", "Proved call failed: {}", e);
-			Some((Vec::new(), state.drop().1.extract_proof()))
-		}
-		Ok(res) => Some((res.output, state.drop().1.extract_proof())),
-	}
-}
+// /// Prove a transaction on the given state.
+// /// Returns `None` when the transacion could not be proved,
+// /// and a proof otherwise.
+// pub fn prove_transaction<H: AsHashDB + Send + Sync>(
+// 	db: H,
+// 	root: H256,
+// 	transaction: &SignedTransaction,
+// 	machine: &Machine,
+// 	env_info: &EnvInfo,
+// 	factories: Factories,
+// 	virt: bool,
+// ) -> Option<(Bytes, Vec<DBValue>)> {
+// 	use self::backend::Proving;
+//
+// 	let backend = Proving::new(db);
+// 	let res = State::from_existing(
+// 		backend,
+// 		root,
+// 		machine.account_start_nonce(env_info.number),
+// 		factories,
+// 	);
+//
+// 	let mut state = match res {
+// 		Ok(state) => state,
+// 		Err(_) => return None,
+// 	};
+//
+// 	let options = TransactOptions::with_no_tracing().dont_check_nonce().save_output_from_contract();
+// 	match state.execute(env_info, machine, transaction, options, virt) {
+// 		Err(ExecutionError::Internal(_)) => None,
+// 		Err(e) => {
+// 			trace!(target: "state", "Proved call failed: {}", e);
+// 			Some((Vec::new(), state.drop().1.extract_proof()))
+// 		}
+// 		Ok(res) => Some((res.output, state.drop().1.extract_proof())),
+// 	}
+// }
 
 /// Representation of the entire state of all accounts in the system.
 ///
@@ -683,13 +685,13 @@ impl<B: Backend> State<B> {
 
 	/// Execute a given transaction, producing a receipt and an optional trace.
 	/// This will change the state accordingly.
-	pub fn apply(&mut self, env_info: &EnvInfo, machine: &Machine, t: &SignedTransaction, tracing: bool) -> ApplyResult<FlatTrace, VMTrace> {
+	pub fn apply(&mut self, env_info: &EnvInfo, machine: &Machine, t: &SignedTransaction, tracing: bool, storage: &mut Storage) -> ApplyResult<FlatTrace, VMTrace> {
 		if tracing {
 			let options = TransactOptions::with_tracing();
-			self.apply_with_tracing(env_info, machine, t, options.tracer, options.vm_tracer)
+			self.apply_with_tracing(env_info, machine, t, options.tracer, options.vm_tracer, storage)
 		} else {
 			let options = TransactOptions::with_no_tracing();
-			self.apply_with_tracing(env_info, machine, t, options.tracer, options.vm_tracer)
+			self.apply_with_tracing(env_info, machine, t, options.tracer, options.vm_tracer, storage)
 		}
 	}
 
@@ -702,12 +704,16 @@ impl<B: Backend> State<B> {
 		t: &SignedTransaction,
 		tracer: T,
 		vm_tracer: V,
+		storage: &mut Storage,
 	) -> ApplyResult<T::Output, V::Output> where
 		T: trace::Tracer,
 		V: trace::VMTracer,
 	{
-		let options = TransactOptions::new(tracer, vm_tracer);
-		let e = self.execute(env_info, machine, t, options, false)?;
+		let options = match machine.params().benchmarking {
+			true => TransactOptions::new(tracer, vm_tracer).dont_check_nonce(),
+			false => TransactOptions::new(tracer, vm_tracer)
+		};
+		let e = self.execute(env_info, machine, t, options, false, storage)?;
 		let params = machine.params();
 
 		let eip658 = env_info.number >= params.eip658_transition;
@@ -742,10 +748,10 @@ impl<B: Backend> State<B> {
 	//
 	// `virt` signals that we are executing outside of a block set and restrictions like
 	// gas limits and gas costs should be lifted.
-	fn execute<T, V>(&mut self, env_info: &EnvInfo, machine: &Machine, t: &SignedTransaction, options: TransactOptions<T, V>, virt: bool)
+	fn execute<T, V>(&mut self, env_info: &EnvInfo, machine: &Machine, t: &SignedTransaction, options: TransactOptions<T, V>, virt: bool, storage: &mut Storage)
 		-> Result<Executed<T::Output, V::Output>, ExecutionError> where T: trace::Tracer, V: trace::VMTracer,
 	{
-		let mut e = Executive::new(self, env_info, machine);
+		let mut e = Executive::new(self, env_info, machine, storage);
 
 		match virt {
 			true => e.transact_virtual(t, options),
@@ -1111,6 +1117,28 @@ impl Clone for State<StateDB> {
 
 		State {
 			db: self.db.boxed_clone(),
+			root: self.root.clone(),
+			cache: RefCell::new(cache),
+			checkpoints: RefCell::new(Vec::new()),
+			account_start_nonce: self.account_start_nonce.clone(),
+			factories: self.factories.clone(),
+		}
+	}
+}
+
+impl<B: Backend + Clone> Clone for State<B> {
+	fn clone(&self) -> State<B> {
+		let cache = {
+			let mut cache: HashMap<Address, AccountEntry> = HashMap::new();
+			for (key, val) in self.cache.borrow().iter() {
+				if let Some(entry) = val.clone_if_dirty() {
+					cache.insert(key.clone(), entry);
+				}
+			}
+			cache
+		};
+		State {
+			db: self.db.clone(),
 			root: self.root.clone(),
 			cache: RefCell::new(cache),
 			checkpoints: RefCell::new(Vec::new()),

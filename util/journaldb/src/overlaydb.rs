@@ -88,7 +88,6 @@ impl OverlayDB {
 	}
 
 	/// Commit all operations in a single batch.
-	#[cfg(test)]
 	pub fn commit(&mut self) -> Result<u32> {
 		let mut batch = self.backing.transaction();
 		let res = self.commit_to_batch(&mut batch)?;

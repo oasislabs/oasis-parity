@@ -19,21 +19,21 @@
 use std::collections::BTreeMap;
 use std::io::Read;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use bytes::Bytes;
 use ethereum_types::{H256, Bloom, U256, Address};
 use ethjson;
 use hash::{KECCAK_NULL_RLP, keccak};
 use memorydb::MemoryDB;
-use parking_lot::RwLock;
+// use parking_lot::RwLock;
 use rlp::{Rlp, RlpStream};
 use rustc_hex::{FromHex, ToHex};
 use vm::{EnvInfo, CallType, ActionValue, ActionParams, ParamsType};
 
 use builtin::Builtin;
 use encoded;
-use engines::{EthEngine, NullEngine, InstantSeal, BasicAuthority, AuthorityRound, Tendermint, DEFAULT_BLOCKHASH_CONTRACT};
+use engines::{EthEngine, NullEngine, InstantSeal};//, BasicAuthority, AuthorityRound, Tendermint, DEFAULT_BLOCKHASH_CONTRACT};
 use error::Error;
 use executive::Executive;
 use factory::Factories;
@@ -44,11 +44,17 @@ use spec::Genesis;
 use spec::seal::Generic as GenericSeal;
 use state::backend::Basic as BasicBackend;
 use state::{Backend, State, Substate};
+use storage::NullStorage;
 use trace::{NoopTracer, NoopVMTracer};
 
-pub use ethash::OptimizeFor;
+// pub use ethash::OptimizeFor;
+type OptimizeFor = u64;
 
-const MAX_TRANSACTION_SIZE: usize = 300 * 1024;
+const MAX_TRANSACTION_SIZE: usize = 4096 * 1024;
+
+/// Default EIP-210 contract code.
+/// As defined in https://github.com/ethereum/EIPs/pull/210
+pub const DEFAULT_BLOCKHASH_CONTRACT: &'static str = "73fffffffffffffffffffffffffffffffffffffffe33141561006a5760014303600035610100820755610100810715156100455760003561010061010083050761010001555b6201000081071515610064576000356101006201000083050761020001555b5061013e565b4360003512151561008457600060405260206040f361013d565b61010060003543031315156100a857610100600035075460605260206060f361013c565b6101006000350715156100c55762010000600035430313156100c8565b60005b156100ea576101006101006000350507610100015460805260206080f361013b565b620100006000350715156101095763010000006000354303131561010c565b60005b1561012f57610100620100006000350507610200015460a052602060a0f361013a565b600060c052602060c0f35b5b5b5b5b";
 
 // helper for formatting errors.
 fn fmt_err<F: ::std::fmt::Display>(f: F) -> String {
@@ -137,6 +143,8 @@ pub struct CommonParams {
 	pub transaction_permission_contract: Option<Address>,
 	/// Maximum size of transaction's RLP payload
 	pub max_transaction_size: usize,
+	/// Whether to run in benchmarking/debug mode.
+	pub benchmarking: bool,
 }
 
 impl CommonParams {
@@ -279,6 +287,7 @@ impl From<ethjson::spec::Params> for CommonParams {
 				BlockNumber::max_value,
 				Into::into
 			),
+			benchmarking: p.benchmarking.unwrap_or(false),
 		}
 	}
 }
@@ -294,6 +303,12 @@ pub struct SpecParams<'a> {
 	/// memory. This may get more fine-grained in the future but for now is simply a binary
 	/// option.
 	pub optimization_setting: Option<OptimizeFor>,
+}
+
+impl<'a> Default for SpecParams<'a> {
+    fn default() -> Self {
+	Self::from_path(Path::new(""))
+    }
 }
 
 impl<'a> SpecParams<'a> {
@@ -361,7 +376,7 @@ pub struct Spec {
 	constructors: Vec<(Address, Bytes)>,
 
 	/// May be prepopulated if we know this in advance.
-	state_root_memo: RwLock<H256>,
+	pub state_root_memo: RwLock<H256>,
 
 	/// Genesis state as plain old data.
 	genesis_state: PodState,
@@ -494,7 +509,7 @@ fn load_from(spec_params: SpecParams, s: ethjson::spec::Spec) -> Result<Spec, Er
 
 	// use memoized state root if provided.
 	match g.state_root {
-		Some(root) => *s.state_root_memo.get_mut() = root,
+		Some(root) => *s.state_root_memo.get_mut().unwrap() = root,
 		None => {
 			let _ = s.run_constructors(
 				&Default::default(),
@@ -506,14 +521,14 @@ fn load_from(spec_params: SpecParams, s: ethjson::spec::Spec) -> Result<Spec, Er
 	Ok(s)
 }
 
-macro_rules! load_bundled {
-	($e:expr) => {
-		Spec::load(
-			&::std::env::temp_dir(),
-			include_bytes!(concat!("../../res/", $e, ".json")) as &[u8]
-		).expect(concat!("Chain spec ", $e, " is invalid."))
-	};
-}
+// macro_rules! load_bundled {
+// 	($e:expr) => {
+// 		Spec::load(
+// 			&::std::env::temp_dir(),
+// 			include_bytes!(concat!("../../res/", $e, ".json")) as &[u8]
+// 		).expect(concat!("Chain spec ", $e, " is invalid."))
+// 	};
+// }
 
 #[cfg(any(test, feature = "test-helpers"))]
 macro_rules! load_machine_bundled {
@@ -549,14 +564,15 @@ impl Spec {
 		let machine = Self::machine(&engine_spec, params, builtins);
 
 		match engine_spec {
-			ethjson::spec::Engine::Null(null) => Arc::new(NullEngine::new(null.params.into(), machine)),
-			ethjson::spec::Engine::Ethash(ethash) => Arc::new(::ethereum::Ethash::new(spec_params.cache_dir, ethash.params.into(), machine, spec_params.optimization_setting)),
 			ethjson::spec::Engine::InstantSeal => Arc::new(InstantSeal::new(machine)),
-			ethjson::spec::Engine::BasicAuthority(basic_authority) => Arc::new(BasicAuthority::new(basic_authority.params.into(), machine)),
-			ethjson::spec::Engine::AuthorityRound(authority_round) => AuthorityRound::new(authority_round.params.into(), machine)
-				.expect("Failed to start AuthorityRound consensus engine."),
-			ethjson::spec::Engine::Tendermint(tendermint) => Tendermint::new(tendermint.params.into(), machine)
-				.expect("Failed to start the Tendermint consensus engine."),
+			ethjson::spec::Engine::Null(null) => Arc::new(NullEngine::new(null.params.into(), machine)),
+			// ethjson::spec::Engine::Ethash(ethash) => Arc::new(::ethereum::Ethash::new(spec_params.cache_dir, ethash.params.into(), machine, spec_params.optimization_setting)),
+			// ethjson::spec::Engine::BasicAuthority(basic_authority) => Arc::new(BasicAuthority::new(basic_authority.params.into(), machine)),
+			// ethjson::spec::Engine::AuthorityRound(authority_round) => AuthorityRound::new(authority_round.params.into(), machine)
+			// 	.expect("Failed to start AuthorityRound consensus engine."),
+			// ethjson::spec::Engine::Tendermint(tendermint) => Tendermint::new(tendermint.params.into(), machine)
+			// 	.expect("Failed to start the Tendermint consensus engine."),
+			_ => panic!("Engine not supported")
 		}
 	}
 
@@ -623,7 +639,8 @@ impl Spec {
 				let mut substate = Substate::new();
 
 				{
-					let mut exec = Executive::new(&mut state, &env_info, self.engine.machine());
+					let mut dummy_storage = NullStorage::new();
+					let mut exec = Executive::new(&mut state, &env_info, self.engine.machine(), &mut dummy_storage);
 					if let Err(e) = exec.create(params, &mut substate, &mut None, &mut NoopTracer, &mut NoopVMTracer) {
 						warn!(target: "spec", "Genesis constructor execution at {} failed: {}.", address, e);
 					}
@@ -639,13 +656,13 @@ impl Spec {
 			state.drop()
 		};
 
-		*self.state_root_memo.write() = root;
+		*self.state_root_memo.write().unwrap() = root;
 		Ok(db)
 	}
 
 	/// Return the state root for the genesis state, memoising accordingly.
 	pub fn state_root(&self) -> H256 {
-		self.state_root_memo.read().clone()
+		self.state_root_memo.read().unwrap().clone()
 	}
 
 	/// Get common blockchain parameters.
@@ -728,7 +745,7 @@ impl Spec {
 		self.seal_rlp = seal_rlp;
 	}
 
-	/// Alter the value of the genesis state.
+	// /// Alter the value of the genesis state.
 	pub fn set_genesis_state(&mut self, s: PodState) -> Result<(), Error> {
 		self.genesis_state = s;
 		let _ = self.run_constructors(
@@ -744,10 +761,10 @@ impl Spec {
 		// TODO: get rid of this function and ensure state root always is valid.
 		// we're mostly there, but `self.genesis_state.root()` doesn't encompass
 		// post-constructor state.
-		*self.state_root_memo.read() == self.genesis_state.root()
+		*self.state_root_memo.read().unwrap() == self.genesis_state.root()
 	}
 
-	/// Ensure that the given state DB has the trie nodes in for the genesis state.
+	// /// Ensure that the given state DB has the trie nodes in for the genesis state.
 	pub fn ensure_db_good<T: Backend>(&self, db: T, factories: &Factories) -> Result<T, Error> {
 		if db.as_hashdb().contains(&self.state_root()) {
 			return Ok(db);
@@ -769,81 +786,81 @@ impl Spec {
 
 	/// Loads spec from json file. Provide factories for executing contracts and ensuring
 	/// storage goes to the right place.
-	pub fn load<'a, T: Into<SpecParams<'a>>, R>(params: T, reader: R) -> Result<Self, String>
+	pub fn load<'a, R>(reader: R) -> Result<Self, String>
 	where
 		R: Read,
 	{
 		ethjson::spec::Spec::load(reader).map_err(fmt_err).and_then(
 			|x| {
-				load_from(params.into(), x).map_err(fmt_err)
+				load_from(Default::default(), x).map_err(fmt_err)
 			},
 		)
 	}
 
-	/// initialize genesis epoch data, using in-memory database for
-	/// constructor.
-	pub fn genesis_epoch_data(&self) -> Result<Vec<u8>, String> {
-		use transaction::{Action, Transaction};
-		use journaldb;
-		use kvdb_memorydb;
+	// /// initialize genesis epoch data, using in-memory database for
+	// /// constructor.
+	// pub fn genesis_epoch_data(&self) -> Result<Vec<u8>, String> {
+	// 	use transaction::{Action, Transaction};
+	// 	use journaldb;
+	// 	use kvdb_memorydb;
+    //
+	// 	let genesis = self.genesis_header();
+    //
+	// 	let factories = Default::default();
+	// 	let mut db = journaldb::new(
+	// 		Arc::new(kvdb_memorydb::create(0)),
+	// 		journaldb::Algorithm::Archive,
+	// 		None,
+	// 	);
+    //
+	// 	self.ensure_db_good(BasicBackend(db.as_hashdb_mut()), &factories)
+	// 		.map_err(|e| format!("Unable to initialize genesis state: {}", e))?;
+    //
+	// 	let call = |a, d| {
+	// 		let mut db = db.boxed_clone();
+	// 		let env_info = ::evm::EnvInfo {
+	// 			number: 0,
+	// 			author: *genesis.author(),
+	// 			timestamp: genesis.timestamp(),
+	// 			difficulty: *genesis.difficulty(),
+	// 			gas_limit: U256::max_value(),
+	// 			last_hashes: Arc::new(Vec::new()),
+	// 			gas_used: 0.into(),
+	// 		};
+    //
+	// 		let from = Address::default();
+	// 		let tx = Transaction {
+	// 			nonce: self.engine.account_start_nonce(0),
+	// 			action: Action::Call(a),
+	// 			gas: U256::max_value(),
+	// 			gas_price: U256::default(),
+	// 			value: U256::default(),
+	// 			data: d,
+	// 		}.fake_sign(from);
+    //
+	// 		let res = ::state::prove_transaction(
+	// 			db.as_hashdb_mut(),
+	// 			*genesis.state_root(),
+	// 			&tx,
+	// 			self.engine.machine(),
+	// 			&env_info,
+	// 			factories.clone(),
+	// 			true,
+	// 		);
+    //
+	// 		res.map(|(out, proof)| {
+	// 			(out, proof.into_iter().map(|x| x.into_vec()).collect())
+	// 		}).ok_or_else(|| "Failed to prove call: insufficient state".into())
+	// 	};
+    //
+	// 	self.engine.genesis_epoch_data(&genesis, &call)
+	// }
 
-		let genesis = self.genesis_header();
-
-		let factories = Default::default();
-		let mut db = journaldb::new(
-			Arc::new(kvdb_memorydb::create(0)),
-			journaldb::Algorithm::Archive,
-			None,
-		);
-
-		self.ensure_db_good(BasicBackend(db.as_hashdb_mut()), &factories)
-			.map_err(|e| format!("Unable to initialize genesis state: {}", e))?;
-
-		let call = |a, d| {
-			let mut db = db.boxed_clone();
-			let env_info = ::evm::EnvInfo {
-				number: 0,
-				author: *genesis.author(),
-				timestamp: genesis.timestamp(),
-				difficulty: *genesis.difficulty(),
-				gas_limit: U256::max_value(),
-				last_hashes: Arc::new(Vec::new()),
-				gas_used: 0.into(),
-			};
-
-			let from = Address::default();
-			let tx = Transaction {
-				nonce: self.engine.account_start_nonce(0),
-				action: Action::Call(a),
-				gas: U256::max_value(),
-				gas_price: U256::default(),
-				value: U256::default(),
-				data: d,
-			}.fake_sign(from);
-
-			let res = ::state::prove_transaction(
-				db.as_hashdb_mut(),
-				*genesis.state_root(),
-				&tx,
-				self.engine.machine(),
-				&env_info,
-				factories.clone(),
-				true,
-			);
-
-			res.map(|(out, proof)| {
-				(out, proof.into_iter().map(|x| x.into_vec()).collect())
-			}).ok_or_else(|| "Failed to prove call: insufficient state".into())
-		};
-
-		self.engine.genesis_epoch_data(&genesis, &call)
-	}
-
-	/// Create a new Spec with InstantSeal consensus which does internal sealing (not requiring
-	/// work).
-	pub fn new_instant() -> Spec {
-		load_bundled!("instant_seal")
-	}
+	// /// Create a new Spec with InstantSeal consensus which does internal sealing (not requiring
+	// /// work).
+	// pub fn new_instant() -> Spec {
+	// 	load_bundled!("instant_seal")
+	// }
 
 	/// Create a new Spec which conforms to the Frontier-era Morden chain except that it's a
 	/// NullEngine consensus.

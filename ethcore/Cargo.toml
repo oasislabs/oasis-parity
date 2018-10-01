@@ -7,60 +7,62 @@ version = "1.12.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-ansi_term = "0.10"
+# ansi_term = "0.10"
 bloomchain = { path = "../util/bloomchain" }
-bn = { git = "https://github.com/paritytech/bn", default-features = false }
+bn = { git = "https://github.com/oasislabs/bn", branch = "ekiden", default-features = false }
 byteorder = "1.0"
 common-types = { path = "types" }
-crossbeam = "0.3"
-ethash = { path = "../ethash" }
+# crossbeam = "0.3"
+# ethash = { path = "../ethash" }
 ethcore-bloom-journal = { path = "../util/bloom" }
 ethcore-bytes = { path = "../util/bytes" }
-fetch = { path = "../util/fetch" }
+# fetch = { path = "../util/fetch" }
 hashdb = { path = "../util/hashdb" }
 memorydb = { path = "../util/memorydb" }
 patricia-trie = { path = "../util/patricia_trie" }
-ethcore-crypto = { path = "crypto" }
-error-chain = { version = "0.11", default-features = false }
-ethcore-io = { path = "../util/io" }
-ethcore-logger = { path = "../logger" }
-ethcore-miner = { path = "../miner" }
-ethcore-stratum = { path = "./stratum" }
+# ethcore-crypto = { path = "crypto" }
+error-chain = { version = "0.10", default-features = false }
+# ethcore-io = { path = "../util/io" }
+# ethcore-logger = { path = "../logger" }
+# ethcore-miner = { path = "../miner" }
+# ethcore-stratum = { path = "./stratum" }
 ethcore-transaction = { path = "./transaction" }
-ethereum-types = "0.3"
+ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
 memory-cache = { path = "../util/memory_cache" }
-ethabi = "5.1"
-ethabi-derive = "5.0"
-ethabi-contract = "5.0"
+ethabi = { git = "https://github.com/oasislabs/ethabi", branch = "ekiden" }
+ethabi-derive = { git = "https://github.com/oasislabs/ethabi", branch = "ekiden" }
+ethabi-contract = { git = "https://github.com/oasislabs/ethabi", branch = "ekiden" }
 ethjson = { path = "../json" }
 ethkey = { path = "../ethkey" }
-ethstore = { path = "../ethstore" }
+# ethstore = { path = "../ethstore" }
 evm = { path = "evm" }
-hardware-wallet = { path = "../hw" }
+# hardware-wallet = { path = "../hw" }
 heapsize = "0.4"
 itertools = "0.5"
 lazy_static = "1.0"
 log = "0.3"
 lru-cache = "0.1"
-num = { version = "0.1", default-features = false, features = ["bigint"] }
-num_cpus = "1.2"
+num-bigint = { version = "0.1", default-features = false }
+num-integer = { version = "0.1", default-features = false }
+num-traits = { version = "0.1", default-features = false }
+# num_cpus = "1.2"
 parity-machine = { path = "../machine" }
-parking_lot = "0.5"
-rayon = "1.0"
-rand = "0.4"
+# parking_lot = "0.5"
+# rayon = "1.0"
+# rand = "0.4"
 rlp = { path = "../util/rlp" }
 rlp_compress = { path = "../util/rlp_compress" }
 rlp_derive = { path = "../util/rlp_derive" }
 kvdb = { path = "../util/kvdb" }
-kvdb-memorydb = { path = "../util/kvdb-memorydb" }
+# kvdb-memorydb = { path = "../util/kvdb-memorydb" }
 util-error = { path = "../util/error" }
-snappy = { git = "https://github.com/paritytech/rust-snappy" }
-stop-guard = { path = "../util/stop-guard" }
+# snappy = { git = "https://github.com/paritytech/rust-snappy" }
+# stop-guard = { path = "../util/stop-guard" }
 macros = { path = "../util/macros" }
 rustc-hex = "1.0"
-stats = { path = "../util/stats" }
-trace-time = { path = "../util/trace-time" }
-using_queue = { path = "../util/using_queue" }
+# stats = { path = "../util/stats" }
+# trace-time = { path = "../util/trace-time" }
+# using_queue = { path = "../util/using_queue" }
 vm = { path = "vm" }
 wasm = { path = "wasm" }
 keccak-hash = { path = "../util/hash" }

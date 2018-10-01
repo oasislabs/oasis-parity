@@ -19,7 +19,7 @@
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
-use parking_lot::RwLock;
+use std::sync::RwLock;
 use heapsize::HeapSizeOf;
 use rlp::{encode, decode};
 use hashdb::*;
@@ -351,7 +351,7 @@ impl JournalDB for EarlyMergeDB {
 
 	fn mem_used(&self) -> usize {
 		self.overlay.mem_used() + match self.refs {
-			Some(ref c) => c.read().heap_size_of_children(),
+			Some(ref c) => c.read().unwrap().heap_size_of_children(),
 			None => 0
 		}
  	}
@@ -363,7 +363,7 @@ impl JournalDB for EarlyMergeDB {
 	fn journal_under(&mut self, batch: &mut DBTransaction, now: u64, id: &H256) -> Result<u32, UtilError> {
 		// record new commit's details.
 		let mut refs = match self.refs.as_ref() {
-			Some(refs) => refs.write(),
+			Some(refs) => refs.write().unwrap(),
 			None => return Ok(0),
 		};
 
@@ -425,7 +425,7 @@ impl JournalDB for EarlyMergeDB {
 	}
 
 	fn mark_canonical(&mut self, batch: &mut DBTransaction, end_era: u64, canon_id: &H256) -> Result<u32, UtilError> {
-		let mut refs = self.refs.as_ref().unwrap().write();
+		let mut refs = self.refs.as_ref().unwrap().write().unwrap();
 
 		// apply old commits' details
 		let mut db_key = DatabaseKey {

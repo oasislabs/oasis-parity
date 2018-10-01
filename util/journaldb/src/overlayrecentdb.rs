@@ -19,7 +19,7 @@
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
-use parking_lot::RwLock;
+use std::sync::RwLock;
 use heapsize::HeapSizeOf;
 use rlp::{Rlp, RlpStream, encode, decode, DecoderError, Decodable, Encodable};
 use hashdb::*;
@@ -166,7 +166,7 @@ impl OverlayRecentDB {
 	#[cfg(test)]
 	fn can_reconstruct_refs(&self) -> bool {
 		let reconstructed = Self::read_overlay(&*self.backing, self.column);
-		let journal_overlay = self.journal_overlay.read();
+		let journal_overlay = self.journal_overlay.read().unwrap();
 		journal_overlay.backing_overlay == reconstructed.backing_overlay &&
 		journal_overlay.pending_overlay == reconstructed.pending_overlay &&
 		journal_overlay.journal == reconstructed.journal &&
@@ -248,7 +248,7 @@ impl JournalDB for OverlayRecentDB {
 
 	fn mem_used(&self) -> usize {
 		let mut mem = self.transaction_overlay.mem_used();
-		let overlay = self.journal_overlay.read();
+		let overlay = self.journal_overlay.read().unwrap();
 
 		mem += overlay.backing_overlay.mem_used();
 		mem += overlay.pending_overlay.heap_size_of_children();
@@ -258,7 +258,7 @@ impl JournalDB for OverlayRecentDB {
 	}
 
 	fn journal_size(&self) -> usize {
-		self.journal_overlay.read().cumulative_size
+		self.journal_overlay.read().unwrap().cumulative_size
 
 	}
 
@@ -270,12 +270,12 @@ impl JournalDB for OverlayRecentDB {
 		&self.backing
 	}
 
-	fn latest_era(&self) -> Option<u64> { self.journal_overlay.read().latest_era }
+	fn latest_era(&self) -> Option<u64> { self.journal_overlay.read().unwrap().latest_era }
 
-	fn earliest_era(&self) -> Option<u64> { self.journal_overlay.read().earliest_era }
+	fn earliest_era(&self) -> Option<u64> { self.journal_overlay.read().unwrap().earliest_era }
 
 	fn state(&self, key: &H256) -> Option<Bytes> {
-		let journal_overlay = self.journal_overlay.read();
+		let journal_overlay = self.journal_overlay.read().unwrap();
 		let key = to_short_key(key);
 		journal_overlay.backing_overlay.get(&key).map(|v| v.into_vec())
 		.or_else(|| journal_overlay.pending_overlay.get(&key).map(|d| d.clone().into_vec()))
@@ -285,7 +285,7 @@ impl JournalDB for OverlayRecentDB {
 	fn journal_under(&mut self, batch: &mut DBTransaction, now: u64, id: &H256) -> Result<u32, UtilError> {
 		trace!(target: "journaldb", "entry: #{} ({})", now, id);
 
-		let mut journal_overlay = self.journal_overlay.write();
+		let mut journal_overlay = self.journal_overlay.write().unwrap();
 
 		// flush previous changes
 		journal_overlay.pending_overlay.clear();
@@ -341,7 +341,7 @@ impl JournalDB for OverlayRecentDB {
 	fn mark_canonical(&mut self, batch: &mut DBTransaction, end_era: u64, canon_id: &H256) -> Result<u32, UtilError> {
 		trace!(target: "journaldb", "canonical: #{} ({})", end_era, canon_id);
 
-		let mut journal_overlay = self.journal_overlay.write();
+		let mut journal_overlay = self.journal_overlay.write().unwrap();
 		let journal_overlay = &mut *journal_overlay;
 
 		let mut ops = 0;
@@ -407,7 +407,7 @@ impl JournalDB for OverlayRecentDB {
 	}
 
 	fn flush(&self) {
-		self.journal_overlay.write().pending_overlay.clear();
+		self.journal_overlay.write().unwrap().pending_overlay.clear();
 	}
 
 	fn inject(&mut self, batch: &mut DBTransaction) -> Result<u32, UtilError> {
@@ -464,7 +464,7 @@ impl HashDB for OverlayRecentDB {
 			}
 		}
 		let v = {
-			let journal_overlay = self.journal_overlay.read();
+			let journal_overlay = self.journal_overlay.read().unwrap();
 			let key = to_short_key(key);
 			journal_overlay.backing_overlay.get(&key)
 				.or_else(|| journal_overlay.pending_overlay.get(&key).cloned())

@@ -20,14 +20,14 @@ use std::ops::Deref;
 use ethereum_types::{H256, H160, Address, U256};
 use error;
 use ethjson;
-use ethkey::{self, Signature, Secret, Public, recover, public_to_address};
+use ethkey::{self, Secret, Signature, Public, recover, public_to_address};
 use evm::Schedule;
 use hash::keccak;
 use heapsize::HeapSizeOf;
 use rlp::{self, RlpStream, Rlp, DecoderError, Encodable};
 
-type Bytes = Vec<u8>;
-type BlockNumber = u64;
+pub type Bytes = Vec<u8>;
+pub type BlockNumber = u64;
 
 /// Fake address for unsigned transactions as defined by EIP-86.
 pub const UNSIGNED_SENDER: Address = H160([0xff; 20]);
@@ -138,27 +138,27 @@ impl HeapSizeOf for Transaction {
 	}
 }
 
-impl From<ethjson::state::Transaction> for SignedTransaction {
-	fn from(t: ethjson::state::Transaction) -> Self {
-		let to: Option<ethjson::hash::Address> = t.to.into();
-		let secret = t.secret.map(|s| Secret::from(s.0));
-		let tx = Transaction {
-			nonce: t.nonce.into(),
-			gas_price: t.gas_price.into(),
-			gas: t.gas_limit.into(),
-			action: match to {
-				Some(to) => Action::Call(to.into()),
-				None => Action::Create
-			},
-			value: t.value.into(),
-			data: t.data.into(),
-		};
-		match secret {
-			Some(s) => tx.sign(&s, None),
-			None => tx.null_sign(1),
-		}
-	}
-}
+// impl From<ethjson::state::Transaction> for SignedTransaction {
+// 	fn from(t: ethjson::state::Transaction) -> Self {
+// 		let to: Option<ethjson::hash::Address> = t.to.into();
+// 		let secret = t.secret.map(|s| Secret::from(s.0));
+// 		let tx = Transaction {
+// 			nonce: t.nonce.into(),
+// 			gas_price: t.gas_price.into(),
+// 			gas: t.gas_limit.into(),
+// 			action: match to {
+// 				Some(to) => Action::Call(to.into()),
+// 				None => Action::Create
+// 			},
+// 			value: t.value.into(),
+// 			data: t.data.into(),
+// 		};
+// 		match secret {
+// 			Some(s) => tx.sign(&s, None),
+// 			None => tx.null_sign(1),
+// 		}
+// 	}
+// }
 
 impl From<ethjson::transaction::Transaction> for UnverifiedTransaction {
 	fn from(t: ethjson::transaction::Transaction) -> Self {
@@ -318,6 +318,16 @@ impl rlp::Encodable for UnverifiedTransaction {
 }
 
 impl UnverifiedTransaction {
+	pub fn new(unsigned: Transaction, v: u64, r: U256, s: U256, hash: H256) -> Self {
+		UnverifiedTransaction{
+			unsigned,
+			v,
+			r,
+			s,
+			hash
+		}
+	}
+
 	/// Used to compute hash of created transactions
 	fn compute_hash(mut self) -> UnverifiedTransaction {
 		let hash = keccak(&*self.rlp_bytes());

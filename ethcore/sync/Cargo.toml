@@ -15,7 +15,7 @@ ethcore-io = { path = "../../util/io" }
 ethcore-light = { path = "../light" }
 ethcore-transaction = { path = "../transaction" }
 ethcore = { path = ".." }
-ethereum-types = "0.3"
+ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
 plain_hasher = { path = "../../util/plain_hasher" }
 rlp = { path = "../../util/rlp" }
 rustc-hex = "1.0"

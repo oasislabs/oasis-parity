@@ -86,7 +86,7 @@ pub trait LiveBlock: 'static {
 	fn uncles(&self) -> &[Self::Header];
 }
 
-/// Trait for blocks which have a transaction type.
+// /// Trait for blocks which have a transaction type.
 pub trait Transactions: LiveBlock {
 	/// The transaction type.
 	type Transaction;
@@ -95,7 +95,7 @@ pub trait Transactions: LiveBlock {
 	fn transactions(&self) -> &[Self::Transaction];
 }
 
-/// Trait for blocks which have finalized information.
+// /// Trait for blocks which have finalized information.
 pub trait Finalizable: LiveBlock {
 	/// Get whether the block is finalized.
 	fn is_finalized(&self) -> bool;
@@ -103,7 +103,7 @@ pub trait Finalizable: LiveBlock {
 	fn mark_finalized(&mut self);
 }
 
-/// A state machine with block metadata.
+// /// A state machine with block metadata.
 pub trait WithMetadata: LiveBlock {
 	/// Get the current live block metadata.
 	fn metadata(&self) -> Option<&[u8]>;
@@ -115,12 +115,12 @@ pub trait WithMetadata: LiveBlock {
 pub trait Machine: for<'a> LocalizedMachine<'a> {
 	/// The block header type.
 	type Header: Header;
-	/// The live block type.
+	// /// The live block type.
 	type LiveBlock: LiveBlock<Header=Self::Header>;
 	/// Block header with metadata information.
 	type ExtendedHeader: Header;
-	/// A handle to a blockchain client for this machine.
-	type EngineClient: ?Sized;
+	// /// A handle to a blockchain client for this machine.
+	// type EngineClient: ?Sized;
 	/// A description of needed auxiliary data.
 	type AuxiliaryRequest;
 	/// Actions taken on ancestry blocks when commiting a new block.

@@ -14,11 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use hash::KECCAK_EMPTY;
 use heapsize::HeapSizeOf;
 use ethereum_types::H256;
-use parking_lot::Mutex;
+// use parking_lot::Mutex;
 use memory_cache::MemoryLruCache;
 use bit_set::BitSet;
 use super::super::instructions;
@@ -55,12 +55,12 @@ impl SharedCache {
 			return Self::find_jump_destinations(code);
 		}
 
-		if let Some(d) = self.jump_destinations.lock().get_mut(code_hash) {
+		if let Some(d) = self.jump_destinations.lock().unwrap().get_mut(code_hash) {
 			return d.0.clone();
 		}
 
 		let d = Self::find_jump_destinations(code);
-		self.jump_destinations.lock().insert(code_hash.clone(), Bits(d.clone()));
+		self.jump_destinations.lock().unwrap().insert(code_hash.clone(), Bits(d.clone()));
 
 		d
 	}

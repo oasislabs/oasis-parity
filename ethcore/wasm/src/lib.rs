@@ -17,10 +17,10 @@
 //! Wasm Interpreter
 
 extern crate byteorder;
-extern crate ethcore_logger;
+// extern crate ethcore_logger;
 extern crate ethereum_types;
 #[macro_use] extern crate log;
-extern crate libc;
+// extern crate libc;
 extern crate parity_wasm;
 extern crate vm;
 extern crate pwasm_utils as wasm_utils;
@@ -90,7 +90,7 @@ impl vm::Vm for WasmInterpreter {
 
 		let loaded_module = wasmi::Module::from_parity_wasm_module(module).map_err(Error::Interpreter)?;
 
-		let instantiation_resolver = env::ImportResolver::with_limit(16);
+		let instantiation_resolver = env::ImportResolver::with_limit(<u32>::max_value() - 1);
 
 		let module_instance = wasmi::ModuleInstance::new(
 			&loaded_module,
@@ -100,10 +100,10 @@ impl vm::Vm for WasmInterpreter {
 		let adjusted_gas = params.gas * U256::from(ext.schedule().wasm().opcodes_div) /
 			U256::from(ext.schedule().wasm().opcodes_mul);
 
-		if adjusted_gas > ::std::u64::MAX.into()
-		{
-			return Err(vm::Error::Wasm("Wasm interpreter cannot run contracts with gas (wasm adjusted) >= 2^64".to_owned()));
-		}
+		// if adjusted_gas > ::std::u64::MAX.into()
+		// {
+		// 	return Err(vm::Error::Wasm("Wasm interpreter cannot run contracts with gas (wasm adjusted) >= 2^64".to_owned()));
+		// }
 
 		let initial_memory = instantiation_resolver.memory_size().map_err(Error::Interpreter)?;
 		trace!(target: "wasm", "Contract requested {:?} pages of initial memory", initial_memory);

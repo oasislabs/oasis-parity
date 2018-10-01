@@ -25,7 +25,7 @@ use {BlockNumber};
 use ethjson;
 
 /// A record of execution for a `LOG` operation.
-#[derive(Default, Debug, Clone, PartialEq, Eq, RlpEncodable, RlpDecodable)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, RlpEncodable, RlpDecodable, Serialize, Deserialize)]
 pub struct LogEntry {
 	/// The address of the contract executing at the point of the `LOG` operation.
 	pub address: Address,

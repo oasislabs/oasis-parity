@@ -11,7 +11,7 @@ log = "0.3"
 ethcore = { path = ".."}
 ethcore-bytes = { path = "../../util/bytes" }
 ethcore-transaction = { path = "../transaction" }
-ethereum-types = "0.3"
+ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
 memorydb = { path = "../../util/memorydb" }
 patricia-trie = { path = "../../util/patricia_trie" }
 ethcore-network = { path = "../../util/network" }
@@ -35,7 +35,7 @@ keccak-hash = { path = "../../util/hash" }
 triehash = { path = "../../util/triehash" }
 kvdb = { path = "../../util/kvdb" }
 memory-cache = { path = "../../util/memory_cache" }
-error-chain = { version = "0.11", default-features = false }
+error-chain = { version = "0.10", default-features = false }
 
 [dev-dependencies]
 kvdb-memorydb = { path = "../../util/kvdb-memorydb" }

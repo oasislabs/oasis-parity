@@ -19,7 +19,7 @@
 use std::ops::Deref;
 use std::hash::Hash;
 use std::collections::HashMap;
-use parking_lot::RwLock;
+use std::sync::RwLock;
 use kvdb::{DBTransaction, KeyValueDB};
 
 use rlp;
@@ -176,14 +176,14 @@ pub trait Readable {
 		C: Cache<K, T> {
 		{
 			let read = cache.read();
-			if let Some(v) = read.get(key) {
+			if let Some(v) = read.unwrap().get(key) {
 				return Some(v.clone());
 			}
 		}
 
 		self.read(col, key).map(|value: T|{
 			let mut write = cache.write();
-			write.insert(key.clone(), value.clone());
+			write.unwrap().insert(key.clone(), value.clone());
 			value
 		})
 	}
@@ -198,7 +198,7 @@ pub trait Readable {
 	C: Cache<K, T> {
 		{
 			let read = cache.read();
-			if read.get(key).is_some() {
+			if read.unwrap().get(key).is_some() {
 				return true;
 			}
 		}

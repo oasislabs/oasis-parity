@@ -23,11 +23,13 @@ use itertools::Itertools;
 use bloomchain as bc;
 use heapsize::HeapSizeOf;
 use ethereum_types::{H256, Bloom, U256};
-use parking_lot::{Mutex, RwLock};
+// use parking_lot::{Mutex, RwLock};
+use std::sync::{Mutex, RwLock};
 use bytes::Bytes;
 use rlp::RlpStream;
 use rlp_compress::{compress, decompress, blocks_swapper};
 use header::*;
+use header::BlockNumber;
 use transaction::*;
 use views::{BlockView, HeaderView};
 use log_entry::{LogEntry, LocalizedLogEntry};
@@ -35,7 +37,7 @@ use receipt::Receipt;
 use blooms::{BloomGroup, GroupPosition};
 use blockchain::best_block::{BestBlock, BestAncientBlock};
 use blockchain::block_info::{BlockInfo, BlockLocation, BranchBecomingCanonChainData};
-use blockchain::extras::{BlockReceipts, BlockDetails, TransactionAddress, EPOCH_KEY_PREFIX, EpochTransitions};
+use blockchain::extras::{BlockReceipts, BlockDetails, TransactionAddress, EPOCH_KEY_PREFIX};
 use types::blockchain_info::BlockChainInfo;
 use types::tree_route::TreeRoute;
 use blockchain::update::{ExtrasUpdate, ExtrasInsert};
@@ -44,9 +46,9 @@ use db::{self, Writable, Readable, CacheUpdatePolicy};
 use cache_manager::CacheManager;
 use encoded;
 use engines::ForkChoice;
-use engines::epoch::{Transition as EpochTransition, PendingTransition as PendingEpochTransition};
-use rayon::prelude::*;
-use ansi_term::Colour;
+// use engines::epoch::{Transition as EpochTransition, PendingTransition as PendingEpochTransition};
+// use rayon::prelude::*;
+// use ansi_term::Colour;
 use kvdb::{DBTransaction, KeyValueDB};
 
 const LOG_BLOOMS_LEVELS: usize = 3;
@@ -174,7 +176,7 @@ impl bc::group::BloomGroupDatabase for BlockChain {
 	fn blooms_at(&self, position: &bc::group::GroupPosition) -> Option<bc::group::BloomGroup> {
 		let position = GroupPosition::from(position.clone());
 		let result = self.db.read_with_cache(db::COL_EXTRA, &self.blocks_blooms, &position).map(Into::into);
-		self.cache_man.lock().note_used(CacheId::BlocksBlooms(position));
+		self.cache_man.lock().unwrap().note_used(CacheId::BlocksBlooms(position));
 		result
 	}
 }
@@ -186,7 +188,7 @@ pub struct BlockChain {
 	// All locks must be captured in the order declared here.
 	blooms_config: bc::Config,
 
-	best_block: RwLock<BestBlock>,
+	// We've removed `best_block`. The Ekiden database system handles state.
 	// Stores best block of the first uninterrupted sequence of blocks. `None` if there are no gaps.
 	// Only updated with `insert_unordered_block`.
 	best_ancient_block: RwLock<Option<BestAncientBlock>>,
@@ -227,11 +229,11 @@ impl BlockProvider for BlockChain {
 	}
 
 	fn best_ancient_block(&self) -> Option<H256> {
-		self.best_ancient_block.read().as_ref().map(|b| b.hash)
+		self.best_ancient_block.read().unwrap().as_ref().map(|b| b.hash)
 	}
 
 	fn best_ancient_number(&self) -> Option<BlockNumber> {
-		self.best_ancient_block.read().as_ref().map(|b| b.number)
+		self.best_ancient_block.read().unwrap().as_ref().map(|b| b.number)
 	}
 
 	/// Get raw block data
@@ -245,17 +247,9 @@ impl BlockProvider for BlockChain {
 	fn block_header_data(&self, hash: &H256) -> Option<encoded::Header> {
 		// Check cache first
 		{
-			let read = self.block_headers.read();
+			let read = self.block_headers.read().unwrap();
 			if let Some(v) = read.get(hash) {
 				return Some(v.clone());
-			}
-		}
-
-		// Check if it's the best block
-		{
-			let best_block = self.best_block.read();
-			if &best_block.header.hash() == hash {
-				return Some(best_block.header.encoded())
 			}
 		}
 
@@ -264,10 +258,10 @@ impl BlockProvider for BlockChain {
 			.expect("Low level database error. Some issue with disk?")?;
 
 		let header = encoded::Header::new(decompress(&b, blocks_swapper()).into_vec());
-		let mut write = self.block_headers.write();
+		let mut write = self.block_headers.write().unwrap();
 		write.insert(*hash, header.clone());
 
-		self.cache_man.lock().note_used(CacheId::BlockHeader(*hash));
+		self.cache_man.lock().unwrap().note_used(CacheId::BlockHeader(*hash));
 		Some(header)
 	}
 
@@ -275,17 +269,9 @@ impl BlockProvider for BlockChain {
 	fn block_body(&self, hash: &H256) -> Option<encoded::Body> {
 		// Check cache first
 		{
-			let read = self.block_bodies.read();
+			let read = self.block_bodies.read().unwrap();
 			if let Some(v) = read.get(hash) {
 				return Some(v.clone());
-			}
-		}
-
-		// Check if it's the best block
-		{
-			let best_block = self.best_block.read();
-			if &best_block.header.hash() == hash {
-				return Some(encoded::Body::new(Self::block_to_body(best_block.block.rlp().as_raw())));
 			}
 		}
 
@@ -294,38 +280,38 @@ impl BlockProvider for BlockChain {
 			.expect("Low level database error. Some issue with disk?")?;
 
 		let body = encoded::Body::new(decompress(&b, blocks_swapper()).into_vec());
-		let mut write = self.block_bodies.write();
+		let mut write = self.block_bodies.write().unwrap();
 		write.insert(*hash, body.clone());
 
-		self.cache_man.lock().note_used(CacheId::BlockBody(*hash));
+		self.cache_man.lock().unwrap().note_used(CacheId::BlockBody(*hash));
 		Some(body)
 	}
 
 	/// Get the familial details concerning a block.
 	fn block_details(&self, hash: &H256) -> Option<BlockDetails> {
 		let result = self.db.read_with_cache(db::COL_EXTRA, &self.block_details, hash)?;
-		self.cache_man.lock().note_used(CacheId::BlockDetails(*hash));
+		self.cache_man.lock().unwrap().note_used(CacheId::BlockDetails(*hash));
 		Some(result)
 	}
 
 	/// Get the hash of given block's number.
 	fn block_hash(&self, index: BlockNumber) -> Option<H256> {
 		let result = self.db.read_with_cache(db::COL_EXTRA, &self.block_hashes, &index)?;
-		self.cache_man.lock().note_used(CacheId::BlockHashes(index));
+		self.cache_man.lock().unwrap().note_used(CacheId::BlockHashes(index));
 		Some(result)
 	}
 
 	/// Get the address of transaction with given hash.
 	fn transaction_address(&self, hash: &H256) -> Option<TransactionAddress> {
 		let result = self.db.read_with_cache(db::COL_EXTRA, &self.transaction_addresses, hash)?;
-		self.cache_man.lock().note_used(CacheId::TransactionAddresses(*hash));
+		self.cache_man.lock().unwrap().note_used(CacheId::TransactionAddresses(*hash));
 		Some(result)
 	}
 
 	/// Get receipts of block with given hash.
 	fn block_receipts(&self, hash: &H256) -> Option<BlockReceipts> {
 		let result = self.db.read_with_cache(db::COL_EXTRA, &self.block_receipts, hash)?;
-		self.cache_man.lock().note_used(CacheId::BlockReceipts(*hash));
+		self.cache_man.lock().unwrap().note_used(CacheId::BlockReceipts(*hash));
 		Some(result)
 	}
 
@@ -349,7 +335,7 @@ impl BlockProvider for BlockChain {
 		let mut logs = blocks
 			.chunks(128)
 			.flat_map(move |blocks_chunk| {
-				blocks_chunk.into_par_iter()
+				blocks_chunk.into_iter()
 					.filter_map(|hash| self.block_number(&hash).map(|r| (r, hash)))
 					.filter_map(|(number, hash)| self.block_receipts(&hash).map(|r| (number, hash, r.receipts)))
 					.filter_map(|(number, hash, receipts)| self.block_body(&hash).map(|ref b| (number, hash, receipts, b.transaction_hashes())))
@@ -456,45 +442,45 @@ impl<'a> Iterator for AncestryWithMetadataIter<'a> {
 
 /// An iterator which walks all epoch transitions.
 /// Returns epoch transitions.
-pub struct EpochTransitionIter<'a> {
-	chain: &'a BlockChain,
-	prefix_iter: Box<Iterator<Item=(Box<[u8]>, Box<[u8]>)> + 'a>,
-}
+// pub struct EpochTransitionIter<'a> {
+// 	chain: &'a BlockChain,
+// 	prefix_iter: Box<Iterator<Item=(Box<[u8]>, Box<[u8]>)> + 'a>,
+// }
 
-impl<'a> Iterator for EpochTransitionIter<'a> {
-	type Item = (u64, EpochTransition);
-
-	fn next(&mut self) -> Option<Self::Item> {
-		loop {
-			// some epochs never occurred on the main chain.
-			let (key, val) = self.prefix_iter.next()?;
-
-			// iterator may continue beyond values beginning with this
-			// prefix.
-			if !key.starts_with(&EPOCH_KEY_PREFIX[..]) {
-				return None
-			}
-
-			let transitions: EpochTransitions = ::rlp::decode(&val[..]).expect("decode error: the db is corrupted or the data structure has changed");
-
-			// if there are multiple candidates, at most one will be on the
-			// canon chain.
-			for transition in transitions.candidates.into_iter() {
-				let is_in_canon_chain = self.chain.block_hash(transition.block_number)
-					.map_or(false, |hash| hash == transition.block_hash);
-
-				// if the transition is within the block gap, there will only be
-				// one candidate, and it will be from a snapshot restored from.
-				let is_ancient = self.chain.first_block_number()
-					.map_or(false, |first| first > transition.block_number);
-
-				if is_ancient || is_in_canon_chain {
-					return Some((transitions.number, transition))
-				}
-			}
-		}
-	}
-}
+// impl<'a> Iterator for EpochTransitionIter<'a> {
+// 	type Item = (u64, EpochTransition);
+//
+// 	fn next(&mut self) -> Option<Self::Item> {
+// 		loop {
+// 			// some epochs never occurred on the main chain.
+// 			let (key, val) = self.prefix_iter.next()?;
+//
+// 			// iterator may continue beyond values beginning with this
+// 			// prefix.
+// 			if !key.starts_with(&EPOCH_KEY_PREFIX[..]) {
+// 				return None
+// 			}
+//
+// 			let transitions: EpochTransitions = ::rlp::decode(&val[..]).expect("decode error: the db is corrupted or the data structure has changed");
+//
+// 			// if there are multiple candidates, at most one will be on the
+// 			// canon chain.
+// 			for transition in transitions.candidates.into_iter() {
+// 				let is_in_canon_chain = self.chain.block_hash(transition.block_number)
+// 					.map_or(false, |hash| hash == transition.block_hash);
+//
+// 				// if the transition is within the block gap, there will only be
+// 				// one candidate, and it will be from a snapshot restored from.
+// 				let is_ancient = self.chain.first_block_number()
+// 					.map_or(false, |first| first > transition.block_number);
+//
+// 				if is_ancient || is_in_canon_chain {
+// 					return Some((transitions.number, transition))
+// 				}
+// 			}
+// 		}
+// 	}
+// }
 
 impl BlockChain {
 	/// Create new instance of blockchain from given Genesis.
@@ -508,12 +494,6 @@ impl BlockChain {
 				elements_per_index: LOG_BLOOMS_ELEMENTS_PER_INDEX,
 			},
 			first_block: None,
-			best_block: RwLock::new(BestBlock {
-				// BestBlock will be overwritten anyway.
-				header: Default::default(),
-				total_difficulty: Default::default(),
-				block: encoded::Block::new(genesis.into()),
-			}),
 			best_ancient_block: RwLock::new(None),
 			block_headers: RwLock::new(HashMap::new()),
 			block_bodies: RwLock::new(HashMap::new()),
@@ -530,56 +510,35 @@ impl BlockChain {
 			pending_transaction_addresses: RwLock::new(HashMap::new()),
 		};
 
-		// load best block
-		let best_block_hash = match bc.db.get(db::COL_EXTRA, b"best").unwrap() {
-			Some(best) => {
-				H256::from_slice(&best)
-			}
-			None => {
-				// best block does not exist
-				// we need to insert genesis into the cache
-				let block = view!(BlockView, genesis);
-				let header = block.header_view();
-				let hash = block.hash();
+		let best_block_hash = bc.load_best_block_hash().unwrap_or_else(|| {
+			// best block does not exist
+			// we need to insert genesis into the cache
+			let block = view!(BlockView, genesis);
+			let header = block.header_view();
+			let hash = block.hash();
 
-				let details = BlockDetails {
-					number: header.number(),
-					total_difficulty: header.difficulty(),
-					parent: header.parent_hash(),
-					children: vec![],
-					is_finalized: false,
-					metadata: None,
-				};
-
-				let mut batch = DBTransaction::new();
-				batch.put(db::COL_HEADERS, &hash, block.header_rlp().as_raw());
-				batch.put(db::COL_BODIES, &hash, &Self::block_to_body(genesis));
-
-				batch.write(db::COL_EXTRA, &hash, &details);
-				batch.write(db::COL_EXTRA, &header.number(), &hash);
-
-				batch.put(db::COL_EXTRA, b"best", &hash);
-				bc.db.write(batch).expect("Low level database error. Some issue with disk?");
-				hash
-			}
-		};
-
-		{
-			// Fetch best block details
-			let best_block_total_difficulty = bc.block_details(&best_block_hash).unwrap().total_difficulty;
-			let best_block_rlp = bc.block(&best_block_hash).unwrap();
-
-			// and write them
-			let mut best_block = bc.best_block.write();
-			*best_block = BestBlock {
-				total_difficulty: best_block_total_difficulty,
-				header: best_block_rlp.decode_header(),
-				block: best_block_rlp,
+			let details = BlockDetails {
+				number: header.number(),
+				total_difficulty: header.difficulty(),
+				parent: header.parent_hash(),
+				children: vec![],
+				is_finalized: false,
+				metadata: None,
 			};
-		}
 
+			let mut batch = DBTransaction::new();
+			batch.put(db::COL_HEADERS, &hash, block.header_rlp().as_raw());
+			batch.put(db::COL_BODIES, &hash, &Self::block_to_body(genesis));
+
+			batch.write(db::COL_EXTRA, &hash, &details);
+			batch.write(db::COL_EXTRA, &header.number(), &hash);
+
+			batch.put(db::COL_EXTRA, b"best", &hash);
+			bc.db.write(batch).expect("Low level database error. Some issue with disk?");
+			hash
+		});
 		{
-			let best_block_number = bc.best_block.read().header.number();
+			let best_block_number = bc.load_best_block().header.number();
 			// Fetch first and best ancient block details
 			let raw_first = bc.db.get(db::COL_EXTRA, b"first").unwrap().map(|v| v.into_vec());
 			let mut best_ancient = bc.db.get(db::COL_EXTRA, b"ancient").unwrap().map(|h| H256::from_slice(&h));
@@ -624,7 +583,7 @@ impl BlockChain {
 
 			// and write them
 			if let (Some(hash), Some(number)) = (best_ancient, best_ancient_number) {
-				let mut best_ancient_block = bc.best_ancient_block.write();
+				let mut best_ancient_block = bc.best_ancient_block.write().unwrap();
 				*best_ancient_block = Some(BestAncientBlock {
 					hash: hash,
 					number: number,
@@ -633,6 +592,29 @@ impl BlockChain {
 		}
 
 		bc
+	}
+
+	/// Load the hash of the best block. Returns None if it's not set. In that case, use the
+	/// genesis block.
+	fn load_best_block_hash(&self) -> Option<H256> {
+		self.db.get(db::COL_EXTRA, b"best").unwrap().map(|best| H256::from_slice(&best))
+	}
+
+	/// Load the best block if it already exists. Otherwise panic.
+	fn load_best_block(&self) -> BestBlock {
+		let best_block_hash = self.load_best_block_hash().expect("load_best_block called before writing genesis");
+		{
+			// Fetch best block details
+			let best_block_total_difficulty = self.block_details(&best_block_hash).unwrap().total_difficulty;
+			let best_block_rlp = self.block(&best_block_hash).unwrap();
+
+			// and return them
+			BestBlock {
+				total_difficulty: best_block_total_difficulty,
+				header: best_block_rlp.decode_header(),
+				block: best_block_rlp,
+			}
+		}
 	}
 
 	/// Returns true if the given parent block has given child
@@ -754,7 +736,7 @@ impl BlockChain {
 			return false;
 		}
 
-		assert!(self.pending_best_block.read().is_none());
+		assert!(self.pending_best_block.read().unwrap().is_none());
 
 		let compressed_header = compress(block.header_rlp().as_raw(), blocks_swapper());
 		let compressed_body = compress(&Self::block_to_body(bytes), blocks_swapper());
@@ -785,7 +767,7 @@ impl BlockChain {
 			}, is_best);
 
 			if is_ancient {
-				let mut best_ancient_block = self.best_ancient_block.write();
+				let mut best_ancient_block = self.best_ancient_block.write().unwrap();
 				let ancient_number = best_ancient_block.as_ref().map_or(0, |b| b.number);
 				if self.block_hash(header.number() + 1).is_some() {
 					batch.delete(db::COL_EXTRA, b"ancient");
@@ -842,85 +824,85 @@ impl BlockChain {
 	/// and epoch transition object.
 	///
 	/// The block the transition occurred at should have already been inserted into the chain.
-	pub fn insert_epoch_transition(&self, batch: &mut DBTransaction, epoch_num: u64, transition: EpochTransition) {
-		let mut transitions = match self.db.read(db::COL_EXTRA, &epoch_num) {
-			Some(existing) => existing,
-			None => EpochTransitions {
-				number: epoch_num,
-				candidates: Vec::with_capacity(1),
-			}
-		};
-
-		// ensure we don't write any duplicates.
-		if transitions.candidates.iter().find(|c| c.block_hash == transition.block_hash).is_none() {
-			transitions.candidates.push(transition);
-			batch.write(db::COL_EXTRA, &epoch_num, &transitions);
-		}
-	}
+	// pub fn insert_epoch_transition(&self, batch: &mut DBTransaction, epoch_num: u64, transition: EpochTransition) {
+	// 	let mut transitions = match self.db.read(db::COL_EXTRA, &epoch_num) {
+	// 		Some(existing) => existing,
+	// 		None => EpochTransitions {
+	// 			number: epoch_num,
+	// 			candidates: Vec::with_capacity(1),
+	// 		}
+	// 	};
+    //
+	// 	// ensure we don't write any duplicates.
+	// 	if transitions.candidates.iter().find(|c| c.block_hash == transition.block_hash).is_none() {
+	// 		transitions.candidates.push(transition);
+	// 		batch.write(db::COL_EXTRA, &epoch_num, &transitions);
+	// 	}
+	// }
 
 	/// Iterate over all epoch transitions.
 	/// This will only return transitions within the canonical chain.
-	pub fn epoch_transitions(&self) -> EpochTransitionIter {
-		let iter = self.db.iter_from_prefix(db::COL_EXTRA, &EPOCH_KEY_PREFIX[..]);
-		EpochTransitionIter {
-			chain: self,
-			prefix_iter: iter,
-		}
-	}
+	// pub fn epoch_transitions(&self) -> EpochTransitionIter {
+	// 	let iter = self.db.iter_from_prefix(db::COL_EXTRA, &EPOCH_KEY_PREFIX[..]);
+	// 	EpochTransitionIter {
+	// 		chain: self,
+	// 		prefix_iter: iter,
+	// 	}
+	// }
 
 	/// Get a specific epoch transition by block number and provided block hash.
-	pub fn epoch_transition(&self, block_num: u64, block_hash: H256) -> Option<EpochTransition> {
-		trace!(target: "blockchain", "Loading epoch transition at block {}, {}",
-			block_num, block_hash);
-
-		self.db.read(db::COL_EXTRA, &block_num).and_then(|transitions: EpochTransitions| {
-			transitions.candidates.into_iter().find(|c| c.block_hash == block_hash)
-		})
-	}
+	// pub fn epoch_transition(&self, block_num: u64, block_hash: H256) -> Option<EpochTransition> {
+	// 	trace!(target: "blockchain", "Loading epoch transition at block {}, {}",
+	// 		block_num, block_hash);
+    //
+	// 	self.db.read(db::COL_EXTRA, &block_num).and_then(|transitions: EpochTransitions| {
+	// 		transitions.candidates.into_iter().find(|c| c.block_hash == block_hash)
+	// 	})
+	// }
 
 	/// Get the transition to the epoch the given parent hash is part of
 	/// or transitions to.
 	/// This will give the epoch that any children of this parent belong to.
 	///
 	/// The block corresponding the the parent hash must be stored already.
-	pub fn epoch_transition_for(&self, parent_hash: H256) -> Option<EpochTransition> {
-		// slow path: loop back block by block
-		for hash in self.ancestry_iter(parent_hash)? {
-			let details = self.block_details(&hash)?;
-
-			// look for transition in database.
-			if let Some(transition) = self.epoch_transition(details.number, hash) {
-				return Some(transition)
-			}
-
-			// canonical hash -> fast breakout:
-			// get the last epoch transition up to this block.
-			//
-			// if `block_hash` is canonical it will only return transitions up to
-			// the parent.
-			if self.block_hash(details.number)? == hash {
-				return self.epoch_transitions()
-					.map(|(_, t)| t)
-					.take_while(|t| t.block_number <= details.number)
-					.last()
-			}
-		}
-
-		// should never happen as the loop will encounter genesis before concluding.
-		None
-	}
+	// pub fn epoch_transition_for(&self, parent_hash: H256) -> Option<EpochTransition> {
+	// 	// slow path: loop back block by block
+	// 	for hash in self.ancestry_iter(parent_hash)? {
+	// 		let details = self.block_details(&hash)?;
+    //
+	// 		// look for transition in database.
+	// 		if let Some(transition) = self.epoch_transition(details.number, hash) {
+	// 			return Some(transition)
+	// 		}
+    //
+	// 		// canonical hash -> fast breakout:
+	// 		// get the last epoch transition up to this block.
+	// 		//
+	// 		// if `block_hash` is canonical it will only return transitions up to
+	// 		// the parent.
+	// 		if self.block_hash(details.number)? == hash {
+	// 			return self.epoch_transitions()
+	// 				.map(|(_, t)| t)
+	// 				.take_while(|t| t.block_number <= details.number)
+	// 				.last()
+	// 		}
+	// 	}
+    //
+	// 	// should never happen as the loop will encounter genesis before concluding.
+	// 	None
+	// }
 
 	/// Write a pending epoch transition by block hash.
-	pub fn insert_pending_transition(&self, batch: &mut DBTransaction, hash: H256, t: PendingEpochTransition) {
-		batch.write(db::COL_EXTRA, &hash, &t);
-	}
+	// pub fn insert_pending_transition(&self, batch: &mut DBTransaction, hash: H256, t: PendingEpochTransition) {
+	// 	batch.write(db::COL_EXTRA, &hash, &t);
+	// }
 
 	/// Get a pending epoch transition by block hash.
 	// TODO: implement removal safely: this can only be done upon finality of a block
 	// that _uses_ the pending transition.
-	pub fn get_pending_transition(&self, hash: H256) -> Option<PendingEpochTransition> {
-		self.db.read(db::COL_EXTRA, &hash)
-	}
+	// pub fn get_pending_transition(&self, hash: H256) -> Option<PendingEpochTransition> {
+	// 	self.db.read(db::COL_EXTRA, &hash)
+	// }
 
 	/// Add a child to a given block. Assumes that the block hash is in
 	/// the chain and the child's parent is this block.
@@ -935,10 +917,10 @@ impl BlockChain {
 		let mut update = HashMap::new();
 		update.insert(block_hash, parent_details);
 
-		let mut write_details = self.block_details.write();
+		let mut write_details = self.block_details.write().unwrap();
 		batch.extend_with_cache(db::COL_EXTRA, &mut *write_details, update, CacheUpdatePolicy::Overwrite);
 
-		self.cache_man.lock().note_used(CacheId::BlockDetails(block_hash));
+		self.cache_man.lock().unwrap().note_used(CacheId::BlockDetails(block_hash));
 	}
 
 	/// Inserts the block into backing cache database.
@@ -969,7 +951,7 @@ impl BlockChain {
 			return ImportRoute::none();
 		}
 
-		assert!(self.pending_best_block.read().is_none());
+		assert!(self.pending_best_block.read().unwrap().is_none());
 
 		let compressed_header = compress(block.header_rlp().as_raw(), blocks_swapper());
 		let compressed_body = compress(&Self::block_to_body(bytes), blocks_swapper());
@@ -980,14 +962,14 @@ impl BlockChain {
 
 		let info = self.block_info(&header, route, &extras);
 
-		if let BlockLocation::BranchBecomingCanonChain(ref d) = info.location {
-			info!(target: "reorg", "Reorg to {} ({} {} {})",
-				Colour::Yellow.bold().paint(format!("#{} {}", info.number, info.hash)),
-				Colour::Red.paint(d.retracted.iter().join(" ")),
-				Colour::White.paint(format!("#{} {}", self.block_details(&d.ancestor).expect("`ancestor` is in the route; qed").number, d.ancestor)),
-				Colour::Green.paint(d.enacted.iter().join(" "))
-			);
-		}
+		// if let BlockLocation::BranchBecomingCanonChain(ref d) = info.location {
+		// 	info!(target: "reorg", "Reorg to {} ({} {} {})",
+		// 		Colour::Yellow.bold().paint(format!("#{} {}", info.number, info.hash)),
+		// 		Colour::Red.paint(d.retracted.iter().join(" ")),
+		// 		Colour::White.paint(format!("#{} {}", self.block_details(&d.ancestor).expect("`ancestor` is in the route; qed").number, d.ancestor)),
+		// 		Colour::Green.paint(d.enacted.iter().join(" "))
+		// 	);
+		// }
 
 		self.prepare_update(batch, ExtrasUpdate {
 			block_hashes: self.prepare_block_hashes_update(bytes, &info),
@@ -1052,7 +1034,7 @@ impl BlockChain {
 		details_map.insert(block_hash, block_details);
 
 		// We're only updating one existing value. So it shouldn't suffer from cache decoherence problem.
-		let mut write_details = self.pending_block_details.write();
+		let mut write_details = self.pending_block_details.write().unwrap();
 		batch.extend_with_cache(db::COL_EXTRA, &mut *write_details, details_map, CacheUpdatePolicy::Overwrite);
 	}
 
@@ -1060,12 +1042,12 @@ impl BlockChain {
 	fn prepare_update(&self, batch: &mut DBTransaction, update: ExtrasUpdate, is_best: bool) {
 
 		{
-			let mut write_receipts = self.block_receipts.write();
+			let mut write_receipts = self.block_receipts.write().unwrap();
 			batch.extend_with_cache(db::COL_EXTRA, &mut *write_receipts, update.block_receipts, CacheUpdatePolicy::Remove);
 		}
 
 		{
-			let mut write_blocks_blooms = self.blocks_blooms.write();
+			let mut write_blocks_blooms = self.blocks_blooms.write().unwrap();
 			// update best block
 			match update.info.location {
 				BlockLocation::Branch => (),
@@ -1098,8 +1080,10 @@ impl BlockChain {
 		// These cached values must be updated last with all four locks taken to avoid
 		// cache decoherence
 		{
-			let mut best_block = self.pending_best_block.write();
+			let mut best_block = self.pending_best_block.write().unwrap();
 			if is_best && update.info.location != BlockLocation::Branch {
+				// With the removal of the cached best block, our view of the best block changes
+				// immediately after this db write.
 				batch.put(db::COL_EXTRA, b"best", &update.info.hash);
 				let block = encoded::Block::new(update.block.to_vec());
 				*best_block = Some(BestBlock {
@@ -1109,9 +1093,9 @@ impl BlockChain {
 				});
 			}
 
-			let mut write_hashes = self.pending_block_hashes.write();
-			let mut write_details = self.pending_block_details.write();
-			let mut write_txs = self.pending_transaction_addresses.write();
+			let mut write_hashes = self.pending_block_hashes.write().unwrap();
+			let mut write_details = self.pending_block_details.write().unwrap();
+			let mut write_txs = self.pending_transaction_addresses.write().unwrap();
 
 			batch.extend_with_cache(db::COL_EXTRA, &mut *write_details, update.block_details, CacheUpdatePolicy::Overwrite);
 			batch.extend_with_cache(db::COL_EXTRA, &mut *write_hashes, update.block_hashes, CacheUpdatePolicy::Overwrite);
@@ -1121,19 +1105,18 @@ impl BlockChain {
 
 	/// Apply pending insertion updates
 	pub fn commit(&self) {
-		let mut pending_best_block = self.pending_best_block.write();
-		let mut pending_write_hashes = self.pending_block_hashes.write();
-		let mut pending_block_details = self.pending_block_details.write();
-		let mut pending_write_txs = self.pending_transaction_addresses.write();
+		let mut pending_best_block = self.pending_best_block.write().unwrap();
+		let mut pending_write_hashes = self.pending_block_hashes.write().unwrap();
+		let mut pending_block_details = self.pending_block_details.write().unwrap();
+		let mut pending_write_txs = self.pending_transaction_addresses.write().unwrap();
 
-		let mut best_block = self.best_block.write();
-		let mut write_block_details = self.block_details.write();
-		let mut write_hashes = self.block_hashes.write();
-		let mut write_txs = self.transaction_addresses.write();
-		// update best block
-		if let Some(block) = pending_best_block.take() {
-			*best_block = block;
-		}
+		let mut write_block_details = self.block_details.write().unwrap();
+		let mut write_hashes = self.block_hashes.write().unwrap();
+		let mut write_txs = self.transaction_addresses.write().unwrap();
+		// We don't maintain our own record of what is the best block. Accessing the best block
+		// will go out to the db. We rely on `prepare_update` to update the best block hash in the
+		// db prior to this. All we do now is clear the pending best block.
+		*pending_best_block = None;
 
 		let pending_txs = mem::replace(&mut *pending_write_txs, HashMap::new());
 		let (retracted_txs, enacted_txs) = pending_txs.into_iter().partition::<HashMap<_, _>, _>(|&(_, ref value)| value.is_none());
@@ -1150,7 +1133,7 @@ impl BlockChain {
 			write_txs.remove(hash);
 		}
 
-		let mut cache_man = self.cache_man.lock();
+		let mut cache_man = self.cache_man.lock().unwrap();
 		for n in pending_hashes_keys {
 			cache_man.note_used(CacheId::BlockHashes(n));
 		}
@@ -1392,39 +1375,41 @@ impl BlockChain {
 			.collect()
 	}
 
+	// These accessors might now be inefficient, with the best block no longer cached.
+
 	/// Get best block hash.
 	pub fn best_block_hash(&self) -> H256 {
-		self.best_block.read().header.hash()
+		self.load_best_block().header.hash()
 	}
 
 	/// Get best block number.
 	pub fn best_block_number(&self) -> BlockNumber {
-		self.best_block.read().header.number()
+		self.load_best_block().header.number()
 	}
 
 	/// Get best block timestamp.
 	pub fn best_block_timestamp(&self) -> u64 {
-		self.best_block.read().header.timestamp()
+		self.load_best_block().header.timestamp()
 	}
 
 	/// Get best block total difficulty.
 	pub fn best_block_total_difficulty(&self) -> U256 {
-		self.best_block.read().total_difficulty
+		self.load_best_block().total_difficulty
 	}
 
 	/// Get best block header
 	pub fn best_block_header(&self) -> Header {
-		self.best_block.read().header.clone()
+		self.load_best_block().header.clone()
 	}
 
 	/// Get current cache size.
 	pub fn cache_size(&self) -> CacheSize {
 		CacheSize {
-			blocks: self.block_headers.read().heap_size_of_children() + self.block_bodies.read().heap_size_of_children(),
-			block_details: self.block_details.read().heap_size_of_children(),
-			transaction_addresses: self.transaction_addresses.read().heap_size_of_children(),
-			blocks_blooms: self.blocks_blooms.read().heap_size_of_children(),
-			block_receipts: self.block_receipts.read().heap_size_of_children(),
+			blocks: self.block_headers.read().unwrap().heap_size_of_children() + self.block_bodies.read().unwrap().heap_size_of_children(),
+			block_details: self.block_details.read().unwrap().heap_size_of_children(),
+			transaction_addresses: self.transaction_addresses.read().unwrap().heap_size_of_children(),
+			blocks_blooms: self.blocks_blooms.read().unwrap().heap_size_of_children(),
+			block_receipts: self.block_receipts.read().unwrap().heap_size_of_children(),
 		}
 	}
 
@@ -1432,15 +1417,15 @@ impl BlockChain {
 	pub fn collect_garbage(&self) {
 		let current_size = self.cache_size().total();
 
-		let mut block_headers = self.block_headers.write();
-		let mut block_bodies = self.block_bodies.write();
-		let mut block_details = self.block_details.write();
-		let mut block_hashes = self.block_hashes.write();
-		let mut transaction_addresses = self.transaction_addresses.write();
-		let mut blocks_blooms = self.blocks_blooms.write();
-		let mut block_receipts = self.block_receipts.write();
+		let mut block_headers = self.block_headers.write().unwrap();
+		let mut block_bodies = self.block_bodies.write().unwrap();
+		let mut block_details = self.block_details.write().unwrap();
+		let mut block_hashes = self.block_hashes.write().unwrap();
+		let mut transaction_addresses = self.transaction_addresses.write().unwrap();
+		let mut blocks_blooms = self.blocks_blooms.write().unwrap();
+		let mut block_receipts = self.block_receipts.write().unwrap();
 
-		let mut cache_man = self.cache_man.lock();
+		let mut cache_man = self.cache_man.lock().unwrap();
 		cache_man.collect_garbage(current_size, | ids | {
 			for id in &ids {
 				match *id {
@@ -1484,8 +1469,8 @@ impl BlockChain {
 	/// Returns general blockchain information
 	pub fn chain_info(&self) -> BlockChainInfo {
 		// ensure data consistencly by locking everything first
-		let best_block = self.best_block.read();
-		let best_ancient_block = self.best_ancient_block.read();
+		let best_block = self.load_best_block();
+		let best_ancient_block = self.best_ancient_block.read().unwrap();
 		BlockChainInfo {
 			total_difficulty: best_block.total_difficulty,
 			pending_total_difficulty: best_block.total_difficulty,

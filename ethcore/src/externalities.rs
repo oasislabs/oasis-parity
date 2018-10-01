@@ -30,6 +30,7 @@ use vm::{
 use evm::FinalizationResult;
 use transaction::UNSIGNED_SENDER;
 use trace::{Tracer, VMTracer};
+use storage::Storage;
 
 /// Policy for handling output data on `RETURN` opcode.
 pub enum OutputPolicy<'a, 'b> {
@@ -77,6 +78,7 @@ pub struct Externalities<'a, T: 'a, V: 'a, B: 'a>
 	tracer: &'a mut T,
 	vm_tracer: &'a mut V,
 	static_flag: bool,
+	storage: &'a mut Storage,
 }
 
 impl<'a, T: 'a, V: 'a, B: 'a> Externalities<'a, T, V, B>
@@ -93,6 +95,7 @@ impl<'a, T: 'a, V: 'a, B: 'a> Externalities<'a, T, V, B>
 		tracer: &'a mut T,
 		vm_tracer: &'a mut V,
 		static_flag: bool,
+		storage: &'a mut Storage,
 	) -> Self {
 		Externalities {
 			state: state,
@@ -106,6 +109,7 @@ impl<'a, T: 'a, V: 'a, B: 'a> Externalities<'a, T, V, B>
 			tracer: tracer,
 			vm_tracer: vm_tracer,
 			static_flag: static_flag,
+			storage: storage,
 		}
 	}
 }
@@ -146,51 +150,11 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 	}
 
 	fn blockhash(&mut self, number: &U256) -> H256 {
-		if self.env_info.number + 256 >= self.machine.params().eip210_transition {
-			let blockhash_contract_address = self.machine.params().eip210_contract_address;
-			let code_res = self.state.code(&blockhash_contract_address)
-				.and_then(|code| self.state.code_hash(&blockhash_contract_address).map(|hash| (code, hash)));
-
-			let (code, code_hash) = match code_res {
-				Ok((code, hash)) => (code, hash),
-				Err(_) => return H256::zero(),
-			};
-
-			let params = ActionParams {
-				sender: self.origin_info.address.clone(),
-				address: blockhash_contract_address.clone(),
-				value: ActionValue::Apparent(self.origin_info.value),
-				code_address: blockhash_contract_address.clone(),
-				origin: self.origin_info.origin.clone(),
-				gas: self.machine.params().eip210_contract_gas,
-				gas_price: 0.into(),
-				code: code,
-				code_hash: Some(code_hash),
-				data: Some(H256::from(number).to_vec()),
-				call_type: CallType::Call,
-				params_type: vm::ParamsType::Separate,
-			};
-
-			let mut output = H256::new();
-			let mut ex = Executive::new(self.state, self.env_info, self.machine);
-			let r = ex.call(params, self.substate, BytesRef::Fixed(&mut output), self.tracer, self.vm_tracer);
-			trace!("ext: blockhash contract({}) -> {:?}({}) self.env_info.number={}\n", number, r, output, self.env_info.number);
-			output
+		if *number < U256::from(self.env_info.number) && number.low_u64() >= cmp::max(256, self.env_info.number) - 256 {
+			let index = self.env_info.number - number.low_u64() - 1;
+			self.env_info.last_hashes[index as usize].clone()
 		} else {
-			// TODO: comment out what this function expects from env_info, since it will produce panics if the latter is inconsistent
-			match *number < U256::from(self.env_info.number) && number.low_u64() >= cmp::max(256, self.env_info.number) - 256 {
-				true => {
-					let index = self.env_info.number - number.low_u64() - 1;
-					assert!(index < self.env_info.last_hashes.len() as u64, format!("Inconsistent env_info, should contain at least {:?} last hashes", index+1));
-					let r = self.env_info.last_hashes[index as usize].clone();
-					trace!("ext: blockhash({}) -> {} self.env_info.number={}\n", number, r, self.env_info.number);
-					r
-				},
-				false => {
-					trace!("ext: blockhash({}) -> null self.env_info.number={}\n", number, self.env_info.number);
-					H256::zero()
-				},
-			}
+			H256::zero()
 		}
 	}
 
@@ -228,7 +192,7 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 				}
 			}
 		}
-		let mut ex = Executive::from_parent(self.state, self.env_info, self.machine, self.depth, self.static_flag);
+		let mut ex = Executive::from_parent(self.state, self.env_info, self.machine, self.depth, self.static_flag, self.storage);
 
 		// TODO: handle internal error separately
 		match ex.create(params, self.substate, &mut None, self.tracer, self.vm_tracer) {
@@ -282,7 +246,7 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 			params.value = ActionValue::Transfer(value);
 		}
 
-		let mut ex = Executive::from_parent(self.state, self.env_info, self.machine, self.depth, self.static_flag);
+		let mut ex = Executive::from_parent(self.state, self.env_info, self.machine, self.depth, self.static_flag, self.storage);
 
 		match ex.call(params, self.substate, BytesRef::Fixed(output), self.tracer, self.vm_tracer) {
 			Ok(FinalizationResult{ gas_left, return_data, apply_state: true }) => MessageCallResult::Success(gas_left, return_data),
@@ -406,6 +370,14 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 
 	fn trace_executed(&mut self, gas_used: U256, stack_push: &[U256], mem_diff: Option<(usize, &[u8])>, store_diff: Option<(U256, U256)>) {
 		self.vm_tracer.trace_executed(gas_used, stack_push, mem_diff, store_diff)
+	}
+
+	fn fetch_bytes(&self, key: &H256) -> vm::Result<Vec<u8>> {
+		self.storage.fetch_bytes(key)
+	}
+
+	fn store_bytes(&mut self, bytes: &[u8]) -> vm::Result<H256> {
+		self.storage.store_bytes(bytes)
 	}
 }
 

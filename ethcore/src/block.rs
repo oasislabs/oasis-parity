@@ -32,13 +32,18 @@ use engines::EthEngine;
 use error::{Error, BlockError};
 use factory::Factories;
 use header::{Header, ExtendedHeader};
+use journaldb::overlaydb::OverlayDB;
 use receipt::{Receipt, TransactionOutcome};
 use state::State;
-use state_db::StateDB;
+use state::backend::{Basic as BasicBackend, Backend};
+// use state_db::StateDB;
+use storage::Storage;
 use trace::Tracing;
 use transaction::{UnverifiedTransaction, SignedTransaction, Error as TransactionError};
-use verification::PreverifiedBlock;
+// use verification::PreverifiedBlock;
 use views::BlockView;
+
+type StateDB = BasicBackend<OverlayDB>;
 
 /// A block, encoded as it is on the block chain.
 #[derive(Default, Debug, Clone, PartialEq)]
@@ -343,19 +348,49 @@ impl<'x> OpenBlock<'x> {
 		self.block.env_info()
 	}
 
+	pub fn push_transaction(
+        &mut self, tx: SignedTransaction, h: Option<H256>,
+        storage: &mut Storage
+    ) -> Result<&Receipt, Error> {
+        self._push_transaction(tx, None, h, storage)
+	}
+
+	pub fn push_transaction_enc(
+        &mut self,
+        tx: SignedTransaction,
+        tx_encrypted: SignedTransaction ,
+        h: Option<H256>,
+        storage: &mut Storage
+	) -> Result<&Receipt, Error> {
+		self._push_transaction(tx_encrypted, Some(tx), h, storage)
+	}
+
 	/// Push a transaction into the block.
 	///
 	/// If valid, it will be executed, and archived together with the receipt.
-	pub fn push_transaction(&mut self, t: SignedTransaction, h: Option<H256>) -> Result<&Receipt, Error> {
-		if self.block.transactions_set.contains(&t.hash()) {
+	/// tx_block is the transaction to be added to the block and tx_apply is the
+	/// transaction to b e executed over the current state.
+	pub fn _push_transaction(
+		&mut self,
+		tx_block: SignedTransaction,
+		tx_apply: Option<SignedTransaction>,
+		h: Option<H256>,
+		storage: &mut Storage
+	)  -> Result<&Receipt, Error> {
+		let tx_apply = match tx_apply {
+			None => tx_block.clone(),
+			Some(tx_apply) => tx_apply
+		};
+
+		if self.block.transactions_set.contains(&tx_block.hash()) {
 			return Err(TransactionError::AlreadyImported.into());
 		}
 
 		let env_info = self.env_info();
-		let outcome = self.block.state.apply(&env_info, self.engine.machine(), &t, self.block.traces.is_enabled())?;
+		let outcome = self.block.state.apply(&env_info, self.engine.machine(), &tx_apply, self.block.traces.is_enabled(), storage)?;
 
-		self.block.transactions_set.insert(h.unwrap_or_else(||t.hash()));
-		self.block.transactions.push(t.into());
+		self.block.transactions_set.insert(h.unwrap_or_else(||tx_block.hash()));
+		self.block.transactions.push(tx_block.into());
 		if let Tracing::Enabled(ref mut traces) = self.block.traces {
 			traces.push(outcome.trace.into());
 		}
@@ -365,23 +400,23 @@ impl<'x> OpenBlock<'x> {
 
 	/// Push transactions onto the block.
 	#[cfg(not(feature = "slow-blocks"))]
-	fn push_transactions(&mut self, transactions: Vec<SignedTransaction>) -> Result<(), Error> {
+	fn push_transactions(&mut self, transactions: Vec<SignedTransaction>, storage: &mut Storage) -> Result<(), Error> {
 		for t in transactions {
-			self.push_transaction(t, None)?;
+			self.push_transaction(t, None, storage)?;
 		}
 		Ok(())
 	}
 
 	/// Push transactions onto the block.
 	#[cfg(feature = "slow-blocks")]
-	fn push_transactions(&mut self, transactions: Vec<SignedTransaction>) -> Result<(), Error> {
+	fn push_transactions(&mut self, transactions: Vec<SignedTransaction>, storage: &mut Storage) -> Result<(), Error> {
 		use std::time;
 
 		let slow_tx = option_env!("SLOW_TX_DURATION").and_then(|v| v.parse().ok()).unwrap_or(100);
 		for t in transactions {
 			let hash = t.hash();
 			let start = time::Instant::now();
-			self.push_transaction(t, None)?;
+			self.push_transaction(t, None, storage)?;
 			let took = start.elapsed();
 			let took_ms = took.as_secs() * 1000 + took.subsec_nanos() as u64 / 1000000;
 			if took > time::Duration::from_millis(slow_tx) {
@@ -480,7 +515,6 @@ impl<'x> OpenBlock<'x> {
 		}
 	}
 
-	#[cfg(test)]
 	/// Return mutable block reference. To be used in tests only.
 	pub fn block_mut(&mut self) -> &mut ExecutedBlock { &mut self.block }
 }
@@ -509,7 +543,7 @@ impl ClosedBlock {
 		}
 	}
 
-	/// Given an engine reference, reopen the `ClosedBlock` into an `OpenBlock`.
+	// /// Given an engine reference, reopen the `ClosedBlock` into an `OpenBlock`.
 	pub fn reopen(self, engine: &EthEngine) -> OpenBlock {
 		// revert rewards (i.e. set state back at last transaction's state).
 		let mut block = self.block;
@@ -609,80 +643,80 @@ impl IsBlock for SealedBlock {
 	fn block(&self) -> &ExecutedBlock { &self.block }
 }
 
-/// Enact the block given by block header, transactions and uncles
-fn enact(
-	header: Header,
-	transactions: Vec<SignedTransaction>,
-	uncles: Vec<Header>,
-	engine: &EthEngine,
-	tracing: bool,
-	db: StateDB,
-	parent: &Header,
-	last_hashes: Arc<LastHashes>,
-	factories: Factories,
-	is_epoch_begin: bool,
-	ancestry: &mut Iterator<Item=ExtendedHeader>,
-) -> Result<LockedBlock, Error> {
-	{
-		if ::log::max_log_level() >= ::log::LogLevel::Trace {
-			let s = State::from_existing(db.boxed_clone(), parent.state_root().clone(), engine.account_start_nonce(parent.number() + 1), factories.clone())?;
-			trace!(target: "enact", "num={}, root={}, author={}, author_balance={}\n",
-				header.number(), s.root(), header.author(), s.balance(&header.author())?);
-		}
-	}
-
-	let mut b = OpenBlock::new(
-		engine,
-		factories,
-		tracing,
-		db,
-		parent,
-		last_hashes,
-		Address::new(),
-		(3141562.into(), 31415620.into()),
-		vec![],
-		is_epoch_begin,
-		ancestry,
-	)?;
-
-	b.populate_from(&header);
-	b.push_transactions(transactions)?;
-
-	for u in uncles {
-		b.push_uncle(u)?;
-	}
-
-	Ok(b.close_and_lock())
-}
-
-/// Enact the block given by `block_bytes` using `engine` on the database `db` with given `parent` block header
-pub fn enact_verified(
-	block: PreverifiedBlock,
-	engine: &EthEngine,
-	tracing: bool,
-	db: StateDB,
-	parent: &Header,
-	last_hashes: Arc<LastHashes>,
-	factories: Factories,
-	is_epoch_begin: bool,
-	ancestry: &mut Iterator<Item=ExtendedHeader>,
-) -> Result<LockedBlock, Error> {
-	let view = view!(BlockView, &block.bytes);
-
-	enact(
-		block.header,
-		block.transactions,
-		view.uncles(),
-		engine,
-		tracing,
-		db,
-		parent,
-		last_hashes,
-		factories,
-		is_epoch_begin,
-		ancestry,
-	)
-}
+// // /// Enact the block given by block header, transactions and uncles
+// // fn enact(
+// // 	header: Header,
+// // 	transactions: Vec<SignedTransaction>,
+// // 	uncles: Vec<Header>,
+// // 	engine: &EthEngine,
+// // 	tracing: bool,
+// // 	db: StateDB,
+// // 	parent: &Header,
+// // 	last_hashes: Arc<LastHashes>,
+// // 	factories: Factories,
+// // 	is_epoch_begin: bool,
+// // 	ancestry: &mut Iterator<Item=ExtendedHeader>,
+// // ) -> Result<LockedBlock, Error> {
+// // 	{
+// // 		if ::log::max_log_level() >= ::log::LogLevel::Trace {
+// // 			let s = State::from_existing(db.boxed_clone(), parent.state_root().clone(), engine.account_start_nonce(parent.number() + 1), factories.clone())?;
+// // 			trace!(target: "enact", "num={}, root={}, author={}, author_balance={}\n",
+// // 				header.number(), s.root(), header.author(), s.balance(&header.author())?);
+// // 		}
+// // 	}
+// //
+// // 	let mut b = OpenBlock::new(
+// // 		engine,
+// // 		factories,
+// // 		tracing,
+// // 		db,
+// // 		parent,
+// // 		last_hashes,
+// // 		Address::new(),
+// // 		(3141562.into(), 31415620.into()),
+// // 		vec![],
+// // 		is_epoch_begin,
+// // 		ancestry,
+// // 	)?;
+// //
+// // 	b.populate_from(&header);
+// // 	b.push_transactions(transactions)?;
+// //
+// // 	for u in uncles {
+// // 		b.push_uncle(u)?;
+// // 	}
+// //
+// // 	Ok(b.close_and_lock())
+// // }
+//
+// // /// Enact the block given by `block_bytes` using `engine` on the database `db` with given `parent` block header
+// // pub fn enact_verified(
+// // 	block: PreverifiedBlock,
+// // 	engine: &EthEngine,
+// // 	tracing: bool,
+// // 	db: StateDB,
+// // 	parent: &Header,
+// // 	last_hashes: Arc<LastHashes>,
+// // 	factories: Factories,
+// // 	is_epoch_begin: bool,
+// // 	ancestry: &mut Iterator<Item=ExtendedHeader>,
+// // ) -> Result<LockedBlock, Error> {
+// // 	let view = view!(BlockView, &block.bytes);
+// //
+// // 	enact(
+// // 		block.header,
+// // 		block.transactions,
+// // 		view.uncles(),
+// // 		engine,
+// // 		tracing,
+// // 		db,
+// // 		parent,
+// // 		last_hashes,
+// // 		factories,
+// // 		is_epoch_begin,
+// // 		ancestry,
+// // 	)
+// // }
 
 #[cfg(test)]
 mod tests {

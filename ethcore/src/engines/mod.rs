@@ -16,38 +16,38 @@
 
 //! Consensus engine specification and basic implementations.
 
-mod authority_round;
-mod basic_authority;
+// mod authority_round;
+// mod basic_authority;
 mod instant_seal;
 mod null_engine;
-mod signer;
-mod tendermint;
-mod transition;
-mod validator_set;
-mod vote_collector;
-
-pub mod block_reward;
-pub mod epoch;
-
-pub use self::authority_round::AuthorityRound;
-pub use self::basic_authority::BasicAuthority;
-pub use self::epoch::{EpochVerifier, Transition as EpochTransition};
+// mod signer;
+// mod tendermint;
+// mod transition;
+// mod validator_set;
+// mod vote_collector;
+//
+// pub mod block_reward;
+// pub mod epoch;
+//
+// pub use self::authority_round::AuthorityRound;
+// pub use self::basic_authority::BasicAuthority;
+// pub use self::epoch::{EpochVerifier, Transition as EpochTransition};
 pub use self::instant_seal::InstantSeal;
 pub use self::null_engine::NullEngine;
-pub use self::tendermint::Tendermint;
+// pub use self::tendermint::Tendermint;
 
 use std::sync::{Weak, Arc};
 use std::collections::{BTreeMap, HashMap};
 use std::{fmt, error};
 
-use self::epoch::PendingTransition;
+// use self::epoch::PendingTransition;
 
-use account_provider::AccountProvider;
+// use account_provider::AccountProvider;
 use builtin::Builtin;
 use vm::{EnvInfo, Schedule, CreateContractAddress};
 use error::Error;
 use header::{Header, BlockNumber};
-use snapshot::SnapshotComponents;
+// use snapshot::SnapshotComponents;
 use spec::CommonParams;
 use transaction::{self, UnverifiedTransaction, SignedTransaction};
 
@@ -137,58 +137,58 @@ pub type SystemCall<'a> = FnMut(Address, Vec<u8>) -> Result<Vec<u8>, String> + '
 pub type Headers<'a, H> = Fn(H256) -> Option<H> + 'a;
 
 /// Type alias for a function we can query pending transitions by block hash through.
-pub type PendingTransitionStore<'a> = Fn(H256) -> Option<PendingTransition> + 'a;
+// pub type PendingTransitionStore<'a> = Fn(H256) -> Option<PendingTransition> + 'a;
 
 /// Proof dependent on state.
-pub trait StateDependentProof<M: Machine>: Send + Sync {
-	/// Generate a proof, given the state.
-	// TODO: make this into an &M::StateContext
-	fn generate_proof<'a>(&self, state: &<M as Localized<'a>>::StateContext) -> Result<Vec<u8>, String>;
-	/// Check a proof generated elsewhere (potentially by a peer).
-	// `engine` needed to check state proofs, while really this should
-	// just be state machine params.
-	fn check_proof(&self, machine: &M, proof: &[u8]) -> Result<(), String>;
-}
-
-/// Proof generated on epoch change.
-pub enum Proof<M: Machine> {
-	/// Known proof (extracted from signal)
-	Known(Vec<u8>),
-	/// State dependent proof.
-	WithState(Arc<StateDependentProof<M>>),
-}
-
-/// Generated epoch verifier.
-pub enum ConstructedVerifier<'a, M: Machine> {
-	/// Fully trusted verifier.
-	Trusted(Box<EpochVerifier<M>>),
-	/// Verifier unconfirmed. Check whether given finality proof finalizes given hash
-	/// under previous epoch.
-	Unconfirmed(Box<EpochVerifier<M>>, &'a [u8], H256),
-	/// Error constructing verifier.
-	Err(Error),
-}
-
-impl<'a, M: Machine> ConstructedVerifier<'a, M> {
-	/// Convert to a result, indicating that any necessary confirmation has been done
-	/// already.
-	pub fn known_confirmed(self) -> Result<Box<EpochVerifier<M>>, Error> {
-		match self {
-			ConstructedVerifier::Trusted(v) | ConstructedVerifier::Unconfirmed(v, _, _) => Ok(v),
-			ConstructedVerifier::Err(e) => Err(e),
-		}
-	}
-}
-
-/// Results of a query of whether an epoch change occurred at the given block.
-pub enum EpochChange<M: Machine> {
-	/// Cannot determine until more data is passed.
-	Unsure(M::AuxiliaryRequest),
-	/// No epoch change.
-	No,
-	/// The epoch will change, with proof.
-	Yes(Proof<M>),
-}
+// pub trait StateDependentProof<M: Machine>: Send + Sync {
+// 	/// Generate a proof, given the state.
+// 	// TODO: make this into an &M::StateContext
+// 	fn generate_proof<'a>(&self, state: &<M as Localized<'a>>::StateContext) -> Result<Vec<u8>, String>;
+// 	/// Check a proof generated elsewhere (potentially by a peer).
+// 	// `engine` needed to check state proofs, while really this should
+// 	// just be state machine params.
+// 	fn check_proof(&self, machine: &M, proof: &[u8]) -> Result<(), String>;
+// }
+//
+// /// Proof generated on epoch change.
+// pub enum Proof<M: Machine> {
+// 	/// Known proof (extracted from signal)
+// 	Known(Vec<u8>),
+// 	/// State dependent proof.
+// 	WithState(Arc<StateDependentProof<M>>),
+// }
+//
+// /// Generated epoch verifier.
+// pub enum ConstructedVerifier<'a, M: Machine> {
+// 	/// Fully trusted verifier.
+// 	Trusted(Box<EpochVerifier<M>>),
+// 	/// Verifier unconfirmed. Check whether given finality proof finalizes given hash
+// 	/// under previous epoch.
+// 	Unconfirmed(Box<EpochVerifier<M>>, &'a [u8], H256),
+// 	/// Error constructing verifier.
+// 	Err(Error),
+// }
+//
+// impl<'a, M: Machine> ConstructedVerifier<'a, M> {
+// 	/// Convert to a result, indicating that any necessary confirmation has been done
+// 	/// already.
+// 	pub fn known_confirmed(self) -> Result<Box<EpochVerifier<M>>, Error> {
+// 		match self {
+// 			ConstructedVerifier::Trusted(v) | ConstructedVerifier::Unconfirmed(v, _, _) => Ok(v),
+// 			ConstructedVerifier::Err(e) => Err(e),
+// 		}
+// 	}
+// }
+//
+// /// Results of a query of whether an epoch change occurred at the given block.
+// pub enum EpochChange<M: Machine> {
+// 	/// Cannot determine until more data is passed.
+// 	Unsure(M::AuxiliaryRequest),
+// 	/// No epoch change.
+// 	No,
+// 	/// The epoch will change, with proof.
+// 	Yes(Proof<M>),
+// }
 
 /// A consensus mechanism for the chain. Generally either proof-of-work or proof-of-stake-based.
 /// Provides hooks into each of the major parts of block import.
@@ -281,11 +281,11 @@ pub trait Engine<M: Machine>: Sync + Send {
 	/// Return `Yes` or `No` when the answer is definitively known.
 	///
 	/// Should not interact with state.
-	fn signals_epoch_end<'a>(&self, _header: &M::Header, _aux: <M as Localized<'a>>::AuxiliaryData)
-		-> EpochChange<M>
-	{
-		EpochChange::No
-	}
+	// fn signals_epoch_end<'a>(&self, _header: &M::Header, _aux: <M as Localized<'a>>::AuxiliaryData)
+	// 	-> EpochChange<M>
+	// {
+	// 	EpochChange::No
+	// }
 
 	/// Whether a block is the end of an epoch.
 	///
@@ -294,20 +294,20 @@ pub trait Engine<M: Machine>: Sync + Send {
 	/// from any epoch other than the current.
 	///
 	/// Return optional transition proof.
-	fn is_epoch_end(
-		&self,
-		_chain_head: &M::Header,
-		_chain: &Headers<M::Header>,
-		_transition_store: &PendingTransitionStore,
-	) -> Option<Vec<u8>> {
-		None
-	}
+	// fn is_epoch_end(
+	// 	&self,
+	// 	_chain_head: &M::Header,
+	// 	_chain: &Headers<M::Header>,
+	// 	_transition_store: &PendingTransitionStore,
+	// ) -> Option<Vec<u8>> {
+	// 	None
+	// }
 
 	/// Create an epoch verifier from validation proof and a flag indicating
 	/// whether finality is required.
-	fn epoch_verifier<'a>(&self, _header: &M::Header, _proof: &'a [u8]) -> ConstructedVerifier<'a, M> {
-		ConstructedVerifier::Trusted(Box::new(self::epoch::NoOp))
-	}
+	// fn epoch_verifier<'a>(&self, _header: &M::Header, _proof: &'a [u8]) -> ConstructedVerifier<'a, M> {
+	// 	ConstructedVerifier::Trusted(Box::new(self::epoch::NoOp))
+	// }
 
 	/// Populate a header's fields based on its parent's header.
 	/// Usually implements the chain scoring rule based on weight.
@@ -322,13 +322,13 @@ pub trait Engine<M: Machine>: Sync + Send {
 	fn is_proposal(&self, _verified_header: &M::Header) -> bool { false }
 
 	/// Register an account which signs consensus messages.
-	fn set_signer(&self, _account_provider: Arc<AccountProvider>, _address: Address, _password: String) {}
+	// fn set_signer(&self, _account_provider: Arc<AccountProvider>, _address: Address, _password: String) {}
 
 	/// Sign using the EngineSigner, to be used for consensus tx signing.
 	fn sign(&self, _hash: H256) -> Result<Signature, M::Error> { unimplemented!() }
 
 	/// Add Client which can be used for sealing, potentially querying the state and sending messages.
-	fn register_client(&self, _client: Weak<M::EngineClient>) {}
+	// fn register_client(&self, _client: Weak<M::EngineClient>) {}
 
 	/// Trigger next step of the consensus engine.
 	fn step(&self) {}
@@ -338,13 +338,14 @@ pub trait Engine<M: Machine>: Sync + Send {
 
 	/// Create a factory for building snapshot chunks and restoring from them.
 	/// Returning `None` indicates that this engine doesn't support snapshot creation.
-	fn snapshot_components(&self) -> Option<Box<SnapshotComponents>> {
-		None
-	}
+	// fn snapshot_components(&self) -> Option<Box<SnapshotComponents>> {
+	// 	None
+	// }
 
 	/// Whether this engine supports warp sync.
 	fn supports_warp(&self) -> bool {
-		self.snapshot_components().is_some()
+		// self.snapshot_components().is_some()
+		false
 	}
 
 	/// Return a new open block header timestamp based on the parent timestamp.

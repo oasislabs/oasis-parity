@@ -216,4 +216,12 @@ impl Ext for FakeExt {
 	fn trace_next_instruction(&mut self, _pc: usize, _instruction: u8, _gas: U256) -> bool {
 		self.tracing
 	}
+
+	fn fetch_bytes(&self, _key: &H256) -> Result<Vec<u8>> {
+		Ok(Vec::new())
+	}
+
+	fn store_bytes(&mut self, _bytes: &[u8]) -> Result<H256> {
+		Ok(H256::zero())
+	}
 }
