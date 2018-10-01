@@ -235,14 +235,15 @@ impl EthereumMachine {
 			return
 		}
 
-		header.set_gas_limit({
-			let bound_divisor = self.params().gas_limit_bound_divisor;
-			if gas_limit < gas_floor_target {
-				cmp::min(gas_floor_target, gas_limit + gas_limit / bound_divisor - U256::one())
-			} else {
-				cmp::max(gas_floor_target, gas_limit - gas_limit / bound_divisor + U256::one())
-			}
-		});
+		//  header.set_gas_limit({
+		//  	let bound_divisor = self.params().gas_limit_bound_divisor;
+		//  	if gas_limit < gas_floor_target {
+		//  		cmp::min(gas_floor_target, gas_limit + gas_limit / bound_divisor - U256::one())
+		//  	} else {
+		//  		cmp::max(gas_floor_target, gas_limit - gas_limit / bound_divisor + U256::one())
+		//  	}
+		//  });
+		header.set_gas_limit(gas_limit);
 	}
 
 	/// Get the general parameters of the chain.
