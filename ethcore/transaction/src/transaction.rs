@@ -492,9 +492,21 @@ impl SignedTransaction {
 		self.sender
 	}
 
+	/// Used to make a copy of an encrypted transaction with a decrypted data field.
+	/// This will not be the result of an ecrecover on the tx's v, r, s.
+	pub fn set_sender(&mut self, sender: Address) {
+		self.sender = sender;
+	}
+
 	/// Returns a public key of the sender.
 	pub fn public_key(&self) -> Option<Public> {
 		self.public
+	}
+
+	/// Used to make a copy of an encrypted transaction with a decrypted data field.
+	/// This will not be the result of an ecrecover on the tx's v, r, s.
+	pub fn set_public_key(&mut self, public: Option<Public>) {
+		self.public = public;
 	}
 
 	/// Checks is signature is empty.
