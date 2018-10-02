@@ -609,13 +609,12 @@ impl<'a> Runtime<'a> {
 
 	fn debug(&mut self, args: RuntimeArgs) -> Result<()>
 	{
-		println!(target: "wasm", "Contract debug message: {}", {
-			let msg_ptr: u32 = args.nth_checked(0)?;
-			let msg_len: u32 = args.nth_checked(1)?;
-
-			String::from_utf8(self.memory.get(msg_ptr, msg_len as usize)?)
-				.map_err(|_| Error::BadUtf8)?
-		});
+		let msg_ptr: u32 = args.nth_checked(0)?;
+		let msg_len: u32 = args.nth_checked(1)?;
+		let debug_str = String::from_utf8(
+			self.memory.get(msg_ptr, msg_len as usize)?
+		).map_err(|_| Error::BadUtf8)?;
+		println!("Contract debug message: {}", debug_str);
 
 		Ok(())
 	}
