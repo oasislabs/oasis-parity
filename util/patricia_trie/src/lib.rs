@@ -23,6 +23,7 @@ extern crate hashdb;
 extern crate ethcore_bytes as bytes;
 extern crate elastic_array;
 extern crate memorydb;
+extern crate kvdb;
 // extern crate ethcore_logger;
 
 #[cfg(test)]
@@ -48,6 +49,7 @@ mod fatdbmut;
 mod lookup;
 mod nibbleslice;
 mod nibblevec;
+mod passthrough;
 
 pub use self::triedbmut::TrieDBMut;
 pub use self::triedb::{TrieDB, TrieDBIterator};
@@ -55,6 +57,7 @@ pub use self::sectriedbmut::SecTrieDBMut;
 pub use self::sectriedb::SecTrieDB;
 pub use self::fatdb::{FatDB, FatDBIterator};
 pub use self::fatdbmut::FatDBMut;
+pub use self::passthrough::{PassthroughDB, PassthroughDBMut};
 pub use self::recorder::Recorder;
 
 /// Trie Errors.
@@ -203,6 +206,8 @@ pub trait TrieIterator : Iterator {
 /// Trie types
 #[derive(Debug, PartialEq, Clone)]
 pub enum TrieSpec {
+	/// Passthrough "trie", specfiying the column to use.
+	Passthrough(Option<u32>),
 	/// Generic trie.
 	Generic,
 	/// Secure trie.
@@ -226,6 +231,8 @@ pub struct TrieFactory {
 /// All different kinds of tries.
 /// This is used to prevent a heap allocation for every created trie.
 pub enum TrieKinds<'db> {
+	/// A passthrough "trie".
+	Passthrough(PassthroughDB<'db>),
 	/// A generic trie db.
 	Generic(TrieDB<'db>),
 	/// A secure trie db.
@@ -238,6 +245,7 @@ pub enum TrieKinds<'db> {
 macro_rules! wrapper {
 	($me: ident, $f_name: ident, $($param: ident),*) => {
 		match *$me {
+			TrieKinds::Passthrough(ref t) => Trie::$f_name(t, $($param),*),
 			TrieKinds::Generic(ref t) => t.$f_name($($param),*),
 			TrieKinds::Secure(ref t) => t.$f_name($($param),*),
 			TrieKinds::Fat(ref t) => t.$f_name($($param),*),
@@ -280,6 +288,7 @@ impl TrieFactory {
 	/// Create new immutable instance of Trie.
 	pub fn readonly<'db>(&self, db: &'db HashDB, root: &'db H256) -> Result<TrieKinds<'db>> {
 		match self.spec {
+			TrieSpec::Passthrough(col) => Ok(TrieKinds::Passthrough(PassthroughDB::new(col, db, root))),
 			TrieSpec::Generic => Ok(TrieKinds::Generic(TrieDB::new(db, root)?)),
 			TrieSpec::Secure => Ok(TrieKinds::Secure(SecTrieDB::new(db, root)?)),
 			TrieSpec::Fat => Ok(TrieKinds::Fat(FatDB::new(db, root)?)),
@@ -289,6 +298,7 @@ impl TrieFactory {
 	/// Create new mutable instance of Trie.
 	pub fn create<'db>(&self, db: &'db mut HashDB, root: &'db mut H256) -> Box<TrieMut + 'db> {
 		match self.spec {
+			TrieSpec::Passthrough(col) => Box::new(PassthroughDBMut::new(col, db, root)),
 			TrieSpec::Generic => Box::new(TrieDBMut::new(db, root)),
 			TrieSpec::Secure => Box::new(SecTrieDBMut::new(db, root)),
 			TrieSpec::Fat => Box::new(FatDBMut::new(db, root)),
@@ -298,6 +308,7 @@ impl TrieFactory {
 	/// Create new mutable instance of trie and check for errors.
 	pub fn from_existing<'db>(&self, db: &'db mut HashDB, root: &'db mut H256) -> Result<Box<TrieMut + 'db>> {
 		match self.spec {
+			TrieSpec::Passthrough(col) => Ok(Box::new(PassthroughDBMut::from_existing(col, db, root)?)),
 			TrieSpec::Generic => Ok(Box::new(TrieDBMut::from_existing(db, root)?)),
 			TrieSpec::Secure => Ok(Box::new(SecTrieDBMut::from_existing(db, root)?)),
 			TrieSpec::Fat => Ok(Box::new(FatDBMut::from_existing(db, root)?)),

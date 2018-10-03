@@ -16,10 +16,11 @@
 
 //! DB backend wrapper for Account trie
 use std::collections::HashMap;
+use std::io::Write;
 use hash::{KECCAK_NULL_RLP, keccak};
 use ethereum_types::H256;
 use kvdb::DBValue;
-use hashdb::HashDB;
+use hashdb::{HashDB, MappedKeyValueDB};
 use rlp::NULL_RLP;
 
 #[cfg(test)]
@@ -127,6 +128,22 @@ impl<'db> HashDB for AccountDB<'db>{
 	fn remove(&mut self, _key: &H256) {
 		unimplemented!()
 	}
+
+	fn get_passthrough_kvdb(&self) -> Option<MappedKeyValueDB> {
+		let address_hash = self.address_hash;
+		self.db.get_passthrough_kvdb()
+			.map(|child| {
+				MappedKeyValueDB {
+					mapper: Box::new(move |key| {
+						let mut new_key = vec![];
+						new_key.write(&address_hash).unwrap();
+						new_key.write(key).unwrap();
+						new_key
+					}),
+					db: child.db,
+				}
+			})
+	}
 }
 
 /// DB backend wrapper for Account trie
@@ -200,6 +217,22 @@ impl<'db> HashDB for AccountDBMut<'db>{
 		let key = combine_key(&self.address_hash, key);
 		self.db.remove(&key)
 	}
+
+	fn get_passthrough_kvdb(&self) -> Option<MappedKeyValueDB> {
+		let address_hash = self.address_hash;
+		self.db.get_passthrough_kvdb()
+			.map(|child| {
+				MappedKeyValueDB {
+					mapper: Box::new(move |key| {
+						let mut new_key = vec![];
+						new_key.write(&address_hash).unwrap();
+						new_key.write(key).unwrap();
+						new_key
+					}),
+					db: child.db,
+				}
+			})
+	}
 }
 
 struct Wrapping<'db>(&'db HashDB);
@@ -233,6 +266,10 @@ impl<'db> HashDB for Wrapping<'db> {
 
 	fn remove(&mut self, _key: &H256) {
 		unimplemented!()
+	}
+
+	fn get_passthrough_kvdb(&self) -> Option<MappedKeyValueDB> {
+		self.0.get_passthrough_kvdb()
 	}
 }
 
@@ -276,5 +313,9 @@ impl<'db> HashDB for WrappingMut<'db>{
 			return;
 		}
 		self.0.remove(key)
+	}
+
+	fn get_passthrough_kvdb(&self) -> Option<MappedKeyValueDB> {
+		self.0.get_passthrough_kvdb()
 	}
 }

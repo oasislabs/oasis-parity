@@ -17,13 +17,22 @@
 //! Database of byte-slices keyed to their Keccak hash.
 extern crate elastic_array;
 extern crate ethereum_types;
+extern crate kvdb;
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use elastic_array::ElasticArray128;
 use ethereum_types::H256;
+use kvdb::KeyValueDB;
 
 /// `HashDB` value type.
 pub type DBValue = ElasticArray128<u8>;
+
+/// Wrapper for a KeyValueDB that also provide a key mapper function.
+pub struct MappedKeyValueDB {
+	pub mapper: Box<Fn(&[u8]) -> Vec<u8>>,
+	pub db: Arc<KeyValueDB>,
+}
 
 /// Trait modelling datastore keyed by a 32-byte Keccak hash.
 pub trait HashDB: AsHashDB + Send + Sync {
@@ -48,6 +57,11 @@ pub trait HashDB: AsHashDB + Send + Sync {
 	/// Remove a datum previously inserted. Insertions can be "owed" such that the same number of `insert()`s may
 	/// happen without the data being eventually being inserted into the DB. It can be "owed" more than once.
 	fn remove(&mut self, key: &H256);
+
+	/// Return the passthrough KeyValueDB if it is available.
+	fn get_passthrough_kvdb(&self) -> Option<MappedKeyValueDB> {
+		None
+	}
 }
 
 /// Upcast trait.
