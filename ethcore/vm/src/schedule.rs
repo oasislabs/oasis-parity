@@ -149,6 +149,20 @@ pub struct WasmCosts {
 
 impl Default for WasmCosts {
 	fn default() -> Self {
+		// WasmCosts {
+		// 	regular: 1,
+		// 	div: 16,
+		// 	mul: 4,
+		// 	mem: 2,
+		// 	static_u256: 64,
+		// 	static_address: 40,
+		// 	initial_mem: 4096,
+		// 	grow_mem: 8192,
+		// 	memcpy: 1,
+		// 	max_stack_height: 64*1024,
+		// 	opcodes_mul: 3,
+		// 	opcodes_div: 8,
+		// }
 		WasmCosts {
 			regular: 1,
 			div: 16,
@@ -156,10 +170,10 @@ impl Default for WasmCosts {
 			mem: 2,
 			static_u256: 64,
 			static_address: 40,
-			initial_mem: 4096,
-			grow_mem: 8192,
+			initial_mem: 1 << 16 - 1,
+			grow_mem: 0,
 			memcpy: 1,
-			max_stack_height: 64*1024,
+			max_stack_height: 4096*1024,
 			opcodes_mul: 3,
 			opcodes_div: 8,
 		}
@@ -291,7 +305,7 @@ impl Schedule {
 			suicide_refund_gas: 24000,
 			memory_gas: 3,
 			quad_coeff_div: 512,
-			create_data_gas: 200,
+			create_data_gas: 1,
 			create_data_limit: usize::max_value(),
 			tx_gas: 21000,
 			tx_create_gas: tcg,
