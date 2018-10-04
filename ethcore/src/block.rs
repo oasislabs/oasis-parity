@@ -45,6 +45,10 @@ use views::BlockView;
 
 type StateDB = BasicBackend<OverlayDB>;
 
+pub trait ReceiptEncrypter {
+    fn encrypt(&self, receipt: Receipt) -> std::result::Result<Receipt, String>;
+}
+
 /// A block, encoded as it is on the block chain.
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct Block {
@@ -352,17 +356,18 @@ impl<'x> OpenBlock<'x> {
         &mut self, tx: SignedTransaction, h: Option<H256>,
         storage: &mut Storage
     ) -> Result<&Receipt, Error> {
-        self._push_transaction(tx, None, h, storage)
+        self._push_transaction(tx, None, None, h, storage)
 	}
 
 	pub fn push_transaction_enc(
         &mut self,
         tx: SignedTransaction,
-        tx_encrypted: SignedTransaction ,
+        tx_encrypted: SignedTransaction,
+        encrypter: Box<ReceiptEncrypter>,
         h: Option<H256>,
         storage: &mut Storage
 	) -> Result<&Receipt, Error> {
-		self._push_transaction(tx_encrypted, Some(tx), h, storage)
+		self._push_transaction(tx_encrypted, Some(tx), Some(encrypter), h, storage)
 	}
 
 	/// Push a transaction into the block.
@@ -374,6 +379,7 @@ impl<'x> OpenBlock<'x> {
 		&mut self,
 		tx_block: SignedTransaction,
 		tx_apply: Option<SignedTransaction>,
+        receipt_encrypter: Option<Box<ReceiptEncrypter>>,
 		h: Option<H256>,
 		storage: &mut Storage
 	)  -> Result<&Receipt, Error> {
@@ -394,9 +400,25 @@ impl<'x> OpenBlock<'x> {
 		if let Tracing::Enabled(ref mut traces) = self.block.traces {
 			traces.push(outcome.trace.into());
 		}
-		self.block.receipts.push(outcome.receipt);
+
+        self.process_receipt(outcome.receipt, receipt_encrypter)?;
+
 		Ok(self.block.receipts.last().expect("receipt just pushed; qed"))
 	}
+
+    fn process_receipt(
+        &mut self, receipt: Receipt,
+        encrypter: Option<Box<ReceiptEncrypter>>
+    ) -> Result<(), Error>{
+        let receipt = match encrypter {
+            None => receipt,
+            Some(encrypter) => encrypter
+                .encrypt(receipt)
+                .map_err(|_| BlockError::InvalidSeal)?,
+        };
+        self.block.receipts.push(receipt);
+        Ok(())
+    }
 
 	/// Push transactions onto the block.
 	#[cfg(not(feature = "slow-blocks"))]
