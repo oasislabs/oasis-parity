@@ -234,7 +234,7 @@ impl Schedule {
 			suicide_refund_gas: 24000,
 			memory_gas: 3,
 			quad_coeff_div: 512,
-			create_data_gas: 200,
+			create_data_gas: 1,
 			create_data_limit: max_code_size,
 			tx_gas: 21000,
 			tx_create_gas: 53000,
