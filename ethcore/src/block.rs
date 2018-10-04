@@ -45,10 +45,6 @@ use views::BlockView;
 
 type StateDB = BasicBackend<OverlayDB>;
 
-pub trait ReceiptEncrypter {
-    fn encrypt(&self, receipt: Receipt) -> std::result::Result<Receipt, String>;
-}
-
 /// A block, encoded as it is on the block chain.
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct Block {
@@ -353,46 +349,47 @@ impl<'x> OpenBlock<'x> {
 	}
 
 	pub fn push_transaction(
-        &mut self, tx: SignedTransaction, h: Option<H256>,
-        storage: &mut Storage
-    ) -> Result<&Receipt, Error> {
-        self._push_transaction(tx, None, None, h, storage)
-	}
-
-	pub fn push_transaction_enc(
-        &mut self,
-        tx: SignedTransaction,
-        tx_encrypted: SignedTransaction,
-        encrypter: Box<ReceiptEncrypter>,
-        h: Option<H256>,
-        storage: &mut Storage
+		&mut self, tx: SignedTransaction,
+		h: Option<H256>,
+		storage: &mut Storage
 	) -> Result<&Receipt, Error> {
-		self._push_transaction(tx_encrypted, Some(tx), Some(encrypter), h, storage)
+		self.push_transaction_with_processing(
+			tx,
+			h,
+			storage,
+			|tx| Ok(tx.clone()),
+			|receipt| Ok(receipt)
+		)
 	}
 
 	/// Push a transaction into the block.
 	///
 	/// If valid, it will be executed, and archived together with the receipt.
-	/// tx_block is the transaction to be added to the block and tx_apply is the
-	/// transaction to b e executed over the current state.
-	pub fn _push_transaction(
+	///
+	/// pre_process_tx returns the transaction used to execute over the current
+	/// state. This is used for decrypting transactions (if needed) before
+	/// executing them.
+	///
+	/// pre_process_receipt returns a new tx receipt to add to the block. Used
+	/// for encrypting logs before adding the receipt to the block.
+	pub fn push_transaction_with_processing<F, G>(
 		&mut self,
 		tx_block: SignedTransaction,
-		tx_apply: Option<SignedTransaction>,
-        receipt_encrypter: Option<Box<ReceiptEncrypter>>,
 		h: Option<H256>,
-		storage: &mut Storage
-	)  -> Result<&Receipt, Error> {
-		let tx_apply = match tx_apply {
-			None => tx_block.clone(),
-			Some(tx_apply) => tx_apply
-		};
-
+		storage: &mut Storage,
+		pre_process_tx: F,
+		pre_process_receipt: G,
+	)  -> Result<&Receipt, Error>
+	where F: FnOnce(&SignedTransaction) -> Result<SignedTransaction, Error>,
+		  G: FnOnce(Receipt) -> Result<Receipt, Error>
+	{
 		if self.block.transactions_set.contains(&tx_block.hash()) {
 			return Err(TransactionError::AlreadyImported.into());
 		}
 
 		let env_info = self.env_info();
+
+		let tx_apply = pre_process_tx(&tx_block)?;
 		let outcome = self.block.state.apply(&env_info, self.engine.machine(), &tx_apply, self.block.traces.is_enabled(), storage)?;
 
 		self.block.transactions_set.insert(h.unwrap_or_else(||tx_block.hash()));
@@ -401,24 +398,11 @@ impl<'x> OpenBlock<'x> {
 			traces.push(outcome.trace.into());
 		}
 
-        self.process_receipt(outcome.receipt, receipt_encrypter)?;
+		let receipt = pre_process_receipt(outcome.receipt)?;
+		self.block.receipts.push(receipt);
 
 		Ok(self.block.receipts.last().expect("receipt just pushed; qed"))
 	}
-
-    fn process_receipt(
-        &mut self, receipt: Receipt,
-        encrypter: Option<Box<ReceiptEncrypter>>
-    ) -> Result<(), Error>{
-        let receipt = match encrypter {
-            None => receipt,
-            Some(encrypter) => encrypter
-                .encrypt(receipt)
-                .map_err(|_| BlockError::InvalidSeal)?,
-        };
-        self.block.receipts.push(receipt);
-        Ok(())
-    }
 
 	/// Push transactions onto the block.
 	#[cfg(not(feature = "slow-blocks"))]
