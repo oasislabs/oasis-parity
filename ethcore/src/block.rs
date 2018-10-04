@@ -349,7 +349,8 @@ impl<'x> OpenBlock<'x> {
 	}
 
 	pub fn push_transaction(
-		&mut self, tx: SignedTransaction,
+		&mut self,
+		tx: SignedTransaction,
 		h: Option<H256>,
 		storage: &mut Storage
 	) -> Result<&Receipt, Error> {
