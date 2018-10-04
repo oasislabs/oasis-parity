@@ -224,6 +224,13 @@ impl HashDB for OverlayDB {
 	fn insert(&mut self, value: &[u8]) -> H256 { self.overlay.insert(value) }
 	fn emplace(&mut self, key: H256, value: DBValue) { self.overlay.emplace(key, value); }
 	fn remove(&mut self, key: &H256) { self.overlay.remove(key); }
+
+	fn get_passthrough_kvdb(&self) -> Option<MappedKeyValueDB> {
+		Some(MappedKeyValueDB {
+			mapper: Box::new(|key| key.to_vec()),
+			db: self.backing.clone(),
+		})
+	}
 }
 
 #[test]
