@@ -171,7 +171,7 @@ pub mod trace;
 mod cache_manager;
 mod blooms;
 mod pod_account;
-mod account_db;
+pub mod account_db;
 mod builtin;
 mod externalities;
 pub mod blockchain;
