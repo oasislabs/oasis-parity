@@ -77,6 +77,7 @@ pub mod ecies {
 	///
 	/// Authenticated data may be empty.
 	pub fn encrypt(public: &Public, auth_data: &[u8], plain: &[u8]) -> Result<Vec<u8>, Error> {
+		/*
 		let r = Random.generate()?;
 		let z = ecdh::agree(r.secret(), public)?;
 		let mut key = [0u8; 32];
@@ -106,6 +107,8 @@ pub mod ecies {
 			msgd[(64 + 16 + plain.len())..].copy_from_slice(&sig);
 		}
 		Ok(msg)
+		*/
+		unimplemented!();
 	}
 
 	/// Decrypt a message with a secret key, checking HMAC for ciphertext

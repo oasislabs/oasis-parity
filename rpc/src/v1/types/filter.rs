@@ -18,7 +18,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::{Error, DeserializeOwned};
 use serde_json::{Value, from_value};
 use ethcore::filter::Filter as EthFilter;
-use ethcore::client::BlockId;
+use ethcore::ids::BlockId;
 use v1::types::{BlockNumber, H160, H256, Log};
 
 /// Variadic value

@@ -30,7 +30,7 @@ rlp = { path = "../rlp" }
 path = { path = "../path" }
 ipnetwork = "0.12.6"
 keccak-hash = { path = "../hash" }
-snappy = { git = "https://github.com/paritytech/rust-snappy" }
+parity-snappy = { git = "https://github.com/paritytech/rust-snappy" }
 serde = "1.0"
 serde_json = "1.0"
 serde_derive = "1.0"

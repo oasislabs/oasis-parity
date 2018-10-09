@@ -30,9 +30,9 @@ macro_rules! try_bf {
 }
 
 #[macro_use]
-mod helpers;
-mod impls;
-mod types;
+pub mod helpers;
+//mod impls;
+pub mod types;
 #[cfg(test)]
 mod tests;
 
@@ -41,18 +41,20 @@ pub mod informant;
 pub mod metadata;
 pub mod traits;
 
-pub use self::traits::{Web3, Eth, EthFilter, EthPubSub, EthSigning, Net, Parity, ParityAccounts, ParitySet, ParitySigning, PubSub, Signer, Personal, Traces, Rpc, SecretStore, Private};
-pub use self::impls::*;
-pub use self::helpers::{NetworkSettings, block_import, dispatch};
+pub use self::traits::{Web3, Eth, EthFilter, EthPubSub, EthSigning, Net, ParitySigning, PubSub, Signer, Personal, Rpc, SecretStore, Private};
+//pub use self::impls::*;
+pub use self::helpers::NetworkSettings;
 pub use self::metadata::Metadata;
 pub use self::types::Origin;
 pub use self::extractors::{RpcExtractor, WsExtractor, WsStats, WsDispatcher};
 
 /// Signer utilities
+/*
 pub mod signer {
 	pub use super::helpers::{SigningQueue, SignerService, ConfirmationsQueue};
 	pub use super::types::{ConfirmationRequest, TransactionModification, U256, TransactionCondition};
 }
+*/
 
 /// Dapps integration utilities
 pub mod dapps {

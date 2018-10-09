@@ -18,12 +18,12 @@
 
 use std::fmt;
 
-use ethcore::account_provider::{SignError as AccountError};
+//use ethcore::account_provider::{SignError as AccountError};
 use ethcore::error::{Error as EthcoreError, ErrorKind, CallError};
 use jsonrpc_core::{futures, Error, ErrorCode, Value};
 use rlp::DecoderError;
 use transaction::Error as TransactionError;
-use ethcore_private_tx::Error as PrivateTransactionError;
+//use ethcore_private_tx::Error as PrivateTransactionError;
 use vm::Error as VMError;
 
 mod codes {
@@ -267,6 +267,7 @@ pub fn fetch<T: fmt::Debug>(error: T) -> Error {
 	}
 }
 
+/*
 pub fn signing(error: AccountError) -> Error {
 	Error {
 		code: ErrorCode::ServerError(codes::ACCOUNT_LOCKED),
@@ -290,6 +291,7 @@ pub fn private_message(error: PrivateTransactionError) -> Error {
 		data: Some(Value::String(format!("{:?}", error))),
 	}
 }
+*/
 
 pub fn private_message_block_id_not_supported() -> Error {
 	Error {

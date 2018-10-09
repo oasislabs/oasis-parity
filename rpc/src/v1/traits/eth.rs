@@ -19,7 +19,7 @@ use jsonrpc_core::{Result, BoxFuture};
 use jsonrpc_macros::Trailing;
 
 use v1::types::{RichBlock, BlockNumber, Bytes, CallRequest, Filter, FilterChanges, Index};
-use v1::types::{Log, Receipt, SyncStatus, Transaction, Work};
+use v1::types::{Log, Receipt, Transaction, Work};
 use v1::types::{H64, H160, H256, U256};
 
 build_rpc_trait! {
@@ -33,7 +33,7 @@ build_rpc_trait! {
 
 		/// Returns an object with data about the sync status or false. (wtf?)
 		#[rpc(name = "eth_syncing")]
-		fn syncing(&self) -> Result<SyncStatus>;
+		fn syncing(&self) -> Result<bool>;
 
 		/// Returns the number of hashes per second that the node is mining with.
 		#[rpc(name = "eth_hashrate")]

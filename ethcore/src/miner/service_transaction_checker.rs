@@ -32,6 +32,7 @@ pub struct ServiceTransactionChecker {
 impl ServiceTransactionChecker {
 	/// Checks if given address is whitelisted to send service transactions.
 	pub fn check<C: CallContract + RegistryInfo>(&self, client: &C, tx: &SignedTransaction) -> Result<bool, String> {
+		/*
 		let sender = tx.sender();
 		let hash = tx.hash();
 
@@ -49,5 +50,7 @@ impl ServiceTransactionChecker {
 			.certified()
 			.call(sender, &|data| client.call_contract(BlockId::Latest, address, data))
 			.map_err(|e| e.to_string())
+		*/
+		unimplemented!();
 	}
 }
