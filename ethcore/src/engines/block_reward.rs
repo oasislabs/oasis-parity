@@ -87,6 +87,7 @@ impl BlockRewardContract {
 		benefactors: &[(Address, RewardKind)],
 		caller: &mut SystemCall,
 	) -> Result<Vec<(Address, U256)>, Error> {
+		/*
 		let reward = self.block_reward_contract.functions().reward();
 
 		let input = reward.input(
@@ -124,6 +125,8 @@ impl BlockRewardContract {
 		let rewards = rewards.into_iter().map(|t| t.to_uint().expect("type checked by ethabi::decode; qed"));
 
 		Ok(addresses.zip(rewards).collect())
+		*/
+		unimplemented!();
 	}
 }
 

@@ -164,6 +164,16 @@ impl TransactOptions<trace::NoopTracer, trace::NoopVMTracer> {
 }
 
 /// Transaction executor.
+#[cfg(feature = "gateway")]
+pub struct Executive<'a, B: 'a + StateBackend> {
+	state: &'a mut State<B>,
+	info: &'a EnvInfo,
+	machine: &'a Machine,
+	depth: usize,
+	static_flag: bool,
+	storage: &'a Storage,
+}
+#[cfg(not(feature = "gateway"))]
 pub struct Executive<'a, B: 'a + StateBackend> {
 	state: &'a mut State<B>,
 	info: &'a EnvInfo,
@@ -175,6 +185,18 @@ pub struct Executive<'a, B: 'a + StateBackend> {
 
 impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 	/// Basic constructor.
+	#[cfg(feature = "gateway")]
+	pub fn new(state: &'a mut State<B>, info: &'a EnvInfo, machine: &'a Machine, storage: &'a Storage) -> Self {
+		Executive {
+			state: state,
+			info: info,
+			machine: machine,
+			depth: 0,
+			static_flag: false,
+			storage: storage,
+		}
+	}
+	#[cfg(not(feature = "gateway"))]
 	pub fn new(state: &'a mut State<B>, info: &'a EnvInfo, machine: &'a Machine, storage: &'a mut Storage) -> Self {
 		Executive {
 			state: state,
@@ -187,6 +209,18 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 	}
 
 	/// Populates executive from parent properties. Increments executive depth.
+	#[cfg(feature = "gateway")]
+	pub fn from_parent(state: &'a mut State<B>, info: &'a EnvInfo, machine: &'a Machine, parent_depth: usize, static_flag: bool, storage: &'a Storage) -> Self {
+		Executive {
+			state: state,
+			info: info,
+			machine: machine,
+			depth: parent_depth + 1,
+			static_flag: static_flag,
+			storage: storage,
+		}
+	}
+	#[cfg(not(feature = "gateway"))]
 	pub fn from_parent(state: &'a mut State<B>, info: &'a EnvInfo, machine: &'a Machine, parent_depth: usize, static_flag: bool, storage: &'a mut Storage) -> Self {
 		Executive {
 			state: state,

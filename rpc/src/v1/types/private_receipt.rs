@@ -15,7 +15,7 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 use v1::types::{H160, H256, TransactionRequest};
-use ethcore_private_tx::{Receipt as EthPrivateReceipt};
+//use ethcore_private_tx::{Receipt as EthPrivateReceipt};
 
 /// Receipt
 #[derive(Debug, Serialize)]
@@ -31,6 +31,7 @@ pub struct PrivateTransactionReceipt {
 	pub status_code: u8,
 }
 
+/*
 impl From<EthPrivateReceipt> for PrivateTransactionReceipt {
 	fn from(r: EthPrivateReceipt) -> Self {
 		PrivateTransactionReceipt {
@@ -40,6 +41,7 @@ impl From<EthPrivateReceipt> for PrivateTransactionReceipt {
 		}
 	}
 }
+*/
 
 /// Receipt and Transaction
 #[derive(Debug, Serialize)]

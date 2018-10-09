@@ -16,7 +16,7 @@ url = "1"
 
 # Miner
 ansi_term = "0.10"
-error-chain = "0.11"
+error-chain = { version = "0.10", default-features = false }
 ethcore-transaction = { path = "../ethcore/transaction" }
 ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
 futures = "0.1"

@@ -183,7 +183,7 @@ pub trait ActivityNotifier: Send + Sync + 'static {
 }
 
 /// Stats-counting RPC middleware
-pub struct Middleware<T: ActivityNotifier = ClientNotifier> {
+pub struct Middleware<T: ActivityNotifier> {
 	stats: Arc<RpcStats>,
 	notifier: T,
 	pool: Option<CpuPool>,
@@ -242,6 +242,7 @@ impl<M: rpc::Metadata, T: ActivityNotifier> rpc::Middleware<M> for Middleware<T>
 	}
 }
 
+/*
 /// Client Notifier
 pub struct ClientNotifier {
 	/// Client
@@ -253,6 +254,7 @@ impl ActivityNotifier for ClientNotifier {
 		self.client.keep_alive()
 	}
 }
+*/
 
 #[cfg(test)]
 mod tests {

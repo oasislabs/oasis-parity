@@ -49,20 +49,20 @@ extern crate ethcore_bytes as bytes;
 extern crate ethcore_crypto as crypto;
 extern crate ethcore_devtools as devtools;
 extern crate ethcore_io as io;
-extern crate ethcore_light as light;
+//extern crate ethcore_light as light;
 extern crate ethcore_logger;
 extern crate ethcore_miner as miner;
-extern crate ethcore_private_tx;
-extern crate ethcore_sync as sync;
+//extern crate ethcore_private_tx;
+//extern crate ethcore_sync as sync;
 extern crate ethcore_transaction as transaction;
 extern crate ethereum_types;
 extern crate ethkey;
-extern crate ethstore;
+//extern crate ethstore;
 extern crate vm;
 extern crate fetch;
 extern crate node_health;
 extern crate parity_reactor;
-extern crate parity_updater as updater;
+//extern crate parity_updater as updater;
 extern crate parity_version as version;
 extern crate rlp;
 extern crate stats;
@@ -101,7 +101,7 @@ extern crate tempdir;
 pub extern crate jsonrpc_ws_server as ws;
 
 mod authcodes;
-mod http_common;
+pub mod http_common;
 pub mod v1;
 
 pub mod tests;
@@ -114,8 +114,8 @@ pub use http::{
 	AccessControlAllowOrigin, Host, DomainsValidation
 };
 
-pub use v1::{NetworkSettings, Metadata, Origin, informant, dispatch, signer, dapps};
-pub use v1::block_import::is_major_importing;
+pub use v1::{NetworkSettings, Metadata, Origin, informant, dapps};
+//pub use v1::block_import::is_major_importing;
 pub use v1::extractors::{RpcExtractor, WsExtractor, WsStats, WsDispatcher};
 pub use authcodes::{AuthCodes, TimeProvider};
 pub use http_common::HttpMetaExtractor;

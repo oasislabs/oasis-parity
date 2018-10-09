@@ -3,6 +3,9 @@ use vm::Result;
 
 pub trait Storage {
 	fn fetch_bytes(&self, key: &H256) -> Result<Vec<u8>>;
+	#[cfg(feature = "gateway")]
+	fn store_bytes(&self, bytes: &[u8]) -> Result<H256>;
+	#[cfg(not(feature = "gateway"))]
 	fn store_bytes(&mut self, bytes: &[u8]) -> Result<H256>;
 }
 
@@ -19,6 +22,12 @@ impl Storage for NullStorage {
 		unimplemented!();
 	}
 
+	#[cfg(feature = "gateway")]
+	fn store_bytes(&self, _bytes: &[u8]) -> Result<H256> {
+		unimplemented!();
+	}
+
+	#[cfg(not(feature = "gateway"))]
 	fn store_bytes(&mut self, _bytes: &[u8]) -> Result<H256> {
 		unimplemented!();
 	}

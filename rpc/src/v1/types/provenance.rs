@@ -17,7 +17,7 @@
 //! Request Provenance
 
 use std::fmt;
-use ethcore::account_provider::DappId as EthDappId;
+//use ethcore::account_provider::DappId as EthDappId;
 use v1::types::H256;
 
 /// RPC request origin
@@ -105,6 +105,7 @@ impl<'a> From<&'a str> for DappId {
 	}
 }
 
+/*
 impl From<EthDappId> for DappId {
 	fn from(id: EthDappId) -> Self {
 		DappId(id.into())
@@ -116,6 +117,7 @@ impl Into<EthDappId> for DappId {
 		Into::<String>::into(self).into()
 	}
 }
+*/
 
 #[cfg(test)]
 mod tests {

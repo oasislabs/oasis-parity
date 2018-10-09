@@ -107,7 +107,7 @@ path = "parity/main.rs"
 name = "parity"
 
 [profile.dev]
-panic = "abort"
+panic = "unwind"
 
 [profile.release]
 debug = false
