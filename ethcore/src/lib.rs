@@ -170,6 +170,9 @@ mod blockchain;
 mod factory;
 mod tx_filter;
 
+mod location;
+mod location_set;
+
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
