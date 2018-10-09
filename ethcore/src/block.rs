@@ -35,7 +35,7 @@ use header::{Header, ExtendedHeader};
 use journaldb::overlaydb::OverlayDB;
 use receipt::{Receipt, TransactionOutcome};
 use state::State;
-use state::backend::{Wrapped as WrappedBackend};
+use state::backend::{Basic as BasicBackend, Backend};
 // use state_db::StateDB;
 use storage::Storage;
 use trace::Tracing;
@@ -43,7 +43,7 @@ use transaction::{UnverifiedTransaction, SignedTransaction, Error as Transaction
 // use verification::PreverifiedBlock;
 use views::BlockView;
 
-type StateDB = WrappedBackend;
+type StateDB = BasicBackend<OverlayDB>;
 
 /// A block, encoded as it is on the block chain.
 #[derive(Default, Debug, Clone, PartialEq)]
