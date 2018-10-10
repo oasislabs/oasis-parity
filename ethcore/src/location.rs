@@ -2,8 +2,10 @@
 
 // To be open sourced eventually.
 
+use std::fmt;
 use std::cmp::{Ordering, PartialOrd};
 use ethereum_types::{Address, H256};
+// use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 // Contract addr: storage key, balance.
 #[derive(Hash, Eq)]
@@ -36,10 +38,34 @@ impl PartialOrd for ParityStorageLocation {
     }
 }
 
+impl fmt::Display for ParityStorageLocation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}:{}", self.contract, self.key)
+    }
+}
+
+// impl Serialize for ParityStorageLocation {
+//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//         where S: Serializer,
+//     {
+//         let mut buffer = [0u8; 160/8 + 256/8];
+//         self.contract.to_big_endian(&mut buffer);
+//     }
+// }
+
 #[derive(Hash, Eq)]
 pub enum ParityLocation {
     Balance(Address),
     Storage(ParityStorageLocation),
+}
+
+impl fmt::Display for ParityLocation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ParityLocation::Balance(addr) => write!(f, "B({})", addr),
+            ParityLocation::Storage(s) => write!(f, "S({})", s)
+        }
+    }
 }
 
 impl PartialEq for ParityLocation {
