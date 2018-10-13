@@ -34,7 +34,7 @@ use factory::Factories;
 use header::{Header, ExtendedHeader};
 use journaldb::overlaydb::OverlayDB;
 use receipt::{Receipt, TransactionOutcome};
-use state::State;
+use state::{State, Encrypter};
 use state::backend::{Wrapped as WrappedBackend};
 // use state_db::StateDB;
 use storage::Storage;
@@ -288,9 +288,10 @@ impl<'x> OpenBlock<'x> {
 		extra_data: Bytes,
 		is_epoch_begin: bool,
 		ancestry: &mut Iterator<Item=ExtendedHeader>,
+		encrypter: Option<Box<Encrypter>>,
 	) -> Result<Self, Error> {
 		let number = parent.number() + 1;
-		let state = State::from_existing(db, parent.state_root().clone(), engine.account_start_nonce(number), factories)?;
+		let state = State::from_existing(db, parent.state_root().clone(), engine.account_start_nonce(number), factories, encrypter)?;
 		let mut r = OpenBlock {
 			block: ExecutedBlock::new(state, last_hashes, tracing),
 			engine: engine,
@@ -348,21 +349,6 @@ impl<'x> OpenBlock<'x> {
 		self.block.env_info()
 	}
 
-	pub fn push_transaction(
-		&mut self,
-		tx: SignedTransaction,
-		h: Option<H256>,
-		storage: &mut Storage
-	) -> Result<&Receipt, Error> {
-		self.push_transaction_with_processing(
-			tx,
-			h,
-			storage,
-			|tx| Ok(tx.clone()),
-			|receipt| Ok(receipt)
-		)
-	}
-
 	/// Push a transaction into the block.
 	///
 	/// If valid, it will be executed, and archived together with the receipt.
@@ -373,34 +359,27 @@ impl<'x> OpenBlock<'x> {
 	///
 	/// pre_process_receipt returns a new tx receipt to add to the block. Used
 	/// for encrypting logs before adding the receipt to the block.
-	pub fn push_transaction_with_processing<F, G>(
+	pub fn push_transaction(
 		&mut self,
-		tx_block: SignedTransaction,
+		tx: SignedTransaction,
 		h: Option<H256>,
-		storage: &mut Storage,
-		pre_process_tx: F,
-		pre_process_receipt: G,
-	)  -> Result<&Receipt, Error>
-	where F: FnOnce(&SignedTransaction) -> Result<SignedTransaction, Error>,
-		  G: FnOnce(Receipt) -> Result<Receipt, Error>
-	{
-		if self.block.transactions_set.contains(&tx_block.hash()) {
+		storage: &mut Storage
+	) -> Result<&Receipt, Error> {
+		if self.block.transactions_set.contains(&tx.hash()) {
 			return Err(TransactionError::AlreadyImported.into());
 		}
 
 		let env_info = self.env_info();
 
-		let tx_apply = pre_process_tx(&tx_block)?;
-		let outcome = self.block.state.apply(&env_info, self.engine.machine(), &tx_apply, self.block.traces.is_enabled(), storage)?;
+		let outcome = self.block.state.apply(&env_info, self.engine.machine(), &tx, self.block.traces.is_enabled(), storage)?;
 
-		self.block.transactions_set.insert(h.unwrap_or_else(||tx_block.hash()));
-		self.block.transactions.push(tx_block.into());
+		self.block.transactions_set.insert(h.unwrap_or_else(||tx.hash()));
+		self.block.transactions.push(tx.into());
 		if let Tracing::Enabled(ref mut traces) = self.block.traces {
 			traces.push(outcome.trace.into());
 		}
 
-		let receipt = pre_process_receipt(outcome.receipt)?;
-		self.block.receipts.push(receipt);
+		self.block.receipts.push(outcome.receipt);
 
 		Ok(self.block.receipts.last().expect("receipt just pushed; qed"))
 	}
@@ -762,7 +741,7 @@ mod tests {
 
 		{
 			if ::log::max_log_level() >= ::log::LogLevel::Trace {
-				let s = State::from_existing(db.boxed_clone(), parent.state_root().clone(), engine.account_start_nonce(parent.number() + 1), factories.clone())?;
+				let s = State::from_existing(db.boxed_clone(), parent.state_root().clone(), engine.account_start_nonce(parent.number() + 1), factories.clone(), None)?;
 				trace!(target: "enact", "num={}, root={}, author={}, author_balance={}\n",
 					header.number(), s.root(), header.author(), s.balance(&header.author())?);
 			}

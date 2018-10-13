@@ -80,6 +80,7 @@ pub struct Externalities<'a, T: 'a, V: 'a, B: 'a>
 	vm_tracer: &'a mut V,
 	static_flag: bool,
 	storage: &'a Storage,
+	encryption_key: Option<Vec<u8>>,
 }
 #[cfg(not(feature = "gateway"))]
 pub struct Externalities<'a, T: 'a, V: 'a, B: 'a>
@@ -97,6 +98,7 @@ pub struct Externalities<'a, T: 'a, V: 'a, B: 'a>
 	vm_tracer: &'a mut V,
 	static_flag: bool,
 	storage: &'a mut Storage,
+	encryption_key: Option<Vec<u8>>,
 }
 
 impl<'a, T: 'a, V: 'a, B: 'a> Externalities<'a, T, V, B>
@@ -129,6 +131,7 @@ impl<'a, T: 'a, V: 'a, B: 'a> Externalities<'a, T, V, B>
 			vm_tracer: vm_tracer,
 			static_flag: static_flag,
 			storage: storage,
+			encryption_key: None,
 		}
 	}
 	#[cfg(not(feature = "gateway"))]
@@ -157,6 +160,7 @@ impl<'a, T: 'a, V: 'a, B: 'a> Externalities<'a, T, V, B>
 			vm_tracer: vm_tracer,
 			static_flag: static_flag,
 			storage: storage,
+			encryption_key: None,
 		}
 	}
 }
@@ -206,6 +210,10 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 	}
 
 	fn create(&mut self, gas: &U256, value: &U256, code: &[u8], address_scheme: CreateContractAddress) -> ContractCreateResult {
+		if self.encryption_key.is_some() {
+			error!("Can't create a contract when executing a confidential contract");
+			return ContractCreateResult::Failed;
+		}
 		// create new contract address
 		let (address, code_hash) = match self.state.nonce(&self.origin_info.address) {
 			Ok(nonce) => contract_address(address_scheme, &self.origin_info.address, &nonce, &code),
@@ -229,6 +237,7 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 			data: None,
 			call_type: CallType::None,
 			params_type: vm::ParamsType::Embedded,
+			confidential: false,
 		};
 
 		if !self.static_flag {
@@ -266,6 +275,11 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 	) -> MessageCallResult {
 		trace!(target: "externalities", "call");
 
+		if self.encryption_key.is_some() {
+			error!("Can't make a contract call when executing a confidential contract");
+			return MessageCallResult::Failed;
+		}
+
 		let code_res = self.state.code(code_address)
 			.and_then(|code| self.state.code_hash(code_address).map(|hash| (code, hash)));
 
@@ -287,6 +301,7 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 			data: Some(data.to_vec()),
 			call_type: call_type,
 			params_type: vm::ParamsType::Separate,
+			confidential: false,
 		};
 
 		if let Some(value) = value {
@@ -356,10 +371,13 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 		}
 
 		let address = self.origin_info.address.clone();
+
+		let data = if self.encryption_key.is_some() { self.encrypt(data.to_vec())? } else { data.to_vec() };
+
 		self.substate.logs.push(LogEntry {
 			address: address,
 			topics: topics,
-			data: data.to_vec()
+			data: data,
 		});
 
 		Ok(())
@@ -426,6 +444,36 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 	fn store_bytes(&mut self, bytes: &[u8]) -> vm::Result<H256> {
 		self.storage.store_bytes(bytes)
 	}
+
+	fn set_encryption_key(&mut self, key: Option<Vec<u8>>) {
+		self.encryption_key = key;
+	}
+
+	fn encrypt(&self, data: Vec<u8>) -> vm::Result<Vec<u8>> {
+		if self.state.encrypter.is_none() || self.encryption_key.is_none() {
+			return Err(vm::Error::Internal("Can't encrypt without an encrypter or key".to_string()));
+		}
+		self.state
+			.encrypter
+			.as_ref()
+			.expect("State should always have an encrypter in encryption mode")
+			.encrypt(data, self.encryption_key.clone().unwrap().to_vec())
+			.map_err(|err| vm::Error::Internal(format!("Could not encrypt {}", err)))
+	}
+
+	fn decrypt(&mut self, data: Vec<u8>) -> vm::Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
+		if self.state.encrypter.is_none() {
+			return Err(vm::Error::Internal("Can't decrypt without a state encrypter".to_string()));
+		}
+
+		let (nonce, key, plaintext) = self.state
+			.encrypter
+			.as_ref()
+			.expect("State should always have an encrypter in encryption mode")
+			.decrypt(data)
+			.map_err(|err| vm::Error::Internal(format!("Could not decrypt {}", err)))?;
+		Ok((nonce, key, plaintext))
+	}
 }
 
 #[cfg(test)]
@@ -489,7 +537,7 @@ mod tests {
 		let mut tracer = NoopTracer;
 		let mut vm_tracer = NoopVMTracer;
 
-		let ext = Externalities::new(state, &setup.env_info, &setup.machine, 0, get_test_origin(), &mut setup.sub_state, OutputPolicy::InitContract(None), &mut tracer, &mut vm_tracer, false);
+		let ext = Externalities::new(state, &setup.env_info, &setup.machine, 0, get_test_origin(), &mut setup.sub_state, OutputPolicy::InitContract(None), &mut tracer, &mut vm_tracer, false, false);
 
 		assert_eq!(ext.env_info().number, 100);
 	}
@@ -501,7 +549,7 @@ mod tests {
 		let mut tracer = NoopTracer;
 		let mut vm_tracer = NoopVMTracer;
 
-		let mut ext = Externalities::new(state, &setup.env_info, &setup.machine, 0, get_test_origin(), &mut setup.sub_state, OutputPolicy::InitContract(None), &mut tracer, &mut vm_tracer, false);
+		let mut ext = Externalities::new(state, &setup.env_info, &setup.machine, 0, get_test_origin(), &mut setup.sub_state, OutputPolicy::InitContract(None), &mut tracer, &mut vm_tracer, false, false);
 
 		let hash = ext.blockhash(&"0000000000000000000000000000000000000000000000000000000000120000".parse::<U256>().unwrap());
 
@@ -525,7 +573,7 @@ mod tests {
 		let mut tracer = NoopTracer;
 		let mut vm_tracer = NoopVMTracer;
 
-		let mut ext = Externalities::new(state, &setup.env_info, &setup.machine, 0, get_test_origin(), &mut setup.sub_state, OutputPolicy::InitContract(None), &mut tracer, &mut vm_tracer, false);
+		let mut ext = Externalities::new(state, &setup.env_info, &setup.machine, 0, get_test_origin(), &mut setup.sub_state, OutputPolicy::InitContract(None), &mut tracer, &mut vm_tracer, false, false);
 
 		let hash = ext.blockhash(&"0000000000000000000000000000000000000000000000000000000000120000".parse::<U256>().unwrap());
 
@@ -540,7 +588,7 @@ mod tests {
 		let mut tracer = NoopTracer;
 		let mut vm_tracer = NoopVMTracer;
 
-		let mut ext = Externalities::new(state, &setup.env_info, &setup.machine, 0, get_test_origin(), &mut setup.sub_state, OutputPolicy::InitContract(None), &mut tracer, &mut vm_tracer, false);
+		let mut ext = Externalities::new(state, &setup.env_info, &setup.machine, 0, get_test_origin(), &mut setup.sub_state, OutputPolicy::InitContract(None), &mut tracer, &mut vm_tracer, false, false);
 
 		let mut output = vec![];
 
@@ -568,7 +616,7 @@ mod tests {
 		let mut vm_tracer = NoopVMTracer;
 
 		{
-			let mut ext = Externalities::new(state, &setup.env_info, &setup.machine, 0, get_test_origin(), &mut setup.sub_state, OutputPolicy::InitContract(None), &mut tracer, &mut vm_tracer, false);
+			let mut ext = Externalities::new(state, &setup.env_info, &setup.machine, 0, get_test_origin(), &mut setup.sub_state, OutputPolicy::InitContract(None), &mut tracer, &mut vm_tracer, false, false);
 			ext.log(log_topics, &log_data).unwrap();
 		}
 
@@ -585,7 +633,7 @@ mod tests {
 		let mut vm_tracer = NoopVMTracer;
 
 		{
-			let mut ext = Externalities::new(state, &setup.env_info, &setup.machine, 0, get_test_origin(), &mut setup.sub_state, OutputPolicy::InitContract(None), &mut tracer, &mut vm_tracer, false);
+			let mut ext = Externalities::new(state, &setup.env_info, &setup.machine, 0, get_test_origin(), &mut setup.sub_state, OutputPolicy::InitContract(None), &mut tracer, &mut vm_tracer, false, false);
 			ext.suicide(refund_account).unwrap();
 		}
 

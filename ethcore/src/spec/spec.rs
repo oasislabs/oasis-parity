@@ -604,7 +604,7 @@ impl Spec {
 		let start_nonce = self.engine.account_start_nonce(0);
 
 		let (root, db) = {
-			let mut state = State::from_existing(db, root, start_nonce, factories.clone())?;
+			let mut state = State::from_existing(db, root, start_nonce, factories.clone(), None)?;
 
 			// Execute contract constructors.
 			let env_info = EnvInfo {
@@ -634,6 +634,8 @@ impl Spec {
 					data: None,
 					call_type: CallType::None,
 					params_type: ParamsType::Embedded,
+					// cannot run confidential contracts pre-defined in genesis/SPEC for now
+					confidential: false,
 				};
 
 				let mut substate = Substate::new();
