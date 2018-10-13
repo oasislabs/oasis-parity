@@ -103,6 +103,19 @@ impl FakeExt {
 }
 
 impl Ext for FakeExt {
+
+	fn set_encryption_key(&mut self, key: Option<[u8; 32]>) {
+		// no-op
+	}
+
+	fn encrypt(&self, data: Vec<u8>) -> Result<Vec<u8>> {
+		Ok(data)
+	}
+
+	fn decrypt(&mut self, data: Vec<u8>) -> Result<(Vec<u8>, [u8; 32], Vec<u8>)> {
+		Ok((vec![], [0u8; 32], data))
+	}
+
 	fn storage_at(&self, key: &H256) -> Result<H256> {
 		Ok(self.store.get(key).unwrap_or(&H256::new()).clone())
 	}

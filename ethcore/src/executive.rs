@@ -26,7 +26,7 @@ use error::ExecutionError;
 use evm::{CallType, Finalize, FinalizationResult};
 use vm::{
 	self, Ext, EnvInfo, CreateContractAddress, ReturnData, CleanDustMode, ActionParams,
-	ActionValue, Schedule,
+	ActionValue, Schedule, GasLeft
 };
 use externalities::*;
 use trace::{self, Tracer, VMTracer};
@@ -34,6 +34,7 @@ use transaction::{Action, SignedTransaction};
 use storage::Storage;
 use storage::NullStorage;
 pub use executed::{Executed, ExecutionResult};
+use confidential_vm::ConfidentialVm;
 
 #[cfg(debug_assertions)]
 /// Roughly estimate what stack size each level of evm depth will use. (Debug build)
@@ -331,6 +332,8 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		let (result, output) = match t.action {
 			Action::Create => {
 				let (new_address, code_hash) = contract_address(self.machine.create_address_scheme(self.info.number), &sender, &nonce, &t.data);
+				let code: Bytes = t.data.clone();
+				let confidential = cfg!(feature = "confidential") && ConfidentialVm::is_confidential(&code);
 				let params = ActionParams {
 					code_address: new_address.clone(),
 					code_hash: code_hash,
@@ -340,15 +343,20 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					gas: init_gas,
 					gas_price: t.gas_price,
 					value: ActionValue::Transfer(t.value),
-					code: Some(Arc::new(t.data.clone())),
+					code: Some(Arc::new(code)),
 					data: None,
 					call_type: CallType::None,
 					params_type: vm::ParamsType::Embedded,
+					confidential: confidential,
 				};
 				let mut out = if output_from_create { Some(vec![]) } else { None };
 				(self.create(params, &mut substate, &mut out, &mut tracer, &mut vm_tracer), out.unwrap_or_else(Vec::new))
 			},
 			Action::Call(ref address) => {
+				let code = self.state.code(address)?;
+				let confidential = cfg!(feature = "confidential") && code.as_ref().map_or(false, |code| {
+					ConfidentialVm::is_confidential(code)
+				});
 				let params = ActionParams {
 					code_address: address.clone(),
 					address: address.clone(),
@@ -357,11 +365,12 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					gas: init_gas,
 					gas_price: t.gas_price,
 					value: ActionValue::Transfer(t.value),
-					code: self.state.code(address)?,
+					code: code,
 					code_hash: Some(self.state.code_hash(address)?),
 					data: Some(t.data.clone()),
 					call_type: CallType::Call,
 					params_type: vm::ParamsType::Separate,
+					confidential: confidential,
 				};
 				let mut out = vec![];
 				(self.call(params, &mut substate, BytesRef::Flexible(&mut out), &mut tracer, &mut vm_tracer), out)

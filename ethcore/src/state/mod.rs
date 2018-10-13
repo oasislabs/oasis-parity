@@ -315,6 +315,16 @@ pub struct State<B: Backend> {
 	checkpoints: RefCell<Vec<HashMap<Address, Option<AccountEntry>>>>,
 	account_start_nonce: U256,
 	factories: Factories,
+	pub encrypter: Option<Box<Encrypter>>,
+}
+
+/// An Encrypter can be injected into the state in order to provide an encryption
+/// mechanism for confidential contracts.
+pub trait Encrypter {
+	/// Encrypts the given data with the given encryption key.
+	fn encrypt(&self, data: Vec<u8>, key: &[u8; 32]) -> Result<Vec<u8>, String>;
+	/// Decrypts the given data, returning a (nonce, key, plaintext) tuple.
+	fn decrypt(&self, data: Vec<u8>) -> Result<(Vec<u8>, [u8; 32], Vec<u8>), String>;
 }
 
 #[derive(Copy, Clone)]
@@ -377,11 +387,12 @@ impl<B: Backend> State<B> {
 			checkpoints: RefCell::new(Vec::new()),
 			account_start_nonce: account_start_nonce,
 			factories: factories,
+			encrypter: None,
 		}
 	}
 
 	/// Creates new state with existing state root
-	pub fn from_existing(db: B, root: H256, account_start_nonce: U256, factories: Factories) -> Result<State<B>, TrieError> {
+	pub fn from_existing(db: B, root: H256, account_start_nonce: U256, factories: Factories, encrypter: Option<Box<Encrypter>>) -> Result<State<B>, TrieError> {
 		if !db.as_hashdb().contains(&root) {
 			return Err(TrieError::InvalidStateRoot(root));
 		}
@@ -392,7 +403,8 @@ impl<B: Backend> State<B> {
 			cache: RefCell::new(HashMap::new()),
 			checkpoints: RefCell::new(Vec::new()),
 			account_start_nonce: account_start_nonce,
-			factories: factories
+			factories: factories,
+			encrypter: encrypter
 		};
 
 		Ok(state)
@@ -1122,6 +1134,7 @@ impl Clone for State<StateDB> {
 			checkpoints: RefCell::new(Vec::new()),
 			account_start_nonce: self.account_start_nonce.clone(),
 			factories: self.factories.clone(),
+			encrypter: None,
 		}
 	}
 }
@@ -1144,6 +1157,7 @@ impl<B: Backend + Clone> Clone for State<B> {
 			checkpoints: RefCell::new(Vec::new()),
 			account_start_nonce: self.account_start_nonce.clone(),
 			factories: self.factories.clone(),
+			encrypter: None,
 		}
 	}
 }
