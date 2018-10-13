@@ -84,7 +84,7 @@ impl<'a, T: 'a, V: 'a, B: 'a> TestExt<'a, T, V, B>
 		let static_call = false;
 		Ok(TestExt {
 			nonce: state.nonce(&address)?,
-			ext: Externalities::new(state, info, machine, depth, origin_info, substate, output, tracer, vm_tracer, static_call),
+			ext: Externalities::new(state, info, machine, depth, origin_info, substate, output, tracer, vm_tracer, static_call, false),
 			callcreates: vec![],
 			sender: address,
 		})

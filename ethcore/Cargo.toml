@@ -76,6 +76,7 @@ trie-standardmap = { path = "../util/trie-standardmap" }
 kvdb-rocksdb = { path = "../util/kvdb-rocksdb" }
 
 [features]
+default = ["confidential"]
 # Display EVM debug traces.
 evm-debug = ["slow-blocks"]
 # Display EVM debug traces when running tests.
@@ -94,3 +95,4 @@ benches = []
 # Compile test helpers
 test-helpers = []
 gateway = []
+confidential = []

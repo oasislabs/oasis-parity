@@ -152,4 +152,14 @@ pub trait Ext {
 	fn fetch_bytes(&self, key: &H256) -> Result<Vec<u8>>;
 
 	fn store_bytes(&mut self, bytes: &[u8]) -> Result<H256>;
+
+    /// Sets the encryption context of the externality. If set, logs will be encrypted
+    /// automatically and one may call the encrypt method.
+    fn set_encryption_key(&mut self, key: Option<Vec<u8>>);
+
+    /// Encrypts the given data with the encryption key used in `set_encryption_key`.
+    fn encrypt(&self, data: Vec<u8>) -> Result<Vec<u8>>;
+
+    /// Decrypts the given data, returning a (nonce, key, plaintext) tuple.
+    fn decrypt(&mut self, data: Vec<u8>) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)>;
 }
