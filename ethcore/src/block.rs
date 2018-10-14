@@ -284,7 +284,7 @@ impl<'x> OpenBlock<'x> {
 		parent: &Header,
 		last_hashes: Arc<LastHashes>,
 		author: Address,
-		gas_range_target: (U256, U256),
+		gas_limit: U256,
 		extra_data: Bytes,
 		is_epoch_begin: bool,
 		ancestry: &mut Iterator<Item=ExtendedHeader>,
@@ -302,10 +302,14 @@ impl<'x> OpenBlock<'x> {
 		r.block.header.set_timestamp(engine.open_block_header_timestamp(parent.timestamp()));
 		r.block.header.set_extra_data(extra_data);
 
-		let gas_floor_target = cmp::max(gas_range_target.0, engine.params().min_gas_limit);
-		let gas_ceil_target = cmp::max(gas_range_target.1, gas_floor_target);
+		//let gas_floor_target = cmp::max(gas_range_target.0, engine.params().min_gas_limit);
+		//let gas_ceil_target = cmp::max(gas_range_target.1, gas_floor_target);
+		let gas_limit = cmp::max(gas_limit, engine.params().min_gas_limit);
+		assert!(!gas_limit.is_zero(), "Gas limit should be > 0");
 
-		engine.machine().populate_from_parent(&mut r.block.header, parent, gas_floor_target, gas_ceil_target);
+		//engine.machine().populate_from_parent(&mut r.block.header, parent, gas_floor_target, gas_ceil_target);
+		r.block.header.set_difficulty(parent.difficulty().clone());
+		r.block.header.set_gas_limit(gas_limit);
 		engine.populate_from_parent(&mut r.block.header, parent);
 
 		engine.machine().on_new_block(&mut r.block)?;
