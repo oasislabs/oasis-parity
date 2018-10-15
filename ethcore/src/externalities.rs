@@ -210,6 +210,10 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 	}
 
 	fn create(&mut self, gas: &U256, value: &U256, code: &[u8], address_scheme: CreateContractAddress) -> ContractCreateResult {
+		if self.encryption_key.is_some() {
+			error!("Can't create a contract when executing a confidential contract");
+			return ContractCreateResult::Failed;
+		}
 		// create new contract address
 		let (address, code_hash) = match self.state.nonce(&self.origin_info.address) {
 			Ok(nonce) => contract_address(address_scheme, &self.origin_info.address, &nonce, &code),
@@ -270,6 +274,11 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 		call_type: CallType
 	) -> MessageCallResult {
 		trace!(target: "externalities", "call");
+
+		if self.encryption_key.is_some() {
+			error!("Can't make a contract call when executing a confidential contract");
+			return MessageCallResult::Failed;
+		}
 
 		let code_res = self.state.code(code_address)
 			.and_then(|code| self.state.code_hash(code_address).map(|hash| (code, hash)));
