@@ -1,7 +1,3 @@
-// (c) Oasis Labs.  All right reserved.
-
-// To be open sourced eventually.
-
 use evm::CallType;
 use std::sync::Arc;
 use vm::{ActionParams, Vm, Ext, GasLeft, Result, ReturnData};

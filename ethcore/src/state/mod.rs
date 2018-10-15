@@ -322,9 +322,9 @@ pub struct State<B: Backend> {
 /// mechanism for confidential contracts.
 pub trait Encrypter {
 	/// Encrypts the given data with the given encryption key.
-	fn encrypt(&self, data: Vec<u8>, key: &[u8; 32]) -> Result<Vec<u8>, String>;
+	fn encrypt(&self, data: Vec<u8>, key: Vec<u8>) -> Result<Vec<u8>, String>;
 	/// Decrypts the given data, returning a (nonce, key, plaintext) tuple.
-	fn decrypt(&self, data: Vec<u8>) -> Result<(Vec<u8>, [u8; 32], Vec<u8>), String>;
+	fn decrypt(&self, data: Vec<u8>) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>), String>;
 }
 
 #[derive(Copy, Clone)]

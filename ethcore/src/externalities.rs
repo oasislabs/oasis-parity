@@ -80,7 +80,7 @@ pub struct Externalities<'a, T: 'a, V: 'a, B: 'a>
 	vm_tracer: &'a mut V,
 	static_flag: bool,
 	storage: &'a Storage,
-	encryption_key: Option<[u8; 32]>,
+	encryption_key: Option<Vec<u8>>,
 }
 #[cfg(not(feature = "gateway"))]
 pub struct Externalities<'a, T: 'a, V: 'a, B: 'a>
@@ -98,7 +98,7 @@ pub struct Externalities<'a, T: 'a, V: 'a, B: 'a>
 	vm_tracer: &'a mut V,
 	static_flag: bool,
 	storage: &'a mut Storage,
-	encryption_key: Option<[u8; 32]>,
+	encryption_key: Option<Vec<u8>>,
 }
 
 impl<'a, T: 'a, V: 'a, B: 'a> Externalities<'a, T, V, B>
@@ -436,7 +436,7 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 		self.storage.store_bytes(bytes)
 	}
 
-	fn set_encryption_key(&mut self, key: Option<[u8; 32]>) {
+	fn set_encryption_key(&mut self, key: Option<Vec<u8>>) {
 		self.encryption_key = key;
 	}
 
@@ -448,11 +448,11 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 			.encrypter
 			.as_ref()
 			.expect("State should always have an encrypter in encryption mode")
-			.encrypt(data, self.encryption_key.as_ref().unwrap())
+			.encrypt(data, self.encryption_key.clone().unwrap().to_vec())
 			.map_err(|err| vm::Error::Internal(format!("Could not encrypt {}", err)))
 	}
 
-	fn decrypt(&mut self, data: Vec<u8>) -> vm::Result<(Vec<u8>, [u8; 32], Vec<u8>)> {
+	fn decrypt(&mut self, data: Vec<u8>) -> vm::Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
 		if self.state.encrypter.is_none() {
 			return Err(vm::Error::Internal("Can't decrypt without a state encrypter".to_string()));
 		}
