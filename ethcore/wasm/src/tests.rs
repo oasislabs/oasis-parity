@@ -50,8 +50,8 @@ macro_rules! reqrep_test {
 			let mut interpreter = wasm_interpreter();
 			interpreter.exec(params, &mut fake_ext)
 				.map(|result| match result {
-					GasLeft::Known(_) => { panic!("Test is expected to return payload to check"); },
-					GasLeft::NeedsReturn { gas_left: gas, data: result, apply_state: _apply } => (gas, result.to_vec()),
+					GasLeft::Known { .. } => { panic!("Test is expected to return payload to check"); },
+					GasLeft::NeedsReturn { gas_left: gas, data: result, .. } => (gas, result.to_vec()),
 				})
 		}
 	};
@@ -59,7 +59,7 @@ macro_rules! reqrep_test {
 
 fn test_finalize(res: Result<GasLeft, vm::Error>) -> Result<U256, vm::Error> {
 	match res {
-		Ok(GasLeft::Known(gas)) => Ok(gas),
+		Ok(GasLeft::Known { gas: gas, .. }) => Ok(gas),
 		Ok(GasLeft::NeedsReturn{..}) => unimplemented!(), // since ret is unimplemented.
 		Err(e) => Err(e),
 	}
@@ -163,8 +163,8 @@ fn identity() {
 		let mut interpreter = wasm_interpreter();
 		let result = interpreter.exec(params, &mut ext).expect("Interpreter to execute without any errors");
 		match result {
-			GasLeft::Known(_) => { panic!("Identity contract should return payload"); },
-			GasLeft::NeedsReturn { gas_left: gas, data: result, apply_state: _apply } => (gas, result.to_vec()),
+			GasLeft::Known { .. } => { panic!("Identity contract should return payload"); },
+			GasLeft::NeedsReturn { gas_left: gas, data: result, .. } => (gas, result.to_vec()),
 		}
 	};
 
@@ -198,8 +198,8 @@ fn dispersion() {
 		let mut interpreter = wasm_interpreter();
 		let result = interpreter.exec(params, &mut ext).expect("Interpreter to execute without any errors");
 		match result {
-			GasLeft::Known(_) => { panic!("Dispersion routine should return payload"); },
-			GasLeft::NeedsReturn { gas_left: gas, data: result, apply_state: _apply } => (gas, result.to_vec()),
+			GasLeft::Known{..} => { panic!("Dispersion routine should return payload"); },
+			GasLeft::NeedsReturn { gas_left: gas, data: result, .. } => (gas, result.to_vec()),
 		}
 	};
 
@@ -226,8 +226,8 @@ fn suicide_not() {
 		let mut interpreter = wasm_interpreter();
 		let result = interpreter.exec(params, &mut ext).expect("Interpreter to execute without any errors");
 		match result {
-			GasLeft::Known(_) => { panic!("Suicidal contract should return payload when had not actualy killed himself"); },
-			GasLeft::NeedsReturn { gas_left: gas, data: result, apply_state: _apply } => (gas, result.to_vec()),
+			GasLeft::Known{..} => { panic!("Suicidal contract should return payload when had not actualy killed himself"); },
+			GasLeft::NeedsReturn { gas_left: gas, data: result, .. } => (gas, result.to_vec()),
 		}
 	};
 
@@ -259,7 +259,7 @@ fn suicide() {
 		let mut interpreter = wasm_interpreter();
 		let result = interpreter.exec(params, &mut ext).expect("Interpreter to execute without any errors");
 		match result {
-			GasLeft::Known(gas) => gas,
+			GasLeft::Known { .. } => gas,
 			GasLeft::NeedsReturn { .. } => {
 				panic!("Suicidal contract should not return anything when had killed itself");
 			},
@@ -286,7 +286,7 @@ fn create() {
 		let mut interpreter = wasm_interpreter();
 		let result = interpreter.exec(params, &mut ext).expect("Interpreter to execute without any errors");
 		match result {
-			GasLeft::Known(gas) => gas,
+			GasLeft::Known { .. } => gas,
 			GasLeft::NeedsReturn { .. } => {
 				panic!("Create contract should not return anthing because ext always fails on creation");
 			},
@@ -331,7 +331,7 @@ fn call_msg() {
 		let mut interpreter = wasm_interpreter();
 		let result = interpreter.exec(params, &mut ext).expect("Interpreter to execute without any errors");
 		match result {
-			GasLeft::Known(gas_left) => gas_left,
+			GasLeft::Known { .. } => gas_left,
 			GasLeft::NeedsReturn { .. } => { panic!("Call test should not return payload"); },
 		}
 	};
@@ -373,8 +373,8 @@ fn call_code() {
 		let mut interpreter = wasm_interpreter();
 		let result = interpreter.exec(params, &mut ext).expect("Interpreter to execute without any errors");
 		match result {
-			GasLeft::Known(_) => { panic!("Call test should return payload"); },
-			GasLeft::NeedsReturn { gas_left: gas, data: result, apply_state: _apply } => (gas, result.to_vec()),
+			GasLeft::Known { .. } => { panic!("Call test should return payload"); },
+			GasLeft::NeedsReturn { gas_left: gas, data: result, .. } => (gas, result.to_vec()),
 		}
 	};
 
@@ -420,8 +420,8 @@ fn call_static() {
 		let mut interpreter = wasm_interpreter();
 		let result = interpreter.exec(params, &mut ext).expect("Interpreter to execute without any errors");
 		match result {
-			GasLeft::Known(_) => { panic!("Static call test should return payload"); },
-			GasLeft::NeedsReturn { gas_left: gas, data: result, apply_state: _apply } => (gas, result.to_vec()),
+			GasLeft::Known { .. } => { panic!("Static call test should return payload"); },
+			GasLeft::NeedsReturn { gas_left: gas, data: result, .. } => (gas, result.to_vec()),
 		}
 	};
 
@@ -460,8 +460,8 @@ fn realloc() {
 		let mut interpreter = wasm_interpreter();
 		let result = interpreter.exec(params, &mut ext).expect("Interpreter to execute without any errors");
 		match result {
-				GasLeft::Known(_) => { panic!("Realloc should return payload"); },
-				GasLeft::NeedsReturn { gas_left: gas, data: result, apply_state: _apply } => (gas, result.to_vec()),
+				GasLeft::Known { .. } => { panic!("Realloc should return payload"); },
+				GasLeft::NeedsReturn { gas_left: gas, data: result, .. } => (gas, result.to_vec()),
 		}
 	};
 	assert_eq!(result, vec![0u8; 2]);
@@ -482,8 +482,8 @@ fn alloc() {
 		let mut interpreter = wasm_interpreter();
 		let result = interpreter.exec(params, &mut ext).expect("Interpreter to execute without any errors");
 		match result {
-				GasLeft::Known(_) => { panic!("alloc test should return payload"); },
-				GasLeft::NeedsReturn { gas_left: gas, data: result, apply_state: _apply } => (gas, result.to_vec()),
+				GasLeft::Known { .. } => { panic!("alloc test should return payload"); },
+				GasLeft::NeedsReturn { gas_left: gas, data: result, .. } => (gas, result.to_vec()),
 		}
 	};
 	assert_eq!(result, vec![5u8; 1024*450]);
@@ -509,8 +509,8 @@ fn storage_read() {
 		let mut interpreter = wasm_interpreter();
 		let result = interpreter.exec(params, &mut ext).expect("Interpreter to execute without any errors");
 		match result {
-				GasLeft::Known(_) => { panic!("storage_read should return payload"); },
-				GasLeft::NeedsReturn { gas_left: gas, data: result, apply_state: _apply } => (gas, result.to_vec()),
+				GasLeft::Known { .. } => { panic!("storage_read should return payload"); },
+				GasLeft::NeedsReturn { gas_left: gas, data: result, .. } => (gas, result.to_vec()),
 		}
 	};
 
@@ -535,8 +535,8 @@ fn keccak() {
 		let mut interpreter = wasm_interpreter();
 		let result = interpreter.exec(params, &mut ext).expect("Interpreter to execute without any errors");
 		match result {
-				GasLeft::Known(_) => { panic!("keccak should return payload"); },
-				GasLeft::NeedsReturn { gas_left: gas, data: result, apply_state: _apply } => (gas, result.to_vec()),
+				GasLeft::Known { .. } => { panic!("keccak should return payload"); },
+				GasLeft::NeedsReturn { gas_left: gas, data: result, .. } => (gas, result.to_vec()),
 		}
 	};
 
@@ -811,8 +811,8 @@ fn embedded_keccak() {
 		let mut interpreter = wasm_interpreter();
 		let result = interpreter.exec(params, &mut ext).expect("Interpreter to execute without any errors");
 		match result {
-			GasLeft::Known(_) => { panic!("keccak should return payload"); },
-			GasLeft::NeedsReturn { gas_left: gas, data: result, apply_state: _apply } => (gas, result.to_vec()),
+			GasLeft::Known { .. } => { panic!("keccak should return payload"); },
+			GasLeft::NeedsReturn { gas_left: gas, data: result, .. } => (gas, result.to_vec()),
 		}
 	};
 
@@ -839,8 +839,8 @@ fn events() {
 		let mut interpreter = wasm_interpreter();
 		let result = interpreter.exec(params, &mut ext).expect("Interpreter to execute without any errors");
 		match result {
-			GasLeft::Known(_) => { panic!("events should return payload"); },
-			GasLeft::NeedsReturn { gas_left: gas, data: result, apply_state: _apply } => (gas, result.to_vec()),
+			GasLeft::Known { .. } => { panic!("events should return payload"); },
+			GasLeft::NeedsReturn { gas_left: gas, data: result, .. } => (gas, result.to_vec()),
 		}
 	};
 
