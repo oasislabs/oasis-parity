@@ -115,6 +115,8 @@ pub enum ExecutionError {
 	Internal(String),
 	/// Returned when generic transaction occurs
 	TransactionMalformed(String),
+	/// Returned when a non-confidential transaction execution is requested in confidential mode.
+	NotConfidential,
 }
 
 impl From<Box<trie::TrieError>> for ExecutionError {
@@ -142,6 +144,7 @@ impl fmt::Display for ExecutionError {
 			SenderMustExist => "Transacting from an empty account".to_owned(),
 			Internal(ref msg) => msg.clone(),
 			TransactionMalformed(ref err) => format!("Malformed transaction: {}", err),
+			NotConfidential => "Tried executing a non-confidential transaction in confidential mode".to_owned(),
 		};
 
 		f.write_fmt(format_args!("Transaction execution error ({}).", msg))

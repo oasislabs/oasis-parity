@@ -333,7 +333,8 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 			Action::Create => {
 				let (new_address, code_hash) = contract_address(self.machine.create_address_scheme(self.info.number), &sender, &nonce, &t.data);
 				let code: Bytes = t.data.clone();
-				let confidential = cfg!(feature = "confidential") && ConfidentialVm::is_confidential(&code);
+				let confidential = ConfidentialVm::is_confidential(Some(&code))
+					.map_err(|_| ExecutionError::NotConfidential)?;
 				let params = ActionParams {
 					code_address: new_address.clone(),
 					code_hash: code_hash,
@@ -354,9 +355,8 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 			},
 			Action::Call(ref address) => {
 				let code = self.state.code(address)?;
-				let confidential = cfg!(feature = "confidential") && code.as_ref().map_or(false, |code| {
-					ConfidentialVm::is_confidential(code)
-				});
+				let confidential = ConfidentialVm::is_confidential(Some(code.as_ref().unwrap()))
+					.map_err(|_| ExecutionError::NotConfidential)?;
 				let params = ActionParams {
 					code_address: address.clone(),
 					address: address.clone(),
