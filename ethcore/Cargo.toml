@@ -76,7 +76,7 @@ trie-standardmap = { path = "../util/trie-standardmap" }
 kvdb-rocksdb = { path = "../util/kvdb-rocksdb" }
 
 [features]
-default = ["confidential"]
+default = ["enable-confidential"]
 # Display EVM debug traces.
 evm-debug = ["slow-blocks"]
 # Display EVM debug traces when running tests.
@@ -95,4 +95,7 @@ benches = []
 # Compile test helpers
 test-helpers = []
 gateway = []
-confidential = []
+# Execute confidential transactions
+enable-confidential = []
+# Don't allow non-confidential transctions. Used for an exlusively confidential chain.
+disable-non-confidential = []
