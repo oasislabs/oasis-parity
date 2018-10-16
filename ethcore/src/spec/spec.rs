@@ -46,6 +46,7 @@ use state::backend::Basic as BasicBackend;
 use state::{Backend, State, Substate};
 use storage::NullStorage;
 use trace::{NoopTracer, NoopVMTracer};
+use trace_ext::NoopExtTracer;
 
 // pub use ethash::OptimizeFor;
 type OptimizeFor = u64;
@@ -643,7 +644,8 @@ impl Spec {
 				{
 					let mut dummy_storage = NullStorage::new();
 					let mut exec = Executive::new(&mut state, &env_info, self.engine.machine(), &mut dummy_storage);
-					if let Err(e) = exec.create(params, &mut substate, &mut None, &mut NoopTracer, &mut NoopVMTracer) {
+                                        let mut ext_tracer = NoopExtTracer;
+					if let Err(e) = exec.create(params, &mut substate, &mut None, &mut NoopTracer, &mut NoopVMTracer, &mut ext_tracer) {
 						warn!(target: "spec", "Genesis constructor execution at {} failed: {}.", address, e);
 					}
 				}
