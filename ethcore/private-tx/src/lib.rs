@@ -84,6 +84,7 @@ use ethcore::client::{
 use ethcore::account_provider::AccountProvider;
 use ethcore::miner::{self, Miner, MinerService};
 use ethcore::trace::{Tracer, VMTracer};
+use ethcore::trace_ext::ExtTracer;
 use rustc_hex::FromHex;
 
 // Source avaiable at https://github.com/parity-contracts/private-tx/blob/master/contracts/PrivateContract.sol
@@ -402,10 +403,11 @@ impl Provider where {
 		raw
 	}
 
-	pub fn execute_private<T, V>(&self, transaction: &SignedTransaction, options: TransactOptions<T, V>, block: BlockId) -> Result<PrivateExecutionResult<T, V>, Error>
+	pub fn execute_private<T, V, X>(&self, transaction: &SignedTransaction, options: TransactOptions<T, V, X>, block: BlockId) -> Result<PrivateExecutionResult<T, V>, Error>
 		where
 			T: Tracer,
 			V: VMTracer,
+			X: ExtTracer,
 	{
 		let mut env_info = self.client.env_info(block).ok_or(ErrorKind::StatePruned)?;
 		env_info.gas_limit = transaction.gas;

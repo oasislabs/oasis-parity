@@ -23,7 +23,7 @@ use std::cell::{RefCell, RefMut};
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, BTreeMap, BTreeSet, HashSet};
 use std::fmt;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use hash::{KECCAK_NULL_RLP, KECCAK_EMPTY};
 
 use receipt::{Receipt, TransactionOutcome};
@@ -33,6 +33,7 @@ use error::Error;
 use executive::{Executive, TransactOptions};
 use factory::Factories;
 use trace::{self, FlatTrace, VMTrace};
+use trace_ext::ExtTracer;
 use pod_account::*;
 use pod_state::{self, PodState};
 use types::basic_account::BasicAccount;
@@ -686,27 +687,29 @@ impl<B: Backend> State<B> {
 	pub fn apply(&mut self, env_info: &EnvInfo, machine: &Machine, t: &SignedTransaction, tracing: bool) -> ApplyResult<FlatTrace, VMTrace> {
 		if tracing {
 			let options = TransactOptions::with_tracing();
-			self.apply_with_tracing(env_info, machine, t, options.tracer, options.vm_tracer)
+			self.apply_with_tracing(env_info, machine, t, options.tracer, options.vm_tracer, options.ext_tracer.clone())
 		} else {
 			let options = TransactOptions::with_no_tracing();
-			self.apply_with_tracing(env_info, machine, t, options.tracer, options.vm_tracer)
+			self.apply_with_tracing(env_info, machine, t, options.tracer, options.vm_tracer, options.ext_tracer.clone())
 		}
 	}
 
 	/// Execute a given transaction with given tracer and VM tracer producing a receipt and an optional trace.
 	/// This will change the state accordingly.
-	pub fn apply_with_tracing<V, T>(
+	pub fn apply_with_tracing<V, T, X>(
 		&mut self,
 		env_info: &EnvInfo,
 		machine: &Machine,
 		t: &SignedTransaction,
 		tracer: T,
 		vm_tracer: V,
+		ext_tracer: Arc<Mutex<X>>,
 	) -> ApplyResult<T::Output, V::Output> where
 		T: trace::Tracer,
 		V: trace::VMTracer,
+		X: ExtTracer,
 	{
-		let options = TransactOptions::new(tracer, vm_tracer);
+		let options = TransactOptions::new(tracer, vm_tracer, ext_tracer.clone());
 		let e = self.execute(env_info, machine, t, options, false)?;
 		let params = machine.params();
 
@@ -742,8 +745,8 @@ impl<B: Backend> State<B> {
 	//
 	// `virt` signals that we are executing outside of a block set and restrictions like
 	// gas limits and gas costs should be lifted.
-	fn execute<T, V>(&mut self, env_info: &EnvInfo, machine: &Machine, t: &SignedTransaction, options: TransactOptions<T, V>, virt: bool)
-		-> Result<Executed<T::Output, V::Output>, ExecutionError> where T: trace::Tracer, V: trace::VMTracer,
+	fn execute<T, V, X>(&mut self, env_info: &EnvInfo, machine: &Machine, t: &SignedTransaction, options: TransactOptions<T, V, X>, virt: bool)
+		-> Result<Executed<T::Output, V::Output>, ExecutionError> where T: trace::Tracer, V: trace::VMTracer, X: ExtTracer,
 	{
 		let mut e = Executive::new(self, env_info, machine);
 

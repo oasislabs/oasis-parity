@@ -158,6 +158,8 @@ pub mod spec;
 pub mod state;
 pub mod state_db;
 pub mod trace;
+/// Ext (Externalities) tracing
+pub mod trace_ext;
 pub mod verification;
 
 mod cache_manager;

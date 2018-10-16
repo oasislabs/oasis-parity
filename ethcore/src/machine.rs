@@ -18,7 +18,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 use std::cmp;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use block::{ExecutedBlock, IsBlock};
 use builtin::Builtin;
@@ -29,6 +29,7 @@ use header::{BlockNumber, Header, ExtendedHeader};
 use spec::CommonParams;
 use state::{CleanupMode, Substate};
 use trace::{NoopTracer, NoopVMTracer, Tracer, ExecutiveTracer, RewardType, Tracing};
+use trace_ext::NoopExtTracer;
 use transaction::{self, SYSTEM_ADDRESS, UnverifiedTransaction, SignedTransaction};
 use tx_filter::TransactionFilter;
 
@@ -148,7 +149,8 @@ impl EthereumMachine {
 		let mut ex = Executive::new(&mut state, &env_info, self);
 		let mut substate = Substate::new();
 		let mut output = Vec::new();
-		if let Err(e) = ex.call(params, &mut substate, BytesRef::Flexible(&mut output), &mut NoopTracer, &mut NoopVMTracer) {
+                let ext_tracer = Arc::new(Mutex::new(NoopExtTracer));
+		if let Err(e) = ex.call(params, &mut substate, BytesRef::Flexible(&mut output), &mut NoopTracer, &mut NoopVMTracer, ext_tracer.clone()) {
 			warn!("Encountered error on making system call: {}", e);
 		}
 

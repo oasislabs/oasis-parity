@@ -19,7 +19,7 @@
 use std::collections::BTreeMap;
 use std::io::Read;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use bytes::Bytes;
 use ethereum_types::{H256, Bloom, U256, Address};
@@ -45,6 +45,7 @@ use spec::seal::Generic as GenericSeal;
 use state::backend::Basic as BasicBackend;
 use state::{Backend, State, Substate};
 use trace::{NoopTracer, NoopVMTracer};
+use trace_ext::NoopExtTracer;
 
 pub use ethash::OptimizeFor;
 
@@ -624,7 +625,8 @@ impl Spec {
 
 				{
 					let mut exec = Executive::new(&mut state, &env_info, self.engine.machine());
-					if let Err(e) = exec.create(params, &mut substate, &mut None, &mut NoopTracer, &mut NoopVMTracer) {
+                                        let mut ext_tracer = Arc::new(Mutex::new(NoopExtTracer));
+					if let Err(e) = exec.create(params, &mut substate, &mut None, &mut NoopTracer, &mut NoopVMTracer, ext_tracer.clone()) {
 						warn!(target: "spec", "Genesis constructor execution at {} failed: {}.", address, e);
 					}
 				}

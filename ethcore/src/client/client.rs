@@ -70,6 +70,7 @@ use state_db::StateDB;
 use state::{self, State};
 use trace;
 use trace::{TraceDB, ImportRequest as TraceImportRequest, LocalizedTrace, Database as TraceDatabase};
+use trace_ext::ExtTracer;
 use transaction::{self, LocalizedTransaction, UnverifiedTransaction, SignedTransaction, Transaction, Action};
 use types::filter::Filter;
 use types::ancestry_action::AncestryAction;
@@ -1222,16 +1223,17 @@ impl Client {
 		t: &SignedTransaction,
 		analytics: CallAnalytics,
 	) -> Result<Executed, CallError> {
-		fn call<V, T>(
+		fn call<V, T, X>(
 			state: &mut State<StateDB>,
 			env_info: &EnvInfo,
 			machine: &::machine::EthereumMachine,
 			state_diff: bool,
 			transaction: &SignedTransaction,
-			options: TransactOptions<T, V>,
+			options: TransactOptions<T, V, X>,
 		) -> Result<Executed<T::Output, V::Output>, CallError> where
 			T: trace::Tracer,
 			V: trace::VMTracer,
+			X: ExtTracer,
 		{
 			let options = options
 				.dont_check_nonce()

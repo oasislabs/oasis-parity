@@ -16,7 +16,7 @@
 
 //! Transaction Execution environment.
 use std::cmp;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use hash::keccak;
 use ethereum_types::{H256, U256, U512, Address};
 use bytes::{Bytes, BytesRef};
@@ -30,6 +30,8 @@ use vm::{
 };
 use externalities::*;
 use trace::{self, Tracer, VMTracer};
+use trace_ext::ExtTracer;
+use trace_ext::NoopExtTracer;
 use transaction::{Action, SignedTransaction};
 use crossbeam;
 pub use executed::{Executed, ExecutionResult};
@@ -78,24 +80,33 @@ pub fn contract_address(address_scheme: CreateContractAddress, sender: &Address,
 }
 
 /// Transaction execution options.
-#[derive(Copy, Clone, PartialEq)]
-pub struct TransactOptions<T, V> {
+#[derive(Clone)]
+pub struct TransactOptions<T, V, X> {
 	/// Enable call tracing.
 	pub tracer: T,
 	/// Enable VM tracing.
 	pub vm_tracer: V,
+	/// Enable Externalties tracing.  Arc makes it impossible to derive Copy.
+	pub ext_tracer: Arc<Mutex<X>>,
 	/// Check transaction nonce before execution.
 	pub check_nonce: bool,
 	/// Records the output from init contract calls.
 	pub output_from_init_contract: bool,
 }
 
-impl<T, V> TransactOptions<T, V> {
+impl<T, V, X> PartialEq for TransactOptions<T, V, X> where T: PartialEq, V: PartialEq, X: PartialEq {
+        fn eq(&self, other: &TransactOptions<T, V, X>) -> bool {
+                self.tracer == other.tracer && self.vm_tracer == other.vm_tracer && *self.ext_tracer.lock().unwrap() == *other.ext_tracer.lock().unwrap() && self.check_nonce == other.check_nonce && self.output_from_init_contract == other.output_from_init_contract
+        }
+}
+
+impl<T, V, X> TransactOptions<T, V, X> {
 	/// Create new `TransactOptions` with given tracer and VM tracer.
-	pub fn new(tracer: T, vm_tracer: V) -> Self {
+	pub fn new(tracer: T, vm_tracer: V, ext_tracer: Arc<Mutex<X>>) -> Self {
 		TransactOptions {
 			tracer,
 			vm_tracer,
+                	ext_tracer,
 			check_nonce: true,
 			output_from_init_contract: false,
 		}
@@ -114,48 +125,52 @@ impl<T, V> TransactOptions<T, V> {
 	}
 }
 
-impl TransactOptions<trace::ExecutiveTracer, trace::ExecutiveVMTracer> {
+impl TransactOptions<trace::ExecutiveTracer, trace::ExecutiveVMTracer, NoopExtTracer> {
 	/// Creates new `TransactOptions` with default tracing and VM tracing.
 	pub fn with_tracing_and_vm_tracing() -> Self {
 		TransactOptions {
 			tracer: trace::ExecutiveTracer::default(),
 			vm_tracer: trace::ExecutiveVMTracer::toplevel(),
+                	ext_tracer: Arc::new(Mutex::new(NoopExtTracer)),
 			check_nonce: true,
 			output_from_init_contract: false,
 		}
 	}
 }
 
-impl TransactOptions<trace::ExecutiveTracer, trace::NoopVMTracer> {
+impl TransactOptions<trace::ExecutiveTracer, trace::NoopVMTracer, NoopExtTracer> {
 	/// Creates new `TransactOptions` with default tracing and no VM tracing.
 	pub fn with_tracing() -> Self {
 		TransactOptions {
 			tracer: trace::ExecutiveTracer::default(),
 			vm_tracer: trace::NoopVMTracer,
+                	ext_tracer: Arc::new(Mutex::new(NoopExtTracer)),
 			check_nonce: true,
 			output_from_init_contract: false,
 		}
 	}
 }
 
-impl TransactOptions<trace::NoopTracer, trace::ExecutiveVMTracer> {
+impl TransactOptions<trace::NoopTracer, trace::ExecutiveVMTracer, NoopExtTracer> {
 	/// Creates new `TransactOptions` with no tracing and default VM tracing.
 	pub fn with_vm_tracing() -> Self {
 		TransactOptions {
 			tracer: trace::NoopTracer,
 			vm_tracer: trace::ExecutiveVMTracer::toplevel(),
+                	ext_tracer: Arc::new(Mutex::new(NoopExtTracer)),
 			check_nonce: true,
 			output_from_init_contract: false,
 		}
 	}
 }
 
-impl TransactOptions<trace::NoopTracer, trace::NoopVMTracer> {
+impl TransactOptions<trace::NoopTracer, trace::NoopVMTracer, NoopExtTracer> {
 	/// Creates new `TransactOptions` without any tracing.
 	pub fn with_no_tracing() -> Self {
 		TransactOptions {
 			tracer: trace::NoopTracer,
 			vm_tracer: trace::NoopVMTracer,
+                	ext_tracer: Arc::new(Mutex::new(NoopExtTracer)),
 			check_nonce: true,
 			output_from_init_contract: false,
 		}
@@ -195,31 +210,32 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 	}
 
 	/// Creates `Externalities` from `Executive`.
-	pub fn as_externalities<'any, T, V>(
+	pub fn as_externalities<'any, T, V, X>(
 		&'any mut self,
 		origin_info: OriginInfo,
 		substate: &'any mut Substate,
 		output: OutputPolicy<'any, 'any>,
 		tracer: &'any mut T,
 		vm_tracer: &'any mut V,
+        	ext_tracer: Arc<Mutex<X>>,
 		static_call: bool,
-	) -> Externalities<'any, T, V, B> where T: Tracer, V: VMTracer {
+	) -> Externalities<'any, T, V, X, B> where T: Tracer, V: VMTracer, X: ExtTracer {
 		let is_static = self.static_flag || static_call;
-		Externalities::new(self.state, self.info, self.machine, self.depth, origin_info, substate, output, tracer, vm_tracer, is_static)
+		Externalities::new(self.state, self.info, self.machine, self.depth, origin_info, substate, output, tracer, vm_tracer, ext_tracer.clone(), is_static)
 	}
 
 	/// This function should be used to execute transaction.
-	pub fn transact<T, V>(&'a mut self, t: &SignedTransaction, options: TransactOptions<T, V>)
-		-> Result<Executed<T::Output, V::Output>, ExecutionError> where T: Tracer, V: VMTracer,
+	pub fn transact<T, V, X>(&'a mut self, t: &SignedTransaction, options: TransactOptions<T, V, X>)
+		-> Result<Executed<T::Output, V::Output>, ExecutionError> where T: Tracer, V: VMTracer, X: ExtTracer,
 	{
-		self.transact_with_tracer(t, options.check_nonce, options.output_from_init_contract, options.tracer, options.vm_tracer)
+		self.transact_with_tracer(t, options.check_nonce, options.output_from_init_contract, options.tracer, options.vm_tracer, options.ext_tracer.clone())
 	}
 
 	/// Execute a transaction in a "virtual" context.
 	/// This will ensure the caller has enough balance to execute the desired transaction.
 	/// Used for extra-block executions for things like consensus contracts and RPCs
-	pub fn transact_virtual<T, V>(&'a mut self, t: &SignedTransaction, options: TransactOptions<T, V>)
-		-> Result<Executed<T::Output, V::Output>, ExecutionError> where T: Tracer, V: VMTracer,
+	pub fn transact_virtual<T, V, X>(&'a mut self, t: &SignedTransaction, options: TransactOptions<T, V, X>)
+		-> Result<Executed<T::Output, V::Output>, ExecutionError> where T: Tracer, V: VMTracer, X: ExtTracer,
 	{
 		let sender = t.sender();
 		let balance = self.state.balance(&sender)?;
@@ -233,14 +249,15 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 	}
 
 	/// Execute transaction/call with tracing enabled
-	fn transact_with_tracer<T, V>(
+	fn transact_with_tracer<T, V, X>(
 		&'a mut self,
 		t: &SignedTransaction,
 		check_nonce: bool,
 		output_from_create: bool,
 		mut tracer: T,
-		mut vm_tracer: V
-	) -> Result<Executed<T::Output, V::Output>, ExecutionError> where T: Tracer, V: VMTracer {
+		mut vm_tracer: V,
+		ext_tracer: Arc<Mutex<X>>
+	) -> Result<Executed<T::Output, V::Output>, ExecutionError> where T: Tracer, V: VMTracer, X: ExtTracer {
 		let sender = t.sender();
 		let nonce = self.state.nonce(&sender)?;
 
@@ -308,7 +325,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					params_type: vm::ParamsType::Embedded,
 				};
 				let mut out = if output_from_create { Some(vec![]) } else { None };
-				(self.create(params, &mut substate, &mut out, &mut tracer, &mut vm_tracer), out.unwrap_or_else(Vec::new))
+				(self.create(params, &mut substate, &mut out, &mut tracer, &mut vm_tracer, ext_tracer.clone()), out.unwrap_or_else(Vec::new))
 			},
 			Action::Call(ref address) => {
 				let params = ActionParams {
@@ -326,7 +343,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					params_type: vm::ParamsType::Separate,
 				};
 				let mut out = vec![];
-				(self.call(params, &mut substate, BytesRef::Flexible(&mut out), &mut tracer, &mut vm_tracer), out)
+				(self.call(params, &mut substate, BytesRef::Flexible(&mut out), &mut tracer, &mut vm_tracer, ext_tracer.clone()), out)
 			}
 		};
 
@@ -334,15 +351,16 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		Ok(self.finalize(t, substate, result, output, tracer.drain(), vm_tracer.drain())?)
 	}
 
-	fn exec_vm<T, V>(
+	fn exec_vm<T, V, X>(
 		&mut self,
 		schedule: Schedule,
 		params: ActionParams,
 		unconfirmed_substate: &mut Substate,
 		output_policy: OutputPolicy,
 		tracer: &mut T,
-		vm_tracer: &mut V
-	) -> vm::Result<FinalizationResult> where T: Tracer, V: VMTracer {
+		vm_tracer: &mut V,
+		ext_tracer: Arc<Mutex<X>>
+	) -> vm::Result<FinalizationResult> where T: Tracer, V: VMTracer, X: ExtTracer {
 		let local_stack_size = ::io::LOCAL_STACK_SIZE.with(|sz| sz.get());
 		let depth_threshold = local_stack_size.saturating_sub(STACK_SIZE_ENTRY_OVERHEAD) / STACK_SIZE_PER_DEPTH;
 		let static_call = params.call_type == CallType::StaticCall;
@@ -350,7 +368,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		// Ordinary execution - keep VM in same thread
 		if self.depth != depth_threshold {
 			let vm_factory = self.state.vm_factory();
-			let mut ext = self.as_externalities(OriginInfo::from(&params), unconfirmed_substate, output_policy, tracer, vm_tracer, static_call);
+			let mut ext = self.as_externalities(OriginInfo::from(&params), unconfirmed_substate, output_policy, tracer, vm_tracer, ext_tracer.clone(), static_call);
 			trace!(target: "executive", "ext.schedule.have_delegate_call: {}", ext.schedule().have_delegate_call);
 			let mut vm = vm_factory.create(&params, &schedule);
 			return vm.exec(params, &mut ext).finalize(ext);
@@ -359,7 +377,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		// Start in new thread with stack size needed up to max depth
 		crossbeam::scope(|scope| {
 			let vm_factory = self.state.vm_factory();
-			let mut ext = self.as_externalities(OriginInfo::from(&params), unconfirmed_substate, output_policy, tracer, vm_tracer, static_call);
+			let mut ext = self.as_externalities(OriginInfo::from(&params), unconfirmed_substate, output_policy, tracer, vm_tracer, ext_tracer.clone(), static_call);
 
 			scope.builder().stack_size(::std::cmp::max(schedule.max_depth.saturating_sub(depth_threshold) * STACK_SIZE_PER_DEPTH, local_stack_size)).spawn(move || {
 				let mut vm = vm_factory.create(&params, &schedule);
@@ -372,14 +390,15 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 	/// NOTE. It does not finalize the transaction (doesn't do refunds, nor suicides).
 	/// Modifies the substate and the output.
 	/// Returns either gas_left or `vm::Error`.
-	pub fn call<T, V>(
+	pub fn call<T, V, X>(
 		&mut self,
 		params: ActionParams,
 		substate: &mut Substate,
 		mut output: BytesRef,
 		tracer: &mut T,
-		vm_tracer: &mut V
-	) -> vm::Result<FinalizationResult> where T: Tracer, V: VMTracer {
+		vm_tracer: &mut V,
+		ext_tracer: Arc<Mutex<X>>
+	) -> vm::Result<FinalizationResult> where T: Tracer, V: VMTracer, X: ExtTracer {
 
 		trace!("Executive::call(params={:?}) self.env_info={:?}, static={}", params, self.info, self.static_flag);
 		if (params.call_type == CallType::StaticCall ||
@@ -478,8 +497,9 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 				// TODO: make ActionParams pass by ref then avoid copy altogether.
 				let mut subvmtracer = vm_tracer.prepare_subtrace(params.code.as_ref().expect("scope is conditional on params.code.is_some(); qed"));
 
+				let mut subexttracer = Arc::new(Mutex::new(ext_tracer.lock().unwrap().subtracer(&params.address)));
 				let res = {
-					self.exec_vm(schedule, params, &mut unconfirmed_substate, OutputPolicy::Return(output, trace_output.as_mut()), &mut subtracer, &mut subvmtracer)
+					self.exec_vm(schedule, params, &mut unconfirmed_substate, OutputPolicy::Return(output, trace_output.as_mut()), &mut subtracer, &mut subvmtracer, subexttracer)
 				};
 
 				vm_tracer.done_subtrace(subvmtracer);
@@ -520,14 +540,15 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 	/// Creates contract with given contract params.
 	/// NOTE. It does not finalize the transaction (doesn't do refunds, nor suicides).
 	/// Modifies the substate.
-	pub fn create<T, V>(
+	pub fn create<T, V, X>(
 		&mut self,
 		params: ActionParams,
 		substate: &mut Substate,
 		output: &mut Option<Bytes>,
 		tracer: &mut T,
 		vm_tracer: &mut V,
-	) -> vm::Result<FinalizationResult> where T: Tracer, V: VMTracer {
+		ext_tracer: Arc<Mutex<X>>,
+	) -> vm::Result<FinalizationResult> where T: Tracer, V: VMTracer, X: ExtTracer {
 
 		// EIP-684: If a contract creation is attempted, due to either a creation transaction or the
 		// CREATE (or future CREATE2) opcode, and the destination address already has either
@@ -570,13 +591,16 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 
 		let mut subvmtracer = vm_tracer.prepare_subtrace(params.code.as_ref().expect("two ways into create (Externalities::create and Executive::transact_with_tracer); both place `Some(...)` `code` in `params`; qed"));
 
+		let subexttracer = Arc::new(Mutex::new(ext_tracer.lock().unwrap().subtracer(&params.address)));
+
 		let res = self.exec_vm(
 			schedule,
 			params,
 			&mut unconfirmed_substate,
 			OutputPolicy::InitContract(output.as_mut().or(trace_output.as_mut())),
 			&mut subtracer,
-			&mut subvmtracer
+			&mut subvmtracer,
+			subexttracer
 		);
 
 		vm_tracer.done_subtrace(subvmtracer);
