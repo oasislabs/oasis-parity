@@ -15,6 +15,7 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::sync::Arc;
+use std::collections::HashMap;
 use super::test_common::*;
 use state::{Backend as StateBackend, State, Substate};
 use executive::*;
@@ -130,7 +131,7 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for TestExt<'a, T, V, B>
 			value: *value
 		});
 		let contract_address = contract_address(address, &self.sender, &self.nonce, &code).0;
-		ContractCreateResult::Created(contract_address, *gas)
+		ContractCreateResult::Created(contract_address, *gas, Box::new(HashMap::new()))
 	}
 
 	fn call(&mut self,
@@ -149,7 +150,7 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for TestExt<'a, T, V, B>
 			gas_limit: *gas,
 			value: value.unwrap()
 		});
-		MessageCallResult::Success(*gas, ReturnData::empty())
+		MessageCallResult::Success(*gas, ReturnData::empty(), Box::new(HashMap:new()))
 	}
 
 	fn extcode(&self, address: &Address) -> vm::Result<Arc<Bytes>>  {

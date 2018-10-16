@@ -487,7 +487,7 @@ impl<'a> Runtime<'a> {
 		);
 
 		match call_result {
-			vm::MessageCallResult::Success(gas_left, _) => {
+			vm::MessageCallResult::Success(gas_left, _, _) => {
 				// cannot overflow, before making call gas_counter was incremented with gas, and gas_left < gas
 				self.gas_counter = self.gas_counter -
 					gas_left.low_u64() * self.ext.schedule().wasm().opcodes_div as u64
@@ -496,7 +496,7 @@ impl<'a> Runtime<'a> {
 				self.memory.set(result_ptr, &result)?;
 				Ok(0i32.into())
 			},
-			vm::MessageCallResult::Reverted(gas_left, _) => {
+			vm::MessageCallResult::Reverted(gas_left, _, _) => {
 				// cannot overflow, before making call gas_counter was incremented with gas, and gas_left < gas
 				self.gas_counter = self.gas_counter -
 					gas_left.low_u64() * self.ext.schedule().wasm().opcodes_div as u64
@@ -579,7 +579,7 @@ impl<'a> Runtime<'a> {
 			/ U256::from(self.ext.schedule().wasm().opcodes_div);
 
 		match self.ext.create(&gas_left, &endowment, &code, vm::CreateContractAddress::FromSenderAndCodeHash) {
-			vm::ContractCreateResult::Created(address, gas_left) => {
+			vm::ContractCreateResult::Created(address, gas_left, _) => {
 				self.memory.set(result_ptr, &*address)?;
 				self.gas_counter = self.gas_limit -
 					// this cannot overflow, since initial gas is in [0..u64::max) range,
@@ -593,7 +593,7 @@ impl<'a> Runtime<'a> {
 				trace!(target: "wasm", "runtime: create contract fail");
 				Ok((-1i32).into())
 			},
-			vm::ContractCreateResult::Reverted(gas_left, _) => {
+			vm::ContractCreateResult::Reverted(gas_left, _, _) => {
 				trace!(target: "wasm", "runtime: create contract reverted");
 				self.gas_counter = self.gas_limit -
 					// this cannot overflow, since initial gas is in [0..u64::max) range,

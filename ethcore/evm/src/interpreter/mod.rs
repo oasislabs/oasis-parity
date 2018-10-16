@@ -25,6 +25,7 @@ mod shared_cache;
 
 use std::marker::PhantomData;
 use std::{cmp, mem};
+use std::collections::HashMap;
 use std::sync::Arc;
 use hash::keccak;
 use ethereum_types::{U256, U512, H256, Address};
@@ -125,6 +126,7 @@ impl<Cost: CostType> vm::Vm for Interpreter<Cost> {
 		let mut stack = VecStack::with_capacity(ext.schedule().stack_limit, U256::zero());
 		let mut reader = CodeReader::new(code);
 		let infos = &*instructions::INSTRUCTIONS;
+		let mut gas_profile = HashMap::new();
 
 		while reader.position < code.len() {
 			let instruction = code[reader.position];
@@ -142,6 +144,13 @@ impl<Cost: CostType> vm::Vm for Interpreter<Cost> {
 			let requirements = gasometer.requirements(ext, instruction, info, &stack, self.mem.size())?;
 			if do_trace {
 				ext.trace_prepare_execute(reader.position - 1, instruction, requirements.gas_cost.as_u256());
+			}
+
+			// Profile gas cost
+			let total_op_cost = gas_profile.get(info.name.to_string());
+			match total_op_cost {
+				Some(op_cost) => gas_profile.insert(info.name.to_string(), op_cost + requirements.gas_cost.as_u256()),
+				None => gas_profile.insert(info.name.to_string(), requirements.gas_cost.as_u256()),
 			}
 
 			gasometer.verify_gas(&requirements.gas_cost)?;
@@ -193,7 +202,8 @@ impl<Cost: CostType> vm::Vm for Interpreter<Cost> {
 					return Ok(GasLeft::NeedsReturn {
 						gas_left: gas.as_u256(),
 						data: mem.into_return_data(init_off, init_size),
-						apply_state: apply
+						apply_state: apply,
+						gas_profile: gas_profile,
 					});
 				},
 				InstructionResult::StopExecution => break,
@@ -201,7 +211,10 @@ impl<Cost: CostType> vm::Vm for Interpreter<Cost> {
 			}
 		}
 		informant.done();
-		Ok(GasLeft::Known(gasometer.current_gas.as_u256()))
+		Ok(GasLeft::Known{
+			gas_left: gasometer.current_gas.as_u256(),
+			gas_profile: Box::new(gas_profile.clone()),
+		})
 	}
 }
 
@@ -339,11 +352,11 @@ impl<Cost: CostType> Interpreter<Cost> {
 
 				let create_result = ext.create(&create_gas.as_u256(), &endowment, contract_code, address_scheme);
 				return match create_result {
-					ContractCreateResult::Created(address, gas_left) => {
+					ContractCreateResult::Created(address, gas_left, _) => {
 						stack.push(address_to_u256(address));
 						Ok(InstructionResult::UnusedGas(Cost::from_u256(gas_left).expect("Gas left cannot be greater.")))
 					},
-					ContractCreateResult::Reverted(gas_left, return_data) => {
+					ContractCreateResult::Reverted(gas_left, return_data, _) => {
 						stack.push(U256::zero());
 						self.return_data = return_data;
 						Ok(InstructionResult::UnusedGas(Cost::from_u256(gas_left).expect("Gas left cannot be greater.")))
@@ -417,12 +430,12 @@ impl<Cost: CostType> Interpreter<Cost> {
 				};
 
 				return match call_result {
-					MessageCallResult::Success(gas_left, data) => {
+					MessageCallResult::Success(gas_left, data, _) => {
 						stack.push(U256::one());
 						self.return_data = data;
 						Ok(InstructionResult::UnusedGas(Cost::from_u256(gas_left).expect("Gas left cannot be greater than current one")))
 					},
-					MessageCallResult::Reverted(gas_left, data) => {
+					MessageCallResult::Reverted(gas_left, data, _) => {
 						stack.push(U256::zero());
 						self.return_data = data;
 						Ok(InstructionResult::UnusedGas(Cost::from_u256(gas_left).expect("Gas left cannot be greater than current one")))

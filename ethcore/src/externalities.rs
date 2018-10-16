@@ -252,12 +252,12 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 
 		// TODO: handle internal error separately
 		match ex.create(params, self.substate, &mut None, self.tracer, self.vm_tracer) {
-			Ok(FinalizationResult{ gas_left, apply_state: true, .. }) => {
+			Ok(FinalizationResult{ gas_left, apply_state: true, gas_profile }) => {
 				self.substate.contracts_created.push(address.clone());
-				ContractCreateResult::Created(address, gas_left)
+				ContractCreateResult::Created(address, gas_left, gas_profile)
 			},
-			Ok(FinalizationResult{ gas_left, apply_state: false, return_data }) => {
-				ContractCreateResult::Reverted(gas_left, return_data)
+			Ok(FinalizationResult{ gas_left, apply_state: false, return_data, gas_profile }) => {
+				ContractCreateResult::Reverted(gas_left, return_data, gas_profile)
 			},
 			_ => ContractCreateResult::Failed,
 		}
@@ -311,8 +311,8 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 		let mut ex = Executive::from_parent(self.state, self.env_info, self.machine, self.depth, self.static_flag, self.storage);
 
 		match ex.call(params, self.substate, BytesRef::Fixed(output), self.tracer, self.vm_tracer) {
-			Ok(FinalizationResult{ gas_left, return_data, apply_state: true }) => MessageCallResult::Success(gas_left, return_data),
-			Ok(FinalizationResult{ gas_left, return_data, apply_state: false }) => MessageCallResult::Reverted(gas_left, return_data),
+			Ok(FinalizationResult{ gas_left, return_data, apply_state: true, gas_profile }) => MessageCallResult::Success(gas_left, return_data, gas_profile),
+			Ok(FinalizationResult{ gas_left, return_data, apply_state: false, gas_profile }) => MessageCallResult::Reverted(gas_left, return_data, gas_profile),
 			_ => MessageCallResult::Failed
 		}
 	}

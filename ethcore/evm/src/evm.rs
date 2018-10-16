@@ -17,6 +17,7 @@
 //! Evm interface.
 
 use std::{ops, cmp, fmt};
+use std::collections::HashMap;
 use ethereum_types::{U128, U256, U512};
 use vm::{Ext, Result, ReturnData, GasLeft, Error};
 
@@ -30,6 +31,8 @@ pub struct FinalizationResult {
 	pub apply_state: bool,
 	/// Return data buffer.
 	pub return_data: ReturnData,
+	/// Gas profile.
+	pub gas_profile: Box<HashMap<String, U256>>,
 }
 
 /// Types that can be "finalized" using an EVM.

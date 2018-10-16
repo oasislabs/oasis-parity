@@ -18,6 +18,8 @@
 
 use ethereum_types::U256;
 
+use std::collections::HashMap;
+
 /// Return data buffer. Holds memory from a previous call and a slice into that memory.
 #[derive(Debug)]
 pub struct ReturnData {
@@ -57,7 +59,12 @@ impl ReturnData {
 #[derive(Debug)]
 pub enum GasLeft {
 	/// Known gas left
-	Known(U256),
+	Known {
+		/// Amount of gas left.
+		gas_left: U256,
+		/// Gas profile.
+		gas_profile: Box<HashMap<String, U256>>,
+	},
 	/// Return or Revert instruction must be processed.
 	NeedsReturn {
 		/// Amount of gas left.
@@ -65,6 +72,8 @@ pub enum GasLeft {
 		/// Return data buffer.
 		data: ReturnData,
 		/// Apply or revert state changes on revert.
-		apply_state: bool
+		apply_state: bool,
+		/// Gas profile.
+		gas_profile: Box<HashMap<String, U256>>,
 	},
 }

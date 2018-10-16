@@ -17,6 +17,7 @@
 //! Interface for Evm externalities.
 
 use std::sync::Arc;
+use std::collections::HashMap;
 use ethereum_types::{U256, H256, Address};
 use bytes::Bytes;
 use call_type::CallType;
@@ -29,25 +30,25 @@ use error::Result;
 pub enum ContractCreateResult {
 	/// Returned when creation was successfull.
 	/// Contains an address of newly created contract and gas left.
-	Created(Address, U256),
+	Created(Address, U256, Box<HashMap<String, U256>>),
 	/// Returned when contract creation failed.
 	/// VM doesn't have to know the reason.
 	Failed,
 	/// Reverted with REVERT.
-	Reverted(U256, ReturnData),
+	Reverted(U256, ReturnData, Box<HashMap<String, U256>>),
 }
 
 /// Result of externalities call function.
 pub enum MessageCallResult {
 	/// Returned when message call was successfull.
 	/// Contains gas left and output data.
-	Success(U256, ReturnData),
+	Success(U256, ReturnData, Box<HashMap<String, U256>>),
 	/// Returned when message call failed.
 	/// VM doesn't have to know the reason.
 	Failed,
 	/// Returned when message call was reverted.
 	/// Contains gas left and output data.
-	Reverted(U256, ReturnData),
+	Reverted(U256, ReturnData, Box<HashMap<String, U256>>),
 }
 
 /// Specifies how an address is calculated for a new contract.

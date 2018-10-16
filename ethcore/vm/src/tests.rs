@@ -178,7 +178,7 @@ impl Ext for FakeExt {
 			data: data.to_vec(),
 			code_address: Some(code_address.clone())
 		});
-		MessageCallResult::Success(*gas, ReturnData::empty())
+		MessageCallResult::Success(*gas, ReturnData::empty(), Box::new(HashMap::new()))
 	}
 
 	fn extcode(&self, address: &Address) -> Result<Arc<Bytes>> {
