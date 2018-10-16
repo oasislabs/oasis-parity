@@ -192,17 +192,16 @@ impl<'a> Runtime<'a> {
 	/// Returns false if gas limit exceeded and true if not.
 	/// Intuition about the return value sense is to aswer the question 'are we allowed to continue?'
 	fn charge_gas(&mut self, amount: u64) -> bool {
-		true
-		// let prev = self.gas_counter;
-		// match prev.checked_add(amount) {
-		// 	// gas charge overflow protection
-		// 	None => false,
-		// 	Some(val) if val > self.gas_limit => false,
-		// 	Some(_) => {
-		// 		self.gas_counter = prev + amount;
-		// 		true
-		// 	}
-		// }
+		let prev = self.gas_counter;
+		match prev.checked_add(amount) {
+		 	// gas charge overflow protection
+		 	None => false,
+		 	Some(val) if val > self.gas_limit => false,
+		 	Some(_) => {
+		 		self.gas_counter = prev + amount;
+		 		true
+			}
+		}
 	}
 
 	/// Charge gas according to closure
