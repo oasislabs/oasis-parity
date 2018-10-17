@@ -316,6 +316,7 @@ pub struct State<B: Backend> {
 	account_start_nonce: U256,
 	factories: Factories,
 	pub encrypter: Option<Box<Encrypter>>,
+	pub key_manager: Option<Box<KeyManager>>,
 }
 
 /// An Encrypter can be injected into the state in order to provide an encryption
@@ -325,6 +326,13 @@ pub trait Encrypter {
 	fn encrypt(&self, data: Vec<u8>, key: Vec<u8>) -> Result<Vec<u8>, String>;
 	/// Decrypts the given data, returning a (nonce, key, plaintext) tuple.
 	fn decrypt(&self, data: Vec<u8>) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>), String>;
+}
+
+/// A KeyManager can be injected into the state in order to provide keys for
+/// confidential contracts.
+pub trait KeyManager {
+	/// Returns the long term public key for the given contract.
+	fn long_term_public_key(&self, contract: Address) -> Vec<u8>;
 }
 
 #[derive(Copy, Clone)]
@@ -388,11 +396,12 @@ impl<B: Backend> State<B> {
 			account_start_nonce: account_start_nonce,
 			factories: factories,
 			encrypter: None,
+			key_manager: None,
 		}
 	}
 
 	/// Creates new state with existing state root
-	pub fn from_existing(db: B, root: H256, account_start_nonce: U256, factories: Factories, encrypter: Option<Box<Encrypter>>) -> Result<State<B>, TrieError> {
+	pub fn from_existing(db: B, root: H256, account_start_nonce: U256, factories: Factories, encrypter: Option<Box<Encrypter>>, key_manager: Option<Box<KeyManager>>) -> Result<State<B>, TrieError> {
 		if !db.as_hashdb().contains(&root) {
 			return Err(TrieError::InvalidStateRoot(root));
 		}
@@ -404,7 +413,8 @@ impl<B: Backend> State<B> {
 			checkpoints: RefCell::new(Vec::new()),
 			account_start_nonce: account_start_nonce,
 			factories: factories,
-			encrypter: encrypter
+			encrypter: encrypter,
+			key_manager: key_manager,
 		};
 
 		Ok(state)
@@ -1135,6 +1145,7 @@ impl Clone for State<StateDB> {
 			account_start_nonce: self.account_start_nonce.clone(),
 			factories: self.factories.clone(),
 			encrypter: None,
+			key_manager: None,
 		}
 	}
 }
@@ -1158,6 +1169,7 @@ impl<B: Backend + Clone> Clone for State<B> {
 			account_start_nonce: self.account_start_nonce.clone(),
 			factories: self.factories.clone(),
 			encrypter: None,
+			key_manager: None,
 		}
 	}
 }

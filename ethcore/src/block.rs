@@ -34,7 +34,7 @@ use factory::Factories;
 use header::{Header, ExtendedHeader};
 use journaldb::overlaydb::OverlayDB;
 use receipt::{Receipt, TransactionOutcome};
-use state::{State, Encrypter};
+use state::{State, Encrypter, KeyManager};
 use state::backend::{Wrapped as WrappedBackend};
 // use state_db::StateDB;
 use storage::Storage;
@@ -289,9 +289,10 @@ impl<'x> OpenBlock<'x> {
 		is_epoch_begin: bool,
 		ancestry: &mut Iterator<Item=ExtendedHeader>,
 		encrypter: Option<Box<Encrypter>>,
+        key_manager: Option<Box<KeyManager>>,
 	) -> Result<Self, Error> {
 		let number = parent.number() + 1;
-		let state = State::from_existing(db, parent.state_root().clone(), engine.account_start_nonce(number), factories, encrypter)?;
+		let state = State::from_existing(db, parent.state_root().clone(), engine.account_start_nonce(number), factories, encrypter, key_manager)?;
 		let mut r = OpenBlock {
 			block: ExecutedBlock::new(state, last_hashes, tracing),
 			engine: engine,

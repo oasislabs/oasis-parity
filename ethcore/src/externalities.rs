@@ -474,6 +474,15 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 			.map_err(|err| vm::Error::Internal(format!("Could not decrypt {}", err)))?;
 		Ok((nonce, key, plaintext))
 	}
+
+	fn long_term_public_key(&self, contract: Address) -> vm::Result<Vec<u8>> {
+		if self.state.key_manager.is_none() {
+			return Err(vm::Error::Internal(
+				"Can't retrieve the long term public key without a key manager".to_string()
+			));
+		}
+		Ok(self.state.key_manager.as_ref().unwrap().long_term_public_key(contract))
+	}
 }
 
 #[cfg(test)]
