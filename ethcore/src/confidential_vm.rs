@@ -1,7 +1,7 @@
 use ethereum_types::H256;
 use evm::CallType;
 use std::sync::Arc;
-use vm::{ActionParams, Vm, Ext, GasLeft, Result, ReturnData};
+use vm::{self, ActionParams, Vm, Ext, GasLeft, Result, ReturnData};
 
 /// 4 byte prefix prepended to all confidential contract bytecode.
 const CONFIDENTIAL_PREFIX: &'static [u8; 4] = b"\0pri";
