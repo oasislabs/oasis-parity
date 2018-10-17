@@ -31,7 +31,36 @@ impl ConfidentialVm {
 	}
 
 	/// Returns true if the given bytecode represents a confidential contract.
-	pub fn is_confidential(bytecode: &[u8]) -> bool {
+	/// Errors if the bytecode is not confidential, but we've compiled with both
+	/// the enable-confidential and disable-non-confidential features.
+	pub fn is_confidential(bytecode: Option<&[u8]>) -> Result<bool> {
+		if cfg!(feature = "enable-confidential") {
+			match bytecode {
+				None => {
+					if cfg!(feature = "disable-non-confidential") {
+						Err(vm::Error::Internal("Bytecode can't be None in exclusively confidential mode".to_string()))
+					} else {
+						Ok(false)
+					}
+				},
+				Some(code) => {
+					if !Self::has_confidential_prefix(code) {
+						if cfg!(feature = "disable-non-confidential") {
+							Err(vm::Error::Internal("Bytecode must always have confidential prefix".to_string()))
+						} else {
+							Ok(false)
+						}
+					} else {
+						Ok(true)
+					}
+				}
+			}
+		} else {
+			Ok(false)
+		}
+	}
+
+	fn has_confidential_prefix(bytecode: &[u8]) -> bool {
 		if bytecode.len() < CONFIDENTIAL_PREFIX.len() {
 			return false;
 		}
