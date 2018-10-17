@@ -237,4 +237,8 @@ impl Ext for FakeExt {
 	fn store_bytes(&mut self, _bytes: &[u8]) -> Result<H256> {
 		Ok(H256::zero())
 	}
+
+	fn long_term_public_key(&self, contract: Address) -> Result<Vec<u8>> {
+		Ok(vec![])
+	}
 }

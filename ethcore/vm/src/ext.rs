@@ -155,11 +155,14 @@ pub trait Ext {
 
     /// Sets the encryption context of the externality. If set, logs will be encrypted
     /// automatically and one may call the encrypt method.
-    fn set_encryption_key(&mut self, key: Option<Vec<u8>>);
+	fn set_encryption_key(&mut self, key: Option<Vec<u8>>);
 
-    /// Encrypts the given data with the encryption key used in `set_encryption_key`.
-    fn encrypt(&self, data: Vec<u8>) -> Result<Vec<u8>>;
+	/// Encrypts the given data with the encryption key used in `set_encryption_key`.
+	fn encrypt(&self, data: Vec<u8>) -> Result<Vec<u8>>;
 
-    /// Decrypts the given data, returning a (nonce, key, plaintext) tuple.
-    fn decrypt(&mut self, data: Vec<u8>) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)>;
+	/// Decrypts the given data, returning a (nonce, key, plaintext) tuple.
+	fn decrypt(&mut self, data: Vec<u8>) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)>;
+
+	/// Returns the long term public key associated with the given contract.
+	fn long_term_public_key(&self, contract: Address) -> Result<Vec<u8>>;
 }
