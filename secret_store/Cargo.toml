@@ -40,4 +40,4 @@ ethabi-contract = "5.0"
 
 [dev-dependencies]
 tempdir = "0.3"
-kvdb-rocksdb = { path = "../util/kvdb-rocksdb" }
+# kvdb-rocksdb = { path = "../util/kvdb-rocksdb" }

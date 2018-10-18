@@ -63,7 +63,7 @@ panic_hook = { path = "util/panic_hook" }
 keccak-hash = { path = "util/hash" }
 migration-rocksdb = { path = "util/migration-rocksdb" }
 kvdb = { path = "util/kvdb" }
-kvdb-rocksdb = { path = "util/kvdb-rocksdb" }
+# kvdb-rocksdb = { path = "util/kvdb-rocksdb" }
 journaldb = { path = "util/journaldb" }
 mem = { path = "util/mem" }
 
