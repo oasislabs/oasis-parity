@@ -101,11 +101,11 @@ build_rpc_trait! {
 
 		/// Sends signed transaction, returning its hash.
 		#[rpc(name = "eth_sendRawTransaction")]
-		fn send_raw_transaction(&self, Bytes) -> Result<H256>;
+		fn send_raw_transaction(&self, Bytes) -> BoxFuture<H256>;
 
 		/// @alias of `eth_sendRawTransaction`.
 		#[rpc(name = "eth_submitTransaction")]
-		fn submit_transaction(&self, Bytes) -> Result<H256>;
+		fn submit_transaction(&self, Bytes) -> BoxFuture<H256>;
 
 		/// Call contract, returning the output data.
 		#[rpc(meta, name = "eth_call")]
