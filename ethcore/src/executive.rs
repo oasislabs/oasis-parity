@@ -355,7 +355,8 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 			},
 			Action::Call(ref address) => {
 				let code = self.state.code(address)?;
-				let confidential = ConfidentialVm::is_confidential(Some(code.as_ref().unwrap()))
+				// convert Option<Arc<Vec<u8>>> to Option<&[u8]>
+				let confidential = ConfidentialVm::is_confidential(code.as_ref().map(|c| c.as_slice()))
 					.map_err(|_| ExecutionError::NotConfidential)?;
 				let params = ActionParams {
 					code_address: address.clone(),
