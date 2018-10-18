@@ -698,6 +698,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 				})
 			},
 			Ok(r) => {
+				info!("Executive::finalize: gas_profile={:?}", r.gas_profile);
 				Ok(Executed {
 					exception: if r.apply_state { None } else { Some(vm::Error::Reverted) },
 					gas: t.gas,
