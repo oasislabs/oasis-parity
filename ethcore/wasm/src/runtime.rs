@@ -37,7 +37,7 @@ pub struct Runtime<'a> {
 	memory: MemoryRef,
 	args: Vec<u8>,
 	result: Vec<u8>,
-	gas_profile: HashMap<String, U256>,
+	pub gas_profile: HashMap<String, U256>,
 }
 
 /// User trap in native code
@@ -196,11 +196,11 @@ impl<'a> Runtime<'a> {
 	/// Intuition about the return value sense is to aswer the question 'are we allowed to continue?'
 	fn charge_gas(&mut self, amount: u64, func: String) -> bool {
 		let prev = self.gas_counter;
-		let total_func_cost = self.gas_profile.get(info.name.to_string());
+		let total_func_cost = self.gas_profile.get(&func).cloned();
 		match total_func_cost {
-			Some(func_cost) => self.gas_profile.insert(func, func_cost + amount.into()),
+			Some(func_cost) => self.gas_profile.insert(func, func_cost + U256::from(amount)),
 			None => self.gas_profile.insert(func, amount.into()),
-		}
+		};
 
 		match prev.checked_add(amount) {
 		 	// gas charge overflow protection

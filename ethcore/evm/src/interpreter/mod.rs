@@ -126,7 +126,7 @@ impl<Cost: CostType> vm::Vm for Interpreter<Cost> {
 		let mut stack = VecStack::with_capacity(ext.schedule().stack_limit, U256::zero());
 		let mut reader = CodeReader::new(code);
 		let infos = &*instructions::INSTRUCTIONS;
-		let mut gas_profile = HashMap::new();
+		let mut gas_profile: HashMap<String, U256> = HashMap::new();
 
 		while reader.position < code.len() {
 			let instruction = code[reader.position];
@@ -147,11 +147,11 @@ impl<Cost: CostType> vm::Vm for Interpreter<Cost> {
 			}
 
 			// Profile gas cost
-			let total_op_cost = gas_profile.get(info.name.to_string());
+			let total_op_cost = gas_profile.get(&info.name.to_string()).cloned();
 			match total_op_cost {
 				Some(op_cost) => gas_profile.insert(info.name.to_string(), op_cost + requirements.gas_cost.as_u256()),
 				None => gas_profile.insert(info.name.to_string(), requirements.gas_cost.as_u256()),
-			}
+			};
 
 			gasometer.verify_gas(&requirements.gas_cost)?;
 			self.mem.expand(requirements.memory_required_size);
@@ -203,7 +203,7 @@ impl<Cost: CostType> vm::Vm for Interpreter<Cost> {
 						gas_left: gas.as_u256(),
 						data: mem.into_return_data(init_off, init_size),
 						apply_state: apply,
-						gas_profile: gas_profile,
+						gas_profile: Box::new(gas_profile.clone()),
 					});
 				},
 				InstructionResult::StopExecution => break,

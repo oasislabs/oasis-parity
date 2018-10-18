@@ -132,7 +132,7 @@ pub fn construct(
 
 	Ok(
 		match wasm_interpreter().exec(params, ext)? {
-			GasLeft::Known(_) => Vec::new(),
+			GasLeft::Known { .. } => Vec::new(),
 			GasLeft::NeedsReturn { data, .. } => data.to_vec(),
 		}
 	)
@@ -199,8 +199,8 @@ pub fn run_fixture(fixture: &Fixture) -> Vec<Fail> {
 		Err(e) => { return Fail::runtime(e); }
 	};
 	let (gas_left, result) = match interpreter_return {
-		GasLeft::Known(gas) => { (gas, Vec::new()) },
-		GasLeft::NeedsReturn { gas_left: gas, data: result, apply_state: _apply } => (gas, result.to_vec()),
+		GasLeft::Known{ gas_left: gas, .. } => { (gas, Vec::new()) },
+		GasLeft::NeedsReturn { gas_left: gas, data: result, .. } => (gas, result.to_vec()),
 	};
 
 	let mut fails = Vec::new();

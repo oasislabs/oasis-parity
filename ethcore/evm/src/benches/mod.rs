@@ -122,8 +122,8 @@ fn mem_gas_calculation_increasing(gas: U256, b: &mut Bencher) {
 
 fn result(r: evm::Result<evm::GasLeft>) -> U256 {
 	match r {
-		Ok(evm::GasLeft::Known(v)) => v,
-		Ok(evm::GasLeft::NeedsReturn(v, _)) => v,
+		Ok(evm::GasLeft::Known(v, _)) => v,
+		Ok(evm::GasLeft::NeedsReturn(v, _, _)) => v,
 		_ => U256::zero(),
 	}
 }

@@ -17,6 +17,7 @@
 //! Transaction Execution environment.
 use std::cmp;
 use std::sync::Arc;
+use std::collections::HashMap;
 use hash::keccak;
 use ethereum_types::{H256, U256, U512, Address};
 use bytes::{Bytes, BytesRef};
@@ -487,6 +488,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 						gas_left: params.gas - cost,
 						return_data: ReturnData::new(builtin_out_buffer, 0, out_len),
 						apply_state: true,
+						gas_profile: Box::new(HashMap::new()),
 					})
 				}
 			} else {
@@ -545,6 +547,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					gas_left: params.gas,
 					return_data: ReturnData::empty(),
 					apply_state: true,
+					gas_profile: Box::new(HashMap::new()),
 				})
 			}
 		}

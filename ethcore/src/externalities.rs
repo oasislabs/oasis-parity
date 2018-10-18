@@ -252,11 +252,11 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 
 		// TODO: handle internal error separately
 		match ex.create(params, self.substate, &mut None, self.tracer, self.vm_tracer) {
-			Ok(FinalizationResult{ gas_left, apply_state: true, gas_profile }) => {
+			Ok(FinalizationResult{ gas_left, apply_state: true, return_data: return_data, gas_profile: gas_profile }) => {
 				self.substate.contracts_created.push(address.clone());
 				ContractCreateResult::Created(address, gas_left, gas_profile)
 			},
-			Ok(FinalizationResult{ gas_left, apply_state: false, return_data, gas_profile }) => {
+			Ok(FinalizationResult{ gas_left, apply_state: false, return_data: return_data, gas_profile: gas_profile }) => {
 				ContractCreateResult::Reverted(gas_left, return_data, gas_profile)
 			},
 			_ => ContractCreateResult::Failed,

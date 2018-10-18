@@ -33,6 +33,8 @@ mod env;
 mod panic_payload;
 mod parser;
 
+use std::collections::HashMap;
+
 use vm::{GasLeft, ReturnData, ActionParams};
 use wasmi::{Error as InterpreterError, Trap};
 
@@ -107,6 +109,7 @@ impl vm::Vm for WasmInterpreter {
 
 		let initial_memory = instantiation_resolver.memory_size().map_err(Error::Interpreter)?;
 		trace!(target: "wasm", "Contract requested {:?} pages of initial memory", initial_memory);
+		let gas_profile: Box<HashMap<String, U256>>;
 
 		let (gas_left, result) = {
 			let mut runtime = Runtime::with_params(
@@ -130,7 +133,7 @@ impl vm::Vm for WasmInterpreter {
 			// total_charge ∈ [0..2^64) if static_region ∈ [0..2^16)
 			// qed
 			assert!(runtime.schedule().wasm().initial_mem < 1 << 16);
-			runtime.charge(|s| initial_memory as u64 * s.wasm().initial_mem as u64)?;
+			runtime.charge(|s| initial_memory as u64 * s.wasm().initial_mem as u64, "exec".to_string())?;
 
 			let module_instance = module_instance.run_start(&mut runtime).map_err(Error::Trap)?;
 
@@ -149,6 +152,7 @@ impl vm::Vm for WasmInterpreter {
 					}
 				}
 			}
+			gas_profile = Box::new(runtime.gas_profile.clone());
 
 			if let (ExecutionOutcome::NotSpecial, Err(e)) = (execution_outcome, invoke_result) {
 				trace!(target: "wasm", "Error executing contract: {:?}", e);
@@ -167,7 +171,7 @@ impl vm::Vm for WasmInterpreter {
 
 		if result.is_empty() {
 			trace!(target: "wasm", "Contract execution result is empty.");
-			Ok(GasLeft::Known(gas_left))
+			Ok(GasLeft::Known{ gas_left: gas_left, gas_profile: gas_profile })
 		} else {
 			let len = result.len();
 			Ok(GasLeft::NeedsReturn {
@@ -178,6 +182,7 @@ impl vm::Vm for WasmInterpreter {
 					len,
 				),
 				apply_state: true,
+				gas_profile: gas_profile,
 			})
 		}
 	}

@@ -96,13 +96,14 @@ impl ConfidentialVm {
 		// execute the init code with the underlying vm
 		let result = self.vm.exec(no_prefix_params, ext)?;
 		// prepend \0pri to the bytecode that is eventually stored in the account
-		if let GasLeft::NeedsReturn { gas_left, data, apply_state } = result {
+		if let GasLeft::NeedsReturn { gas_left, data, apply_state, gas_profile } = result {
 			let confidential_bytecode = Self::add_prefix(data.to_vec());
 			let size = confidential_bytecode.len();
 			return Ok(GasLeft::NeedsReturn {
 				gas_left,
 				data: ReturnData::new(confidential_bytecode, 0, size),
-				apply_state
+				apply_state,
+				gas_profile,
 			});
 		}
 		Err(vm::Error::Internal("Expected to receive returned bytecode".to_string()))
@@ -137,11 +138,11 @@ impl ConfidentialVm {
 	/// Encrypts the execution result of a confidential call.
 	/// Assumes the encryption context of ext has already been set.
 	fn encrypt_vm_result(result: GasLeft, ext: &Ext) -> vm::Result<GasLeft> {
-		if let GasLeft::NeedsReturn { gas_left, data, apply_state} = result {
+		if let GasLeft::NeedsReturn { gas_left, data, apply_state, gas_profile } = result {
 			let enc_data = ext.encrypt(data.to_vec())?;
 			let enc_data_len = enc_data.len();
 			let result = GasLeft::NeedsReturn {
-				gas_left, data: ReturnData::new(enc_data, 0, enc_data_len), apply_state
+				gas_left, data: ReturnData::new(enc_data, 0, enc_data_len), apply_state, gas_profile
 			};
 			return Ok(result);
 		}

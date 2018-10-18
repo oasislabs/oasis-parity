@@ -69,7 +69,7 @@ pub struct FakeExt {
 // similar to the normal `finalize` function, but ignoring NeedsReturn.
 pub fn test_finalize(res: Result<GasLeft>) -> Result<U256> {
 	match res {
-		Ok(GasLeft::Known { gas: gas, .. }) => Ok(gas),
+		Ok(GasLeft::Known { gas_left: gas, .. }) => Ok(gas),
 		Ok(GasLeft::NeedsReturn{..}) => unimplemented!(), // since ret is unimplemented.
 		Err(e) => Err(e),
 	}
