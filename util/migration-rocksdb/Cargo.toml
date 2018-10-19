@@ -7,7 +7,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 log = "0.3"
 macros = { path = "../macros" }
 kvdb = { path = "../kvdb" }
-kvdb-rocksdb = { path = "../kvdb-rocksdb" }
+# kvdb-rocksdb = { path = "../kvdb-rocksdb" }
 error-chain = { version = "0.10", default-features = false }
 
 [dev-dependencies]
