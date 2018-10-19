@@ -65,7 +65,7 @@ extern crate byteorder;
 pub extern crate common_types as types;
 // extern crate ethash;
 extern crate ethcore_bloom_journal as bloom_journal;
-// extern crate ethcore_crypto;
+extern crate ethcore_crypto;
 // extern crate ethcore_io as io;
 extern crate ethcore_bytes as bytes;
 // extern crate ethcore_logger;

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use rcrypto;
+// use rcrypto;
 use ring;
 
 quick_error! {
@@ -48,10 +48,10 @@ quick_error! {
 quick_error! {
 	#[derive(Debug)]
 	pub enum SymmError wraps PrivSymmErr {
-		RustCrypto(e: rcrypto::symmetriccipher::SymmetricCipherError) {
-			display("symmetric crypto error")
-			from()
-		}
+		// RustCrypto(e: rcrypto::symmetriccipher::SymmetricCipherError) {
+		// 	display("symmetric crypto error")
+		// 	from()
+		// }
 		Ring(e: ring::error::Unspecified) {
 			display("symmetric crypto error")
 			cause(e)
@@ -75,8 +75,8 @@ impl From<ring::error::Unspecified> for SymmError {
 	}
 }
 
-impl From<rcrypto::symmetriccipher::SymmetricCipherError> for SymmError {
-	fn from(e: rcrypto::symmetriccipher::SymmetricCipherError) -> SymmError {
-		SymmError(PrivSymmErr::RustCrypto(e))
-	}
-}
+// impl From<rcrypto::symmetriccipher::SymmetricCipherError> for SymmError {
+// 	fn from(e: rcrypto::symmetriccipher::SymmetricCipherError) -> SymmError {
+// 		SymmError(PrivSymmErr::RustCrypto(e))
+// 	}
+// }

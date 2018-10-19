@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use rcrypto::ripemd160;
+// use rcrypto::ripemd160;
+use ripemd160;
 use ring::digest::{self, Context, SHA256, SHA512};
 use std::marker::PhantomData;
 use std::ops::Deref;
@@ -80,6 +81,7 @@ impl Hasher<Sha512> {
 
 impl Hasher<Ripemd160> {
 	pub fn ripemd160() -> Hasher<Ripemd160> {
+		use ripemd160::Digest;
 		Hasher(Inner::Ripemd160(ripemd160::Ripemd160::new()), PhantomData)
 	}
 }
@@ -89,7 +91,8 @@ impl<T> Hasher<T> {
 		match self.0 {
 			Inner::Ring(ref mut ctx) => ctx.update(data),
 			Inner::Ripemd160(ref mut ctx) => {
-				use rcrypto::digest::Digest;
+				// use rcrypto::digest::Digest;
+				use ripemd160::Digest;
 				ctx.input(data)
 			}
 		}
@@ -98,10 +101,11 @@ impl<T> Hasher<T> {
 	pub fn finish(self) -> Digest<T> {
 		match self.0 {
 			Inner::Ring(ctx) => Digest(InnerDigest::Ring(ctx.finish()), PhantomData),
-			Inner::Ripemd160(mut ctx) => {
-				use rcrypto::digest::Digest;
+			Inner::Ripemd160(ctx) => {
+				// use rcrypto::digest::Digest;
+				use ripemd160::Digest;
 				let mut d = [0; 20];
-				ctx.result(&mut d);
+				d.clone_from_slice(&ctx.result());
 				Digest(InnerDigest::Ripemd160(d), PhantomData)
 			}
 		}
