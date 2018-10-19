@@ -718,11 +718,13 @@ mod tests {
 	use error::Error;
 	use header::Header;
 	use factory::Factories;
-	use state_db::StateDB;
+	// use state_db::StateDB;
 	use views::BlockView;
 	use ethereum_types::Address;
 	use std::sync::Arc;
 	use transaction::SignedTransaction;
+	use storage::NullStorage;
+	use state::Backend;
 
 	/// Enact the block given by `block_bytes` using `engine` on the database `db` with given `parent` block header
 	fn enact_bytes(
@@ -743,10 +745,11 @@ mod tests {
 			.map(|r| r.map_err(Into::into))
 			.collect();
 		let transactions = transactions?;
+		let mut storage = NullStorage::new();
 
 		{
 			if ::log::max_log_level() >= ::log::LogLevel::Trace {
-				let s = State::from_existing(db.boxed_clone(), parent.state_root().clone(), engine.account_start_nonce(parent.number() + 1), factories.clone(), None)?;
+				let s = State::from_existing(db.clone(), parent.state_root().clone(), engine.account_start_nonce(parent.number() + 1), factories.clone(), None, None)?;
 				trace!(target: "enact", "num={}, root={}, author={}, author_balance={}\n",
 					header.number(), s.root(), header.author(), s.balance(&header.author())?);
 			}
@@ -760,14 +763,16 @@ mod tests {
 			parent,
 			last_hashes,
 			Address::new(),
-			(3141562.into(), 31415620.into()),
+			31415620.into(),
 			vec![],
 			false,
 			&mut Vec::new().into_iter(),
+			None,
+			None,
 		)?;
 
 		b.populate_from(&header);
-		b.push_transactions(transactions)?;
+		b.push_transactions(transactions, &mut storage)?;
 
 		for u in &block.uncles() {
 			b.push_uncle(u.clone())?;
@@ -797,7 +802,7 @@ mod tests {
 		let genesis_header = spec.genesis_header();
 		let db = spec.ensure_db_good(get_temp_state_db(), &Default::default()).unwrap();
 		let last_hashes = Arc::new(vec![genesis_header.hash()]);
-		let b = OpenBlock::new(&*spec.engine, Default::default(), false, db, &genesis_header, last_hashes, Address::zero(), (3141562.into(), 31415620.into()), vec![], false, &mut Vec::new().into_iter()).unwrap();
+		let b = OpenBlock::new(&*spec.engine, Default::default(), false, db, &genesis_header, last_hashes, Address::zero(), 31415620.into(), vec![], false, &mut Vec::new().into_iter(), None, None).unwrap();
 		let b = b.close_and_lock();
 		let _ = b.seal(&*spec.engine, vec![]);
 	}
@@ -811,7 +816,7 @@ mod tests {
 
 		let db = spec.ensure_db_good(get_temp_state_db(), &Default::default()).unwrap();
 		let last_hashes = Arc::new(vec![genesis_header.hash()]);
-		let b = OpenBlock::new(engine, Default::default(), false, db, &genesis_header, last_hashes.clone(), Address::zero(), (3141562.into(), 31415620.into()), vec![], false, &mut Vec::new().into_iter()).unwrap()
+		let b = OpenBlock::new(engine, Default::default(), false, db, &genesis_header, last_hashes.clone(), Address::zero(), 31415620.into(), vec![], false, &mut Vec::new().into_iter(), None, None).unwrap()
 			.close_and_lock().seal(engine, vec![]).unwrap();
 		let orig_bytes = b.rlp_bytes();
 		let orig_db = b.drain();
@@ -822,8 +827,8 @@ mod tests {
 		assert_eq!(e.rlp_bytes(), orig_bytes);
 
 		let db = e.drain();
-		assert_eq!(orig_db.journal_db().keys(), db.journal_db().keys());
-		assert!(orig_db.journal_db().keys().iter().filter(|k| orig_db.journal_db().get(k.0) != db.journal_db().get(k.0)).next() == None);
+		assert_eq!(orig_db.as_hashdb().keys(), db.as_hashdb().keys());
+		assert!(orig_db.as_hashdb().keys().iter().filter(|k| orig_db.as_hashdb().get(k.0) != db.as_hashdb().get(k.0)).next() == None);
 	}
 
 	#[test]
@@ -835,7 +840,7 @@ mod tests {
 
 		let db = spec.ensure_db_good(get_temp_state_db(), &Default::default()).unwrap();
 		let last_hashes = Arc::new(vec![genesis_header.hash()]);
-		let mut open_block = OpenBlock::new(engine, Default::default(), false, db, &genesis_header, last_hashes.clone(), Address::zero(), (3141562.into(), 31415620.into()), vec![], false, &mut Vec::new().into_iter()).unwrap();
+		let mut open_block = OpenBlock::new(engine, Default::default(), false, db, &genesis_header, last_hashes.clone(), Address::zero(), 31415620.into(), vec![], false, &mut Vec::new().into_iter(), None, None).unwrap();
 		let mut uncle1_header = Header::new();
 		uncle1_header.set_extra_data(b"uncle1".to_vec());
 		let mut uncle2_header = Header::new();
@@ -856,7 +861,7 @@ mod tests {
 		assert_eq!(uncles[1].extra_data(), b"uncle2");
 
 		let db = e.drain();
-		assert_eq!(orig_db.journal_db().keys(), db.journal_db().keys());
-		assert!(orig_db.journal_db().keys().iter().filter(|k| orig_db.journal_db().get(k.0) != db.journal_db().get(k.0)).next() == None);
+		assert_eq!(orig_db.as_hashdb().keys(), db.as_hashdb().keys());
+		assert!(orig_db.as_hashdb().keys().iter().filter(|k| orig_db.as_hashdb().get(k.0) != db.as_hashdb().get(k.0)).next() == None);
 	}
 }

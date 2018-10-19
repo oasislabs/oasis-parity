@@ -63,6 +63,7 @@ fn test_blockhash_eip210(factory: Factory) {
 			data: Some(H256::from(i - 1).to_vec()),
 			call_type: CallType::Call,
 			params_type: ParamsType::Separate,
+			confidential: false,
 		};
 		let mut ex = Executive::new(&mut state, &env_info, &machine, &mut storage);
 		let mut substate = Substate::new();
@@ -86,6 +87,7 @@ fn test_blockhash_eip210(factory: Factory) {
 		data: None,
 		call_type: CallType::Call,
 		params_type: ParamsType::Separate,
+		confidential: false,
 	};
 	let mut ex = Executive::new(&mut state, &env_info, &machine, &mut storage);
 	let mut substate = Substate::new();

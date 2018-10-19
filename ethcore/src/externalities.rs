@@ -493,6 +493,7 @@ mod tests {
 	use test_helpers::get_temp_state;
 	use super::*;
 	use trace::{NoopTracer, NoopVMTracer};
+	use storage::NullStorage;
 
 	fn get_test_origin() -> OriginInfo {
 		OriginInfo {
@@ -545,8 +546,9 @@ mod tests {
 		let state = &mut setup.state;
 		let mut tracer = NoopTracer;
 		let mut vm_tracer = NoopVMTracer;
+		let mut storage = NullStorage::new();
 
-		let ext = Externalities::new(state, &setup.env_info, &setup.machine, 0, get_test_origin(), &mut setup.sub_state, OutputPolicy::InitContract(None), &mut tracer, &mut vm_tracer, false, false);
+		let ext = Externalities::new(state, &setup.env_info, &setup.machine, 0, get_test_origin(), &mut setup.sub_state, OutputPolicy::InitContract(None), &mut tracer, &mut vm_tracer, false, &mut storage);
 
 		assert_eq!(ext.env_info().number, 100);
 	}
@@ -557,8 +559,9 @@ mod tests {
 		let state = &mut setup.state;
 		let mut tracer = NoopTracer;
 		let mut vm_tracer = NoopVMTracer;
+		let mut storage = NullStorage::new();
 
-		let mut ext = Externalities::new(state, &setup.env_info, &setup.machine, 0, get_test_origin(), &mut setup.sub_state, OutputPolicy::InitContract(None), &mut tracer, &mut vm_tracer, false, false);
+		let mut ext = Externalities::new(state, &setup.env_info, &setup.machine, 0, get_test_origin(), &mut setup.sub_state, OutputPolicy::InitContract(None), &mut tracer, &mut vm_tracer, false, &mut storage);
 
 		let hash = ext.blockhash(&"0000000000000000000000000000000000000000000000000000000000120000".parse::<U256>().unwrap());
 
@@ -581,8 +584,9 @@ mod tests {
 		let state = &mut setup.state;
 		let mut tracer = NoopTracer;
 		let mut vm_tracer = NoopVMTracer;
+		let mut storage = NullStorage::new();
 
-		let mut ext = Externalities::new(state, &setup.env_info, &setup.machine, 0, get_test_origin(), &mut setup.sub_state, OutputPolicy::InitContract(None), &mut tracer, &mut vm_tracer, false, false);
+		let mut ext = Externalities::new(state, &setup.env_info, &setup.machine, 0, get_test_origin(), &mut setup.sub_state, OutputPolicy::InitContract(None), &mut tracer, &mut vm_tracer, false, &mut storage);
 
 		let hash = ext.blockhash(&"0000000000000000000000000000000000000000000000000000000000120000".parse::<U256>().unwrap());
 
@@ -596,8 +600,9 @@ mod tests {
 		let state = &mut setup.state;
 		let mut tracer = NoopTracer;
 		let mut vm_tracer = NoopVMTracer;
+		let mut storage = NullStorage::new();
 
-		let mut ext = Externalities::new(state, &setup.env_info, &setup.machine, 0, get_test_origin(), &mut setup.sub_state, OutputPolicy::InitContract(None), &mut tracer, &mut vm_tracer, false, false);
+		let mut ext = Externalities::new(state, &setup.env_info, &setup.machine, 0, get_test_origin(), &mut setup.sub_state, OutputPolicy::InitContract(None), &mut tracer, &mut vm_tracer, false, &mut storage);
 
 		let mut output = vec![];
 
@@ -623,9 +628,10 @@ mod tests {
 		let state = &mut setup.state;
 		let mut tracer = NoopTracer;
 		let mut vm_tracer = NoopVMTracer;
+		let mut storage = NullStorage::new();
 
 		{
-			let mut ext = Externalities::new(state, &setup.env_info, &setup.machine, 0, get_test_origin(), &mut setup.sub_state, OutputPolicy::InitContract(None), &mut tracer, &mut vm_tracer, false, false);
+			let mut ext = Externalities::new(state, &setup.env_info, &setup.machine, 0, get_test_origin(), &mut setup.sub_state, OutputPolicy::InitContract(None), &mut tracer, &mut vm_tracer, false, &mut storage);
 			ext.log(log_topics, &log_data).unwrap();
 		}
 
@@ -640,9 +646,10 @@ mod tests {
 		let state = &mut setup.state;
 		let mut tracer = NoopTracer;
 		let mut vm_tracer = NoopVMTracer;
+		let mut storage = NullStorage::new();
 
 		{
-			let mut ext = Externalities::new(state, &setup.env_info, &setup.machine, 0, get_test_origin(), &mut setup.sub_state, OutputPolicy::InitContract(None), &mut tracer, &mut vm_tracer, false, false);
+			let mut ext = Externalities::new(state, &setup.env_info, &setup.machine, 0, get_test_origin(), &mut setup.sub_state, OutputPolicy::InitContract(None), &mut tracer, &mut vm_tracer, false, &mut storage);
 			ext.suicide(refund_account).unwrap();
 		}
 

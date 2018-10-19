@@ -21,4 +21,4 @@ mod seal;
 mod spec;
 
 pub use self::genesis::Genesis;
-pub use self::spec::{Spec, SpecHardcodedSync, CommonParams};
+pub use self::spec::{Spec, SpecHardcodedSync, SpecParams, CommonParams};

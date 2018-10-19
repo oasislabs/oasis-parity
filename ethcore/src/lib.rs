@@ -102,7 +102,7 @@ extern crate triehash;
 // extern crate ansi_term;
 extern crate unexpected;
 pub extern crate kvdb;
-// extern crate kvdb_memorydb;
+extern crate kvdb_memorydb;
 extern crate util_error;
 // extern crate snappy;
 //
@@ -153,7 +153,8 @@ pub mod db;
 pub mod encoded;
 pub mod engines;
 pub mod error;
-// pub mod ethereum;
+#[cfg(test)]
+pub mod ethereum;
 pub mod executed;
 pub mod executive;
 pub mod header;
@@ -186,8 +187,8 @@ mod tests;
 mod json_tests;
 #[cfg(any(test, feature = "test-helpers"))]
 pub mod test_helpers;
-#[cfg(test)]
-mod test_helpers_internal;
+// #[cfg(test)]
+// mod test_helpers_internal;
 
 pub use types::*;
 pub use executive::contract_address;
