@@ -1,0 +1,15 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: ekiden/testing:0.2.0
+    resource_class: xlarge
+    steps:
+      # Check out source from github
+      - checkout
+
+      # Build ethcore
+      - run:
+          name: Build ethcore
+          working_directory: ethcore
+          command: cargo build
