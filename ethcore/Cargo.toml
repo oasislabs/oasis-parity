@@ -74,6 +74,7 @@ journaldb = { path = "../util/journaldb" }
 tempdir = "0.3"
 trie-standardmap = { path = "../util/trie-standardmap" }
 # kvdb-rocksdb = { path = "../util/kvdb-rocksdb" }
+rand = "0.5"
 
 [features]
 default = ["enable-confidential"]

@@ -37,15 +37,16 @@ use state::*;
 use std::sync::Arc;
 use transaction::{Action, Transaction, SignedTransaction};
 use views::BlockView;
+use rand::prelude::*;
 
-// TODO: use rand
 pub fn random_address() -> Address {
-    Address::from(1)
+    let val: u64 = random();
+    Address::from(val)
 }
 
-// TODO: use rand
 pub fn random_h256() -> H256 {
-    H256::from(1)
+    let val: u64 = random();
+    H256::from(val)
 }
 
 /// Creates test block with corresponding header

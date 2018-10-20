@@ -90,7 +90,8 @@ mod num {
 }
 extern crate parity_machine;
 // extern crate parking_lot;
-// extern crate rand;
+#[cfg(test)]
+extern crate rand;
 // extern crate rayon;
 pub extern crate rlp;
 extern crate rlp_compress;
