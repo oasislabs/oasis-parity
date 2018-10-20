@@ -13,3 +13,9 @@ jobs:
           name: Build ethcore
           working_directory: ethcore
           command: cargo build
+
+      # Test ethcore
+      - run:
+          name: Run the ethcore tests
+          working_directory: ethcore
+          command: cargo test
