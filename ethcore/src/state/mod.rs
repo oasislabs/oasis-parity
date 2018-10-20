@@ -1238,7 +1238,7 @@ mod tests {
 				init: vec![96, 16, 128, 96, 12, 96, 0, 57, 96, 0, 243, 0, 96, 0, 53, 84, 21, 96, 9, 87, 0, 91, 96, 32, 53, 96, 0, 53, 85],
 			}),
 			result: trace::Res::Create(trace::CreateResult {
-				gas_used: U256::from(3224),
+				gas_used: U256::from(40),
 				address: Address::from_str("8988167e088c87cd314df6d3c2b83da5acb93ace").unwrap(),
 				code: vec![96, 0, 53, 84, 21, 96, 9, 87, 0, 91, 96, 32, 53, 96, 0, 53]
 			}),
