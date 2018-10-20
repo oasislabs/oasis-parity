@@ -88,16 +88,19 @@ enum ExecutionOutcome {
 impl vm::Vm for WasmInterpreter {
 
 	fn exec(&mut self, params: ActionParams, ext: &mut vm::Ext) -> vm::Result<GasLeft> {
+		info!("exec");
 		let (module, data) = parser::payload(&params, ext.schedule().wasm())?;
 
 		let loaded_module = wasmi::Module::from_parity_wasm_module(module).map_err(Error::Interpreter)?;
 
 		let instantiation_resolver = env::ImportResolver::with_limit(<u32>::max_value() - 1);
 
+		info!("creating module instance");
 		let module_instance = wasmi::ModuleInstance::new(
 			&loaded_module,
 			&wasmi::ImportsBuilder::new().with_resolver("env", &instantiation_resolver)
 		).map_err(Error::Interpreter)?;
+		info!("done");
 
 		let adjusted_gas = params.gas * U256::from(ext.schedule().wasm().opcodes_div) /
 			U256::from(ext.schedule().wasm().opcodes_mul);
@@ -133,10 +136,12 @@ impl vm::Vm for WasmInterpreter {
 			// total_charge ∈ [0..2^64) if static_region ∈ [0..2^16)
 			// qed
 			assert!(runtime.schedule().wasm().initial_mem < 1 << 16);
-			runtime.charge(|s| initial_memory as u64 * s.wasm().initial_mem as u64, "exec".to_string())?;
+			runtime.charge(|s| initial_memory as u64 + s.wasm().initial_mem as u64, "wasm.exec".to_string())?;
 
+			info!("run_start");
 			let module_instance = module_instance.run_start(&mut runtime).map_err(Error::Trap)?;
 
+			info!("invole_export");
 			let invoke_result = module_instance.invoke_export("call", &[], &mut runtime);
 
 			let mut execution_outcome = ExecutionOutcome::NotSpecial;
@@ -156,6 +161,7 @@ impl vm::Vm for WasmInterpreter {
 
 			if let (ExecutionOutcome::NotSpecial, Err(e)) = (execution_outcome, invoke_result) {
 				trace!(target: "wasm", "Error executing contract: {:?}", e);
+				info!(target: "wasm", "Error executing contract: {:?}", e);
 				return Err(vm::Error::from(Error::from(e)));
 			}
 

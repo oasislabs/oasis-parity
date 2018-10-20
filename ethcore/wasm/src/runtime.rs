@@ -219,6 +219,7 @@ impl<'a> Runtime<'a> {
 	{
 		let amount = f(self.ext.schedule());
 		if !self.charge_gas(amount as u64, func) {
+			info!("ran out of gas: {:?}", self.gas_profile);
 			Err(Error::GasLimit)
 		} else {
 			Ok(())
