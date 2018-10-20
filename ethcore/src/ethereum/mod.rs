@@ -93,7 +93,7 @@ pub fn new_ropsten<'a, T: Into<SpecParams<'a>>>(params: T) -> Spec {
 
 /// Create a new Morden chain spec.
 pub fn new_morden<'a, T: Into<SpecParams<'a>>>(params: T) -> Spec {
-	load(params.into(), include_bytes!("../../res/ethereum/morden.json"))
+	load(params.into(), include_bytes!("../../res/ethereum/morden_test.json"))
 }
 
 // For tests
