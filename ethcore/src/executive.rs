@@ -1685,7 +1685,7 @@ mod tests {
 			ex.call(params.clone(), &mut Substate::new(), BytesRef::Fixed(&mut output), &mut NoopTracer, &mut NoopVMTracer).unwrap()
 		};
 
-		assert_eq!(result, U256::from(18433));
+		assert_eq!(result, U256::from(7681));
 		// Transaction successfully returned sender
 		assert_eq!(output[..], sender[..]);
 
