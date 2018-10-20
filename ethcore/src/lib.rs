@@ -181,8 +181,8 @@ pub mod blockchain;
 pub mod factory;
 // mod tx_filter;
 
-#[cfg(test)]
-mod tests;
+// #[cfg(test)]
+// mod tests;
 #[cfg(test)]
 #[cfg(feature = "json-tests")]
 mod json_tests;
