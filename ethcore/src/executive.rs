@@ -774,9 +774,9 @@ mod tests {
     // TODO: randomize
     fn get_keypair() -> KeyPair {
 		KeyPair::from_secret(
-			Secret::from_str(
-				"0000000000000000000000000000000000000000000000000000000000000000",
-			).unwrap()
+			Secret::from(
+				"0000000000000000000000000000000000000000000000000000000000000001",
+			)
 		).unwrap()
     }
 
