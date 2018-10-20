@@ -2,19 +2,7 @@
 	"name": "Morden",
 	"dataDir": "morden",
 	"engine": {
-		"Ethash": {
-			"params": {
-				"minimumDifficulty": "0x020000",
-				"difficultyBoundDivisor": "0x0800",
-				"durationLimit": "0x0d",
-				"blockReward": "0x4563918244F40000",
-				"homesteadTransition": 494000,
-				"ecip1010PauseTransition": 1915000,
-				"ecip1010ContinueTransition": 3415000,
-				"ecip1017EraRounds": 2000000,
-				"bombDefuseTransition": 2300000
-			}
-		}
+		"instantSeal": null
 	},
 	"params": {
 		"gasLimitBoundDivisor": "0x0400",
