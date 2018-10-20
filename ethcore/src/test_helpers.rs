@@ -27,7 +27,7 @@ use evm::Factory as EvmFactory;
 use factory::Factories;
 use hash::keccak;
 use header::Header;
-use std::io::*;
+// use io::*;
 // use miner::Miner;
 // use parking_lot::RwLock;
 use rlp::{self, RlpStream};
