@@ -1188,7 +1188,7 @@ mod tests {
 			ex.create(params.clone(), &mut substate, &mut None, &mut tracer, &mut vm_tracer).unwrap()
 		};
 
-		assert_eq!(gas_left, U256::from(96_776));
+		assert_eq!(gas_left, U256::from(99_960));
 
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
@@ -1200,7 +1200,7 @@ mod tests {
 				init: vec![96, 16, 128, 96, 12, 96, 0, 57, 96, 0, 243, 0, 96, 0, 53, 84, 21, 96, 9, 87, 0, 91, 96, 32, 53, 96, 0, 53, 85],
 			}),
 			result: trace::Res::Create(trace::CreateResult {
-				gas_used: U256::from(3224),
+				gas_used: U256::from(40),
 				address: params.address,
 				code: vec![96, 0, 53, 84, 21, 96, 9, 87, 0, 91, 96, 32, 53, 96, 0, 53]
 			}),
