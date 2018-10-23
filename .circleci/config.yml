@@ -8,20 +8,25 @@ jobs:
       # Check out source from github
       - checkout
 
-      # Build ethcore (runtime)
+      # Build ethcore for runtime (SGX)
       - run:
-          name: Build ethcore for runtime
+          name: Build ethcore for runtime (SGX)
           working_directory: ethcore
           command: RUST_TARGET_PATH=$(pwd) RUSTFLAGS="-Z force-unstable-if-unmarked" xargo build --target x86_64-unknown-linux-sgx --release
 
-      # Build ethcore (gateway)
+      # Build ethcore for gateway
       - run:
           name: Build ethcore for gateway
           working_directory: ethcore
           command: cargo build --features "gateway"
 
+      # Build other gateway dependencies
+      - run:
+          name: Build other gateway dependencies
+          command: cargo build --package mem --package parity-reactor --package parity-rpc --package path
+
       # Test ethcore
       - run:
-          name: Run the ethcore tests
+          name: Run ethcore tests
           working_directory: ethcore
           command: cargo test
