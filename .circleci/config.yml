@@ -8,11 +8,17 @@ jobs:
       # Check out source from github
       - checkout
 
-      # Build ethcore
+      # Build ethcore (runtime)
       - run:
-          name: Build ethcore
+          name: Build ethcore for runtime
           working_directory: ethcore
-          command: cargo build
+          command: RUST_TARGET_PATH=$(pwd) RUSTFLAGS="-Z force-unstable-if-unmarked" xargo build --target x86_64-unknown-linux-sgx --release
+
+      # Build ethcore (gateway)
+      - run:
+          name: Build ethcore for gateway
+          working_directory: ethcore
+          command: cargo build --features "gateway"
 
       # Test ethcore
       - run:

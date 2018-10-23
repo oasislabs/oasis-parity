@@ -1,0 +1,15 @@
+[dependencies]
+alloc = {}
+panic_unwind = {}
+panic_abort = {}
+
+[dependencies.std]
+git = "https://github.com/oasislabs/rust-sgx-sdk"
+tag = "v1.0.1-ekiden2"
+features = ["backtrace", "stdio", "untrusted_time"]
+stage = 2
+
+[dependencies.xargo_sgx_rand]
+git = "https://github.com/oasislabs/rust-sgx-sdk"
+tag = "v1.0.1-ekiden2"
+stage = 3
