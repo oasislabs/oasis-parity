@@ -188,7 +188,7 @@ pub struct BlockChain {
 	// All locks must be captured in the order declared here.
 	blooms_config: bc::Config,
 
-	// We've removed `best_block`. The Ekiden database system handles state.
+	best_block: RwLock<BestBlock>,
 	// Stores best block of the first uninterrupted sequence of blocks. `None` if there are no gaps.
 	// Only updated with `insert_unordered_block`.
 	best_ancient_block: RwLock<Option<BestAncientBlock>>,
@@ -253,6 +253,14 @@ impl BlockProvider for BlockChain {
 			}
 		}
 
+		// Check if it's the best block
+		{
+			let best_block = self.best_block.read().unwrap();
+			if &best_block.header.hash() == hash {
+				return Some(best_block.header.encoded())
+			}
+		}
+
 		// Read from DB and populate cache
 		let b = self.db.get(db::COL_HEADERS, hash)
 			.expect("Low level database error. Some issue with disk?")?;
@@ -272,6 +280,14 @@ impl BlockProvider for BlockChain {
 			let read = self.block_bodies.read().unwrap();
 			if let Some(v) = read.get(hash) {
 				return Some(v.clone());
+			}
+		}
+
+		// Check if it's the best block
+		{
+			let best_block = self.best_block.read().unwrap();
+			if &best_block.header.hash() == hash {
+				return Some(encoded::Body::new(Self::block_to_body(best_block.block.rlp().as_raw())));
 			}
 		}
 
@@ -494,6 +510,12 @@ impl BlockChain {
 				elements_per_index: LOG_BLOOMS_ELEMENTS_PER_INDEX,
 			},
 			first_block: None,
+			best_block: RwLock::new(BestBlock {
+				// BestBlock will be overwritten anyway.
+				header: Default::default(),
+				total_difficulty: Default::default(),
+				block: encoded::Block::new(genesis.into()),
+			}),
 			best_ancient_block: RwLock::new(None),
 			block_headers: RwLock::new(HashMap::new()),
 			block_bodies: RwLock::new(HashMap::new()),
@@ -510,35 +532,56 @@ impl BlockChain {
 			pending_transaction_addresses: RwLock::new(HashMap::new()),
 		};
 
-		let best_block_hash = bc.load_best_block_hash().unwrap_or_else(|| {
-			// best block does not exist
-			// we need to insert genesis into the cache
-			let block = view!(BlockView, genesis);
-			let header = block.header_view();
-			let hash = block.hash();
+		// load best block
+		let best_block_hash = match bc.db.get(db::COL_EXTRA, b"best").unwrap() {
+			Some(best) => {
+				H256::from_slice(&best)
+			}
+			None => {
+				// best block does not exist
+				// we need to insert genesis into the cache
+				let block = view!(BlockView, genesis);
+				let header = block.header_view();
+				let hash = block.hash();
 
-			let details = BlockDetails {
-				number: header.number(),
-				total_difficulty: header.difficulty(),
-				parent: header.parent_hash(),
-				children: vec![],
-				is_finalized: false,
-				metadata: None,
-			};
+				let details = BlockDetails {
+					number: header.number(),
+					total_difficulty: header.difficulty(),
+					parent: header.parent_hash(),
+					children: vec![],
+					is_finalized: false,
+					metadata: None,
+				};
 
-			let mut batch = DBTransaction::new();
-			batch.put(db::COL_HEADERS, &hash, block.header_rlp().as_raw());
-			batch.put(db::COL_BODIES, &hash, &Self::block_to_body(genesis));
+				let mut batch = DBTransaction::new();
+				batch.put(db::COL_HEADERS, &hash, block.header_rlp().as_raw());
+				batch.put(db::COL_BODIES, &hash, &Self::block_to_body(genesis));
 
-			batch.write(db::COL_EXTRA, &hash, &details);
-			batch.write(db::COL_EXTRA, &header.number(), &hash);
+				batch.write(db::COL_EXTRA, &hash, &details);
+				batch.write(db::COL_EXTRA, &header.number(), &hash);
 
-			batch.put(db::COL_EXTRA, b"best", &hash);
-			bc.db.write(batch).expect("Low level database error. Some issue with disk?");
-			hash
-		});
+				batch.put(db::COL_EXTRA, b"best", &hash);
+				bc.db.write(batch).expect("Low level database error. Some issue with disk?");
+				hash
+			}
+		};
+
 		{
-			let best_block_number = bc.load_best_block().header.number();
+			// Fetch best block details
+			let best_block_total_difficulty = bc.block_details(&best_block_hash).unwrap().total_difficulty;
+			let best_block_rlp = bc.block(&best_block_hash).unwrap();
+
+			// and write them
+			let mut best_block = bc.best_block.write().unwrap();
+			*best_block = BestBlock {
+				total_difficulty: best_block_total_difficulty,
+				header: best_block_rlp.decode_header(),
+				block: best_block_rlp,
+			};
+		}
+
+		{
+			let best_block_number = bc.best_block.read().unwrap().header.number();
 			// Fetch first and best ancient block details
 			let raw_first = bc.db.get(db::COL_EXTRA, b"first").unwrap().map(|v| v.into_vec());
 			let mut best_ancient = bc.db.get(db::COL_EXTRA, b"ancient").unwrap().map(|h| H256::from_slice(&h));
@@ -592,29 +635,6 @@ impl BlockChain {
 		}
 
 		bc
-	}
-
-	/// Load the hash of the best block. Returns None if it's not set. In that case, use the
-	/// genesis block.
-	fn load_best_block_hash(&self) -> Option<H256> {
-		self.db.get(db::COL_EXTRA, b"best").unwrap().map(|best| H256::from_slice(&best))
-	}
-
-	/// Load the best block if it already exists. Otherwise panic.
-	fn load_best_block(&self) -> BestBlock {
-		let best_block_hash = self.load_best_block_hash().expect("load_best_block called before writing genesis");
-		{
-			// Fetch best block details
-			let best_block_total_difficulty = self.block_details(&best_block_hash).unwrap().total_difficulty;
-			let best_block_rlp = self.block(&best_block_hash).unwrap();
-
-			// and return them
-			BestBlock {
-				total_difficulty: best_block_total_difficulty,
-				header: best_block_rlp.decode_header(),
-				block: best_block_rlp,
-			}
-		}
 	}
 
 	/// Returns true if the given parent block has given child
@@ -1082,8 +1102,6 @@ impl BlockChain {
 		{
 			let mut best_block = self.pending_best_block.write().unwrap();
 			if is_best && update.info.location != BlockLocation::Branch {
-				// With the removal of the cached best block, our view of the best block changes
-				// immediately after this db write.
 				batch.put(db::COL_EXTRA, b"best", &update.info.hash);
 				let block = encoded::Block::new(update.block.to_vec());
 				*best_block = Some(BestBlock {
@@ -1110,13 +1128,14 @@ impl BlockChain {
 		let mut pending_block_details = self.pending_block_details.write().unwrap();
 		let mut pending_write_txs = self.pending_transaction_addresses.write().unwrap();
 
+		let mut best_block = self.best_block.write().unwrap();
 		let mut write_block_details = self.block_details.write().unwrap();
 		let mut write_hashes = self.block_hashes.write().unwrap();
 		let mut write_txs = self.transaction_addresses.write().unwrap();
-		// We don't maintain our own record of what is the best block. Accessing the best block
-		// will go out to the db. We rely on `prepare_update` to update the best block hash in the
-		// db prior to this. All we do now is clear the pending best block.
-		*pending_best_block = None;
+		// update best block
+		if let Some(block) = pending_best_block.take() {
+			*best_block = block;
+		}
 
 		let pending_txs = mem::replace(&mut *pending_write_txs, HashMap::new());
 		let (retracted_txs, enacted_txs) = pending_txs.into_iter().partition::<HashMap<_, _>, _>(|&(_, ref value)| value.is_none());
@@ -1375,31 +1394,29 @@ impl BlockChain {
 			.collect()
 	}
 
-	// These accessors might now be inefficient, with the best block no longer cached.
-
 	/// Get best block hash.
 	pub fn best_block_hash(&self) -> H256 {
-		self.load_best_block().header.hash()
+		self.best_block.read().unwrap().header.hash()
 	}
 
 	/// Get best block number.
 	pub fn best_block_number(&self) -> BlockNumber {
-		self.load_best_block().header.number()
+		self.best_block.read().unwrap().header.number()
 	}
 
 	/// Get best block timestamp.
 	pub fn best_block_timestamp(&self) -> u64 {
-		self.load_best_block().header.timestamp()
+		self.best_block.read().unwrap().header.timestamp()
 	}
 
 	/// Get best block total difficulty.
 	pub fn best_block_total_difficulty(&self) -> U256 {
-		self.load_best_block().total_difficulty
+		self.best_block.read().unwrap().total_difficulty
 	}
 
 	/// Get best block header
 	pub fn best_block_header(&self) -> Header {
-		self.load_best_block().header.clone()
+		self.best_block.read().unwrap().header.clone()
 	}
 
 	/// Get current cache size.
@@ -1469,7 +1486,7 @@ impl BlockChain {
 	/// Returns general blockchain information
 	pub fn chain_info(&self) -> BlockChainInfo {
 		// ensure data consistencly by locking everything first
-		let best_block = self.load_best_block();
+		let best_block = self.best_block.read().unwrap();
 		let best_ancient_block = self.best_ancient_block.read().unwrap();
 		BlockChainInfo {
 			total_difficulty: best_block.total_difficulty,
