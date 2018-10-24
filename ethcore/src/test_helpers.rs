@@ -16,6 +16,8 @@
 
 //! Set of different helpers for client tests
 
+use std::collections::HashMap;
+
 // use account_provider::AccountProvider;
 use ethereum_types::{H256, U256, Address};
 use block::{OpenBlock, Drain};
@@ -26,7 +28,9 @@ use ethkey::KeyPair;
 use evm::Factory as EvmFactory;
 use factory::Factories;
 use hash::keccak;
+use hashdb::{AsHashDB, HashDB, DBValue};
 use header::Header;
+use memorydb::MemoryDB;
 // use io::*;
 // use miner::Miner;
 // use parking_lot::RwLock;
@@ -97,6 +101,37 @@ pub fn create_test_block_with_data(header: &Header, transactions: &[SignedTransa
 	}
 	rlp.append_list(&uncles);
 	rlp.out()
+}
+
+#[derive(Clone, PartialEq)]
+pub struct TempBackend(MemoryDB);
+
+impl TempBackend {
+	pub fn new() -> Self {
+		let mut db = MemoryDB::new();
+		TempBackend(db)
+	}
+}
+
+impl HashDB for TempBackend {
+	fn keys(&self) -> HashMap<H256, i32> { self.0.keys() }
+	fn get(&self, key: &H256) -> Option<DBValue> {
+		self.0.get(key)
+	}
+
+	fn contains(&self, key: &H256) -> bool {
+		self.0.contains(key)
+	}
+
+	fn insert(&mut self, value: &[u8]) -> H256 {
+		self.0.insert(value)
+	}
+
+	fn emplace(&mut self, key: H256, value: DBValue) {
+		self.0.emplace(key, value)
+	}
+
+	fn remove(&mut self, _key: &H256) { }
 }
 
 /*
@@ -350,6 +385,11 @@ pub fn get_temp_state_db() -> StateDB {
 	let db = new_db();
 	let journal_db = ::journaldb::new(db, ::journaldb::Algorithm::EarlyMerge, ::db::COL_STATE);
 	StateDB::new(journal_db, 5 * 1024 * 1024)
+}
+
+/// Returns temp state backend
+pub fn get_temp_state_backend() -> TempBackend {
+	TempBackend::new()
 }
 
 /// Returns sequence of hashes of the dummy blocks

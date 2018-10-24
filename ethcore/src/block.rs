@@ -711,7 +711,7 @@ impl IsBlock for SealedBlock {
 
 #[cfg(test)]
 mod tests {
-	use test_helpers::get_temp_state_db;
+	use test_helpers::get_temp_state_backend;
 	use super::*;
 	use engines::EthEngine;
 	use vm::LastHashes;
@@ -795,22 +795,18 @@ mod tests {
 		Ok(enact_bytes(block_bytes, engine, tracing, db, parent, last_hashes, factories)?.seal(engine, header.seal())?)
 	}
 
-	// TODO: re-enable OpenBlock tests
-	/*
 	#[test]
 	fn open_block() {
 		use spec::*;
 		let spec = Spec::new_test();
 		let genesis_header = spec.genesis_header();
-		let db = spec.ensure_db_good(get_temp_state_db(), &Default::default()).unwrap();
+		let db = spec.ensure_db_good(WrappedBackend(Box::new(get_temp_state_backend())), &Default::default()).unwrap();
 		let last_hashes = Arc::new(vec![genesis_header.hash()]);
 		let b = OpenBlock::new(&*spec.engine, Default::default(), false, db, &genesis_header, last_hashes, Address::zero(), 31415620.into(), vec![], false, &mut Vec::new().into_iter(), None, None).unwrap();
 		let b = b.close_and_lock();
 		let _ = b.seal(&*spec.engine, vec![]);
 	}
-	*/
 
-	/*
 	#[test]
 	fn enact_block() {
 		use spec::*;
@@ -818,14 +814,14 @@ mod tests {
 		let engine = &*spec.engine;
 		let genesis_header = spec.genesis_header();
 
-		let db = spec.ensure_db_good(get_temp_state_db(), &Default::default()).unwrap();
+		let db = spec.ensure_db_good(WrappedBackend(Box::new(get_temp_state_backend())), &Default::default()).unwrap();
 		let last_hashes = Arc::new(vec![genesis_header.hash()]);
 		let b = OpenBlock::new(engine, Default::default(), false, db, &genesis_header, last_hashes.clone(), Address::zero(), 31415620.into(), vec![], false, &mut Vec::new().into_iter(), None, None).unwrap()
 			.close_and_lock().seal(engine, vec![]).unwrap();
 		let orig_bytes = b.rlp_bytes();
 		let orig_db = b.drain();
 
-		let db = spec.ensure_db_good(get_temp_state_db(), &Default::default()).unwrap();
+		let db = spec.ensure_db_good(WrappedBackend(Box::new(get_temp_state_backend())), &Default::default()).unwrap();
 		let e = enact_and_seal(&orig_bytes, engine, false, db, &genesis_header, last_hashes, Default::default()).unwrap();
 
 		assert_eq!(e.rlp_bytes(), orig_bytes);
@@ -834,9 +830,7 @@ mod tests {
 		assert_eq!(orig_db.as_hashdb().keys(), db.as_hashdb().keys());
 		assert!(orig_db.as_hashdb().keys().iter().filter(|k| orig_db.as_hashdb().get(k.0) != db.as_hashdb().get(k.0)).next() == None);
 	}
-	*/
 
-	/*
 	#[test]
 	fn enact_block_with_uncle() {
 		use spec::*;
@@ -844,7 +838,7 @@ mod tests {
 		let engine = &*spec.engine;
 		let genesis_header = spec.genesis_header();
 
-		let db = spec.ensure_db_good(get_temp_state_db(), &Default::default()).unwrap();
+		let db = spec.ensure_db_good(WrappedBackend(Box::new(get_temp_state_backend())), &Default::default()).unwrap();
 		let last_hashes = Arc::new(vec![genesis_header.hash()]);
 		let mut open_block = OpenBlock::new(engine, Default::default(), false, db, &genesis_header, last_hashes.clone(), Address::zero(), 31415620.into(), vec![], false, &mut Vec::new().into_iter(), None, None).unwrap();
 		let mut uncle1_header = Header::new();
@@ -858,7 +852,7 @@ mod tests {
 		let orig_bytes = b.rlp_bytes();
 		let orig_db = b.drain();
 
-		let db = spec.ensure_db_good(get_temp_state_db(), &Default::default()).unwrap();
+		let db = spec.ensure_db_good(WrappedBackend(Box::new(get_temp_state_backend())), &Default::default()).unwrap();
 		let e = enact_and_seal(&orig_bytes, engine, false, db, &genesis_header, last_hashes, Default::default()).unwrap();
 
 		let bytes = e.rlp_bytes();
@@ -870,5 +864,4 @@ mod tests {
 		assert_eq!(orig_db.as_hashdb().keys(), db.as_hashdb().keys());
 		assert!(orig_db.as_hashdb().keys().iter().filter(|k| orig_db.as_hashdb().get(k.0) != db.as_hashdb().get(k.0)).next() == None);
 	}
-	*/
 }
