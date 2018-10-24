@@ -350,7 +350,7 @@ impl<'a> Runtime<'a> {
 	}
 
 	/// Query the length of the input bytes
-	fn input_legnth(&mut self) -> RuntimeValue {
+	fn input_length(&mut self) -> RuntimeValue {
 		RuntimeValue::I32(self.args.len() as i32)
 	}
 
@@ -795,7 +795,7 @@ mod ext_impl {
 				STORAGE_READ_FUNC => void!(self.storage_read(args)),
 				RET_FUNC => void!(self.ret(args)),
 				GAS_FUNC => void!(self.gas(args)),
-				INPUT_LENGTH_FUNC => cast!(self.input_legnth()),
+				INPUT_LENGTH_FUNC => cast!(self.input_length()),
 				FETCH_INPUT_FUNC => void!(self.fetch_input(args)),
 				PANIC_FUNC => void!(self.panic(args)),
 				DEBUG_FUNC => void!(self.debug(args)),
