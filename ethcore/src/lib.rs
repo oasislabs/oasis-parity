@@ -65,7 +65,7 @@ extern crate byteorder;
 pub extern crate common_types as types;
 // extern crate ethash;
 extern crate ethcore_bloom_journal as bloom_journal;
-// extern crate ethcore_crypto;
+extern crate ethcore_crypto;
 // extern crate ethcore_io as io;
 extern crate ethcore_bytes as bytes;
 // extern crate ethcore_logger;
@@ -90,7 +90,8 @@ mod num {
 }
 extern crate parity_machine;
 // extern crate parking_lot;
-// extern crate rand;
+#[cfg(test)]
+extern crate rand;
 // extern crate rayon;
 pub extern crate rlp;
 extern crate rlp_compress;
@@ -102,7 +103,7 @@ extern crate triehash;
 // extern crate ansi_term;
 extern crate unexpected;
 pub extern crate kvdb;
-// extern crate kvdb_memorydb;
+extern crate kvdb_memorydb;
 extern crate util_error;
 // extern crate snappy;
 //
@@ -153,7 +154,8 @@ pub mod db;
 pub mod encoded;
 pub mod engines;
 pub mod error;
-// pub mod ethereum;
+#[cfg(test)]
+pub mod ethereum;
 pub mod executed;
 pub mod executive;
 pub mod header;
@@ -179,15 +181,15 @@ pub mod blockchain;
 pub mod factory;
 // mod tx_filter;
 
-#[cfg(test)]
-mod tests;
+// #[cfg(test)]
+// mod tests;
 #[cfg(test)]
 #[cfg(feature = "json-tests")]
 mod json_tests;
 #[cfg(any(test, feature = "test-helpers"))]
 pub mod test_helpers;
-#[cfg(test)]
-mod test_helpers_internal;
+// #[cfg(test)]
+// mod test_helpers_internal;
 
 pub use types::*;
 pub use executive::contract_address;

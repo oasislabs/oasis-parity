@@ -73,20 +73,21 @@ impl<M: Machine> Engine<M> for InstantSeal<M>
 mod tests {
 	use std::sync::Arc;
 	use ethereum_types::{H520, Address};
-	use test_helpers::get_temp_state_db;
+	use test_helpers::get_temp_state_backend;
 	use spec::Spec;
 	use header::Header;
 	use block::*;
 	use engines::Seal;
+	use state::backend::{Wrapped as WrappedBackend};
 
 	#[test]
 	fn instant_can_seal() {
 		let spec = Spec::new_instant();
 		let engine = &*spec.engine;
-		let db = spec.ensure_db_good(get_temp_state_db(), &Default::default()).unwrap();
+		let db = spec.ensure_db_good(WrappedBackend(Box::new(get_temp_state_backend())), &Default::default()).unwrap();
 		let genesis_header = spec.genesis_header();
 		let last_hashes = Arc::new(vec![genesis_header.hash()]);
-		let b = OpenBlock::new(engine, Default::default(), false, db, &genesis_header, last_hashes, Address::default(), (3141562.into(), 31415620.into()), vec![], false, &mut Vec::new().into_iter()).unwrap();
+		let b = OpenBlock::new(engine, Default::default(), false, db, &genesis_header, last_hashes, Address::default(), 31415620.into(), vec![], false, &mut Vec::new().into_iter(), None, None).unwrap();
 		let b = b.close_and_lock();
 		if let Seal::Regular(seal) = engine.generate_seal(b.block(), &genesis_header) {
 			assert!(b.try_seal(engine, seal).is_ok());

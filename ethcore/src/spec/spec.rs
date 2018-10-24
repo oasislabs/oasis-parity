@@ -402,7 +402,7 @@ impl Clone for Spec {
 			seal_rlp: self.seal_rlp.clone(),
 			hardcoded_sync: self.hardcoded_sync.clone(),
 			constructors: self.constructors.clone(),
-			state_root_memo: RwLock::new(*self.state_root_memo.read()),
+			state_root_memo: RwLock::new(*self.state_root_memo.read().unwrap()),
 			genesis_state: self.genesis_state.clone(),
 		}
 	}
@@ -521,14 +521,14 @@ fn load_from(spec_params: SpecParams, s: ethjson::spec::Spec) -> Result<Spec, Er
 	Ok(s)
 }
 
-// macro_rules! load_bundled {
-// 	($e:expr) => {
-// 		Spec::load(
-// 			&::std::env::temp_dir(),
-// 			include_bytes!(concat!("../../res/", $e, ".json")) as &[u8]
-// 		).expect(concat!("Chain spec ", $e, " is invalid."))
-// 	};
-// }
+#[cfg(test)]
+macro_rules! load_bundled {
+	($e:expr) => {
+		Spec::load(
+			include_bytes!(concat!("../../res/", $e, ".json")) as &[u8]
+		).expect(concat!("Chain spec ", $e, " is invalid."))
+	};
+}
 
 #[cfg(any(test, feature = "test-helpers"))]
 macro_rules! load_machine_bundled {
@@ -858,11 +858,12 @@ impl Spec {
 	// 	self.engine.genesis_epoch_data(&genesis, &call)
 	// }
 
-	// /// Create a new Spec with InstantSeal consensus which does internal sealing (not requiring
-	// /// work).
-	// pub fn new_instant() -> Spec {
-	// 	load_bundled!("instant_seal")
-	// }
+	/// Create a new Spec with InstantSeal consensus which does internal sealing (not requiring
+	/// work).
+	#[cfg(any(test, feature = "test-helpers"))]
+	pub fn new_instant() -> Spec {
+		load_bundled!("instant_seal")
+	}
 
 	/// Create a new Spec which conforms to the Frontier-era Morden chain except that it's a
 	/// NullEngine consensus.
@@ -967,7 +968,7 @@ mod tests {
 	#[test]
 	fn test_load_empty() {
 		let tempdir = TempDir::new("").unwrap();
-		assert!(Spec::load(&tempdir.path(), &[] as &[u8]).is_err());
+		assert!(Spec::load(&[] as &[u8]).is_err());
 	}
 
 	#[test]
@@ -987,7 +988,7 @@ mod tests {
 
 	#[test]
 	fn genesis_constructor() {
-		::ethcore_logger::init_log();
+		// ::ethcore_logger::init_log();
 		let spec = Spec::new_test_constructor();
 		let db = spec.ensure_db_good(get_temp_state_db(), &Default::default())
 			.unwrap();
@@ -996,6 +997,8 @@ mod tests {
 			spec.state_root(),
 			spec.engine.account_start_nonce(0),
 			Default::default(),
+			None,
+			None,
 		).unwrap();
 		let expected = "0000000000000000000000000000000000000000000000000000000000000001".into();
 		let address = "0000000000000000000000000000000000001337".into();

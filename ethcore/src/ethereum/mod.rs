@@ -20,11 +20,11 @@
 //! consensus specifications.
 
 /// Export the ethash module.
-pub mod ethash;
+// pub mod ethash;
 /// Export the denominations module.
 pub mod denominations;
 
-pub use self::ethash::{Ethash};
+// pub use self::ethash::{Ethash};
 pub use self::denominations::*;
 
 use machine::EthereumMachine;
@@ -32,8 +32,8 @@ use super::spec::*;
 
 fn load<'a, T: Into<Option<SpecParams<'a>>>>(params: T, b: &[u8]) -> Spec {
 	match params.into() {
-		Some(params) => Spec::load(params, b),
-		None => Spec::load(&::std::env::temp_dir(), b)
+		Some(params) => Spec::load(b),
+		None => Spec::load(b)
 	}.expect("chain spec is invalid")
 }
 
@@ -162,7 +162,7 @@ mod tests {
 		let engine = &spec.engine;
 		let genesis_header = spec.genesis_header();
 		let db = spec.ensure_db_good(get_temp_state_db(), &Default::default()).unwrap();
-		let s = State::from_existing(db, genesis_header.state_root().clone(), engine.account_start_nonce(0), Default::default()).unwrap();
+		let s = State::from_existing(db, genesis_header.state_root().clone(), engine.account_start_nonce(0), Default::default(), None, None).unwrap();
 		assert_eq!(s.balance(&"0000000000000000000000000000000000000001".into()).unwrap(), 1u64.into());
 		assert_eq!(s.balance(&"0000000000000000000000000000000000000002".into()).unwrap(), 1u64.into());
 		assert_eq!(s.balance(&"0000000000000000000000000000000000000003".into()).unwrap(), 1u64.into());

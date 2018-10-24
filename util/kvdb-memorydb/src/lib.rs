@@ -14,11 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-extern crate parking_lot;
+// extern crate parking_lot;
 extern crate kvdb;
 
 use std::collections::{BTreeMap, HashMap};
-use parking_lot::RwLock;
+// use parking_lot::RwLock;
+use std::sync::RwLock;
 use kvdb::{DBValue, DBTransaction, KeyValueDB, DBOp, Result};
 
 /// A key-value database fulfilling the `KeyValueDB` trait, living in memory.
@@ -45,7 +46,7 @@ pub fn create(num_cols: u32) -> InMemory {
 
 impl KeyValueDB for InMemory {
 	fn get(&self, col: Option<u32>, key: &[u8]) -> Result<Option<DBValue>> {
-		let columns = self.columns.read();
+		let columns = self.columns.read().unwrap();
 		match columns.get(&col) {
 			None => Err(format!("No such column family: {:?}", col).into()),
 			Some(map) => Ok(map.get(key).cloned()),
@@ -53,7 +54,7 @@ impl KeyValueDB for InMemory {
 	}
 
 	fn get_by_prefix(&self, col: Option<u32>, prefix: &[u8]) -> Option<Box<[u8]>> {
-		let columns = self.columns.read();
+		let columns = self.columns.read().unwrap();
 		match columns.get(&col) {
 			None => None,
 			Some(map) =>
@@ -64,7 +65,7 @@ impl KeyValueDB for InMemory {
 	}
 
 	fn write_buffered(&self, transaction: DBTransaction) {
-		let mut columns = self.columns.write();
+		let mut columns = self.columns.write().unwrap();
 		let ops = transaction.ops;
 		for op in ops {
 			match op {
@@ -87,7 +88,7 @@ impl KeyValueDB for InMemory {
 	}
 
 	fn iter<'a>(&'a self, col: Option<u32>) -> Box<Iterator<Item=(Box<[u8]>, Box<[u8]>)> + 'a> {
-		match self.columns.read().get(&col) {
+		match self.columns.read().unwrap().get(&col) {
 			Some(map) => Box::new( // TODO: worth optimizing at all?
 				map.clone()
 					.into_iter()
@@ -100,7 +101,7 @@ impl KeyValueDB for InMemory {
 	fn iter_from_prefix<'a>(&'a self, col: Option<u32>, prefix: &'a [u8])
 		-> Box<Iterator<Item=(Box<[u8]>, Box<[u8]>)> + 'a>
 	{
-		match self.columns.read().get(&col) {
+		match self.columns.read().unwrap().get(&col) {
 			Some(map) => Box::new(
 				map.clone()
 					.into_iter()

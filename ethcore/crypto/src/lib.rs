@@ -16,19 +16,20 @@
 
 //! Crypto utils used ethstore and network.
 
-extern crate crypto as rcrypto;
+// extern crate crypto as rcrypto;
+extern crate ripemd160;
 extern crate ethereum_types;
 #[macro_use]
 extern crate quick_error;
 extern crate ring;
 extern crate tiny_keccak;
 
-pub mod aes;
-pub mod aes_gcm;
+// pub mod aes;
+// pub mod aes_gcm;
 pub mod error;
-pub mod scrypt;
+// pub mod scrypt;
 pub mod digest;
-pub mod hmac;
+// pub mod hmac;
 pub mod pbkdf2;
 
 pub use error::Error;

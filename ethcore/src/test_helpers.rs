@@ -16,20 +16,24 @@
 
 //! Set of different helpers for client tests
 
-use account_provider::AccountProvider;
+use std::collections::HashMap;
+
+// use account_provider::AccountProvider;
 use ethereum_types::{H256, U256, Address};
 use block::{OpenBlock, Drain};
 use blockchain::{BlockChain, Config as BlockChainConfig, ExtrasInsert};
 use bytes::Bytes;
-use client::{Client, ClientConfig, ChainInfo, ImportBlock, ChainNotify, ChainMessageType, PrepareOpenBlock};
+// use client::{Client, ClientConfig, ChainInfo, ImportBlock, ChainNotify, ChainMessageType, PrepareOpenBlock};
 use ethkey::KeyPair;
 use evm::Factory as EvmFactory;
 use factory::Factories;
 use hash::keccak;
+use hashdb::{AsHashDB, HashDB, DBValue};
 use header::Header;
-use io::*;
-use miner::Miner;
-use parking_lot::RwLock;
+use memorydb::MemoryDB;
+// use io::*;
+// use miner::Miner;
+// use parking_lot::RwLock;
 use rlp::{self, RlpStream};
 use spec::Spec;
 use state_db::StateDB;
@@ -37,6 +41,17 @@ use state::*;
 use std::sync::Arc;
 use transaction::{Action, Transaction, SignedTransaction};
 use views::BlockView;
+use rand::prelude::*;
+
+pub fn random_address() -> Address {
+    let val: u64 = random();
+    Address::from(val)
+}
+
+pub fn random_h256() -> H256 {
+    let val: u64 = random();
+    H256::from(val)
+}
 
 /// Creates test block with corresponding header
 pub fn create_test_block(header: &Header) -> Bytes {
@@ -88,26 +103,66 @@ pub fn create_test_block_with_data(header: &Header, transactions: &[SignedTransa
 	rlp.out()
 }
 
+#[derive(Clone, PartialEq)]
+pub struct TempBackend(MemoryDB);
+
+impl TempBackend {
+	pub fn new() -> Self {
+		let mut db = MemoryDB::new();
+		TempBackend(db)
+	}
+}
+
+impl HashDB for TempBackend {
+	fn keys(&self) -> HashMap<H256, i32> { self.0.keys() }
+	fn get(&self, key: &H256) -> Option<DBValue> {
+		self.0.get(key)
+	}
+
+	fn contains(&self, key: &H256) -> bool {
+		self.0.contains(key)
+	}
+
+	fn insert(&mut self, value: &[u8]) -> H256 {
+		self.0.insert(value)
+	}
+
+	fn emplace(&mut self, key: H256, value: DBValue) {
+		self.0.emplace(key, value)
+	}
+
+	fn remove(&mut self, _key: &H256) { }
+}
+
+/*
 /// Generates dummy client (not test client) with corresponding amount of blocks
 pub fn generate_dummy_client(block_number: u32) -> Arc<Client> {
 	generate_dummy_client_with_spec_and_data(Spec::new_test, block_number, 0, &[])
 }
+*/
 
+/*
 /// Generates dummy client (not test client) with corresponding amount of blocks and txs per every block
 pub fn generate_dummy_client_with_data(block_number: u32, txs_per_block: usize, tx_gas_prices: &[U256]) -> Arc<Client> {
 	generate_dummy_client_with_spec_and_data(Spec::new_null, block_number, txs_per_block, tx_gas_prices)
 }
+*/
 
+/*
 /// Generates dummy client (not test client) with corresponding amount of blocks, txs per block and spec
 pub fn generate_dummy_client_with_spec_and_data<F>(test_spec: F, block_number: u32, txs_per_block: usize, tx_gas_prices: &[U256]) -> Arc<Client> where F: Fn()->Spec {
 	generate_dummy_client_with_spec_accounts_and_data(test_spec, None, block_number, txs_per_block, tx_gas_prices)
 }
+*/
 
+/*
 /// Generates dummy client (not test client) with corresponding spec and accounts
 pub fn generate_dummy_client_with_spec_and_accounts<F>(test_spec: F, accounts: Option<Arc<AccountProvider>>) -> Arc<Client> where F: Fn()->Spec {
 	generate_dummy_client_with_spec_accounts_and_data(test_spec, accounts, 0, 0, &[])
 }
+*/
 
+/*
 /// Generates dummy client (not test client) with corresponding blocks, accounts and spec
 pub fn generate_dummy_client_with_spec_accounts_and_data<F>(test_spec: F, accounts: Option<Arc<AccountProvider>>, block_number: u32, txs_per_block: usize, tx_gas_prices: &[U256]) -> Arc<Client> where F: Fn()->Spec {
 	let test_spec = test_spec();
@@ -179,7 +234,9 @@ pub fn generate_dummy_client_with_spec_accounts_and_data<F>(test_spec: F, accoun
 	client.import_verified_blocks();
 	client
 }
+*/
 
+/*
 /// Adds blocks to the client
 pub fn push_blocks_to_client(client: &Arc<Client>, timestamp_salt: u64, starting_number: usize, block_number: usize) {
 	let test_spec = Spec::new_test();
@@ -209,7 +266,9 @@ pub fn push_blocks_to_client(client: &Arc<Client>, timestamp_salt: u64, starting
 		}
 	}
 }
+*/
 
+/*
 /// Adds one block with transactions
 pub fn push_block_with_transactions(client: &Arc<Client>, transactions: &[SignedTransaction]) {
 	let test_spec = Spec::new_test();
@@ -231,7 +290,9 @@ pub fn push_block_with_transactions(client: &Arc<Client>, transactions: &[Signed
 	client.flush_queue();
 	client.import_verified_blocks();
 }
+*/
 
+/*
 /// Creates dummy client (not test client) with corresponding blocks
 pub fn get_test_client_with_blocks(blocks: Vec<Bytes>) -> Arc<Client> {
 	let test_spec = Spec::new_test();
@@ -254,6 +315,7 @@ pub fn get_test_client_with_blocks(blocks: Vec<Bytes>) -> Arc<Client> {
 	client.import_verified_blocks();
 	client
 }
+*/
 
 fn new_db() -> Arc<::kvdb::KeyValueDB> {
 	Arc::new(::kvdb_memorydb::create(::db::NUM_COLUMNS.unwrap_or(0)))
@@ -325,6 +387,11 @@ pub fn get_temp_state_db() -> StateDB {
 	StateDB::new(journal_db, 5 * 1024 * 1024)
 }
 
+/// Returns temp state backend
+pub fn get_temp_state_backend() -> TempBackend {
+	TempBackend::new()
+}
+
 /// Returns sequence of hashes of the dummy blocks
 pub fn get_good_dummy_block_seq(count: usize) -> Vec<Bytes> {
 	let test_spec = Spec::new_test();
@@ -392,13 +459,16 @@ pub fn get_bad_state_dummy_block() -> Bytes {
 	create_test_block(&block_header)
 }
 
+/*
 /// Test actor for chain events
 #[derive(Default)]
 pub struct TestNotify {
 	/// Messages store
 	pub messages: RwLock<Vec<Bytes>>,
 }
+*/
 
+/*
 impl ChainNotify for TestNotify {
 	fn broadcast(&self, message: ChainMessageType) {
 		let data = match message {
@@ -409,3 +479,4 @@ impl ChainNotify for TestNotify {
 		self.messages.write().push(data);
 	}
 }
+*/

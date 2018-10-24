@@ -1,15 +1,7 @@
 {
 	"name": "Homestead (Test)",
 	"engine": {
-		"Ethash": {
-			"params": {
-				"minimumDifficulty": "0x020000",
-				"difficultyBoundDivisor": "0x0800",
-				"durationLimit": "0x0d",
-				"blockReward": "0x4563918244F40000",
-				"homesteadTransition": "0x0"
-			}
-		}
+		"instantSeal": null
 	},
 	"params": {
 		"gasLimitBoundDivisor": "0x0400",

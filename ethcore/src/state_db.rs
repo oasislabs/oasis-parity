@@ -480,24 +480,24 @@ unsafe impl Sync for SyncAccount {}
 mod tests {
 	use ethereum_types::{H256, U256, Address};
 	use kvdb::DBTransaction;
-	use test_helpers::get_temp_state_db;
+	use test_helpers::{get_temp_state_db, random_address, random_h256};
 	use state::{Account, Backend};
-	use ethcore_logger::init_log;
+	// use ethcore_logger::init_log;
 
 	#[test]
 	fn state_db_smoke() {
-		init_log();
+		// init_log();
 
 		let state_db = get_temp_state_db();
-		let root_parent = H256::random();
-		let address = Address::random();
-		let h0 = H256::random();
-		let h1a = H256::random();
-		let h1b = H256::random();
-		let h2a = H256::random();
-		let h2b = H256::random();
-		let h3a = H256::random();
-		let h3b = H256::random();
+		let root_parent = random_h256();
+		let address = random_address();
+		let h0 = random_h256();
+		let h1a = random_h256();
+		let h1b = random_h256();
+		let h2a = random_h256();
+		let h2b = random_h256();
+		let h3a = random_h256();
+		let h3b = random_h256();
 		let mut batch = DBTransaction::new();
 
 		// blocks  [ 3a(c) 2a(c) 2b 1b 1a(c) 0 ]
