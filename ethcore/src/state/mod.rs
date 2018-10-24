@@ -1234,7 +1234,7 @@ mod tests {
 			action: trace::Action::Create(trace::Create {
 				from: "9cce34f7ab185c7aba1b7c8140d620b4bda941d6".into(),
 				value: 100.into(),
-				gas: 77412.into(),
+				gas: 78603.into(),
 				init: vec![96, 16, 128, 96, 12, 96, 0, 57, 96, 0, 243, 0, 96, 0, 53, 84, 21, 96, 9, 87, 0, 91, 96, 32, 53, 96, 0, 53, 85],
 			}),
 			result: trace::Res::Create(trace::CreateResult {
@@ -1292,7 +1292,7 @@ mod tests {
 			action: trace::Action::Create(trace::Create {
 				from: "9cce34f7ab185c7aba1b7c8140d620b4bda941d6".into(),
 				value: 100.into(),
-				gas: 78792.into(),
+				gas: 78948.into(),
 				init: vec![91, 96, 0, 86],
 			}),
 			result: trace::Res::FailedCreate(TraceError::OutOfGas),
