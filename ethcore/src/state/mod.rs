@@ -1192,7 +1192,7 @@ mod tests {
 	use trace::{FlatTrace, TraceError, trace};
 	use evm::CallType;
 
-    // TODO: do we need to log?
+	// TODO: do we need to log?
 	fn init_log() {
 	}
 
