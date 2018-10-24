@@ -133,8 +133,8 @@ pub struct WasmCosts {
 	pub static_u256: u32,
 	/// General static query of Address value from env-info
 	pub static_address: u32,
-	/// Memory stipend. Amount of free memory (in 64kb pages) each contract can use for stack.
-	pub initial_mem: u32,
+	/// The cost for the amount of initial memory allocated for the contract
+	pub initial_mem_cost: u32,
 	/// Grow memory cost, per page (64kb)
 	pub grow_mem: u32,
 	/// Memory copy cost, per byte
@@ -170,7 +170,7 @@ impl Default for WasmCosts {
 			mem: 2,
 			static_u256: 64,
 			static_address: 40,
-			initial_mem: 1 << 16 - 1,
+			initial_mem_cost: 4096,
 			grow_mem: 0,
 			memcpy: 1,
 			max_stack_height: 4096*1024,

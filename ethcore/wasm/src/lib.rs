@@ -129,8 +129,8 @@ impl vm::Vm for WasmInterpreter {
 			// total_charge <- static_region * 2^32 * 2^16
 			// total_charge ∈ [0..2^64) if static_region ∈ [0..2^16)
 			// qed
-			assert!(runtime.schedule().wasm().initial_mem < 1 << 16);
-			runtime.charge(|s| initial_memory as u64 * s.wasm().initial_mem as u64)?;
+			assert!(runtime.schedule().wasm().initial_mem_cost < 1 << 16);
+			runtime.charge(|s| initial_memory as u64 * s.wasm().initial_mem_cost as u64)?;
 
 			let module_instance = module_instance.run_start(&mut runtime).map_err(Error::Trap)?;
 
