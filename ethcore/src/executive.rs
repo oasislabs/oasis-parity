@@ -810,7 +810,7 @@ mod tests {
 			ex.create(params, &mut substate, &mut None, &mut NoopTracer, &mut NoopVMTracer).unwrap()
 		};
 
-		assert_eq!(gas_left, U256::from(79_975));
+		assert_eq!(gas_left, U256::from(79_975)); // NOTICE: This value will change if the gas model changes, so please update accordingly.
 		assert_eq!(state.storage_at(&address, &H256::new()).unwrap(), H256::from(&U256::from(0xf9u64)));
 		assert_eq!(state.balance(&sender).unwrap(), U256::from(0xf9));
 		assert_eq!(state.balance(&address).unwrap(), U256::from(0x7));
@@ -868,7 +868,7 @@ mod tests {
 			ex.create(params, &mut substate, &mut None, &mut NoopTracer, &mut NoopVMTracer).unwrap()
 		};
 
-		assert_eq!(gas_left, U256::from(62_976));
+		assert_eq!(gas_left, U256::from(62_976)); // NOTICE: This value will change if the gas model changes, so please update accordingly.
 		// ended with max depth
 		assert_eq!(substate.contracts_created.len(), 0);
 	}
@@ -917,7 +917,7 @@ mod tests {
 				from: "4444444444444444444444444444444444444444".into(),
 				to: "5555555555555555555555555555555555555555".into(),
 				value: 100.into(),
-				gas: 100_000.into(),
+				gas: 100_000.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
 				input: vec![],
 				call_type: CallType::Call
 			}),
@@ -932,7 +932,7 @@ mod tests {
 				from: "5555555555555555555555555555555555555555".into(),
 				to: "0000000000000000000000000000000000000003".into(),
 				value: 1.into(),
-				gas: 66560.into(),
+				gas: 66560.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
 				input: vec![],
 				call_type: CallType::Call
 			}), result: trace::Res::Call(trace::CallResult {
@@ -999,7 +999,7 @@ mod tests {
 			ex.call(params, &mut substate, output, &mut tracer, &mut vm_tracer).unwrap()
 		};
 
-		assert_eq!(gas_left, U256::from(47_936));
+		assert_eq!(gas_left, U256::from(47_936)); // NOTICE: This value will change if the gas model changes, so please update accordingly.
 
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
@@ -1008,7 +1008,7 @@ mod tests {
 				from: "cd1722f3947def4cf144679da39c4c32bdc35681".into(),
 				to: "b010143a42d5980c7e5ef0e4a4416dc098a4fed3".into(),
 				value: 100.into(),
-				gas: 100000.into(),
+				gas: 100000.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
 				input: vec![],
 				call_type: CallType::Call,
 			}),
@@ -1022,7 +1022,7 @@ mod tests {
 			action: trace::Action::Create(trace::Create {
 				from: "b010143a42d5980c7e5ef0e4a4416dc098a4fed3".into(),
 				value: 23.into(),
-				gas: 67979.into(),
+				gas: 67979.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
 				init: vec![96, 16, 128, 96, 12, 96, 0, 57, 96, 0, 243, 0, 96, 0, 53, 84, 21, 96, 9, 87, 0, 91, 96, 32, 53, 96, 0, 53, 85]
 			}),
 			result: trace::Res::Create(trace::CreateResult {
@@ -1116,7 +1116,7 @@ mod tests {
 			ex.call(params, &mut substate, output, &mut tracer, &mut vm_tracer).unwrap()
 		};
 
-		assert_eq!(gas_left, U256::from(62967));
+		assert_eq!(gas_left, U256::from(62967)); // NOTICE: This value will change if the gas model changes, so please update accordingly.
 
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
@@ -1125,7 +1125,7 @@ mod tests {
 				from: "cd1722f3947def4cf144679da39c4c32bdc35681".into(),
 				to: "b010143a42d5980c7e5ef0e4a4416dc098a4fed3".into(),
 				value: 100.into(),
-				gas: 100_000.into(),
+				gas: 100_000.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
 				input: vec![],
 				call_type: CallType::Call,
 			}),
@@ -1139,7 +1139,7 @@ mod tests {
 			action: trace::Action::Create(trace::Create {
 				from: "b010143a42d5980c7e5ef0e4a4416dc098a4fed3".into(),
 				value: 23.into(),
-				gas: 66_917.into(),
+				gas: 66_917.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
 				init: vec![0x60, 0x01, 0x60, 0x00, 0xfd]
 			}),
 			result: trace::Res::FailedCreate(vm::Error::Reverted.into()),
@@ -1188,7 +1188,7 @@ mod tests {
 			ex.create(params.clone(), &mut substate, &mut None, &mut tracer, &mut vm_tracer).unwrap()
 		};
 
-		assert_eq!(gas_left, U256::from(99_960));
+		assert_eq!(gas_left, U256::from(99_960)); // NOTICE: This value will change if the gas model changes, so please update accordingly.
 
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
@@ -1274,7 +1274,7 @@ mod tests {
 			ex.create(params, &mut substate, &mut None, &mut NoopTracer, &mut NoopVMTracer).unwrap()
 		};
 
-		assert_eq!(gas_left, U256::from(62_976));
+		assert_eq!(gas_left, U256::from(62_976)); // NOTICE: This value will change if the gas model changes, so please update accordingly.
 		assert_eq!(substate.contracts_created.len(), 0);
 	}
 
@@ -1387,7 +1387,7 @@ mod tests {
 			ex.call(params, &mut substate, BytesRef::Fixed(&mut []), &mut NoopTracer, &mut NoopVMTracer).unwrap()
 		};
 
-		assert_eq!(gas_left, U256::from(73_237));
+		assert_eq!(gas_left, U256::from(73_237)); // NOTICE: This value will change if the gas model changes, so please update accordingly.
 		assert_eq!(state.storage_at(&address_a, &H256::from(&U256::from(0x23))).unwrap(), H256::from(&U256::from(1)));
 	}
 
@@ -1432,7 +1432,7 @@ mod tests {
 			ex.call(params, &mut substate, BytesRef::Fixed(&mut []), &mut NoopTracer, &mut NoopVMTracer).unwrap()
 		};
 
-		assert_eq!(gas_left, U256::from(59_870));
+		assert_eq!(gas_left, U256::from(59_870)); // NOTICE: This value will change if the gas model changes, so please update accordingly.
 		assert_eq!(state.storage_at(&address, &H256::from(&U256::zero())).unwrap(), H256::from(&U256::from(1)));
 		assert_eq!(state.storage_at(&address, &H256::from(&U256::one())).unwrap(), H256::from(&U256::from(1)));
 	}
@@ -1466,7 +1466,7 @@ mod tests {
 			ex.transact(&t, opts).unwrap()
 		};
 
-		assert_eq!(executed.gas, U256::from(100_000));
+		assert_eq!(executed.gas, U256::from(100_000)); // NOTICE: This value will change if the gas model changes, so please update accordingly.
 		assert_eq!(executed.gas_used, U256::from(41_301));
 		assert_eq!(executed.refunded, U256::from(58_699));
 		assert_eq!(executed.cumulative_gas_used, U256::from(41_301));
@@ -1685,7 +1685,7 @@ mod tests {
 			ex.call(params.clone(), &mut Substate::new(), BytesRef::Fixed(&mut output), &mut NoopTracer, &mut NoopVMTracer).unwrap()
 		};
 
-		assert_eq!(result, U256::from(7681));
+		assert_eq!(result, U256::from(18433)); // NOTICE: This value will change if the gas model changes, so please update accordingly.
 		// Transaction successfully returned sender
 		assert_eq!(output[..], sender[..]);
 
@@ -1698,7 +1698,7 @@ mod tests {
 			ex.call(params, &mut Substate::new(), BytesRef::Fixed(&mut output), &mut NoopTracer, &mut NoopVMTracer).unwrap()
 		};
 
-		assert_eq!(result, U256::from(20025));
+		assert_eq!(result, U256::from(20025)); // NOTICE: This value will change if the gas model changes, so please update accordingly.
 		// Since transaction errored due to wasm was not activated, result is just empty
 		assert_eq!(output[..], [0u8; 20][..]);
 	}
