@@ -241,10 +241,14 @@ impl<'a> Runtime<'a> {
 	{
 		let amount = match f(self.ext.schedule()) {
 			Some(amount) => amount,
-			None => { return Err(Error::GasLimit.into()); }
+			None => {
+				info!("ran out of gas: {:?}", self.gas_profile);
+				return Err(Error::GasLimit.into());
+			}
 		};
 
 		if !self.charge_gas(amount as u64, func) {
+			info!("ran out of gas: {:?}", gas_profile);
 			Err(Error::GasLimit.into())
 		} else {
 			Ok(())
@@ -340,6 +344,7 @@ impl<'a> Runtime<'a> {
 		if self.charge_gas(amount as u64, "gas".to_string()) {
 			Ok(())
 		} else {
+			info!("ran out of gas: {:?}", self.gas_profile);
 			Err(Error::GasLimit.into())
 		}
 	}
