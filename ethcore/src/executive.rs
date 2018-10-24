@@ -771,7 +771,7 @@ mod tests {
 		machine
 	}
 
-    // TODO: randomize
+    // Using a static keypair for now, derived from a valid secret.
     fn get_keypair() -> KeyPair {
 		KeyPair::from_secret(
 			Secret::from(
