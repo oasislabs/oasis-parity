@@ -95,7 +95,6 @@ test-heavy = []
 benches = []
 # Compile test helpers
 test-helpers = []
-gateway = []
 # Execute confidential transactions
 enable-confidential = []
 # Don't allow non-confidential transctions. Used for an exlusively confidential chain.
