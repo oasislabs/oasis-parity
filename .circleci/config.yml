@@ -18,7 +18,7 @@ jobs:
       - run:
           name: Build ethcore for gateway
           working_directory: ethcore
-          command: cargo build --features "gateway"
+          command: cargo build
 
       # Build other gateway dependencies
       - run:

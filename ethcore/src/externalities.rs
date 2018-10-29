@@ -67,7 +67,6 @@ impl OriginInfo {
 }
 
 /// Implementation of evm Externalities.
-#[cfg(feature = "gateway")]
 pub struct Externalities<'a, T: 'a, V: 'a, X: 'a, B: 'a>
 	where T: Tracer, V:  VMTracer, X: ExtTracer, B: StateBackend
 {
@@ -86,31 +85,11 @@ pub struct Externalities<'a, T: 'a, V: 'a, X: 'a, B: 'a>
 	storage: &'a Storage,
 	encryption_key: Option<Vec<u8>>,
 }
-#[cfg(not(feature = "gateway"))]
-pub struct Externalities<'a, T: 'a, V: 'a, X: 'a, B: 'a>
-	where T: Tracer, V:  VMTracer, X: ExtTracer, B: StateBackend
-{
-	state: &'a mut State<B>,
-	env_info: &'a EnvInfo,
-	machine: &'a Machine,
-	depth: usize,
-	origin_info: OriginInfo,
-	substate: &'a mut Substate,
-	schedule: Schedule,
-	output: OutputPolicy<'a, 'a>,
-	tracer: &'a mut T,
-	vm_tracer: &'a mut V,
-	ext_tracer: &'a mut X,
-	static_flag: bool,
-	storage: &'a mut Storage,
-	encryption_key: Option<Vec<u8>>,
-}
 
 impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Externalities<'a, T, V, X, B>
 	where T: Tracer, V: VMTracer, X: ExtTracer, B: StateBackend
 {
 	/// Basic `Externalities` constructor.
-	#[cfg(feature = "gateway")]
 	pub fn new(state: &'a mut State<B>,
 		env_info: &'a EnvInfo,
 		machine: &'a Machine,
@@ -123,37 +102,6 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Externalities<'a, T, V, X, B>
 		ext_tracer: &'a mut X,
 		static_flag: bool,
 		storage: &'a Storage,
-	) -> Self {
-		Externalities {
-			state: state,
-			env_info: env_info,
-			machine: machine,
-			depth: depth,
-			origin_info: origin_info,
-			substate: substate,
-			schedule: machine.schedule(env_info.number),
-			output: output,
-			tracer: tracer,
-			vm_tracer: vm_tracer,
-			ext_tracer: ext_tracer,
-			static_flag: static_flag,
-			storage: storage,
-			encryption_key: None,
-		}
-	}
-	#[cfg(not(feature = "gateway"))]
-	pub fn new(state: &'a mut State<B>,
-		env_info: &'a EnvInfo,
-		machine: &'a Machine,
-		depth: usize,
-		origin_info: OriginInfo,
-		substate: &'a mut Substate,
-		output: OutputPolicy<'a, 'a>,
-		tracer: &'a mut T,
-		vm_tracer: &'a mut V,
-		ext_tracer: &'a mut X,
-		static_flag: bool,
-		storage: &'a mut Storage,
 	) -> Self {
 		Externalities {
 			state: state,
