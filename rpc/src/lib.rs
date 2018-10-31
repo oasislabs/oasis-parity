@@ -100,7 +100,7 @@ extern crate tempdir;
 
 pub extern crate jsonrpc_ws_server as ws;
 
-mod authcodes;
+pub mod authcodes;
 pub mod http_common;
 pub mod v1;
 
