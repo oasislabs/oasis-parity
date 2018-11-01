@@ -30,8 +30,7 @@ use vm::{
 };
 use externalities::*;
 use trace::{self, Tracer, VMTracer};
-use trace_ext::ExtTracer;
-use trace_ext::NoopExtTracer;
+use trace_ext::{ExtTracer, FullExtTracer, FullTracerCallTrace, FullTracerRecord, NoopExtTracer};
 use transaction::{Action, SignedTransaction};
 use storage::Storage;
 use storage::NullStorage;
@@ -97,13 +96,13 @@ pub struct TransactOptions<T, V, X> {
 }
 
 impl<T, V, X> PartialEq for TransactOptions<T, V, X> where T: PartialEq, V: PartialEq, X: PartialEq {
-        fn eq(&self, other: &TransactOptions<T, V, X>) -> bool {
-                self.tracer == other.tracer
+	fn eq(&self, other: &TransactOptions<T, V, X>) -> bool {
+		self.tracer == other.tracer
 			&& self.vm_tracer == other.vm_tracer
 			&& self.ext_tracer == other.ext_tracer
 			&& self.check_nonce == other.check_nonce
 			&& self.output_from_init_contract == other.output_from_init_contract
-        }
+	}
 }
 
 impl<T, V, X> TransactOptions<T, V, X> {
@@ -764,14 +763,14 @@ mod tests {
 		machine
 	}
 
-    // Using a static keypair for now, derived from a valid secret.
-    fn get_keypair() -> KeyPair {
+	// Using a static keypair for now, derived from a valid secret.
+	fn get_keypair() -> KeyPair {
 		KeyPair::from_secret(
 			Secret::from(
 				"0000000000000000000000000000000000000000000000000000000000000001",
 			)
 		).unwrap()
-    }
+	}
 
 	#[test]
 	fn test_contract_address() {
@@ -1376,12 +1375,11 @@ mod tests {
 		let info = EnvInfo::default();
 		let machine = make_frontier_machine(0);
 		let mut substate = Substate::new();
-		let mut ext_tracer = NoopExtTracer;
 		let mut storage = NullStorage::new();
 
 		let FinalizationResult { gas_left, .. } = {
 			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
-			ex.call(params, &mut substate, BytesRef::Fixed(&mut []), &mut NoopTracer, &mut NoopVMTracer, &mut ext_tracer).unwrap()
+			ex.call(params, &mut substate, BytesRef::Fixed(&mut []), &mut NoopTracer, &mut NoopVMTracer, &mut NoopExtTracer).unwrap()
 		};
 
 		assert_eq!(gas_left, U256::from(73_237)); // NOTICE: This value will change if the gas model changes, so please update accordingly.
@@ -1422,12 +1420,11 @@ mod tests {
 		let info = EnvInfo::default();
 		let machine = make_frontier_machine(0);
 		let mut substate = Substate::new();
-		let mut ext_tracer = NoopExtTracer;
 		let mut storage = NullStorage::new();
 
 		let FinalizationResult { gas_left, .. } = {
 			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
-			ex.call(params, &mut substate, BytesRef::Fixed(&mut []), &mut NoopTracer, &mut NoopVMTracer, &mut ext_tracer).unwrap()
+			ex.call(params, &mut substate, BytesRef::Fixed(&mut []), &mut NoopTracer, &mut NoopVMTracer, &mut NoopExtTracer).unwrap()
 		};
 
 		assert_eq!(gas_left, U256::from(59_870)); // NOTICE: This value will change if the gas model changes, so please update accordingly.
@@ -1631,13 +1628,12 @@ mod tests {
 		let info = EnvInfo::default();
 		let machine = ::ethereum::new_byzantium_test_machine();
 		let mut substate = Substate::new();
-		let mut ext_tracer = NoopExtTracer;
 		let mut storage = NullStorage::new();
 
 		let mut output = [0u8; 14];
 		let FinalizationResult { gas_left: result, .. } = {
 			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
-			ex.call(params, &mut substate, BytesRef::Fixed(&mut output), &mut NoopTracer, &mut NoopVMTracer, &mut ext_tracer).unwrap()
+			ex.call(params, &mut substate, BytesRef::Fixed(&mut output), &mut NoopTracer, &mut NoopVMTracer, &mut NoopExtTracer).unwrap()
 		};
 
 		assert_eq!(result, U256::from(1));
@@ -1701,5 +1697,164 @@ mod tests {
 		assert_eq!(result, U256::from(20025)); // NOTICE: This value will change if the gas model changes, so please update accordingly.
 		// Since transaction errored due to wasm was not activated, result is just empty
 		assert_eq!(output[..], [0u8; 20][..]);
+	}
+
+	// read / write via sload and sstore
+	evm_test!{test_ext_tracer_rw: test_ext_tracer_rw_int}
+	fn test_ext_tracer_rw(factory: Factory) {
+		// 60 01 ; push 1
+		// 60 00 ; push 0
+		// 54 ; sload
+		// 01 ; add
+		// 60 01 ; push 1
+		// 55 ; sstore
+		let sender = Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681").unwrap();
+		let code = "600160005401600155".from_hex().unwrap();
+		let address = contract_address(CreateContractAddress::FromSenderAndNonce, &sender, &U256::zero(), &[]).0;
+		let mut params = ActionParams::default();
+		params.address = address.clone();
+		params.gas = U256::from(100_000);
+		params.code = Some(Arc::new(code.clone()));
+		let mut state = get_temp_state_with_factory(factory);
+		state.init_code(&address, code).unwrap();
+		let info = EnvInfo::default();
+		let machine = make_frontier_machine(0);
+		let mut substate = Substate::new();
+		let mut ext_tracer = FullExtTracer::new();
+		let mut storage = NullStorage::new();
+
+		let FinalizationResult { gas_left, .. } = {
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
+			ex.call(params, &mut substate, BytesRef::Fixed(&mut []), &mut NoopTracer, &mut NoopVMTracer, &mut ext_tracer).unwrap()
+		};
+
+		// Ignore gas used.
+		assert_eq!(state.storage_at(&address, &H256::from(&U256::zero())).unwrap(), H256::from(&U256::from(0)));
+		assert_eq!(state.storage_at(&address, &H256::from(&U256::one())).unwrap(), H256::from(&U256::from(1)));
+		let expected_ext_trace = FullTracerCallTrace {
+			contract: address.clone(),
+			trace: vec![
+				// SLOAD(0)
+				FullTracerRecord::Read(H256::from(0)),
+				// SSTORE(1): Interpreter<Cost>::exec_instruction SSTORE reads
+				//  first to see if there is a refund for clearing persistent
+				//  memory;
+				FullTracerRecord::Read(H256::from(1)),
+				//  State<B>::set_storage reads to see if new value is change before
+				FullTracerRecord::Read(H256::from(1)),
+				//  ... actually doing the store.
+				FullTracerRecord::Write(H256::from(1)),
+			],
+			// TODO(bsy): Interpreter<Cost>::exec_stack_instructions should see if
+			// the new value is zero first, before fetching the old value.
+		};
+		let trace = ext_tracer.drain();
+		assert_eq!(trace, expected_ext_trace);
+	}
+
+	// The exists and exists_and_not_full queries are not directly referenced from
+	// Interpreter<Cost>, but are invoked indirectly in gasometer via CALL or SUICIDE, when
+	// checking for the target address of the call.  Which of exists or exists_and_not_full
+	// will be used depends on schedule.no_empty.
+	//
+	// call
+	evm_test!{test_ext_tracer_call: test_ext_tracer_call_int}
+	fn test_ext_tracer_call(factory: Factory) {
+		// 60 00 ; retLength
+		// 80 ; retOffset
+		// 80 ; argsLength
+		// 80 ; argsOffset
+		// 80 ; value
+		// 63 60 00 80 3f - push other code, which is just push 0; dup; ret
+		// 60 00 - push 0
+		// 52 - mstore
+		// 60 04 - push 4 init_size
+		// 60 1c - push 28=32-4 init_off
+		// 60 17 - push 17 endowment
+		// f0 - create ; addr
+		// 80 - dup contract addr
+		// 60 00 - push 0
+		// 55 sstore ; so we can retrieve it for comparison
+		// 60 ff ; gas to be used for the call
+		// f1 ; message call
+		let sender = Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681").unwrap();
+		let code = "600080808080636000803f6000526004601c6017f08060005560fff1".from_hex().unwrap();
+		let address = contract_address(CreateContractAddress::FromSenderAndNonce, &sender, &U256::zero(), &[]).0;
+		let mut params = ActionParams::default();
+		params.address = address.clone();
+		params.gas = U256::from(100_000);
+		params.code = Some(Arc::new(code.clone()));
+		let mut state = get_temp_state_with_factory(factory);
+		state.init_code(&address, code).unwrap();
+		let info = EnvInfo::default();
+		let machine = make_frontier_machine(0);
+		let mut substate = Substate::new();
+		let mut ext_tracer = FullExtTracer::new();
+		let mut storage = NullStorage::new();
+
+		let FinalizationResult { gas_left, .. } = {
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
+			ex.call(params, &mut substate, BytesRef::Fixed(&mut []), &mut NoopTracer, &mut NoopVMTracer, &mut ext_tracer).unwrap()
+		};
+
+		let subcontract = state.storage_at(&address, &H256::from(&U256::zero())).unwrap();
+		// Ignore gas used.
+		let expected_ext_trace = FullTracerCallTrace {
+			contract: address.clone(),
+			trace: vec![
+				// CREATE invokes ext.balance to see if there's enough endowment
+				FullTracerRecord::Balance(address.clone()),
+				// SSTORE(0) subcontract addr
+				FullTracerRecord::Read(H256::from(0)),
+				FullTracerRecord::Read(H256::from(0)),
+				FullTracerRecord::Write(H256::from(0)),
+				// Side-effect of CALL
+				//  gasometer<Gas>::requirements, before actual execution
+				FullTracerRecord::Exists(subcontract.into()),
+				//  Interpreter<Cost>::exec_instruction has_balance check call
+				//  value transfer
+				FullTracerRecord::Balance(address.clone()),
+			],
+		};
+		let trace = ext_tracer.drain();
+		assert_eq!(trace, expected_ext_trace);
+	}
+
+	// balance
+	evm_test!{test_ext_tracer_bal: test_ext_tracer_bal_int}
+	fn test_ext_tracer_bal(factory: Factory) {
+		// 30 ; address
+		// 31 ; balance
+		// 50 ; pop
+		let sender = Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681").unwrap();
+		let code = "303150".from_hex().unwrap();
+		let address = contract_address(CreateContractAddress::FromSenderAndNonce, &sender, &U256::zero(), &[]).0;
+		let mut params = ActionParams::default();
+		params.address = address.clone();
+		params.gas = U256::from(100_000);
+		params.code = Some(Arc::new(code.clone()));
+		let mut state = get_temp_state_with_factory(factory);
+		state.init_code(&address, code).unwrap();
+		let info = EnvInfo::default();
+		let machine = make_frontier_machine(0);
+		let mut substate = Substate::new();
+		let mut ext_tracer = FullExtTracer::new();
+		let mut storage = NullStorage::new();
+
+		let FinalizationResult { gas_left, .. } = {
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
+			ex.call(params, &mut substate, BytesRef::Fixed(&mut []), &mut NoopTracer, &mut NoopVMTracer, &mut ext_tracer).unwrap()
+		};
+
+		// Ignore gas used.
+		let expected_ext_trace = FullTracerCallTrace {
+			contract: address.clone(),
+			trace: vec![
+				// BALANCE()
+				FullTracerRecord::Balance(address.clone()),
+			],
+		};
+		let trace = ext_tracer.drain();
+		assert_eq!(trace, expected_ext_trace);
 	}
 }
