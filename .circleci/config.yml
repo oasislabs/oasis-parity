@@ -2,10 +2,10 @@ version: 2
 jobs:
   build:
     docker:
-     - image: oasislabs/testing:0.2.0
-       auth:
-         username: $DOCKERHUB_USERNAME
-         password: $DOCKERHUB_PASSWORD
+      - image: oasislabs/testing:0.2.0
+        auth:
+          username: $DOCKERHUB_USERNAME
+          password: $DOCKERHUB_PASSWORD
     resource_class: xlarge
     steps:
       # Check out source from github
