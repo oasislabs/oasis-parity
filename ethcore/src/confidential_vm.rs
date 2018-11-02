@@ -4,7 +4,7 @@ use std::sync::Arc;
 use vm::{self, ActionParams, Vm, Ext, GasLeft, Result, ReturnData};
 
 /// 4 byte prefix prepended to all confidential contract bytecode.
-const CONFIDENTIAL_PREFIX: &'static [u8; 4] = b"\0pri";
+const CONFIDENTIAL_PREFIX: &'static [u8; 4] = b"\0enc";
 /// The H256 topic that the long term public key is logged under for a confidential deploy.
 const CONFIDENTIAL_LOG_TOPIC: &'static str = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
 
@@ -74,8 +74,8 @@ impl ConfidentialVm {
 		bytecode[CONFIDENTIAL_PREFIX.len()..].to_vec()
 	}
 
-	/// Prepends `\0pri` to the given bytecode, marking it as a confidential contract.
-	/// Assumes is_confidential is false.
+	/// Prepends the CONFIDENTIAL_PREFIX to the given bytecode, marking it as a
+	/// confidential contract. Assumes is_confidential is false.
 	fn add_prefix(mut bytecode: Vec<u8>) -> Vec<u8> {
 		let mut prefix = CONFIDENTIAL_PREFIX.to_vec();
 		prefix.append(&mut bytecode);
@@ -83,9 +83,9 @@ impl ConfidentialVm {
 	}
 
 	/// Deploys a confidential contract, executing the init code and ensuring the
-	/// \0pri prefix is prepended to the stored account bytecode.
+	/// CONFIDENTIAL_PREFIX is prepended to the stored account bytecode.
 	///
-	/// Assumes the \0pri prefix has been removed from the initcode in `no_prefix_params`.
+	/// Assumes the prefix has been removed from the initcode in `no_prefix_params`.
 	fn exec_create(&mut self, no_prefix_params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
 		let pk = ext.long_term_public_key(no_prefix_params.code_address.clone())?;
 		// store public key in log for retrieval
@@ -95,7 +95,7 @@ impl ConfidentialVm {
 		);
 		// execute the init code with the underlying vm
 		let result = self.vm.exec(no_prefix_params, ext)?;
-		// prepend \0pri to the bytecode that is eventually stored in the account
+		// prepend CONFIDENTIAL_PREFIX to the bytecode that is eventually stored in the account
 		if let GasLeft::NeedsReturn { gas_left, data, apply_state } = result {
 			let confidential_bytecode = Self::add_prefix(data.to_vec());
 			let size = confidential_bytecode.len();
@@ -109,7 +109,7 @@ impl ConfidentialVm {
 	}
 
 	/// Makes a confidential contract call, decrypting the transaction's calldata if needed.
-	/// Assumes the \0pri prefix has been removed from contract bytecode in `no_prefix_params`.
+	/// Assumes the CONFIDENTIAL_PREFIX has been removed from contract bytecode in `no_prefix_params`.
 	/// Returns the result of executing the contract call, encrypted with key given in the
 	/// encrypted calldata.
 	fn exec_call(&mut self, mut no_prefix_params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
