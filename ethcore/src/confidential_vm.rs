@@ -70,7 +70,7 @@ impl ConfidentialVm {
 
 	/// Strips the prefix off the given bytecode, so that it can be executed normally.
 	/// Assumes is_confidential is true.
-	fn remove_prefix(bytecode: Vec<u8>) -> Vec<u8> {
+	pub fn remove_prefix(bytecode: Vec<u8>) -> Vec<u8> {
 		bytecode[CONFIDENTIAL_PREFIX.len()..].to_vec()
 	}
 
