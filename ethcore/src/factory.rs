@@ -8,7 +8,7 @@
 
 // Parity is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
@@ -20,6 +20,7 @@ use confidential_vm::ConfidentialVm;
 use evm::{Factory as EvmFactory, VMType};
 use vm::{Vm, ActionParams, Schedule};
 use wasm::WasmInterpreter;
+use bytes::Bytes;
 
 const WASM_MAGIC_NUMBER: &'static [u8; 4] = b"\0asm";
 
@@ -40,11 +41,23 @@ impl VmFactory {
 	}
 
 	fn _create(&self, params: &ActionParams, schedule: &Schedule) -> Box<Vm> {
-		if schedule.wasm.is_some() && params.code.as_ref().map_or(false, |code| code.len() > 4 && &code[0..4] == WASM_MAGIC_NUMBER) {
+		let raw_code = Self::raw_code(params);
+		if schedule.wasm.is_some() && raw_code.len() > 4 && &raw_code[0..4] == WASM_MAGIC_NUMBER {
 			Box::new(WasmInterpreter)
 		} else {
 			self.evm.create(&params.gas)
 		}
+	}
+
+	/// Removes the confidential prefix from the ActionParams' code, if needed.
+	fn raw_code(params: &ActionParams) -> Bytes {
+		params.code.as_ref().map_or(vec![], |code| {
+			if params.confidential {
+				ConfidentialVm::remove_prefix(code.to_vec())
+			} else {
+				code.to_vec()
+			}
+		})
 	}
 
 	pub fn new(evm: VMType, cache_size: usize) -> Self {
