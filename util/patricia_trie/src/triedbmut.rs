@@ -98,7 +98,20 @@ impl Node {
 
 	// decode a node from rlp without getting its children.
 	fn from_rlp(rlp: &[u8], db: &HashDB, storage: &mut NodeStorage) -> Self {
-		match RlpNode::decoded(rlp).expect("rlp read from db; qed") {
+		Self::from_rlp_with_hash(rlp, &H256::zero(), db, storage)
+	}
+
+	// temporary: for logging hash+value on decoding error (oasislabs/runtime-ethereum#393)
+	fn from_rlp_with_hash(rlp: &[u8], hash: &H256, db: &HashDB, storage: &mut NodeStorage) -> Self {
+		let node = match RlpNode::decoded(rlp) {
+			Ok(node) => node,
+			Err(e) => {
+				println!("Error decoding rlp node ({:?}, {:?}): {:?}", hash, rlp, e);
+				panic!();
+			}
+		};
+
+		match node {
 			RlpNode::Empty => Node::Empty,
 			RlpNode::Leaf(k, v) => Node::Leaf(k.encoded(true), DBValue::from_slice(&v)),
 			RlpNode::Extension(key, cb) => {
@@ -349,7 +362,9 @@ impl<'a> TrieDBMut<'a> {
 	// cache a node by hash
 	fn cache(&mut self, hash: H256) -> super::Result<StorageHandle> {
 		let node_rlp = self.db.get(&hash).ok_or_else(|| Box::new(TrieError::IncompleteDatabase(hash)))?;
-		let node = Node::from_rlp(&node_rlp, &*self.db, &mut self.storage);
+		// temporary: for logging hash+value on decoding error (oasislabs/runtime-ethereum#393)
+		// let node = Node::from_rlp(&node_rlp, &*self.db, &mut self.storage);
+		let node = Node::from_rlp_with_hash(&node_rlp, &hash, &*self.db, &mut self.storage);
 		Ok(self.storage.alloc(Stored::Cached(node, hash)))
 	}
 
