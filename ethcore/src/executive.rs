@@ -30,7 +30,7 @@ use vm::{
 };
 use externalities::*;
 use trace::{self, Tracer, VMTracer};
-use trace_ext::{ExtTracer, FullExtTracer, FullTracerCallTrace, FullTracerRecord, NoopExtTracer};
+use trace_ext::{CountingTracer, ExtTracer, FullExtTracer, FullTracerCallTrace, FullTracerRecord, NoopExtTracer};
 use transaction::{Action, SignedTransaction};
 use storage::Storage;
 use storage::NullStorage;
@@ -1855,6 +1855,151 @@ mod tests {
 			],
 		};
 		let trace = ext_tracer.drain();
+		assert_eq!(trace, expected_ext_trace);
+	}
+
+	// read / write via sload and sstore -- counting tracer
+	evm_test!{test_ext_tracer_counting: test_ext_tracer_counting_int}
+	fn test_ext_tracer_counting(factory: Factory) {
+		// 60 01 ; push 1
+		// 60 00 ; push 0
+		// 54 ; sload
+		// 01 ; add
+		// 60 01 ; push 1
+		// 55 ; sstore
+		let sender = Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681").unwrap();
+		let code = "600160005401600155".from_hex().unwrap();
+		let address = contract_address(CreateContractAddress::FromSenderAndNonce, &sender, &U256::zero(), &[]).0;
+		let mut params = ActionParams::default();
+		params.address = address.clone();
+		params.gas = U256::from(100_000);
+		params.code = Some(Arc::new(code.clone()));
+		let mut state = get_temp_state_with_factory(factory);
+		state.init_code(&address, code).unwrap();
+		let info = EnvInfo::default();
+		let machine = make_frontier_machine(0);
+		let mut substate = Substate::new();
+		let mut ext_tracer = CountingTracer::new();
+		let mut storage = NullStorage::new();
+
+		let FinalizationResult { gas_left, .. } = {
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
+			ex.call(params, &mut substate, BytesRef::Fixed(&mut []), &mut NoopTracer, &mut NoopVMTracer, &mut ext_tracer).unwrap()
+		};
+
+		// Ignore gas used.
+		assert_eq!(state.storage_at(&address, &H256::from(&U256::zero())).unwrap(), H256::from(&U256::from(0)));
+		assert_eq!(state.storage_at(&address, &H256::from(&U256::one())).unwrap(), H256::from(&U256::from(1)));
+		let expected_ext_trace = (2, 1);
+		let trace = ext_tracer.get_rw_counts();
+		assert_eq!(trace, expected_ext_trace);
+	}
+
+	// read / write via sload and sstore; more instructions -- counting tracer
+	evm_test!{test_ext_tracer_counting2: test_ext_tracer_counting2_int}
+	fn test_ext_tracer_counting2(factory: Factory) {
+		// 60 01 ; push 1
+		// 60 00 ; push 0
+		// 54 ; sload
+		// 01 ; add
+		// 60 01 ; push 1
+		// 54 ; sload
+		// 01 ; add
+		// 60 02 ; push 2
+		// 54 ; sload
+		// 01 ; add
+		// 60 03 ; push 3
+		// 54 ; sload
+		// 01 ; add
+		// 60 04 ; push 4
+		// 55 ; sstore
+		let sender = Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681").unwrap();
+		let code = "600160005401600154016002540160035401600455".from_hex().unwrap();
+		let address = contract_address(CreateContractAddress::FromSenderAndNonce, &sender, &U256::zero(), &[]).0;
+		let mut params = ActionParams::default();
+		params.address = address.clone();
+		params.gas = U256::from(100_000);
+		params.code = Some(Arc::new(code.clone()));
+		let mut state = get_temp_state_with_factory(factory);
+		state.init_code(&address, code).unwrap();
+		let info = EnvInfo::default();
+		let machine = make_frontier_machine(0);
+		let mut substate = Substate::new();
+		let mut ext_tracer = CountingTracer::new();
+		let mut storage = NullStorage::new();
+
+		let FinalizationResult { gas_left, .. } = {
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
+			ex.call(params, &mut substate, BytesRef::Fixed(&mut []), &mut NoopTracer, &mut NoopVMTracer, &mut ext_tracer).unwrap()
+		};
+
+		// Ignore gas used.
+		assert_eq!(state.storage_at(&address, &H256::from(&U256::zero())).unwrap(), H256::from(&U256::from(0)));
+		assert_eq!(state.storage_at(&address, &H256::from(&U256::from(4))).unwrap(), H256::from(&U256::from(1)));
+		let expected_ext_trace = (5, 1);
+		let trace = ext_tracer.get_rw_counts();
+		assert_eq!(trace, expected_ext_trace);
+	}
+
+	// read / write via sload and sstore; more writes -- counting tracer
+	evm_test!{test_ext_tracer_counting3: test_ext_tracer_counting3_int}
+	fn test_ext_tracer_counting3(factory: Factory) {
+		// 60 05 ; push 5
+		// 60 00 ; push 0
+		// 55 ; sstore
+		// 60 04 ; push 4
+		// 60 01 ; push 1
+		// 55 ; sstore
+		// 60 03 ; push 3
+		// 60 02 ; push 2
+		// 55 ; sstore
+		// 60 02 ; push 2
+		// 60 03 ; push 3
+		// 55 ; sstore
+		// 60 01 ; push 1
+		// 60 04 ; push 4
+		// 55 ; sstore
+		// 60 00 ; push 0
+		// 54 ; sload
+		// 60 01 ; push 1
+		// 54 ; sload
+		// 60 02 ; push 2
+		// 54 ; sload
+		// 60 03 ; push 3
+		// 54 ; sload
+		// 60 04 ; push 4
+		// 54 ; sload
+		// 01 ; add
+		// 01 ; add
+		// 01 ; add
+		// 01 ; add
+		// 60 05 ; push 5
+		// 55 ; sstore
+		let sender = Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681").unwrap();
+		let code = "6005600055600460015560036002556002600355600160045560005460015460025460035460045401010101600555".from_hex().unwrap();
+		let address = contract_address(CreateContractAddress::FromSenderAndNonce, &sender, &U256::zero(), &[]).0;
+		let mut params = ActionParams::default();
+		params.address = address.clone();
+		params.gas = U256::from(200_000);
+		params.code = Some(Arc::new(code.clone()));
+		let mut state = get_temp_state_with_factory(factory);
+		state.init_code(&address, code).unwrap();
+		let info = EnvInfo::default();
+		let machine = make_frontier_machine(0);
+		let mut substate = Substate::new();
+		let mut ext_tracer = CountingTracer::new_extended(100, 0.0001);
+		let mut storage = NullStorage::new();
+
+		let FinalizationResult { gas_left, .. } = {
+			let mut ex = Executive::new(&mut state, &info, &machine, &mut storage);
+			ex.call(params, &mut substate, BytesRef::Fixed(&mut []), &mut NoopTracer, &mut NoopVMTracer, &mut ext_tracer).unwrap()
+		};
+
+		// Ignore gas used.
+		assert_eq!(state.storage_at(&address, &H256::from(&U256::zero())).unwrap(), H256::from(&U256::from(5)));
+		assert_eq!(state.storage_at(&address, &H256::from(&U256::from(4))).unwrap(), H256::from(&U256::from(1)));
+		let expected_ext_trace = (6, 6);
+		let trace = ext_tracer.get_rw_counts();
 		assert_eq!(trace, expected_ext_trace);
 	}
 }

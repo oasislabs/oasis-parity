@@ -14,20 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-/// ExtTracer-specific error enum.
-pub mod error;
-/// ExtTracer trait for tracing Ext (Externalities) calls. 
-pub mod ext_tracer;
-/// FullExtTracer full externalities tracing.
-pub mod full_ext_tracer;
-/// Concrete class for no-op tracing.
-pub mod noop;
-// Bloomfilter used internally for counting.
-mod bloomfilter;
-/// CountingExtTracer that just estimates the sizes of the conflict sets.
-pub mod counting_tracer;
-
-pub use self::ext_tracer::ExtTracer;
-pub use self::counting_tracer::CountingTracer;
-pub use self::full_ext_tracer::{FullExtTracer, FullTracerRecord, FullTracerCallTrace};
-pub use self::noop::NoopExtTracer;
+#[derive(Debug, Clone, PartialEq)]
+/// Errors that arise from externalities tracers.  Which errors may occur depends on the
+/// particular ExtTracer implementation used.
+pub enum Error {
+	/// When taking the `intersect` of two Bloom filters, the bitmap size must match.
+	BitmapSizeMismatch,
+	/// When taking the `intersect` of two Bloom filters, the number of statistically
+	/// independent hash functions used must match.
+	NumberOfHashFnMismatch,
+}
