@@ -316,24 +316,42 @@ pub struct State<B: Backend> {
 	checkpoints: RefCell<Vec<HashMap<Address, Option<AccountEntry>>>>,
 	account_start_nonce: U256,
 	factories: Factories,
-	pub encrypter: Option<Box<Encrypter>>,
-	pub key_manager: Option<Box<KeyManager>>,
+	pub confidential_ctx: Option<Box<ConfidentialCtx>>,
 }
 
-/// An Encrypter can be injected into the state in order to provide an encryption
-/// mechanism for confidential contracts.
-pub trait Encrypter {
-	/// Encrypts the given data with the given encryption key.
-	fn encrypt(&self, data: Vec<u8>, key: Vec<u8>) -> Result<Vec<u8>, String>;
-	/// Decrypts the given data, returning a (nonce, key, plaintext) tuple.
-	fn decrypt(&self, data: Vec<u8>) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>), String>;
-}
-
-/// A KeyManager can be injected into the state in order to provide keys for
-/// confidential contracts.
-pub trait KeyManager {
-	/// Returns the long term public key for the given contract.
-	fn long_term_public_key(&self, contract: Address) -> Vec<u8>;
+/// ConfidentialCtx provides a collection of services to be injected into the state
+/// to enable confidential contracts.
+pub trait ConfidentialCtx {
+	/// Opens the confidential context by unsealing the given `encrypted_data`,
+	/// destined for the given `contract`.
+	///
+	/// Assumes `encrypted_data` is the `data` field in a transaction of the form
+	/// NONCE || PEER_PUBLIC_SESSION_KEY || CIPHER.
+	///
+	/// Being "open" means not only that one may encrypt, but also that all
+	/// encryption will be done using the user's session key specified by
+	/// `encrypted_data`. This session key along with the active contract's key
+	/// pair is what sets the context at any given time. While open, this session
+	/// key will never change; however, the associated contract keys may change
+	/// at any point to facilitate cross-contract calls in a "confidential context
+	/// switch".
+	///
+	/// Switch functionality is not currently in use but will be useful in the future
+	/// for cross-contract calls in a confidential setting. To switch the confidential
+	/// context to encrypt under a new contract, swap out the `contract_keypair` to a
+	/// new set of keys.
+	fn open(&mut self, encrypted_data: Vec<u8>, contract: Address) -> Result<Vec<u8>, String>;
+	/// Returns true if open has previously been called.
+	fn is_open(&self) -> bool;
+	/// Closes the context. If called, subsequent calls to `encrypt` should fail.
+	fn close(&mut self);
+	/// Encrypts the given data under the given context, i.e., using the active
+	/// session and contract keys. Returrns an error if the confidential context
+	/// is not open.
+	fn encrypt(&self, data: Vec<u8>) -> Result<Vec<u8>, String>;
+	/// Creates the long term public key for the given contract. If it already
+	/// exists, returns the existing key.
+	fn create_long_term_pk(&self, contract: Address) -> Result<Vec<u8>, String>;
 }
 
 #[derive(Copy, Clone)]
@@ -396,13 +414,12 @@ impl<B: Backend> State<B> {
 			checkpoints: RefCell::new(Vec::new()),
 			account_start_nonce: account_start_nonce,
 			factories: factories,
-			encrypter: None,
-			key_manager: None,
+			confidential_ctx: None
 		}
 	}
 
 	/// Creates new state with existing state root
-	pub fn from_existing(db: B, root: H256, account_start_nonce: U256, factories: Factories, encrypter: Option<Box<Encrypter>>, key_manager: Option<Box<KeyManager>>) -> Result<State<B>, TrieError> {
+	pub fn from_existing(db: B, root: H256, account_start_nonce: U256, factories: Factories, confidential_ctx: Option<Box<ConfidentialCtx>>) -> Result<State<B>, TrieError> {
 		if !db.as_hashdb().contains(&root) {
 			return Err(TrieError::InvalidStateRoot(root));
 		}
@@ -414,8 +431,7 @@ impl<B: Backend> State<B> {
 			checkpoints: RefCell::new(Vec::new()),
 			account_start_nonce: account_start_nonce,
 			factories: factories,
-			encrypter: encrypter,
-			key_manager: key_manager,
+			confidential_ctx: confidential_ctx,
 		};
 
 		Ok(state)
@@ -1071,6 +1087,10 @@ impl<B: Backend> State<B> {
 	pub fn patch_account(&self, a: &Address, code: Arc<Bytes>, storage: HashMap<H256, H256>) -> trie::Result<()> {
 		Ok(self.require(a, false)?.reset_code_and_storage(code, storage))
 	}
+
+    pub fn is_confidential_ctx_open(&self) -> bool {
+        self.confidential_ctx.is_some() && self.confidential_ctx.as_ref().unwrap().is_open()
+    }
 }
 
 // State proof implementations; useful for light client protocols.
@@ -1147,8 +1167,7 @@ impl Clone for State<StateDB> {
 			checkpoints: RefCell::new(Vec::new()),
 			account_start_nonce: self.account_start_nonce.clone(),
 			factories: self.factories.clone(),
-			encrypter: None,
-			key_manager: None,
+			confidential_ctx: None,
 		}
 	}
 }
@@ -1171,8 +1190,7 @@ impl<B: Backend + Clone> Clone for State<B> {
 			checkpoints: RefCell::new(Vec::new()),
 			account_start_nonce: self.account_start_nonce.clone(),
 			factories: self.factories.clone(),
-			encrypter: None,
-			key_manager: None,
+			confidential_ctx: None,
 		}
 	}
 }
@@ -2062,7 +2080,7 @@ mod tests {
 			state.drop()
 		};
 
-		let state = State::from_existing(db, root, U256::from(0u8), Default::default(), None, None).unwrap();
+		let state = State::from_existing(db, root, U256::from(0u8), Default::default(), None).unwrap();
 		assert_eq!(state.code(&a).unwrap(), Some(Arc::new(vec![1u8, 2, 3])));
 	}
 
@@ -2076,7 +2094,7 @@ mod tests {
 			state.drop()
 		};
 
-		let s = State::from_existing(db, root, U256::from(0u8), Default::default(), None, None).unwrap();
+		let s = State::from_existing(db, root, U256::from(0u8), Default::default(), None).unwrap();
 		assert_eq!(s.storage_at(&a, &H256::from(&U256::from(1u64))).unwrap(), H256::from(&U256::from(69u64)));
 	}
 
@@ -2092,7 +2110,7 @@ mod tests {
 			state.drop()
 		};
 
-		let state = State::from_existing(db, root, U256::from(0u8), Default::default(), None, None).unwrap();
+		let state = State::from_existing(db, root, U256::from(0u8), Default::default(), None).unwrap();
 		assert_eq!(state.balance(&a).unwrap(), U256::from(69u64));
 		assert_eq!(state.nonce(&a).unwrap(), U256::from(1u64));
 	}
@@ -2123,7 +2141,7 @@ mod tests {
 			state.commit().unwrap();
 			state.drop()
 		};
-		let state = State::from_existing(db, root, U256::from(0u8), Default::default(), None, None).unwrap();
+		let state = State::from_existing(db, root, U256::from(0u8), Default::default(), None).unwrap();
 		assert!(!state.exists(&a).unwrap());
 		assert!(!state.exists_and_not_null(&a).unwrap());
 	}
@@ -2138,7 +2156,7 @@ mod tests {
 			state.commit().unwrap();
 			state.drop()
 		};
-		let state = State::from_existing(db, root, U256::from(0u8), Default::default(), None, None).unwrap();
+		let state = State::from_existing(db, root, U256::from(0u8), Default::default(), None).unwrap();
 		assert!(state.exists(&a).unwrap());
 		assert!(!state.exists_and_not_null(&a).unwrap());
 	}
@@ -2156,7 +2174,7 @@ mod tests {
 		};
 
 		let (root, db) = {
-			let mut state = State::from_existing(db, root, U256::from(0u8), Default::default(), None, None).unwrap();
+			let mut state = State::from_existing(db, root, U256::from(0u8), Default::default(), None).unwrap();
 			assert_eq!(state.exists(&a).unwrap(), true);
 			assert_eq!(state.nonce(&a).unwrap(), U256::from(1u64));
 			state.kill_account(&a);
@@ -2166,7 +2184,7 @@ mod tests {
 			state.drop()
 		};
 
-		let state = State::from_existing(db, root, U256::from(0u8), Default::default(), None, None).unwrap();
+		let state = State::from_existing(db, root, U256::from(0u8), Default::default(), None).unwrap();
 		assert_eq!(state.exists(&a).unwrap(), false);
 		assert_eq!(state.nonce(&a).unwrap(), U256::from(0u64));
 	}
@@ -2301,7 +2319,7 @@ mod tests {
 			state.drop()
 		};
 
-		let mut state = State::from_existing(db, root, U256::from(0u8), Default::default(), None, None).unwrap();
+		let mut state = State::from_existing(db, root, U256::from(0u8), Default::default(), None).unwrap();
 		let mut touched = HashSet::new();
 		state.add_balance(&a, &U256::default(), CleanupMode::TrackTouched(&mut touched)).unwrap(); // touch an account
 		state.transfer_balance(&b, &x, &1.into(), CleanupMode::TrackTouched(&mut touched)).unwrap(); // touch an account decreasing its balance
@@ -2334,7 +2352,7 @@ mod tests {
 			state.drop()
 		};
 
-		let mut state = State::from_existing(db, root, U256::from(0u8), Default::default(), None, None).unwrap();
+		let mut state = State::from_existing(db, root, U256::from(0u8), Default::default(), None).unwrap();
 		let original = state.clone();
 		state.kill_account(&a);
 
@@ -2365,7 +2383,7 @@ mod tests {
 			state.drop()
 		};
 
-		let mut state = State::from_existing(db, root, U256::from(0u8), Default::default(), None, None).unwrap();
+		let mut state = State::from_existing(db, root, U256::from(0u8), Default::default(), None).unwrap();
 		let original = state.clone();
 		state.set_storage(&a, H256::from(&U256::from(1u64)), H256::from(&U256::from(100u64))).unwrap();
 

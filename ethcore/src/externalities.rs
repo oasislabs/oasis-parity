@@ -68,7 +68,7 @@ impl OriginInfo {
 
 /// Implementation of evm Externalities.
 pub struct Externalities<'a, T: 'a, V: 'a, X: 'a, B: 'a>
-	where T: Tracer, V:  VMTracer, X: ExtTracer, B: StateBackend
+	where T: Tracer, V:	 VMTracer, X: ExtTracer, B: StateBackend
 {
 	state: &'a mut State<B>,
 	env_info: &'a EnvInfo,
@@ -83,7 +83,6 @@ pub struct Externalities<'a, T: 'a, V: 'a, X: 'a, B: 'a>
 	ext_tracer: &'a mut X,
 	static_flag: bool,
 	storage: &'a Storage,
-	encryption_key: Option<Vec<u8>>,
 }
 
 impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Externalities<'a, T, V, X, B>
@@ -117,7 +116,6 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Externalities<'a, T, V, X, B>
 			ext_tracer: ext_tracer,
 			static_flag: static_flag,
 			storage: storage,
-			encryption_key: None,
 		}
 	}
 }
@@ -173,7 +171,7 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 	}
 
 	fn create(&mut self, gas: &U256, value: &U256, code: &[u8], address_scheme: CreateContractAddress) -> ContractCreateResult {
-		if self.encryption_key.is_some() {
+		if self.state.is_confidential_ctx_open() {
 			error!("Can't create a contract when executing a confidential contract");
 			return ContractCreateResult::Failed;
 		}
@@ -238,7 +236,7 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 	) -> MessageCallResult {
 		trace!(target: "externalities", "call");
 
-		if self.encryption_key.is_some() {
+		if self.state.is_confidential_ctx_open() {
 			error!("Can't make a contract call when executing a confidential contract");
 			return MessageCallResult::Failed;
 		}
@@ -336,7 +334,11 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 
 		let address = self.origin_info.address.clone();
 
-		let data = if self.encryption_key.is_some() { self.encrypt(data.to_vec())? } else { data.to_vec() };
+		let data = if self.state.is_confidential_ctx_open() {
+			self.encrypt(data.to_vec())?
+		} else {
+			data.to_vec()
+		};
 
 		self.substate.logs.push(LogEntry {
 			address: address,
@@ -409,43 +411,55 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 		self.storage.store_bytes(bytes)
 	}
 
-	fn set_encryption_key(&mut self, key: Option<Vec<u8>>) {
-		self.encryption_key = key;
+	fn create_long_term_pk(&self, contract: Address) -> vm::Result<Vec<u8>> {
+		if self.state.confidential_ctx.is_none() {
+			return Err(vm::Error::Internal(
+				"Can't create a long term public key without a confidential ctx".to_string()
+			));
+		}
+		self.state
+			.confidential_ctx
+			.as_ref()
+			.unwrap()
+			.create_long_term_pk(contract)
+			.map_err(|err| vm::Error::Internal(err))
+	}
+
+	fn open_confidential_ctx(&mut self, encrypted_data: Vec<u8>, contract: Address) -> vm::Result<Vec<u8>> {
+		if self.state.confidential_ctx.is_none() {
+			return Err(vm::Error::Internal(
+				"Can't set an encryption key without a confidential context".to_string()
+			));
+		}
+		self.state
+			.confidential_ctx
+			.as_mut()
+			.unwrap()
+			.open(encrypted_data, contract)
+			.map_err(|err| vm::Error::Internal(err))
 	}
 
 	fn encrypt(&self, data: Vec<u8>) -> vm::Result<Vec<u8>> {
-		if self.state.encrypter.is_none() || self.encryption_key.is_none() {
+		if !self.state.is_confidential_ctx_open() {
 			return Err(vm::Error::Internal("Can't encrypt without an encrypter or key".to_string()));
 		}
 		self.state
-			.encrypter
+			.confidential_ctx
 			.as_ref()
-			.expect("State should always have an encrypter in encryption mode")
-			.encrypt(data, self.encryption_key.clone().unwrap().to_vec())
+			.unwrap()
+			.encrypt(data)
 			.map_err(|err| vm::Error::Internal(format!("Could not encrypt {}", err)))
 	}
 
-	fn decrypt(&mut self, data: Vec<u8>) -> vm::Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
-		if self.state.encrypter.is_none() {
-			return Err(vm::Error::Internal("Can't decrypt without a state encrypter".to_string()));
+	fn close_confidential_ctx(&mut self) {
+		if !self.state.is_confidential_ctx_open() {
+			return;
 		}
-
-		let (nonce, key, plaintext) = self.state
-			.encrypter
-			.as_ref()
-			.expect("State should always have an encrypter in encryption mode")
-			.decrypt(data)
-			.map_err(|err| vm::Error::Internal(format!("Could not decrypt {}", err)))?;
-		Ok((nonce, key, plaintext))
-	}
-
-	fn long_term_public_key(&self, contract: Address) -> vm::Result<Vec<u8>> {
-		if self.state.key_manager.is_none() {
-			return Err(vm::Error::Internal(
-				"Can't retrieve the long term public key without a key manager".to_string()
-			));
-		}
-		Ok(self.state.key_manager.as_ref().unwrap().long_term_public_key(contract))
+		self.state
+			.confidential_ctx
+			.as_mut()
+			.unwrap()
+			.close();
 	}
 }
 

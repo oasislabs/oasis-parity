@@ -104,16 +104,16 @@ impl FakeExt {
 
 impl Ext for FakeExt {
 
-	fn set_encryption_key(&mut self, key: Option<Vec<u8>>) {
+	fn open_confidential_ctx(&mut self, encrypted_data: Vec<u8>, contract: Address) -> Result<Vec<u8>> {
+		// no-op
+		Ok(vec![])
+	}
+
+	fn close_confidential_ctx(&mut self) {
 		// no-op
 	}
-
 	fn encrypt(&self, data: Vec<u8>) -> Result<Vec<u8>> {
 		Ok(data)
-	}
-
-	fn decrypt(&mut self, data: Vec<u8>) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
-		Ok((vec![], vec![], data))
 	}
 
 	fn storage_at(&self, key: &H256) -> Result<H256> {
@@ -238,7 +238,7 @@ impl Ext for FakeExt {
 		Ok(H256::zero())
 	}
 
-	fn long_term_public_key(&self, contract: Address) -> Result<Vec<u8>> {
+	fn create_long_term_pk(&self, contract: Address) -> Result<Vec<u8>> {
 		Ok(vec![])
 	}
 }
