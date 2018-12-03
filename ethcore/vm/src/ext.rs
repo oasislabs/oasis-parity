@@ -8,7 +8,7 @@
 
 // Parity is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
@@ -167,5 +167,5 @@ pub trait Ext {
 
 	/// Allocates and returns the long term public key associated with the given contract.
 	/// To be called upon creation of the contract.
-	fn create_long_term_pk(&self, contract: Address) -> Result<Vec<u8>>;
+	fn create_long_term_public_key(&self, contract: Address) -> Result<Vec<u8>>;
 }

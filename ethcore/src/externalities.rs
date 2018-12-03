@@ -411,7 +411,7 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 		self.storage.store_bytes(bytes)
 	}
 
-	fn create_long_term_pk(&self, contract: Address) -> vm::Result<Vec<u8>> {
+	fn create_long_term_public_key(&self, contract: Address) -> vm::Result<Vec<u8>> {
 		if self.state.confidential_ctx.is_none() {
 			return Err(vm::Error::Internal(
 				"Can't create a long term public key without a confidential ctx".to_string()
@@ -421,7 +421,7 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 			.confidential_ctx
 			.as_ref()
 			.unwrap()
-			.create_long_term_pk(contract)
+			.create_long_term_public_key(contract)
 			.map_err(|err| vm::Error::Internal(err))
 	}
 

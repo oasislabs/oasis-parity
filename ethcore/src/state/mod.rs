@@ -351,7 +351,7 @@ pub trait ConfidentialCtx {
 	fn encrypt(&self, data: Vec<u8>) -> Result<Vec<u8>, String>;
 	/// Creates the long term public key for the given contract. If it already
 	/// exists, returns the existing key.
-	fn create_long_term_pk(&self, contract: Address) -> Result<Vec<u8>, String>;
+	fn create_long_term_public_key(&self, contract: Address) -> Result<Vec<u8>, String>;
 }
 
 #[derive(Copy, Clone)]

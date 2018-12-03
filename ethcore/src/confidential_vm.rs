@@ -87,11 +87,11 @@ impl ConfidentialVm {
 	///
 	/// Assumes the prefix has been removed from the initcode in `no_prefix_params`.
 	fn exec_create(&mut self, no_prefix_params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
-		let pk = ext.create_long_term_pk(no_prefix_params.code_address.clone())?;
+		let public_key = ext.create_long_term_public_key(no_prefix_params.code_address.clone())?;
 		// store public key in log for retrieval
 		ext.log(
 			vec![H256::from(CONFIDENTIAL_LOG_TOPIC)],
-			&pk
+			&public_key
 		);
 		// execute the init code with the underlying vm
 		let result = self.vm.exec(no_prefix_params, ext)?;
