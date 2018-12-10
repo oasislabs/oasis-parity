@@ -334,7 +334,14 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 
 		let address = self.origin_info.address.clone();
 
-		let data = if self.state.is_confidential_ctx_open() {
+		// Only encrypt the log if we're in a confidential context with a peer.
+		// If we're creating a confidential contract, don't encrypt the log.
+		let data = if self.state.is_confidential_ctx_open()
+			&& self.state.confidential_ctx
+			.as_ref()
+			.unwrap()
+			.peer()
+			.is_some() {
 			self.encrypt(data.to_vec())?
 		} else {
 			data.to_vec()
@@ -425,7 +432,7 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 			.map_err(|err| vm::Error::Internal(err))
 	}
 
-	fn open_confidential_ctx(&mut self, encrypted_data: Vec<u8>, contract: Address) -> vm::Result<Vec<u8>> {
+	fn open_confidential_ctx(&mut self, contract: Address, encrypted_data: Option<Vec<u8>>) -> vm::Result<Vec<u8>> {
 		if self.state.confidential_ctx.is_none() {
 			return Err(vm::Error::Internal(
 				"Can't set an encryption key without a confidential context".to_string()
@@ -435,7 +442,7 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 			.confidential_ctx
 			.as_mut()
 			.unwrap()
-			.open(encrypted_data, contract)
+			.open(contract, encrypted_data)
 			.map_err(|err| vm::Error::Internal(err))
 	}
 
