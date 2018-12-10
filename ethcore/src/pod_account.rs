@@ -39,7 +39,7 @@ pub struct PodAccount {
 	/// The code of the account or `None` in the special case that it is unknown.
 	pub code: Option<Bytes>,
 	/// The storage of the account.
-	pub storage: BTreeMap<H256, H256>,
+	pub storage: BTreeMap<H256, Vec<u8>>,
 }
 
 impl PodAccount {
@@ -73,13 +73,14 @@ impl PodAccount {
 		let mut r = H256::new();
 		let mut t = factory.create(db, &mut r);
 		for (k, v) in &self.storage {
-			if let Err(e) = t.insert(k, &rlp::encode(&U256::from(&**v))) {
+			if let Err(e) = t.insert(k, &rlp::encode(v)) {
 				warn!("Encountered potential DB corruption: {}", e);
 			}
 		}
 	}
 }
 
+// It is assumed ethjson::blockchain::Account has storage values as H256.
 impl From<ethjson::blockchain::Account> for PodAccount {
 	fn from(a: ethjson::blockchain::Account) -> Self {
 		PodAccount {
@@ -89,12 +90,13 @@ impl From<ethjson::blockchain::Account> for PodAccount {
 			storage: a.storage.into_iter().map(|(key, value)| {
 				let key: U256 = key.into();
 				let value: U256 = value.into();
-				(H256::from(key), H256::from(value))
+				(H256::from(key), H256::from(value).to_vec())
 			}).collect(),
 		}
 	}
 }
 
+// It is assumed ethjson::spec::Account has storage values as H256.
 impl From<ethjson::spec::Account> for PodAccount {
 	fn from(a: ethjson::spec::Account) -> Self {
 		PodAccount {
@@ -104,7 +106,7 @@ impl From<ethjson::spec::Account> for PodAccount {
 			storage: a.storage.map_or_else(BTreeMap::new, |s| s.into_iter().map(|(key, value)| {
 				let key: U256 = key.into();
 				let value: U256 = value.into();
-				(H256::from(key), H256::from(value))
+				(H256::from(key), H256::from(value).to_vec())
 			}).collect()),
 		}
 	}
@@ -140,7 +142,7 @@ pub fn diff_pod(pre: Option<&PodAccount>, post: Option<&PodAccount>) -> Option<A
 		}),
 		(Some(pre), Some(post)) => {
 			let storage: Vec<_> = pre.storage.keys().merge(post.storage.keys())
-				.filter(|k| pre.storage.get(k).unwrap_or(&H256::new()) != post.storage.get(k).unwrap_or(&H256::new()))
+				.filter(|k| pre.storage.get(k).unwrap_or(&H256::new().to_vec()) != post.storage.get(k).unwrap_or(&H256::new().to_vec()))
 				.collect();
 			let r = AccountDiff {
 				balance: Diff::new(pre.balance, post.balance),
@@ -151,8 +153,8 @@ pub fn diff_pod(pre: Option<&PodAccount>, post: Option<&PodAccount>) -> Option<A
 				},
 				storage: storage.into_iter().map(|k|
 					(k.clone(), Diff::new(
-						pre.storage.get(k).cloned().unwrap_or_else(H256::new),
-						post.storage.get(k).cloned().unwrap_or_else(H256::new)
+						pre.storage.get(k).cloned().unwrap_or_else(|| H256::new().to_vec()),
+						post.storage.get(k).cloned().unwrap_or_else(|| H256::new().to_vec())
 					))).collect(),
 			};
 			if r.balance.is_same() && r.nonce.is_same() && r.code.is_same() && r.storage.is_empty() {
@@ -169,6 +171,7 @@ pub fn diff_pod(pre: Option<&PodAccount>, post: Option<&PodAccount>) -> Option<A
 mod test {
 	use std::collections::BTreeMap;
 	use types::account_diff::*;
+    use ethereum_types::H256;
 	use super::{PodAccount, diff_pod};
 
 	#[test]
@@ -213,24 +216,24 @@ mod test {
 			balance: 0.into(),
 			nonce: 0.into(),
 			code: Some(vec![]),
-			storage: map_into![1 => 1, 2 => 2, 3 => 3, 4 => 4, 5 => 0, 6 => 0, 7 => 0]
+			storage: map_into![1 => H256::from(1).to_vec(), 2 => H256::from(2).to_vec(), 3 => H256::from(3).to_vec(), 4 => H256::from(4).to_vec(), 5 => H256::from(0).to_vec(), 6 => H256::from(0).to_vec(), 7 => H256::from(0).to_vec()]
 		};
 		let b = PodAccount {
 			balance: 0.into(),
 			nonce: 0.into(),
 			code: Some(vec![]),
-			storage: map_into![1 => 1, 2 => 3, 3 => 0, 5 => 0, 7 => 7, 8 => 0, 9 => 9]
+			storage: map_into![1 => H256::from(1).to_vec(), 2 => H256::from(3).to_vec(), 3 => H256::from(0).to_vec(), 5 => H256::from(0).to_vec(), 7 => H256::from(7).to_vec(), 8 => H256::from(0).to_vec(), 9 => H256::from(9).to_vec()]
 		};
 		assert_eq!(diff_pod(Some(&a), Some(&b)), Some(AccountDiff {
 			balance: Diff::Same,
 			nonce: Diff::Same,
 			code: Diff::Same,
 			storage: map![
-				2.into() => Diff::new(2.into(), 3.into()),
-				3.into() => Diff::new(3.into(), 0.into()),
-				4.into() => Diff::new(4.into(), 0.into()),
-				7.into() => Diff::new(0.into(), 7.into()),
-				9.into() => Diff::new(0.into(), 9.into())
+				2.into() => Diff::new(H256::from(2).to_vec(), H256::from(3).to_vec()),
+				3.into() => Diff::new(H256::from(3).to_vec(), H256::from(0).to_vec()),
+				4.into() => Diff::new(H256::from(4).to_vec(), H256::from(0).to_vec()),
+				7.into() => Diff::new(H256::from(0).to_vec(), H256::from(7).to_vec()),
+				9.into() => Diff::new(H256::from(0).to_vec(), H256::from(9).to_vec())
 			],
 		}));
 	}

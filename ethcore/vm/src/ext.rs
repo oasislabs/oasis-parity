@@ -155,7 +155,7 @@ pub trait Ext {
 
 	/// Opens up the confidential context to enable encryption. If set, logs will
 	/// be encrypted automatically and one may call the encrypt method.
-	fn open_confidential_ctx(&mut self, encrypted_data: Vec<u8>, contract: Address) -> Result<Vec<u8>>;
+	fn open_confidential_ctx(&mut self, contract: Address, encrypted_data: Option<Vec<u8>>) -> Result<Vec<u8>>;
 
 	/// Closes the confidential context so that logs are no longer encrypted and
 	/// the `encrypt` method returns an error.

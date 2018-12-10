@@ -59,7 +59,7 @@ pub struct AccountDiff {
 	/// Change in code, allowed to be `Diff::Same`.
 	pub code: Diff<Bytes>,					// Allowed to be Same
 	/// Change in storage, values are not allowed to be `Diff::Same`.
-	pub storage: BTreeMap<H256, Diff<H256>>,
+	pub storage: BTreeMap<H256, Diff<Vec<u8>>>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -109,6 +109,15 @@ fn interpreted_hash(u: &H256) -> String {
 	}
 }
 
+fn interpreted_storage(v: Vec<u8>) -> String {
+    if v.len() == 32 {
+        interpreted_hash(&H256::from_slice(&v[..]))
+    } else {
+        // Data is encrypted so just return the raw bytes.
+        format!("{:?}", v)
+    }
+}
+
 impl fmt::Display for AccountDiff {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		use bytes::ToPretty;
@@ -129,8 +138,8 @@ impl fmt::Display for AccountDiff {
 		write!(f, "\n")?;
 		for (k, dv) in &self.storage {
 			match *dv {
-				Diff::Born(ref v) => write!(f, "    +  {} => {}\n", interpreted_hash(k), interpreted_hash(v))?,
-				Diff::Changed(ref pre, ref post) => write!(f, "    *  {} => {} (was {})\n", interpreted_hash(k), interpreted_hash(post), interpreted_hash(pre))?,
+				Diff::Born(ref v) => write!(f, "    +  {} => {}\n", interpreted_hash(k), interpreted_storage(v.to_vec()))?,
+				Diff::Changed(ref pre, ref post) => write!(f, "    *  {} => {} (was {})\n", interpreted_hash(k), interpreted_storage(post.to_vec()), interpreted_storage(pre.to_vec()))?,
 				Diff::Died(_) => write!(f, "    X  {}\n", interpreted_hash(k))?,
 				_ => {},
 			}
