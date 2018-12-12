@@ -34,7 +34,7 @@ use factory::Factories;
 use header::{Header, ExtendedHeader};
 use journaldb::overlaydb::OverlayDB;
 use receipt::{Receipt, TransactionOutcome};
-use state::{State, Encrypter, KeyManager};
+use state::{State, ConfidentialCtx};
 use state::backend::{Wrapped as WrappedBackend};
 // use state_db::StateDB;
 use storage::Storage;
@@ -288,11 +288,10 @@ impl<'x> OpenBlock<'x> {
 		extra_data: Bytes,
 		is_epoch_begin: bool,
 		ancestry: &mut Iterator<Item=ExtendedHeader>,
-		encrypter: Option<Box<Encrypter>>,
-        key_manager: Option<Box<KeyManager>>,
+		confidential_ctx: Option<Box<ConfidentialCtx>>
 	) -> Result<Self, Error> {
 		let number = parent.number() + 1;
-		let state = State::from_existing(db, parent.state_root().clone(), engine.account_start_nonce(number), factories, encrypter, key_manager)?;
+		let state = State::from_existing(db, parent.state_root().clone(), engine.account_start_nonce(number), factories, confidential_ctx)?;
 		let mut r = OpenBlock {
 			block: ExecutedBlock::new(state, last_hashes, tracing),
 			engine: engine,
@@ -749,7 +748,7 @@ mod tests {
 
 		{
 			if ::log::max_log_level() >= ::log::LogLevel::Trace {
-				let s = State::from_existing(db.clone(), parent.state_root().clone(), engine.account_start_nonce(parent.number() + 1), factories.clone(), None, None)?;
+				let s = State::from_existing(db.clone(), parent.state_root().clone(), engine.account_start_nonce(parent.number() + 1), factories.clone(), None)?;
 				trace!(target: "enact", "num={}, root={}, author={}, author_balance={}\n",
 					header.number(), s.root(), header.author(), s.balance(&header.author())?);
 			}
@@ -767,7 +766,6 @@ mod tests {
 			vec![],
 			false,
 			&mut Vec::new().into_iter(),
-			None,
 			None,
 		)?;
 
@@ -802,7 +800,7 @@ mod tests {
 		let genesis_header = spec.genesis_header();
 		let db = spec.ensure_db_good(WrappedBackend(Box::new(get_temp_state_backend())), &Default::default()).unwrap();
 		let last_hashes = Arc::new(vec![genesis_header.hash()]);
-		let b = OpenBlock::new(&*spec.engine, Default::default(), false, db, &genesis_header, last_hashes, Address::zero(), 31415620.into(), vec![], false, &mut Vec::new().into_iter(), None, None).unwrap();
+		let b = OpenBlock::new(&*spec.engine, Default::default(), false, db, &genesis_header, last_hashes, Address::zero(), 31415620.into(), vec![], false, &mut Vec::new().into_iter(), None).unwrap();
 		let b = b.close_and_lock();
 		let _ = b.seal(&*spec.engine, vec![]);
 	}
@@ -816,7 +814,7 @@ mod tests {
 
 		let db = spec.ensure_db_good(WrappedBackend(Box::new(get_temp_state_backend())), &Default::default()).unwrap();
 		let last_hashes = Arc::new(vec![genesis_header.hash()]);
-		let b = OpenBlock::new(engine, Default::default(), false, db, &genesis_header, last_hashes.clone(), Address::zero(), 31415620.into(), vec![], false, &mut Vec::new().into_iter(), None, None).unwrap()
+		let b = OpenBlock::new(engine, Default::default(), false, db, &genesis_header, last_hashes.clone(), Address::zero(), 31415620.into(), vec![], false, &mut Vec::new().into_iter(), None).unwrap()
 			.close_and_lock().seal(engine, vec![]).unwrap();
 		let orig_bytes = b.rlp_bytes();
 		let orig_db = b.drain();
@@ -840,7 +838,7 @@ mod tests {
 
 		let db = spec.ensure_db_good(WrappedBackend(Box::new(get_temp_state_backend())), &Default::default()).unwrap();
 		let last_hashes = Arc::new(vec![genesis_header.hash()]);
-		let mut open_block = OpenBlock::new(engine, Default::default(), false, db, &genesis_header, last_hashes.clone(), Address::zero(), 31415620.into(), vec![], false, &mut Vec::new().into_iter(), None, None).unwrap();
+		let mut open_block = OpenBlock::new(engine, Default::default(), false, db, &genesis_header, last_hashes.clone(), Address::zero(), 31415620.into(), vec![], false, &mut Vec::new().into_iter(), None).unwrap();
 		let mut uncle1_header = Header::new();
 		uncle1_header.set_extra_data(b"uncle1".to_vec());
 		let mut uncle2_header = Header::new();

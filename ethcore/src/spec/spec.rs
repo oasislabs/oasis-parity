@@ -605,7 +605,7 @@ impl Spec {
 		let start_nonce = self.engine.account_start_nonce(0);
 
 		let (root, db) = {
-			let mut state = State::from_existing(db, root, start_nonce, factories.clone(), None, None)?;
+			let mut state = State::from_existing(db, root, start_nonce, factories.clone(), None)?;
 
 			// Execute contract constructors.
 			let env_info = EnvInfo {
@@ -999,7 +999,6 @@ mod tests {
 			spec.state_root(),
 			spec.engine.account_start_nonce(0),
 			Default::default(),
-			None,
 			None,
 		).unwrap();
 		let expected = "0000000000000000000000000000000000000000000000000000000000000001".into();
