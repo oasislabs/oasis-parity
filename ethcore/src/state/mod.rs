@@ -39,11 +39,12 @@ use pod_state::{self, PodState};
 use types::basic_account::BasicAccount;
 use executed::{Executed, ExecutionError};
 use types::state_diff::StateDiff;
-use transaction::SignedTransaction;
+use transaction::{self, SignedTransaction};
 use state_db::StateDB;
 use storage::{Storage, NullStorage};
 use factory::VmFactory;
 use journaldb::overlaydb::OverlayDB;
+use confidential_vm::ConfidentialVm;
 
 use ethereum_types::{H256, U256, Address};
 use hashdb::{HashDB, AsHashDB};
@@ -1088,9 +1089,25 @@ impl<B: Backend> State<B> {
 		Ok(self.require(a, false)?.reset_code_and_storage(code, storage))
 	}
 
-    pub fn is_confidential_ctx_open(&self) -> bool {
-        self.confidential_ctx.is_some() && self.confidential_ctx.as_ref().unwrap().is_open()
-    }
+	/// Returns true if the given transaction is to a confidential contract.
+	pub fn is_confidential(&self, transaction: &SignedTransaction) -> Result<bool, String> {
+		match transaction.action {
+			transaction::Action::Create => Ok(false),
+			transaction::Action::Call(to_addr) => {
+				let mut code = self.code(&to_addr)
+					.map_err(|_| format!("Failed to get code at address {:?}", to_addr))?;
+
+				ConfidentialVm::is_confidential(
+					// convert Option<Arc<Vec<u8>>> to Option<&[u8]>
+					code.as_ref().map(|c| c.as_slice())
+				).map_err(|e| format!("{:?}", e))
+			}
+		}
+	}
+
+	pub fn is_confidential_ctx_open(&self) -> bool {
+		self.confidential_ctx.is_some() && self.confidential_ctx.as_ref().unwrap().is_open()
+	}
 }
 
 // State proof implementations; useful for light client protocols.
