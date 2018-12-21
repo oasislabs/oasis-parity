@@ -327,7 +327,11 @@ pub trait ConfidentialCtx {
 	/// destined for the given `contract`.
 	///
 	/// Assumes `encrypted_data` is the `data` field in a transaction of the form
-	/// NONCE || PEER_PUBLIC_SESSION_KEY || CIPHER.
+	/// NONCE || PEER_PUBLIC_SESSION_KEY || CIPHER. Note that it's an option since
+	/// this is called on the creation of a confidential contract, which will not
+	/// have an encrypted data payload. In this case, we do not set the
+	/// peer_public_key on the confidential context, and so we can only encrypt or
+	/// decrypt storage but cannot encrypt or decrypt logs.
 	///
 	/// Being "open" means not only that one may encrypt, but also that all
 	/// encryption will be done using the user's session key specified by
