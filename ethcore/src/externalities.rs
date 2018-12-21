@@ -337,7 +337,11 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 		// Only encrypt the log if we're in a confidential context with a peer.
 		// If we're creating a confidential contract, don't encrypt the log.
 		let data = if self.state.is_confidential_ctx_open()
-			&& self.state.confidential_ctx.unwrap().peer().is_some() {
+			&& self.state.confidential_ctx
+			.as_ref()
+			.unwrap()
+			.peer()
+			.is_some() {
 			self.encrypt(data.to_vec())?
 		} else {
 			data.to_vec()
