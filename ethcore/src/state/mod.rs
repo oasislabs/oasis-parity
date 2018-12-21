@@ -322,24 +322,32 @@ pub struct State<B: Backend> {
 
 /// ConfidentialCtx provides a collection of services to be injected into the state
 /// to enable confidential contracts.
+///
+/// The expected usage is to first `open` the confidential context, e.g., before
+/// executing a confidential contract, at which point any of the other methods
+/// can be called, for example, to encrypt/decrypt storage or logs. Upon completion,
+/// one should call `close` to shut down and clear the confidential context.
 pub trait ConfidentialCtx {
 	/// Opens the confidential context by unsealing the given `encrypted_data`,
 	/// destined for the given `contract`.
 	///
 	/// Assumes `encrypted_data` is the `data` field in a transaction of the form
 	/// NONCE || PEER_PUBLIC_SESSION_KEY || CIPHER. Note that it's an option since
-	/// this is called on the creation of a confidential contract, which will not
+	/// this may be called on the creation of a confidential contract, which will not
 	/// have an encrypted data payload. In this case, we do not set the
 	/// peer_public_key on the confidential context, and so we can only encrypt or
 	/// decrypt storage but cannot encrypt or decrypt logs.
 	///
-	/// Being "open" means not only that one may encrypt, but also that all
-	/// encryption will be done using the user's session key specified by
-	/// `encrypted_data`. This session key along with the active contract's key
-	/// pair is what sets the context at any given time. While open, this session
-	/// key will never change; however, the associated contract keys may change
-	/// at any point to facilitate cross-contract calls in a "confidential context
-	/// switch".
+	/// Being "open" means not only that one may encrypt storage. Being open with
+	/// an `encrypted_data` payload means that one can encrypt data that is
+	/// decryptable by a peer. Specifically, encryption will be done using the
+	/// peer's session key specified by `encrypted_data`. This session key along
+	/// with the active contract's key pair is what sets the context at any given
+	/// time.
+	///
+	/// While open, this session key will never change; however, the associated
+	/// contract keys may change at any point to facilitate cross-contract calls in
+	/// a "confidential context switch".
 	///
 	/// Switch functionality is not currently in use but will be useful in the future
 	/// for cross-contract calls in a confidential setting. To switch the confidential
