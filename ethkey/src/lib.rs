@@ -24,7 +24,8 @@ extern crate mem;
 // extern crate parity_wordlist;
 #[macro_use]
 extern crate quick_error;
-// extern crate rand;
+#[cfg(any(test, feature = "test"))]
+extern crate rand;
 extern crate rustc_hex;
 extern crate secp256k1;
 extern crate tiny_keccak;
@@ -40,7 +41,8 @@ mod error;
 mod keypair;
 mod keccak;
 // mod prefix;
-// mod random;
+#[cfg(any(test, feature = "test"))]
+mod random;
 mod signature;
 mod secret;
 // mod extended;
@@ -56,7 +58,8 @@ pub use self::error::Error;
 pub use self::keypair::{KeyPair, public_to_address};
 // pub use self::math::public_is_valid;
 // pub use self::prefix::Prefix;
-// pub use self::random::Random;
+#[cfg(any(test, feature = "test"))]
+pub use self::random::Random;
 pub use self::signature::{sign, verify_public, verify_address, recover, Signature};
 //pub use self::signature::{recover, Signature};
 pub use self::secret::Secret;
@@ -71,14 +74,16 @@ lazy_static! {
 	pub static ref SECP256K1: secp256k1::Secp256k1 = secp256k1::Secp256k1::new();
 }
 
-// /// Uninstantiatable error type for infallible generators.
-// #[derive(Debug)]
-// pub enum Void {}
-//
-// /// Generates new keypair.
-// pub trait Generator {
-// 	type Error;
-//
-// 	/// Should be called to generate new keypair.
-// 	fn generate(&mut self) -> Result<KeyPair, Self::Error>;
-// }
+/// Uninstantiatable error type for infallible generators.
+#[cfg(any(test, feature = "test"))]
+#[derive(Debug)]
+pub enum Void {}
+
+/// Generates new keypair.
+#[cfg(any(test, feature = "test"))]
+pub trait Generator {
+	type Error;
+
+	/// Should be called to generate new keypair.
+	fn generate(&mut self) -> Result<KeyPair, Self::Error>;
+}

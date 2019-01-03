@@ -14,3 +14,7 @@ mem = { path = "../util/mem" }
 quick-error = "1.2"
 rustc-hex = "1.0"
 tiny-keccak = "1.4"
+rand = { version = "0.3", optional = true }
+
+[features]
+test = ["secp256k1-plus/rand", "rand"]

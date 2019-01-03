@@ -735,8 +735,7 @@ mod tests {
 	use std::sync::Arc;
 	use std::str::FromStr;
 	use rustc_hex::FromHex;
-	// use ethkey::{Generator, Random};
-	use ethkey::{KeyPair, Secret};
+	use ethkey::{Generator, Random};
 	use super::*;
 	use ethereum_types::{H256, U256, U512, Address};
 	use bytes::BytesRef;
@@ -761,15 +760,6 @@ mod tests {
 		let mut machine = ::ethereum::new_byzantium_test_machine();
 		machine.set_schedule_creation_rules(Box::new(move |s, _| s.max_depth = max_depth));
 		machine
-	}
-
-	// Using a static keypair for now, derived from a valid secret.
-	fn get_keypair() -> KeyPair {
-		KeyPair::from_secret(
-			Secret::from(
-				"0000000000000000000000000000000000000000000000000000000000000001",
-			)
-		).unwrap()
 	}
 
 	#[test]
@@ -1436,7 +1426,7 @@ mod tests {
 	// TODO: fix (preferred) or remove
 	evm_test_ignore!{test_transact_simple: test_transact_simple_int}
 	fn test_transact_simple(factory: Factory) {
-		let keypair = get_keypair();
+		let keypair = Random.generate().unwrap();
 		let t = Transaction {
 			action: Action::Create,
 			value: U256::from(17),
@@ -1475,7 +1465,7 @@ mod tests {
 
 	evm_test!{test_transact_invalid_nonce: test_transact_invalid_nonce_int}
 	fn test_transact_invalid_nonce(factory: Factory) {
-		let keypair = get_keypair();
+		let keypair = Random.generate().unwrap();
 		let t = Transaction {
 			action: Action::Create,
 			value: U256::from(17),
@@ -1508,7 +1498,7 @@ mod tests {
 
 	evm_test!{test_transact_gas_limit_reached: test_transact_gas_limit_reached_int}
 	fn test_transact_gas_limit_reached(factory: Factory) {
-		let keypair = get_keypair();
+		let keypair = Random.generate().unwrap();
 		let t = Transaction {
 			action: Action::Create,
 			value: U256::from(17),
@@ -1543,7 +1533,7 @@ mod tests {
 	evm_test!{test_not_enough_cash: test_not_enough_cash_int}
 	fn test_not_enough_cash(factory: Factory) {
 
-		let keypair = get_keypair();
+		let keypair = Random.generate().unwrap();
 		let t = Transaction {
 			action: Action::Create,
 			value: U256::from(18),
