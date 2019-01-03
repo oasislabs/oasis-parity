@@ -31,5 +31,4 @@ jobs:
       # Test ethcore
       - run:
           name: Run ethcore tests
-          working_directory: ethcore
-          command: cargo test
+          command: cargo test --package ethcore --package ethcore-transaction --package ethkey --features "ethkey-test"
