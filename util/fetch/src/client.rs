@@ -20,7 +20,7 @@ use futures::{self, Future, Async, Sink, Stream};
 use hyper::header::{UserAgent, Location, ContentLength, ContentType};
 use hyper::mime::Mime;
 use hyper::{self, Method, StatusCode};
-use hyper_rustls;
+use hyper_tls;
 use std;
 use std::cmp::min;
 use std::sync::Arc;
@@ -208,7 +208,7 @@ impl Client {
 
 			let handle = core.handle();
 			let hyper = hyper::Client::configure()
-				.connector(hyper_rustls::HttpsConnector::new(4, &core.handle()))
+				.connector(hyper_tls::HttpsConnector::new(4, &core.handle()).expect("TLS initialization should not fail"))
 				.build(&core.handle());
 
 			let future = rx_proto.take_while(|item| Ok(item.is_some()))
