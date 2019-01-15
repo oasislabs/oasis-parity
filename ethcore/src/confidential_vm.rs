@@ -151,7 +151,7 @@ impl ConfidentialVm {
 
 	/// Encrypts the execution result of a confidential call.
 	/// Assumes the encryption context of ext has already been set.
-	fn encrypt_vm_result(result: GasLeft, ext: &Ext) -> vm::Result<GasLeft> {
+	fn encrypt_vm_result(result: GasLeft, ext: &mut Ext) -> vm::Result<GasLeft> {
 		if let GasLeft::NeedsReturn { gas_left, data, apply_state} = result {
 			let enc_data = ext.encrypt(data.to_vec())?;
 			let enc_data_len = enc_data.len();

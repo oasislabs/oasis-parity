@@ -163,7 +163,7 @@ pub trait Ext {
 
 	/// Encrypts the given data inside a confidential context. `open_confidential_ctx`
 	/// must be called prior to invoking this method.
-	fn encrypt(&self, data: Vec<u8>) -> Result<Vec<u8>>;
+	fn encrypt(&mut self, data: Vec<u8>) -> Result<Vec<u8>>;
 
 	/// Allocates and returns the long term public key associated with the given contract.
 	/// To be called upon creation of the contract.

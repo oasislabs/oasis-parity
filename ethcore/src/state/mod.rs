@@ -362,7 +362,7 @@ pub trait ConfidentialCtx {
 	/// and contract keys so that the *client* which initiated the transaction to open the
 	/// context can decrypt the data. Returns an error if the confidential context is
 	/// not open.
-	fn encrypt(&self, data: Vec<u8>) -> Result<Vec<u8>, String>;
+	fn encrypt(&mut self, data: Vec<u8>) -> Result<Vec<u8>, String>;
 	/// Encrypts the given data to be placed into contract storage	under the context.
 	/// The runtime allows *only a given contract* to encrypt/decrypt this data, as
 	/// opposed to the `encrypt` method, which allows a user's client to decrypt.

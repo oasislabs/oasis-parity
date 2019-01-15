@@ -446,13 +446,13 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 			.map_err(|err| vm::Error::Internal(err))
 	}
 
-	fn encrypt(&self, data: Vec<u8>) -> vm::Result<Vec<u8>> {
+	fn encrypt(&mut self, data: Vec<u8>) -> vm::Result<Vec<u8>> {
 		if !self.state.is_confidential_ctx_open() {
 			return Err(vm::Error::Internal("Can't encrypt without an encrypter or key".to_string()));
 		}
 		self.state
 			.confidential_ctx
-			.as_ref()
+			.as_mut()
 			.unwrap()
 			.encrypt(data)
 			.map_err(|err| vm::Error::Internal(format!("Could not encrypt {}", err)))
