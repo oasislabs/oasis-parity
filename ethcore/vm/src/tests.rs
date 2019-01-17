@@ -112,7 +112,7 @@ impl Ext for FakeExt {
 	fn close_confidential_ctx(&mut self) {
 		// no-op
 	}
-	fn encrypt(&self, data: Vec<u8>) -> Result<Vec<u8>> {
+	fn encrypt(&mut self, data: Vec<u8>) -> Result<Vec<u8>> {
 		Ok(data)
 	}
 
