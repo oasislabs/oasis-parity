@@ -104,7 +104,7 @@ impl FakeExt {
 
 impl Ext for FakeExt {
 
-	fn open_confidential_ctx(&mut self, encrypted_data: Vec<u8>, contract: Address) -> Result<Vec<u8>> {
+	fn open_confidential_ctx(&mut self, contract: Address, encrypted_data: Option<Vec<u8>>) -> Result<Vec<u8>> {
 		// no-op
 		Ok(vec![])
 	}

@@ -24,7 +24,7 @@ use std::collections::hash_map::Entry;
 use std::collections::{HashMap, BTreeMap, BTreeSet, HashSet};
 use std::fmt;
 use std::sync::Arc;
-use hash::{KECCAK_NULL_RLP, KECCAK_EMPTY};
+use hash::{KECCAK_NULL_RLP, KECCAK_EMPTY, keccak};
 
 use receipt::{Receipt, TransactionOutcome};
 use machine::EthereumMachine as Machine;
@@ -322,37 +322,59 @@ pub struct State<B: Backend> {
 
 /// ConfidentialCtx provides a collection of services to be injected into the state
 /// to enable confidential contracts.
+///
+/// The expected usage is to first `open` the confidential context, e.g., before
+/// executing a confidential contract, at which point any of the other methods
+/// can be called, for example, to encrypt/decrypt storage or logs. Upon completion,
+/// one should call `close` to shut down and clear the confidential context.
 pub trait ConfidentialCtx {
 	/// Opens the confidential context by unsealing the given `encrypted_data`,
 	/// destined for the given `contract`.
 	///
 	/// Assumes `encrypted_data` is the `data` field in a transaction of the form
-	/// NONCE || PEER_PUBLIC_SESSION_KEY || CIPHER.
+	/// NONCE || PEER_PUBLIC_SESSION_KEY || CIPHER. Note that it's an option since
+	/// this may be called on the creation of a confidential contract, which will not
+	/// have an encrypted data payload. In this case, we do not set the
+	/// peer_public_key on the confidential context, and so we can only encrypt or
+	/// decrypt storage but cannot encrypt or decrypt logs.
 	///
-	/// Being "open" means not only that one may encrypt, but also that all
-	/// encryption will be done using the user's session key specified by
-	/// `encrypted_data`. This session key along with the active contract's key
-	/// pair is what sets the context at any given time. While open, this session
-	/// key will never change; however, the associated contract keys may change
-	/// at any point to facilitate cross-contract calls in a "confidential context
-	/// switch".
+	/// Being "open" means not only that one may encrypt storage. Being open with
+	/// an `encrypted_data` payload means that one can encrypt data that is
+	/// decryptable by a peer. Specifically, encryption will be done using the
+	/// peer's session key specified by `encrypted_data`. This session key along
+	/// with the active contract's key pair is what sets the context at any given
+	/// time.
+	///
+	/// While open, this session key will never change; however, the associated
+	/// contract keys may change at any point to facilitate cross-contract calls in
+	/// a "confidential context switch".
 	///
 	/// Switch functionality is not currently in use but will be useful in the future
 	/// for cross-contract calls in a confidential setting. To switch the confidential
 	/// context to encrypt under a new contract, swap out the `contract_keypair` to a
 	/// new set of keys.
-	fn open(&mut self, encrypted_data: Vec<u8>, contract: Address) -> Result<Vec<u8>, String>;
+	fn open(&mut self, contract: Address, encrypted_data: Option<Vec<u8>>) -> Result<Vec<u8>, String>;
 	/// Returns true if open has previously been called.
 	fn is_open(&self) -> bool;
 	/// Closes the context. If called, subsequent calls to `encrypt` should fail.
 	fn close(&mut self);
-	/// Encrypts the given data under the given context, i.e., using the active
-	/// session and contract keys. Returrns an error if the confidential context
-	/// is not open.
+	/// Encrypts the given data under the given context, i.e., using the active session
+	/// and contract keys so that the *client* which initiated the transaction to open the
+	/// context can decrypt the data. Returns an error if the confidential context is
+	/// not open.
 	fn encrypt(&self, data: Vec<u8>) -> Result<Vec<u8>, String>;
+	/// Encrypts the given data to be placed into contract storage	under the context.
+	/// The runtime allows *only a given contract* to encrypt/decrypt this data, as
+	/// opposed to the `encrypt` method, which allows a user's client to decrypt.
+	fn encrypt_storage(&self, data: Vec<u8>) -> Result<Vec<u8>, String>;
+	/// Analog to `encrypt_storage` for decyrpting data.
+	fn decrypt_storage(&self, data: Vec<u8>) -> Result<Vec<u8>, String>;
 	/// Creates the long term public key for the given contract. If it already
 	/// exists, returns the existing key.
 	fn create_long_term_public_key(&self, contract: Address) -> Result<Vec<u8>, String>;
+	/// Returns the public key of the peer connecting through a secure channel to the runtime.
+	/// Returns None if no such key exists, e.g., if a confidential contract is being created.
+	fn peer(&self) -> Option<Vec<u8>>;
 }
 
 #[derive(Copy, Clone)]
@@ -523,7 +545,7 @@ impl<B: Backend> State<B> {
 	}
 
 	/// Destroy the current object and return single account data.
-	pub fn into_account(self, account: &Address) -> trie::Result<(Option<Arc<Bytes>>, HashMap<H256, H256>)> {
+	pub fn into_account(self, account: &Address) -> trie::Result<(Option<Arc<Bytes>>, HashMap<H256, Vec<u8>>)> {
 		// TODO: deconstruct without cloning.
 		let account = self.require(account, true)?;
 		Ok((account.code().clone(), account.storage_changes().clone()))
@@ -581,8 +603,19 @@ impl<B: Backend> State<B> {
 			|a| a.as_ref().and_then(|account| account.storage_root().cloned()))
 	}
 
-	/// Mutate storage of account `address` so that it is `value` for `key`.
+	/// Contract storage interface mapping H256 -> H256. The underlying storage may or may
+	/// not be encrypted. As a result, we pre-process the key, encrypting it if we're in a
+	/// confidential context, and we post-process the value, decrypting it and transforming
+	/// it back to an H256, if needed (since the encrypted form requires a Vec<u8>).
 	pub fn storage_at(&self, address: &Address, key: &H256) -> trie::Result<H256> {
+		let key = self.to_storage_key(key);
+		let value = self._storage_at(address, &key)?;
+		Ok(self.from_storage_value(value))
+	}
+
+	/// Mutate storage of account `address` so that it is `value` for `key`.
+	/// Returns None if there is no storage located at the given address for the given key.
+	fn _storage_at(&self, address: &Address, key: &H256) -> trie::Result<Option<Vec<u8>>> {
 		// Storage key search and update works like this:
 		// 1. If there's an entry for the account in the local cache check for the key and return it if found.
 		// 2. If there's an entry for the account in the global cache check for the key or load it into that account.
@@ -595,21 +628,22 @@ impl<B: Backend> State<B> {
 			if let Some(maybe_acc) = local_cache.get(address) {
 				match maybe_acc.account {
 					Some(ref account) => {
-						if let Some(value) = account.cached_storage_at(key) {
-							return Ok(value);
+						if let Some(value) = account.cached_storage_at(&key) {
+							return Ok(Some(value));
 						} else {
 							local_account = Some(maybe_acc);
 						}
 					},
-					_ => return Ok(H256::new()),
+					_ => return Ok(None),
 				}
 			}
 			// check the global cache and and cache storage key there if found,
 			let trie_res = self.db.get_cached(address, |acc| match acc {
-				None => Ok(H256::new()),
+				None => Ok(None),
 				Some(a) => {
 					let account_db = self.factories.accountdb.readonly(self.db.as_hashdb(), a.address_hash(address));
-					a.storage_at(account_db.as_hashdb(), key)
+					let value = a.storage_at(account_db.as_hashdb(), &key)?;
+					Ok(value)
 				}
 			});
 
@@ -621,23 +655,23 @@ impl<B: Backend> State<B> {
 			if let Some(ref mut acc) = local_account {
 				if let Some(ref account) = acc.account {
 					let account_db = self.factories.accountdb.readonly(self.db.as_hashdb(), account.address_hash(address));
-					return account.storage_at(account_db.as_hashdb(), key)
+					return account.storage_at(account_db.as_hashdb(), &key);
 				} else {
-					return Ok(H256::new())
+					return Ok(None)
 				}
 			}
 		}
 
 		// check if the account could exist before any requests to trie
-		if self.db.is_known_null(address) { return Ok(H256::zero()) }
+		if self.db.is_known_null(address) { return Ok(None) }
 
 		// account is not found in the global cache, get from the DB and insert into local
 		let db = self.factories.trie.readonly(self.db.as_hashdb(), &self.root).expect(SEC_TRIE_DB_UNWRAP_STR);
 		let from_rlp = |b: &[u8]| Account::from_rlp(b).expect("decoding db value failed");
 		let maybe_acc = db.get_with(address, from_rlp)?;
-		let r = maybe_acc.as_ref().map_or(Ok(H256::new()), |a| {
+		let r = maybe_acc.as_ref().map_or(Ok(None), |a| {
 			let account_db = self.factories.accountdb.readonly(self.db.as_hashdb(), a.address_hash(address));
-			a.storage_at(account_db.as_hashdb(), key)
+			a.storage_at(account_db.as_hashdb(), &key)
 		});
 		self.insert_cache(address, AccountEntry::new_clean(maybe_acc));
 		r
@@ -700,10 +734,19 @@ impl<B: Backend> State<B> {
 		self.require(a, false).map(|mut x| x.inc_nonce())
 	}
 
-	/// Mutate storage of account `a` so that it is `value` for `key`.
+	/// Analogous to storage_at, encrypts the key, value, if needed, before inserting into
+	/// the backing account storage.
 	pub fn set_storage(&mut self, a: &Address, key: H256, value: H256) -> trie::Result<()> {
 		trace!(target: "state", "set_storage({}:{:x} to {:x})", a, key, value);
-		if self.storage_at(a, &key)? != value {
+		let key = self.to_storage_key(&key);
+		let value = self.to_storage_value(&value);
+		self._set_storage(a, key, value)
+	}
+
+	/// Mutate storage of account `a` so that it is `value` for `key`.
+	fn _set_storage(&mut self, a: &Address, key: H256, value: Vec<u8>) -> trie::Result<()> {
+		let current_storage = self._storage_at(a, &key)?;
+		if current_storage.is_none() || current_storage.unwrap() != value {
 			self.require(a, false)?.set_storage(key, value)
 		}
 
@@ -937,7 +980,7 @@ impl<B: Backend> State<B> {
 				let storage = storage_keys.into_iter().fold(Ok(BTreeMap::new()), |s: trie::Result<_>, key| {
 					let mut s = s?;
 
-					s.insert(key, self.storage_at(&address, &key)?);
+					s.insert(key, self._storage_at(&address, &key)?.unwrap_or(H256::zero().to_vec()));
 					Ok(s)
 				})?;
 
@@ -1085,28 +1128,96 @@ impl<B: Backend> State<B> {
 	}
 
 	/// Replace account code and storage. Creates account if it does not exist.
-	pub fn patch_account(&self, a: &Address, code: Arc<Bytes>, storage: HashMap<H256, H256>) -> trie::Result<()> {
+	pub fn patch_account(&self, a: &Address, code: Arc<Bytes>, storage: HashMap<H256, Vec<u8>>) -> trie::Result<()> {
 		Ok(self.require(a, false)?.reset_code_and_storage(code, storage))
 	}
 
-	/// Returns true if the given transaction is to a confidential contract.
+	/// Returns true if the given transaction is to or will create a confidential contract.
 	pub fn is_confidential(&self, transaction: &SignedTransaction) -> Result<bool, String> {
-		match transaction.action {
-			transaction::Action::Create => Ok(false),
-			transaction::Action::Call(to_addr) => {
-				let mut code = self.code(&to_addr)
-					.map_err(|_| format!("Failed to get code at address {:?}", to_addr))?;
+		let code = self.tx_code(transaction)?;
+		ConfidentialVm::is_confidential(code.as_ref().map(|c| c.as_slice()))
+			.map_err(|e| format!("{:?}", e))
+	}
 
-				ConfidentialVm::is_confidential(
-					// convert Option<Arc<Vec<u8>>> to Option<&[u8]>
-					code.as_ref().map(|c| c.as_slice())
-				).map_err(|e| format!("{:?}", e))
+	/// Returns true if in a confidential context, i.e., all contract state is encrypted/decrypted
+	/// and all logs are encrypted during execution.
+	pub fn is_confidential_ctx_open(&self) -> bool {
+		self.confidential_ctx.is_some() && self.confidential_ctx.as_ref().unwrap().is_open()
+	}
+
+	/// Returns the code that will be executed as a result of this transaction. For a create this
+	/// is the init code in the transaction's data field. For a call, this is the stored contract
+	/// code.
+	fn tx_code(&self, transaction: &SignedTransaction) -> Result<Option<Vec<u8>>, String> {
+		Ok(Some(
+			match transaction.action {
+				transaction::Action::Create => {
+					transaction.data.clone()
+				},
+				transaction::Action::Call(to_addr) => {
+					let mut code = self.code(&to_addr)
+						.map_err(|_| format!("Failed to get code at address {:?}", to_addr))?;
+					if code.is_none() {
+						return Ok(None);
+					}
+					code.unwrap().to_vec()
+				}
 			}
+		))
+	}
+
+	/// Returns the given key in a format that is suitable for storage.
+	/// If a confidential context is open, then encrypts the key and hashes it.
+	/// Otherwise returns the key as given.
+	fn to_storage_key(&self, key: &H256) -> H256 {
+		if self.is_confidential_ctx_open() {
+			let enc_key = self.confidential_ctx
+				.as_ref()
+				.unwrap()
+				.encrypt_storage(key.to_vec())
+				.expect("Should be able to encrypt storage keys");
+			keccak(&enc_key)
+		} else {
+			key.clone()
 		}
 	}
 
-	pub fn is_confidential_ctx_open(&self) -> bool {
-		self.confidential_ctx.is_some() && self.confidential_ctx.as_ref().unwrap().is_open()
+	/// Returns the given value in a format that is suitable for storage.
+	/// If a confidential context is open, then encrypts the value. Otherwise
+	/// returns the given value as a Vec.
+	fn to_storage_value(&self, value: &H256) -> Vec<u8> {
+		if self.is_confidential_ctx_open() {
+			self.confidential_ctx
+				.as_ref()
+				.unwrap()
+				.encrypt_storage(value.to_vec())
+				.expect("Should be able to encrypt storage")
+		} else {
+			value.to_vec()
+		}
+	}
+
+	/// Transforms the given value--from storage--into its plaintext representation.
+	/// If a confidential context is open, then decrypts the value, otherwise returns
+	/// the value as given, as an H256. Assumes all *unencrypted* contract storage
+	/// values are H256.
+	fn from_storage_value(&self, value: Option<Vec<u8>>) -> H256 {
+		if value.is_none() {
+			return H256::new();
+		}
+		let value = value.unwrap();
+		let result = if self.is_confidential_ctx_open() {
+			self.confidential_ctx
+				.as_ref()
+				.unwrap()
+				.decrypt_storage(value)
+				.expect("Corrupted state")
+		} else {
+			value
+		};
+		// all storage should be 32 bytes before encryption
+		assert!(result.len() == 32);
+		H256::from_slice(&result[..32])
 	}
 }
 
@@ -1142,14 +1253,14 @@ impl<B: Backend> State<B> {
 	/// Requires a secure trie to be used for correctness.
 	/// `account_key` == keccak(address)
 	/// `storage_key` == keccak(key)
-	pub fn prove_storage(&self, account_key: H256, storage_key: H256) -> trie::Result<(Vec<Bytes>, H256)> {
+	pub fn prove_storage(&self, account_key: H256, storage_key: H256) -> trie::Result<(Vec<Bytes>, Vec<u8>)> {
 		// TODO: probably could look into cache somehow but it's keyed by
 		// address, not keccak(address).
 		let trie = TrieDB::new(self.db.as_hashdb(), &self.root)?;
 		let from_rlp = |b: &[u8]| Account::from_rlp(b).expect("decoding db value failed");
 		let acc = match trie.get_with(&account_key, from_rlp)? {
 			Some(acc) => acc,
-			None => return Ok((Vec::new(), H256::new())),
+			None => return Ok((Vec::new(), H256::new().to_vec())),
 		};
 
 		let account_db = self.factories.accountdb.readonly(self.db.as_hashdb(), account_key);
@@ -2413,13 +2524,13 @@ mod tests {
 					   balance: U256::zero(),
 					   nonce: U256::zero(),
 					   code: Some(Default::default()),
-					   storage: vec![(H256::from(&U256::from(1u64)), H256::from(&U256::from(20u64)))]
+					   storage: vec![(H256::from(&U256::from(1u64)), H256::from(&U256::from(20u64)).to_vec())]
 						   .into_iter().collect(),
 				   }), Some(&PodAccount {
 					   balance: U256::zero(),
 					   nonce: U256::zero(),
 					   code: Some(Default::default()),
-					   storage: vec![(H256::from(&U256::from(1u64)), H256::from(&U256::from(100u64)))]
+					   storage: vec![(H256::from(&U256::from(1u64)), H256::from(&U256::from(100u64)).to_vec())]
 						   .into_iter().collect(),
 				   })).as_ref());
 	}
