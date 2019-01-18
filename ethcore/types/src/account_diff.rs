@@ -60,6 +60,8 @@ pub struct AccountDiff {
 	pub code: Diff<Bytes>,					// Allowed to be Same
 	/// Change in storage, values are not allowed to be `Diff::Same`.
 	pub storage: BTreeMap<H256, Diff<Vec<u8>>>,
+	/// Change in storage_expiry, allowed to be `Diff::Same`.
+	pub storage_expiry: Diff<u64>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -134,6 +136,11 @@ impl fmt::Display for AccountDiff {
 		}
 		if let Diff::Born(ref x) = self.code {
 			write!(f, "  code {}", x.pretty())?;
+		}
+		match self.storage_expiry {
+			Diff::Born(ref x) => write!(f, "  exp {}", x)?,
+			Diff::Changed(ref pre, ref post) => write!(f, "${} ({} {} {})", post, pre, if pre > post {"-"} else {"+"}, *max(pre, post) - *min(pre, post))?,
+			_ => {},
 		}
 		write!(f, "\n")?;
 		for (k, dv) in &self.storage {

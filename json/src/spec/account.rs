@@ -36,6 +36,8 @@ pub struct Account {
 	pub storage: Option<BTreeMap<Uint, Uint>>,
 	/// Constructor.
 	pub constructor: Option<Bytes>,
+	/// Storage expiry (Unix timestamp).
+	pub storage_expiry: Option<u64>,
 }
 
 impl Account {

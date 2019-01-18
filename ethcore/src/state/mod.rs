@@ -408,6 +408,9 @@ pub trait StateInfo {
 
 	/// Get accounts' code.
 	fn code(&self, a: &Address) -> trie::Result<Option<Arc<Bytes>>>;
+
+	/// Get storage expiration timestamp for account 'a'.
+	fn storage_expiry(&self, a: &Address) -> trie::Result<u64>;
 }
 
 impl<B: Backend> StateInfo for State<B> {
@@ -415,6 +418,7 @@ impl<B: Backend> StateInfo for State<B> {
 	fn balance(&self, a: &Address) -> trie::Result<U256> { State::balance(self, a) }
 	fn storage_at(&self, address: &Address, key: &H256) -> trie::Result<H256> { State::storage_at(self, address, key) }
 	fn code(&self, address: &Address) -> trie::Result<Option<Arc<Bytes>>> { State::code(self, address) }
+	fn storage_expiry(&self, address: &Address) -> trie::Result<u64> { State::storage_expiry(self, address) }
 }
 
 const SEC_TRIE_DB_UNWRAP_STR: &'static str = "A state can only be created with valid root. Creating a SecTrieDB with a valid root will not fail. \
@@ -558,8 +562,8 @@ impl<B: Backend> State<B> {
 
 	/// Create a new contract at address `contract`. If there is already an account at the address
 	/// it will have its code reset, ready for `init_code()`.
-	pub fn new_contract(&mut self, contract: &Address, balance: U256, nonce_offset: U256) {
-		self.insert_cache(contract, AccountEntry::new_dirty(Some(Account::new_contract(balance, self.account_start_nonce + nonce_offset))));
+	pub fn new_contract(&mut self, contract: &Address, balance: U256, nonce_offset: U256, storage_expiry: u64) {
+		self.insert_cache(contract, AccountEntry::new_dirty(Some(Account::new_contract(balance, self.account_start_nonce + nonce_offset, storage_expiry))));
 	}
 
 	/// Remove an existing account.
@@ -601,6 +605,12 @@ impl<B: Backend> State<B> {
 	pub fn storage_root(&self, a: &Address) -> trie::Result<Option<H256>> {
 		self.ensure_cached(a, RequireCache::None, true,
 			|a| a.as_ref().and_then(|account| account.storage_root().cloned()))
+	}
+
+	/// Get the storage expiration timestamp for account `a`.
+	pub fn storage_expiry(&self, a: &Address) -> trie::Result<u64> {
+		self.ensure_cached(a, RequireCache::None, true,
+			|a| a.as_ref().map_or(0, |account| account.storage_expiry()))
 	}
 
 	/// Contract storage interface mapping H256 -> H256. The underlying storage may or may
@@ -756,13 +766,13 @@ impl<B: Backend> State<B> {
 	/// Initialise the code of account `a` so that it is `code`.
 	/// NOTE: Account should have been created with `new_contract`.
 	pub fn init_code(&mut self, a: &Address, code: Bytes) -> trie::Result<()> {
-		self.require_or_from(a, true, || Account::new_contract(0.into(), self.account_start_nonce), |_|{})?.init_code(code);
+		self.require_or_from(a, true, || Account::new_contract(0.into(), self.account_start_nonce, 0), |_|{})?.init_code(code);
 		Ok(())
 	}
 
 	/// Reset the code of account `a` so that it is `code`.
 	pub fn reset_code(&mut self, a: &Address, code: Bytes) -> trie::Result<()> {
-		self.require_or_from(a, true, || Account::new_contract(0.into(), self.account_start_nonce), |_|{})?.reset_code(code);
+		self.require_or_from(a, true, || Account::new_contract(0.into(), self.account_start_nonce, 0), |_|{})?.reset_code(code);
 		Ok(())
 	}
 
@@ -972,11 +982,11 @@ impl<B: Backend> State<B> {
 					};
 
 					// Storage must be fetched after ensure_cached to avoid borrow problem.
-					(*acc.balance(), *acc.nonce(), all_keys, acc.code().map(|x| x.to_vec()))
+					(*acc.balance(), *acc.nonce(), all_keys, acc.code().map(|x| x.to_vec()), acc.storage_expiry())
 				})
 			})?;
 
-			if let Some((balance, nonce, storage_keys, code)) = account {
+			if let Some((balance, nonce, storage_keys, code, storage_expiry)) = account {
 				let storage = storage_keys.into_iter().fold(Ok(BTreeMap::new()), |s: trie::Result<_>, key| {
 					let mut s = s?;
 
@@ -985,7 +995,7 @@ impl<B: Backend> State<B> {
 				})?;
 
 				m.insert(address, PodAccount {
-					balance, nonce, storage, code
+					balance, nonce, storage, code, storage_expiry
 				});
 			}
 
@@ -1243,6 +1253,7 @@ impl<B: Backend> State<B> {
 			nonce: self.account_start_nonce,
 			code_hash: KECCAK_EMPTY,
 			storage_root: KECCAK_NULL_RLP,
+			storage_expiry: 0,
 		});
 
 		Ok((recorder.drain().into_iter().map(|r| r.data).collect(), account))
@@ -2200,7 +2211,7 @@ mod tests {
 		let a = Address::zero();
 		let (root, db) = {
 			let mut state = get_temp_state();
-			state.require_or_from(&a, false, ||Account::new_contract(42.into(), 0.into()), |_|{}).unwrap();
+			state.require_or_from(&a, false, ||Account::new_contract(42.into(), 0.into(), 0), |_|{}).unwrap();
 			state.init_code(&a, vec![1, 2, 3]).unwrap();
 			assert_eq!(state.code(&a).unwrap(), Some(Arc::new(vec![1u8, 2, 3])));
 			state.commit().unwrap();
@@ -2371,7 +2382,7 @@ mod tests {
 		let a = Address::zero();
 		state.require(&a, false).unwrap();
 		state.commit().unwrap();
-		assert_eq!(*state.root(), "0ce23f3c809de377b008a4a3ee94a0834aac8bec1f86e28ffe4fdb5a15b0c785".into());
+		assert_eq!(*state.root(), "911f21ac6c69e16485433cade78bcb6f0f98b6df40ea093e473db3488dacedfe".into());
 	}
 
 	#[test]
@@ -2441,7 +2452,7 @@ mod tests {
 			state.add_balance(&b, &100.into(), CleanupMode::ForceCreate).unwrap(); // create a dust account
 			state.add_balance(&c, &101.into(), CleanupMode::ForceCreate).unwrap(); // create a normal account
 			state.add_balance(&d, &99.into(), CleanupMode::ForceCreate).unwrap(); // create another dust account
-			state.new_contract(&e, 100.into(), 1.into()); // create a contract account
+			state.new_contract(&e, 100.into(), 1.into(), 0); // create a contract account
 			state.init_code(&e, vec![0x00]).unwrap();
 			state.commit().unwrap();
 			state.drop()
@@ -2493,6 +2504,7 @@ mod tests {
 					   balance: U256::from(100),
 					   nonce: U256::zero(),
 					   code: Some(Default::default()),
+					   storage_expiry: 0,
 					   storage: Default::default()
 				   }), None).as_ref());
 	}
@@ -2526,12 +2538,14 @@ mod tests {
 					   code: Some(Default::default()),
 					   storage: vec![(H256::from(&U256::from(1u64)), H256::from(&U256::from(20u64)).to_vec())]
 						   .into_iter().collect(),
+					   storage_expiry: 0,
 				   }), Some(&PodAccount {
 					   balance: U256::zero(),
 					   nonce: U256::zero(),
 					   code: Some(Default::default()),
 					   storage: vec![(H256::from(&U256::from(1u64)), H256::from(&U256::from(100u64)).to_vec())]
 						   .into_iter().collect(),
+					   storage_expiry: 0,
 				   })).as_ref());
 	}
 }

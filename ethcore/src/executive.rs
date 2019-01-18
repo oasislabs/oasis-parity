@@ -581,9 +581,11 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		let prev_bal = self.state.balance(&params.address)?;
 		if let ActionValue::Transfer(val) = params.value {
 			self.state.sub_balance(&params.sender, &val, &mut substate.to_cleanup_mode(&schedule))?;
-			self.state.new_contract(&params.address, val + prev_bal, nonce_offset);
+			// TODO: set storage expiry timestamp (currently defaults to 0)
+			self.state.new_contract(&params.address, val + prev_bal, nonce_offset, 0);
 		} else {
-			self.state.new_contract(&params.address, prev_bal, nonce_offset);
+			// TODO: set storage expiry timestamp (currently defaults to 0)
+			self.state.new_contract(&params.address, prev_bal, nonce_offset, 0);
 		}
 
 		let trace_info = tracer.prepare_trace_create(&params);

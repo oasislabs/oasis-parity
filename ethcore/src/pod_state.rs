@@ -100,6 +100,7 @@ mod test {
 				nonce: 0.into(),
 				code: Some(Vec::new()),
 				storage: map![],
+				storage_expiry: 0,
 			}
 		]);
 		assert_eq!(super::diff_pod(&a, &PodState::new()), StateDiff { raw: map![
@@ -108,6 +109,7 @@ mod test {
 				nonce: Diff::Died(0.into()),
 				code: Diff::Died(vec![]),
 				storage: map![],
+				storage_expiry: Diff::Died(0),
 			}
 		]});
 		assert_eq!(super::diff_pod(&PodState::new(), &a), StateDiff{ raw: map![
@@ -116,6 +118,7 @@ mod test {
 				nonce: Diff::Born(0.into()),
 				code: Diff::Born(vec![]),
 				storage: map![],
+				storage_expiry: Diff::Born(0),
 			}
 		]});
 	}
@@ -128,6 +131,7 @@ mod test {
 				nonce: 0.into(),
 				code: Some(Vec::new()),
 				storage: map![],
+				storage_expiry: 0,
 			}
 		]);
 		let b = PodState::from(map![
@@ -136,12 +140,14 @@ mod test {
 				nonce: 0.into(),
 				code: Some(Vec::new()),
 				storage: map![],
+				storage_expiry: 0,
 			},
 			2.into() => PodAccount {
 				balance: 69.into(),
 				nonce: 0.into(),
 				code: Some(Vec::new()),
 				storage: map![],
+				storage_expiry: 0,
 			}
 		]);
 		assert_eq!(super::diff_pod(&a, &b), StateDiff { raw: map![
@@ -150,6 +156,7 @@ mod test {
 				nonce: Diff::Born(0.into()),
 				code: Diff::Born(vec![]),
 				storage: map![],
+				storage_expiry: Diff::Born(0),
 			}
 		]});
 		assert_eq!(super::diff_pod(&b, &a), StateDiff { raw: map![
@@ -158,6 +165,7 @@ mod test {
 				nonce: Diff::Died(0.into()),
 				code: Diff::Died(vec![]),
 				storage: map![],
+				storage_expiry: Diff::Died(0),
 			}
 		]});
 	}
@@ -170,12 +178,14 @@ mod test {
 				nonce: 0.into(),
 				code: Some(Vec::new()),
 				storage: map![],
+				storage_expiry: 0,
 			},
 			2.into() => PodAccount {
 				balance: 69.into(),
 				nonce: 0.into(),
 				code: Some(Vec::new()),
 				storage: map![],
+				storage_expiry: 0,
 			}
 		]);
 		let b = PodState::from(map![
@@ -184,12 +194,14 @@ mod test {
 				nonce: 1.into(),
 				code: Some(Vec::new()),
 				storage: map![],
+				storage_expiry: 0,
 			},
 			2.into() => PodAccount {
 				balance: 69.into(),
 				nonce: 0.into(),
 				code: Some(Vec::new()),
 				storage: map![],
+				storage_expiry: 0,
 			}
 		]);
 		assert_eq!(super::diff_pod(&a, &b), StateDiff { raw: map![
@@ -198,6 +210,7 @@ mod test {
 				nonce: Diff::Changed(0.into(), 1.into()),
 				code: Diff::Same,
 				storage: map![],
+				storage_expiry: Diff::Same,
 			}
 		]});
 	}
