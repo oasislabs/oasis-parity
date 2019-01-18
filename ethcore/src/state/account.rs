@@ -55,7 +55,8 @@ pub struct Account {
 	nonce: U256,
 	// Trie-backed storage.
 	storage_root: H256,
-	// Storage expiry (Unix timestamp)..
+	// Storage expiry (Unix timestamp, seconds since the epoch).
+	// A special value of 0 indicates that the account's storage does not expire.
 	storage_expiry: u64,
 	// LRU Cache of the trie-backed storage.
 	// This is limited to `STORAGE_CACHE_ITEMS` recent queries
@@ -139,7 +140,7 @@ impl Account {
 			balance: balance,
 			nonce: nonce,
 			storage_root: KECCAK_NULL_RLP,
-            storage_expiry: 0,
+			storage_expiry: 0,
 			storage_cache: Self::empty_storage_cache(),
 			storage_changes: HashMap::new(),
 			code_hash: KECCAK_EMPTY,
@@ -366,6 +367,8 @@ impl Account {
 	pub fn storage_changes(&self) -> &HashMap<H256, Vec<u8>> { &self.storage_changes }
 
 	/// Return the storage expiry timestamp associated with this account.
+	/// The value is a Unix timestamp. A special value of 0 indicates that the account's
+	/// storage does not expire.
 	pub fn storage_expiry(&self) -> u64 { self.storage_expiry }
 
 	/// Increment the nonce of the account by one.
