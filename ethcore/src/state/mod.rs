@@ -625,7 +625,7 @@ impl<B: Backend> State<B> {
 
 	/// Mutate storage of account `address` so that it is `value` for `key`.
 	/// Returns None if there is no storage located at the given address for the given key.
-	fn _storage_at(&self, address: &Address, key: &H256) -> trie::Result<Option<Vec<u8>>> {
+	pub fn _storage_at(&self, address: &Address, key: &H256) -> trie::Result<Option<Vec<u8>>> {
 		// Storage key search and update works like this:
 		// 1. If there's an entry for the account in the local cache check for the key and return it if found.
 		// 2. If there's an entry for the account in the global cache check for the key or load it into that account.
@@ -1179,7 +1179,7 @@ impl<B: Backend> State<B> {
 	/// Returns the given key in a format that is suitable for storage.
 	/// If a confidential context is open, then encrypts the key and hashes it.
 	/// Otherwise returns the key as given.
-	fn to_storage_key(&self, key: &H256) -> H256 {
+	pub fn to_storage_key(&self, key: &H256) -> H256 {
 		if self.is_confidential_ctx_open() {
 			let enc_key = self.confidential_ctx
 				.as_ref()
