@@ -270,7 +270,9 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		let nonce = self.state.nonce(&sender)?;
 
 		let schedule = self.machine.schedule(self.info.number);
-		let base_gas_required = U256::from(t.gas_required(&schedule));
+		let confidential = self.state.is_confidential(t)
+					   .map_err(|_| ExecutionError::NotConfidential)?;
+		let base_gas_required = U256::from(t.gas_required(&schedule, confidential));
 
 		if t.gas < base_gas_required {
 			return Err(ExecutionError::NotEnoughBaseGas { required: base_gas_required, got: t.gas });
@@ -319,8 +321,6 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 			Action::Create => {
 				let (new_address, code_hash) = contract_address(self.machine.create_address_scheme(self.info.number), &sender, &nonce, &t.data);
 				let code: Bytes = t.data.clone();
-				let confidential = ConfidentialVm::is_confidential(Some(&code))
-					.map_err(|_| ExecutionError::NotConfidential)?;
 				let params = ActionParams {
 					code_address: new_address.clone(),
 					code_hash: code_hash,
@@ -341,9 +341,6 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 			},
 			Action::Call(ref address) => {
 				let code = self.state.code(address)?;
-				// convert Option<Arc<Vec<u8>>> to Option<&[u8]>
-				let confidential = ConfidentialVm::is_confidential(code.as_ref().map(|c| c.as_slice()))
-					.map_err(|_| ExecutionError::NotConfidential)?;
 				let params = ActionParams {
 					code_address: address.clone(),
 					address: address.clone(),
