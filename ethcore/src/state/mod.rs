@@ -1575,7 +1575,7 @@ mod tests {
 				from: "9cce34f7ab185c7aba1b7c8140d620b4bda941d6".into(),
 				to: "0000000000000000000000000000000000000001".into(),
 				value: 0.into(),
-				gas: 79_000.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
+				gas: 97_900.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
 				input: vec![],
 				call_type: CallType::Call,
 			}),
@@ -1618,7 +1618,7 @@ mod tests {
 				from: "9cce34f7ab185c7aba1b7c8140d620b4bda941d6".into(),
 				to: 0xa.into(),
 				value: 0.into(),
-				gas: 79000.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
+				gas: 97900.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
 				input: vec![],
 				call_type: CallType::Call,
 			}),
@@ -1663,7 +1663,7 @@ mod tests {
 				from: "9cce34f7ab185c7aba1b7c8140d620b4bda941d6".into(),
 				to: 0xa.into(),
 				value: 0.into(),
-				gas: 79000.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
+				gas: 97900.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
 				input: vec![],
 				call_type: CallType::Call,
 			}),
@@ -1723,7 +1723,7 @@ mod tests {
 				from: "9cce34f7ab185c7aba1b7c8140d620b4bda941d6".into(),
 				to: 0xa.into(),
 				value: 0.into(),
-				gas: 79000.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
+				gas: 97900.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
 				input: vec![],
 				call_type: CallType::Call,
 			}),
