@@ -87,11 +87,14 @@ impl ConfidentialVm {
 	///
 	/// Assumes the prefix has been removed from the initcode in `no_prefix_params`.
 	fn exec_create(&mut self, no_prefix_params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
-		let public_key = ext.create_long_term_public_key(no_prefix_params.code_address.clone())?;
+		let (public_key, signature) = ext.create_long_term_public_key(no_prefix_params.code_address.clone())?;
+
+        let log_data = public_key;
+        log_data.append(signature);
 		// store public key in log for retrieval
 		ext.log(
 			vec![H256::from(CONFIDENTIAL_LOG_TOPIC)],
-			&public_key
+			&log_data
 		);
 
         // open the confidential context so that we can transparently encrypt/decrypt

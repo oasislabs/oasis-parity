@@ -238,7 +238,7 @@ impl Ext for FakeExt {
 		Ok(H256::zero())
 	}
 
-	fn create_long_term_public_key(&self, contract: Address) -> Result<Vec<u8>> {
-		Ok(vec![])
+	fn create_long_term_public_key(&self, contract: Address) -> Result<(Vec<u8>, Vec<u8>)> {
+		Ok((vec![], vec![]))
 	}
 }
