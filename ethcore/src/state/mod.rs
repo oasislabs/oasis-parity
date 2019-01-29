@@ -372,7 +372,7 @@ pub trait ConfidentialCtx {
 	/// Creates the long term public key for the given contract. If it already
 	/// exists, returns the existing key. The first item is the key, the second
     /// is a signature over the key by the KeyManager.
-	fn create_long_term_public_key(&self, contract: Address) -> Result<(Vec<u8>, Vec<u8>) String>;
+	fn create_long_term_public_key(&self, contract: Address) -> Result<(Vec<u8>, Vec<u8>), String>;
 	/// Returns the public key of the peer connecting through a secure channel to the runtime.
 	/// Returns None if no such key exists, e.g., if a confidential contract is being created.
 	fn peer(&self) -> Option<Vec<u8>>;
