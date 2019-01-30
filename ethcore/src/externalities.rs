@@ -418,7 +418,7 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 		self.storage.store_bytes(bytes)
 	}
 
-	fn create_long_term_public_key(&self, contract: Address) -> vm::Result<Vec<u8>> {
+	fn create_long_term_public_key(&self, contract: Address) -> vm::Result<(Vec<u8>, Vec<u8>)> {
 		if self.state.confidential_ctx.is_none() {
 			return Err(vm::Error::Internal(
 				"Can't create a long term public key without a confidential ctx".to_string()
