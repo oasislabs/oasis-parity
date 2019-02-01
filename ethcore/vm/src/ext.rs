@@ -69,6 +69,9 @@ pub trait Ext {
 	/// Stores a value for given key.
 	fn set_storage(&mut self, key: H256, value: H256) -> Result<()>;
 
+	/// Returns the storage expiry for the origin account.
+	fn storage_expiry(&self) -> Result<u64>;
+
 	/// Determine whether an account exists.
 	fn exists(&self, address: &Address) -> Result<bool>;
 
@@ -135,7 +138,7 @@ pub trait Ext {
 	fn depth(&self) -> usize;
 
 	/// Increments sstore refunds count by 1.
-	fn inc_sstore_clears(&mut self);
+	fn inc_sstore_clears(&mut self) -> Result<()>;
 
 	/// Decide if any more operations should be traced. Passthrough for the VM trace.
 	fn trace_next_instruction(&mut self, _pc: usize, _instruction: u8, _current_gas: U256) -> bool { false }

@@ -16,6 +16,8 @@
 
 //! Cost schedule and other parameterisations for the EVM.
 
+use ethereum_types::U256;
+
 /// Definition of the cost schedule and other parameterisations for the EVM.
 pub struct Schedule {
 	/// Does it support exceptional failed code deposit
@@ -117,6 +119,8 @@ pub struct Schedule {
 	pub eip86: bool,
 	/// Wasm extra schedule settings, if wasm activated
 	pub wasm: Option<WasmCosts>,
+	/// Default storage duration (in seconds)
+	pub default_storage_duration: u64,
 }
 
 /// Wasm cost table
@@ -255,6 +259,7 @@ impl Schedule {
 			kill_dust: CleanDustMode::Off,
 			eip86: false,
 			wasm: None,
+			default_storage_duration: 3155695200, // 100 years
 		}
 	}
 
@@ -326,6 +331,7 @@ impl Schedule {
 			kill_dust: CleanDustMode::Off,
 			eip86: false,
 			wasm: None,
+			default_storage_duration: 3155695200, // 100 years
 		}
 	}
 
@@ -336,6 +342,39 @@ impl Schedule {
 		// *** Prefer PANIC here instead of silently breaking consensus! ***
 		self.wasm.as_ref().expect("Wasm schedule expected to exist while checking wasm contract. Misconfigured client?")
 	}
+
+	/// Gas price for setting new value to storage (`storage==0`, `new!=0`), prorated for expiry
+	pub fn prorated_sstore_set_gas(&self, duration_secs: u64) -> U256 {
+		Self::prorated_sstore_gas(self.sstore_set_gas, self.default_storage_duration, duration_secs, false)
+	}
+
+	/// Gas price for altering value in storage, prorated for expiry
+	pub fn prorated_sstore_reset_gas(&self, duration_secs: u64) -> U256 {
+		Self::prorated_sstore_gas(self.sstore_reset_gas, self.default_storage_duration, duration_secs, false)
+	}
+
+	/// Gas refund for `SSTORE` clearing (when `storage!=0`, `new==0`), prorated for expiry
+	pub fn prorated_sstore_refund_gas(&self, duration_secs: u64) -> U256 {
+		Self::prorated_sstore_gas(self.sstore_refund_gas, self.default_storage_duration, duration_secs, true)
+	}
+
+	/// Calculates prorated gas price for SSTORE based on expiry
+	fn prorated_sstore_gas(default_gas: usize, default_storage_duration: u64, duration_secs: u64, refund: bool) -> U256 {
+		let duration = U256::from(duration_secs);
+		let default_gas = U256::from(default_gas);
+		let default_storage_duration = U256::from(default_storage_duration);
+
+		// prorated gas cost <- duration * default_gas / default_storage_duration
+		// cannot overflow as duration and default_gas are converted from u64s
+		let mut gas = duration * default_gas / default_storage_duration;
+
+		// if this is a charge (not a refund), round up
+		if !refund && duration * default_gas % default_storage_duration != U256::from(0) {
+			gas = gas + U256::from(1)
+		}
+
+		gas
+	}
 }
 
 impl Default for Schedule {
@@ -344,13 +383,41 @@ impl Default for Schedule {
 	}
 }
 
-#[test]
 #[cfg(test)]
-fn schedule_evm_assumptions() {
-	let s1 = Schedule::new_frontier();
-	let s2 = Schedule::new_homestead();
+mod tests {
+	use super::*;
 
-	// To optimize division we assume 2**9 for quad_coeff_div
-	assert_eq!(s1.quad_coeff_div, 512);
-	assert_eq!(s2.quad_coeff_div, 512);
+	#[test]
+	fn schedule_evm_assumptions() {
+		let s1 = Schedule::new_frontier();
+		let s2 = Schedule::new_homestead();
+
+		// To optimize division we assume 2**9 for quad_coeff_div
+		assert_eq!(s1.quad_coeff_div, 512);
+		assert_eq!(s2.quad_coeff_div, 512);
+	}
+
+	#[test]
+	fn prorated_sstore() {
+		// the schedule used by the Oasis runtime
+		let schedule = Schedule::new_post_eip150(24576, true, true, true);
+
+		// default storage duration
+		let gas = schedule.prorated_sstore_set_gas(schedule.default_storage_duration);
+		assert_eq!(gas, U256::from(schedule.sstore_set_gas));
+
+		// 2x default storage duration
+		let gas = schedule.prorated_sstore_reset_gas(2 * schedule.default_storage_duration);
+		assert_eq!(gas, U256::from(schedule.sstore_reset_gas * 2));
+
+		// check that we round up for costs
+		let gas = schedule.prorated_sstore_set_gas(1);
+		assert!(schedule.sstore_set_gas < schedule.default_storage_duration as usize);
+		assert!(gas > U256::from(0));
+
+		// check that we round down for refunds
+		let gas = schedule.prorated_sstore_refund_gas(1);
+		assert!(schedule.sstore_set_gas < schedule.default_storage_duration as usize);
+		assert_eq!(gas, U256::from(0));
+	}
 }

@@ -518,6 +518,7 @@ impl fmt::Debug for Account {
 			.field("nonce", &self.nonce)
 			.field("code", &self.code())
 			.field("storage", &self.storage_changes.iter().collect::<BTreeMap<_, _>>())
+			.field("storage_expiry", &self.storage_expiry)
 			.finish()
 	}
 }
