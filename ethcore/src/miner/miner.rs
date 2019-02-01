@@ -50,7 +50,6 @@ use miner::pool_client::{PoolClient, CachedNonceClient};
 use receipt::{Receipt, RichReceipt};
 use spec::Spec;
 use state::State;
-use storage::NullStorage;
 
 /// Different possible definitions for pending transaction set.
 #[derive(Debug, PartialEq)]
@@ -392,7 +391,6 @@ impl Miner {
 			let transaction = tx.signed().clone();
 			let hash = transaction.hash();
 			let sender = transaction.sender();
-			let mut storage = NullStorage::new();
 
 			// Re-verify transaction again vs current state.
 			let result = client.verify_signed(&transaction)

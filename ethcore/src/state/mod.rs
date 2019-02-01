@@ -41,7 +41,6 @@ use executed::{Executed, ExecutionError};
 use types::state_diff::StateDiff;
 use transaction::{self, SignedTransaction};
 use state_db::StateDB;
-use storage::{Storage, NullStorage};
 use factory::VmFactory;
 use journaldb::overlaydb::OverlayDB;
 use confidential_vm::ConfidentialVm;
@@ -779,13 +778,13 @@ impl<B: Backend> State<B> {
 
 	/// Execute a given transaction, producing a receipt and an optional trace.
 	/// This will change the state accordingly.
-	pub fn apply(&mut self, env_info: &EnvInfo, machine: &Machine, t: &SignedTransaction, tracing: bool, storage: &mut Storage) -> ApplyResult<FlatTrace, VMTrace> {
+	pub fn apply(&mut self, env_info: &EnvInfo, machine: &Machine, t: &SignedTransaction, tracing: bool) -> ApplyResult<FlatTrace, VMTrace> {
 		if tracing {
 			let options = TransactOptions::with_tracing();
-			self.apply_with_tracing(env_info, machine, t, options.tracer, options.vm_tracer, options.ext_tracer, storage)
+			self.apply_with_tracing(env_info, machine, t, options.tracer, options.vm_tracer, options.ext_tracer)
 		} else {
 			let options = TransactOptions::with_no_tracing();
-			self.apply_with_tracing(env_info, machine, t, options.tracer, options.vm_tracer, options.ext_tracer, storage)
+			self.apply_with_tracing(env_info, machine, t, options.tracer, options.vm_tracer, options.ext_tracer)
 		}
 	}
 
@@ -799,7 +798,6 @@ impl<B: Backend> State<B> {
 		tracer: T,
 		vm_tracer: V,
 		ext_tracer: X,
-		storage: &mut Storage,
 	) -> ApplyResult<T::Output, V::Output> where
 		T: trace::Tracer,
 		V: trace::VMTracer,
@@ -809,7 +807,7 @@ impl<B: Backend> State<B> {
 			true => TransactOptions::new(tracer, vm_tracer, ext_tracer).dont_check_nonce(),
 			false => TransactOptions::new(tracer, vm_tracer, ext_tracer)
 		};
-		let e = self.execute(env_info, machine, t, options, false, storage)?;
+		let e = self.execute(env_info, machine, t, options, false)?;
 		let params = machine.params();
 
 		let eip658 = env_info.number >= params.eip658_transition;
@@ -844,10 +842,10 @@ impl<B: Backend> State<B> {
 	//
 	// `virt` signals that we are executing outside of a block set and restrictions like
 	// gas limits and gas costs should be lifted.
-	fn execute<T, V, X>(&mut self, env_info: &EnvInfo, machine: &Machine, t: &SignedTransaction, options: TransactOptions<T, V, X>, virt: bool, storage: &mut Storage)
+	fn execute<T, V, X>(&mut self, env_info: &EnvInfo, machine: &Machine, t: &SignedTransaction, options: TransactOptions<T, V, X>, virt: bool)
 		-> Result<Executed<T::Output, V::Output>, ExecutionError> where T: trace::Tracer, V: trace::VMTracer, X: ExtTracer,
 	{
-		let mut e = Executive::new(self, env_info, machine, storage);
+		let mut e = Executive::new(self, env_info, machine);
 
 		match virt {
 			true => e.transact_virtual(t, options),
@@ -1376,7 +1374,6 @@ mod tests {
 		let mut info = EnvInfo::default();
 		info.gas_limit = 1_000_000.into();
 		let machine = make_frontier_machine(5);
-		let mut storage = NullStorage::new();
 
 		let t = Transaction {
 			nonce: 0.into(),
@@ -1388,7 +1385,7 @@ mod tests {
 		}.sign(&secret(), None);
 
 		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
-		let result = state.apply(&info, &machine, &t, true, &mut storage).unwrap();
+		let result = state.apply(&info, &machine, &t, true).unwrap();
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
 			subtraces: 0,
@@ -1435,7 +1432,6 @@ mod tests {
 		let mut info = EnvInfo::default();
 		info.gas_limit = 1_000_000.into();
 		let machine = make_frontier_machine(5);
-		let mut storage = NullStorage::new();
 
 		let t = Transaction {
 			nonce: 0.into(),
@@ -1447,7 +1443,7 @@ mod tests {
 		}.sign(&secret(), None);
 
 		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
-		let result = state.apply(&info, &machine, &t, true, &mut storage).unwrap();
+		let result = state.apply(&info, &machine, &t, true).unwrap();
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
 			action: trace::Action::Create(trace::Create {
@@ -1472,7 +1468,6 @@ mod tests {
 		let mut info = EnvInfo::default();
 		info.gas_limit = 1_000_000.into();
 		let machine = make_frontier_machine(5);
-		let mut storage = NullStorage::new();
 
 		let t = Transaction {
 			nonce: 0.into(),
@@ -1485,7 +1480,7 @@ mod tests {
 
 		state.init_code(&0xa.into(), FromHex::from_hex("6000").unwrap()).unwrap();
 		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
-		let result = state.apply(&info, &machine, &t, true, &mut storage).unwrap();
+		let result = state.apply(&info, &machine, &t, true).unwrap();
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
 			action: trace::Action::Call(trace::Call {
@@ -1515,7 +1510,6 @@ mod tests {
 		let mut info = EnvInfo::default();
 		info.gas_limit = 1_000_000.into();
 		let machine = make_frontier_machine(5);
-		let mut storage = NullStorage::new();
 
 		let t = Transaction {
 			nonce: 0.into(),
@@ -1527,7 +1521,7 @@ mod tests {
 		}.sign(&secret(), None);
 
 		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
-		let result = state.apply(&info, &machine, &t, true, &mut storage).unwrap();
+		let result = state.apply(&info, &machine, &t, true).unwrap();
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
 			action: trace::Action::Call(trace::Call {
@@ -1557,7 +1551,6 @@ mod tests {
 		let mut info = EnvInfo::default();
 		info.gas_limit = 1_000_000.into();
 		let machine = Spec::new_test_machine();
-		let mut storage = NullStorage::new();
 
 		let t = Transaction {
 			nonce: 0.into(),
@@ -1568,7 +1561,7 @@ mod tests {
 			data: vec![],
 		}.sign(&secret(), None);
 
-		let result = state.apply(&info, &machine, &t, true, &mut storage).unwrap();
+		let result = state.apply(&info, &machine, &t, true).unwrap();
 
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
@@ -1599,7 +1592,6 @@ mod tests {
 		let mut info = EnvInfo::default();
 		info.gas_limit = 1_000_000.into();
 		let machine = Spec::new_test_machine();
-		let mut storage = NullStorage::new();
 
 		let t = Transaction {
 			nonce: 0.into(),
@@ -1611,7 +1603,7 @@ mod tests {
 		}.sign(&secret(), None);
 
 		state.init_code(&0xa.into(), FromHex::from_hex("600060006000600060006001610be0f1").unwrap()).unwrap();
-		let result = state.apply(&info, &machine, &t, true, &mut storage).unwrap();
+		let result = state.apply(&info, &machine, &t, true).unwrap();
 
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
@@ -1642,7 +1634,6 @@ mod tests {
 		let mut info = EnvInfo::default();
 		info.gas_limit = 1_000_000.into();
 		let machine = Spec::new_test_machine();
-		let mut storage = NullStorage::new();
 
 		let t = Transaction {
 			nonce: 0.into(),
@@ -1655,7 +1646,7 @@ mod tests {
 
 		state.init_code(&0xa.into(), FromHex::from_hex("60006000600060006000600b611000f2").unwrap()).unwrap();
 		state.init_code(&0xb.into(), FromHex::from_hex("6000").unwrap()).unwrap();
-		let result = state.apply(&info, &machine, &t, true, &mut storage).unwrap();
+		let result = state.apply(&info, &machine, &t, true).unwrap();
 
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
@@ -1702,7 +1693,6 @@ mod tests {
 		info.gas_limit = 1_000_000.into();
 		info.number = 0x789b0;
 		let machine = Spec::new_test_machine();
-		let mut storage = NullStorage::new();
 
 		let t = Transaction {
 			nonce: 0.into(),
@@ -1715,7 +1705,7 @@ mod tests {
 
 		state.init_code(&0xa.into(), FromHex::from_hex("6000600060006000600b618000f4").unwrap()).unwrap();
 		state.init_code(&0xb.into(), FromHex::from_hex("60056000526001601ff3").unwrap()).unwrap();
-		let result = state.apply(&info, &machine, &t, true, &mut storage).unwrap();
+		let result = state.apply(&info, &machine, &t, true).unwrap();
 
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
@@ -1761,7 +1751,6 @@ mod tests {
 		let mut info = EnvInfo::default();
 		info.gas_limit = 1_000_000.into();
 		let machine = make_frontier_machine(5);
-		let mut storage = NullStorage::new();
 
 		let t = Transaction {
 			nonce: 0.into(),
@@ -1774,7 +1763,7 @@ mod tests {
 
 		state.init_code(&0xa.into(), FromHex::from_hex("5b600056").unwrap()).unwrap();
 		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
-		let result = state.apply(&info, &machine, &t, true, &mut storage).unwrap();
+		let result = state.apply(&info, &machine, &t, true).unwrap();
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
 			action: trace::Action::Call(trace::Call {
@@ -1801,7 +1790,6 @@ mod tests {
 		let mut info = EnvInfo::default();
 		info.gas_limit = 1_000_000.into();
 		let machine = make_frontier_machine(5);
-		let mut storage = NullStorage::new();
 
 		let t = Transaction {
 			nonce: 0.into(),
@@ -1815,7 +1803,7 @@ mod tests {
 		state.init_code(&0xa.into(), FromHex::from_hex("60006000600060006000600b602b5a03f1").unwrap()).unwrap();
 		state.init_code(&0xb.into(), FromHex::from_hex("6000").unwrap()).unwrap();
 		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
-		let result = state.apply(&info, &machine, &t, true, &mut storage).unwrap();
+		let result = state.apply(&info, &machine, &t, true).unwrap();
 
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
@@ -1861,7 +1849,6 @@ mod tests {
 		let mut info = EnvInfo::default();
 		info.gas_limit = 1_000_000.into();
 		let machine = make_frontier_machine(5);
-		let mut storage = NullStorage::new();
 
 		let t = Transaction {
 			nonce: 0.into(),
@@ -1874,7 +1861,7 @@ mod tests {
 
 		state.init_code(&0xa.into(), FromHex::from_hex("60006000600060006045600b6000f1").unwrap()).unwrap();
 		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
-		let result = state.apply(&info, &machine, &t, true, &mut storage).unwrap();
+		let result = state.apply(&info, &machine, &t, true).unwrap();
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
 			subtraces: 1,
@@ -1916,7 +1903,6 @@ mod tests {
 		let mut info = EnvInfo::default();
 		info.gas_limit = 1_000_000.into();
 		let machine = make_frontier_machine(5);
-		let mut storage = NullStorage::new();
 
 		let t = Transaction {
 			nonce: 0.into(),
@@ -1929,7 +1915,7 @@ mod tests {
 
 		state.init_code(&0xa.into(), FromHex::from_hex("600060006000600060ff600b6000f1").unwrap()).unwrap();	// not enough funds.
 		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
-		let result = state.apply(&info, &machine, &t, true, &mut storage).unwrap();
+		let result = state.apply(&info, &machine, &t, true).unwrap();
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
 			subtraces: 0,
@@ -1959,7 +1945,6 @@ mod tests {
 		let mut info = EnvInfo::default();
 		info.gas_limit = 1_000_000.into();
 		let machine = make_frontier_machine(5);
-		let mut storage = NullStorage::new();
 
 		let t = Transaction {
 			nonce: 0.into(),
@@ -1973,7 +1958,7 @@ mod tests {
 		state.init_code(&0xa.into(), FromHex::from_hex("60006000600060006000600b602b5a03f1").unwrap()).unwrap();
 		state.init_code(&0xb.into(), FromHex::from_hex("5b600056").unwrap()).unwrap();
 		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
-		let result = state.apply(&info, &machine, &t, true, &mut storage).unwrap();
+		let result = state.apply(&info, &machine, &t, true).unwrap();
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
 			subtraces: 1,
@@ -2015,7 +2000,6 @@ mod tests {
 		let mut info = EnvInfo::default();
 		info.gas_limit = 1_000_000.into();
 		let machine = make_frontier_machine(5);
-		let mut storage = NullStorage::new();
 
 		let t = Transaction {
 			nonce: 0.into(),
@@ -2030,7 +2014,7 @@ mod tests {
 		state.init_code(&0xb.into(), FromHex::from_hex("60006000600060006000600c602b5a03f1").unwrap()).unwrap();
 		state.init_code(&0xc.into(), FromHex::from_hex("6000").unwrap()).unwrap();
 		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
-		let result = state.apply(&info, &machine, &t, true, &mut storage).unwrap();
+		let result = state.apply(&info, &machine, &t, true).unwrap();
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
 			subtraces: 1,
@@ -2090,7 +2074,6 @@ mod tests {
 		let mut info = EnvInfo::default();
 		info.gas_limit = 1_000_000.into();
 		let machine = make_frontier_machine(5);
-		let mut storage = NullStorage::new();
 
 		let t = Transaction {
 			nonce: 0.into(),
@@ -2105,7 +2088,7 @@ mod tests {
 		state.init_code(&0xb.into(), FromHex::from_hex("60006000600060006000600c602b5a03f1505b601256").unwrap()).unwrap();
 		state.init_code(&0xc.into(), FromHex::from_hex("6000").unwrap()).unwrap();
 		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
-		let result = state.apply(&info, &machine, &t, true, &mut storage).unwrap();
+		let result = state.apply(&info, &machine, &t, true).unwrap();
 
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
@@ -2163,7 +2146,6 @@ mod tests {
 		let mut info = EnvInfo::default();
 		info.gas_limit = 1_000_000.into();
 		let machine = make_frontier_machine(5);
-		let mut storage = NullStorage::new();
 
 		let t = Transaction {
 			nonce: 0.into(),
@@ -2177,7 +2159,7 @@ mod tests {
 		state.init_code(&0xa.into(), FromHex::from_hex("73000000000000000000000000000000000000000bff").unwrap()).unwrap();
 		state.add_balance(&0xa.into(), &50.into(), CleanupMode::NoEmpty).unwrap();
 		state.add_balance(&t.sender(), &100.into(), CleanupMode::NoEmpty).unwrap();
-		let result = state.apply(&info, &machine, &t, true, &mut storage).unwrap();
+		let result = state.apply(&info, &machine, &t, true).unwrap();
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
 			subtraces: 1,
