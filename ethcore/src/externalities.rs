@@ -406,13 +406,15 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 		self.vm_tracer.trace_executed(gas_used, stack_push, mem_diff, store_diff)
 	}
 
-	fn fetch_bytes(&self, key: &H256) -> vm::Result<Vec<u8>> {
+    fn fetch_bytes(&self, key: &H256) -> vm::Result<Vec<u8>> {
         // TODO: https://github.com/oasislabs/runtime-ethereum/issues/474
-	}
+        Ok(vec![])
+    }
 
-	fn store_bytes(&mut self, bytes: &[u8]) -> vm::Result<H256> {
+    fn store_bytes(&mut self, bytes: &[u8]) -> vm::Result<H256> {
         // TODO: https://github.com/oasislabs/runtime-ethereum/issues/474
-	}
+        Ok(H256::from(0))
+    }
 
 	fn create_long_term_public_key(&self, contract: Address) -> vm::Result<(Vec<u8>, Vec<u8>)> {
 		if self.state.confidential_ctx.is_none() {
