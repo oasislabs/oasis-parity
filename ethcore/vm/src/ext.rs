@@ -63,11 +63,24 @@ pub enum CreateContractAddress {
 
 /// Externalities interface for EVMs
 pub trait Ext {
-	/// Returns a value for given key.
+	/// Returns a value for a given key. Maintains the same H256 -> H256 interface
+    /// as Ethereum.
 	fn storage_at(&self, key: &H256) -> Result<H256>;
 
-	/// Stores a value for given key.
+	/// Stores a value for given key. Maintains the same H256 -> H256 interface
+    /// as Ethereum.
 	fn set_storage(&mut self, key: H256, value: H256) -> Result<()>;
+
+    /// Returns a value for a given key. Extends the storage interface to allow
+    /// for storage values of arbitrary length.
+    fn bulk_storage_at(&self, key: &H256) -> Result<Vec<u8>>;
+
+    /// Returns the length of the bulk_storage_at value.
+    fn bulk_storage_len(&self, key: &H256) -> Result<u32>;
+
+    /// Stores a value for given key. Extends the storage interface to allow
+    /// for storage values of arbitrary length.
+    fn bulk_set_storage(&mut self, key: H256, value: Vec<u8>) -> Result<()>;
 
 	/// Determine whether an account exists.
 	fn exists(&self, address: &Address) -> Result<bool>;
@@ -148,10 +161,6 @@ pub trait Ext {
 
 	/// Check if running in static context.
 	fn is_static(&self) -> bool;
-
-	fn fetch_bytes(&self, key: &H256) -> Result<Vec<u8>>;
-
-	fn store_bytes(&mut self, bytes: &[u8]) -> Result<H256>;
 
 	/// Opens up the confidential context to enable encryption. If set, logs will
 	/// be encrypted automatically and one may call the encrypt method.

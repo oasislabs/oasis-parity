@@ -8,7 +8,7 @@
 
 // Parity is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
@@ -47,8 +47,9 @@ pub mod ids {
 	pub const SENDER_FUNC: usize = 190;
 	pub const ORIGIN_FUNC: usize = 200;
 	pub const ELOG_FUNC: usize = 210;
-	pub const FETCH_BYTES_FUNC: usize = 220;
-	// pub const STORE_BYTES_FUNC: usize = 230;
+	pub const GET_BYTES_FUNC: usize = 220;
+    pub const GET_BYTES_LEN_FUNC: usize = 230;
+    pub const SET_BYTES_FUNC: usize = 240;
 
 	pub const PANIC_FUNC: usize = 1000;
 	pub const DEBUG_FUNC: usize = 1010;
@@ -195,15 +196,20 @@ pub mod signatures {
 		None,
 	);
 
-	pub const FETCH_BYTES: StaticSignature = StaticSignature(
+	pub const GET_BYTES: StaticSignature = StaticSignature(
 		&[I32, I32],
 		None,
 	);
 
-	// pub const STORE_BYTES: StaticSignature = StaticSignature(
-	// 	&[I32, I64, I32],
-	// 	None,
-	// );
+    pub const GET_BYTES_LEN: StaticSignature = StaticSignature(
+		&[I32],
+		Some(I32),
+	);
+
+	pub const SET_BYTES: StaticSignature = StaticSignature(
+		&[I32, I32, I64],
+		None,
+	);
 
 	impl Into<wasmi::Signature> for StaticSignature {
 		fn into(self) -> wasmi::Signature {
@@ -290,9 +296,9 @@ impl wasmi::ModuleImportResolver for ImportResolver {
 			"sender" => host(signatures::SENDER, ids::SENDER_FUNC),
 			"origin" => host(signatures::ORIGIN, ids::ORIGIN_FUNC),
 			"elog" => host(signatures::ELOG, ids::ELOG_FUNC),
-			"fetch_bytes" => host(signatures::FETCH_BYTES, ids::FETCH_BYTES_FUNC),
-			// "store_bytes" => host(signatures::STORE_BYTES, ids::STORE_BYTES_FUNC),
-			"store_bytes" => unimplemented!(),
+			"get_bytes" => host(signatures::GET_BYTES, ids::GET_BYTES_FUNC),
+   			"get_bytes_len" => host(signatures::GET_BYTES_LEN, ids::GET_BYTES_LEN_FUNC),
+			"set_bytes" => host(signatures::SET_BYTES, ids::SET_BYTES_FUNC),
 			_ => {
 				return Err(wasmi::Error::Instantiation(
 					format!("Export {} not found", field_name),

@@ -411,6 +411,9 @@ pub trait StateInfo {
 
 	/// Get storage expiration timestamp for account 'a'.
 	fn storage_expiry(&self, a: &Address) -> trie::Result<u64>;
+
+    /// Mutate storage of account `address` so that it is `value` for `key`.
+	fn bulk_storage_at(&self, address: &Address, key: &H256) -> trie::Result<Vec<u8>>;
 }
 
 impl<B: Backend> StateInfo for State<B> {
@@ -419,6 +422,7 @@ impl<B: Backend> StateInfo for State<B> {
 	fn storage_at(&self, address: &Address, key: &H256) -> trie::Result<H256> { State::storage_at(self, address, key) }
 	fn code(&self, address: &Address) -> trie::Result<Option<Arc<Bytes>>> { State::code(self, address) }
 	fn storage_expiry(&self, address: &Address) -> trie::Result<u64> { State::storage_expiry(self, address) }
+	fn bulk_storage_at(&self, address: &Address, key: &H256) -> trie::Result<Vec<u8>> { State::bulk_storage_at(self, address, key) }
 }
 
 const SEC_TRIE_DB_UNWRAP_STR: &'static str = "A state can only be created with valid root. Creating a SecTrieDB with a valid root will not fail. \
@@ -613,11 +617,30 @@ impl<B: Backend> State<B> {
 			|a| a.as_ref().map_or(0, |account| account.storage_expiry()))
 	}
 
-	/// Contract storage interface mapping H256 -> H256. The underlying storage may or may
-	/// not be encrypted. As a result, we pre-process the key, encrypting it if we're in a
-	/// confidential context, and we post-process the value, decrypting it and transforming
-	/// it back to an H256, if needed (since the encrypted form requires a Vec<u8>).
+    /// Returns storage for the given key, translating the underlying
+    /// Arbitrary length byte array into a 256 bit word.
+    ///
+    /// Note: this means that the following will error:
+    ///
+    ///  - Rust contract sets storage > 256 bits.
+    ///  - Rust contract makes a delegate call from a Rust contract to a Solidity
+    ///    contract such that the Solidity contract attempts to modify the same
+    ///    storage that was set in step 1.
+    ///
+    /// If we don't want this to fail, we'd have to allow truncation from Vec<u8>
+    /// to H256. when accessing data through SSTORE.
 	pub fn storage_at(&self, address: &Address, key: &H256) -> trie::Result<H256> {
+        let storage = self.bulk_storage_at(address, key)?;
+        if storage.len() != 32 {
+            panic!("TODO: REPLACE THIS PANIC WITH AN ERROR");
+        }
+        Ok(H256::from(storage.as_slice()))
+    }
+
+    /// Contract storage interface mapping H256 -> H256. The underlying storage may or may
+	/// not be encrypted. As a result, we pre-process the key, encrypting it if we're in a
+	/// confidential context, and we post-process the value by decrypting it.
+    pub fn bulk_storage_at(&self, address: &Address, key: &H256) -> trie::Result<Vec<u8>> {
 		let key = self.to_storage_key(key);
 		let value = self._storage_at(address, &key)?;
 		Ok(self.from_storage_value(value))
@@ -747,11 +770,15 @@ impl<B: Backend> State<B> {
 	/// Analogous to storage_at, encrypts the key, value, if needed, before inserting into
 	/// the backing account storage.
 	pub fn set_storage(&mut self, a: &Address, key: H256, value: H256) -> trie::Result<()> {
-		trace!(target: "state", "set_storage({}:{:x} to {:x})", a, key, value);
-		let key = self.to_storage_key(&key);
-		let value = self.to_storage_value(&value);
-		self._set_storage(a, key, value)
+        self.bulk_set_storage(a, key, value.to_vec())
 	}
+
+    pub fn bulk_set_storage(&mut self, a: &Address, key: H256, value: Vec<u8>) -> trie::Result<()> {
+        trace!(target: "state", "set_storage({}:{:x} to {:?})", a, key, value);
+		let key = self.to_storage_key(&key);
+		let value = self.to_storage_value(value);
+		self._set_storage(a, key, value)
+    }
 
 	/// Mutate storage of account `a` so that it is `value` for `key`.
 	fn _set_storage(&mut self, a: &Address, key: H256, value: Vec<u8>) -> trie::Result<()> {
@@ -1194,15 +1221,15 @@ impl<B: Backend> State<B> {
 	/// Returns the given value in a format that is suitable for storage.
 	/// If a confidential context is open, then encrypts the value. Otherwise
 	/// returns the given value as a Vec.
-	fn to_storage_value(&self, value: &H256) -> Vec<u8> {
+	fn to_storage_value(&self, value: Vec<u8>) -> Vec<u8> {
 		if self.is_confidential_ctx_open() {
 			self.confidential_ctx
 				.as_ref()
 				.unwrap()
-				.encrypt_storage(value.to_vec())
+				.encrypt_storage(value)
 				.expect("Should be able to encrypt storage")
 		} else {
-			value.to_vec()
+			value
 		}
 	}
 
@@ -1210,12 +1237,12 @@ impl<B: Backend> State<B> {
 	/// If a confidential context is open, then decrypts the value, otherwise returns
 	/// the value as given, as an H256. Assumes all *unencrypted* contract storage
 	/// values are H256.
-	fn from_storage_value(&self, value: Option<Vec<u8>>) -> H256 {
+	fn from_storage_value(&self, value: Option<Vec<u8>>) -> Vec<u8> {
 		if value.is_none() {
-			return H256::new();
+			return H256::new().to_vec();
 		}
 		let value = value.unwrap();
-		let result = if self.is_confidential_ctx_open() {
+		if self.is_confidential_ctx_open() {
 			self.confidential_ctx
 				.as_ref()
 				.unwrap()
@@ -1223,10 +1250,7 @@ impl<B: Backend> State<B> {
 				.expect("Corrupted state")
 		} else {
 			value
-		};
-		// all storage should be 32 bytes before encryption
-		assert!(result.len() == 32);
-		H256::from_slice(&result[..32])
+		}
 	}
 }
 

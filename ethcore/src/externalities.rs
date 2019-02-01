@@ -119,6 +119,7 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Externalities<'a, T, V, X, B>
 impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 	where T: Tracer, V: VMTracer, X: ExtTracer, B: StateBackend
 {
+
 	fn storage_at(&self, key: &H256) -> vm::Result<H256> {
 		self.ext_tracer.trace_storage_at(key);
 		self.state.storage_at(&self.origin_info.address, key).map_err(Into::into)
@@ -132,6 +133,24 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 			self.state.set_storage(&self.origin_info.address, key, value).map_err(Into::into)
 		}
 	}
+
+    fn bulk_storage_at(&self, key: &H256) -> vm::Result<Vec<u8>> {
+        // self.ext_tracer.trace_storage_at(key);
+        // todo trace
+		self.state.bulk_storage_at(&self.origin_info.address, key).map_err(Into::into)
+    }
+
+    fn bulk_storage_len(&self, key: &H256) -> vm::Result<u32> {
+        self.bulk_storage_at(key).map(|bytes| bytes.len() as u32) // TODO: get it directly from RLP instead
+    }
+
+    fn bulk_set_storage(&mut self, key: H256, value: Vec<u8>) -> vm::Result<()> {
+        if self.static_flag {
+			Err(vm::Error::MutableCallInStaticContext)
+		} else {
+			self.state.bulk_set_storage(&self.origin_info.address, key, value).map_err(Into::into)
+		}
+    }
 
 	fn is_static(&self) -> bool {
 		return self.static_flag
@@ -405,16 +424,6 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 	fn trace_executed(&mut self, gas_used: U256, stack_push: &[U256], mem_diff: Option<(usize, &[u8])>, store_diff: Option<(U256, U256)>) {
 		self.vm_tracer.trace_executed(gas_used, stack_push, mem_diff, store_diff)
 	}
-
-    fn fetch_bytes(&self, key: &H256) -> vm::Result<Vec<u8>> {
-        // TODO: https://github.com/oasislabs/runtime-ethereum/issues/474
-        Ok(vec![])
-    }
-
-    fn store_bytes(&mut self, bytes: &[u8]) -> vm::Result<H256> {
-        // TODO: https://github.com/oasislabs/runtime-ethereum/issues/474
-        Ok(H256::from(0))
-    }
 
 	fn create_long_term_public_key(&self, contract: Address) -> vm::Result<(Vec<u8>, Vec<u8>)> {
 		if self.state.confidential_ctx.is_none() {

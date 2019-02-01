@@ -494,19 +494,19 @@ impl<Cost: CostType> Interpreter<Cost> {
 			},
 			instructions::SLOAD => {
 				let key = H256::from(&stack.pop_back());
-				let word = U256::from(&*ext.storage_at(&key)?);
+                let word = U256::from(&*ext.storage_at(&key)?);
 				stack.push(word);
 			},
 			instructions::SSTORE => {
 				let address = H256::from(&stack.pop_back());
 				let val = stack.pop_back();
 
-				let current_val = U256::from(&*ext.storage_at(&address)?);
+                let current_val = U256::from(&*ext.storage_at(&address)?);
 				// Increase refund for clear
 				if !self.is_zero(&current_val) && self.is_zero(&val) {
 					ext.inc_sstore_clears();
 				}
-				ext.set_storage(address, H256::from(&val))?;
+				ext.set_storage(address, H256::from(val))?;
 			},
 			instructions::PC => {
 				stack.push(U256::from(code.position - 1));

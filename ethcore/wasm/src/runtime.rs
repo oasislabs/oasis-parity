@@ -16,6 +16,7 @@
 use std::mem;
 
 use ethereum_types::{U256, H256, Address};
+use hash;
 use vm::{self, CallType};
 use wasmi::{self, MemoryRef, RuntimeArgs, RuntimeValue, Error as InterpreterError, Trap, TrapKind};
 use super::panic_payload;
@@ -253,6 +254,7 @@ impl<'a> Runtime<'a> {
 	}
 
 	/// Read from the storage to wasm memory
+    /// All storage written through here *must* be an H256.
 	pub fn storage_read(&mut self, args: RuntimeArgs) -> Result<()>
 	{
 		let key = self.h256_at(args.nth_checked(0)?)?;
@@ -268,6 +270,7 @@ impl<'a> Runtime<'a> {
 	}
 
 	/// Write to storage from wasm memory
+    /// All storage written through here *must* be an H256.
 	pub fn storage_write(&mut self, args: RuntimeArgs) -> Result<()>
 	{
 		let key = self.h256_at(args.nth_checked(0)?)?;
@@ -322,7 +325,7 @@ impl<'a> Runtime<'a> {
 		if self.gas_counter > self.gas_limit { return Err(Error::InvalidGasState); }
 		Ok(self.gas_limit - self.gas_counter)
 	}
-	
+
 	/// General gas charging extern.
 	fn gas(&mut self, args: RuntimeArgs) -> Result<()> {
 		let amount: u32 = args.nth_checked(0)?;
@@ -729,25 +732,39 @@ impl<'a> Runtime<'a> {
 		Ok(())
 	}
 
-	/// Signature: `fn fetch_bytes(key: *const u8, result: *mut u8)`
-	pub fn fetch_bytes(&mut self, args: RuntimeArgs) -> Result<()> {
-		let key = self.h256_at(args.nth_checked(0)?)?;
-		let bytes = self.ext.fetch_bytes(&key).map_err(|_| Error::StorageReadError)?;
+	/// Signature: `fn get_bytes(key: *const u8, result: *mut u8)`
+	pub fn get_bytes(&mut self, args: RuntimeArgs) -> Result<()> {
+		let key = self.bulk_storage_key(self.h256_at(args.nth_checked(0)?)?);
+		let bytes = self.ext.bulk_storage_at(&key).map_err(|_| Error::StorageReadError)?;
 		self.memory.set(args.nth_checked(1)?, &bytes)?;
-
 		Ok(())
 	}
 
-	/// Signature: `fn store_bytes(bytes: *const u8, len: u64, key: *mut u8)`
-	pub fn store_bytes(&mut self, args: RuntimeArgs) -> Result<()> {
-		let bytes_ptr: u32 = args.nth_checked(0)?;
-		let len: u64 = args.nth_checked(1)?;
+    /// Signature: `fn get_bytes_len(key: *const u8) -> u32`
+	pub fn get_bytes_len(&mut self, args: RuntimeArgs) -> Result<RuntimeValue> {
+		let key = self.bulk_storage_key(self.h256_at(args.nth_checked(0)?)?);
+		let len = self.ext.bulk_storage_len(&key).map_err(|_| Error::StorageReadError)?;
+		Ok(RuntimeValue::I32(len as i32))
+	}
+
+	/// Signature: `fn set_bytes(key: *const u8, bytes: *mut u8, len: u64)`
+	pub fn set_bytes(&mut self, args: RuntimeArgs) -> Result<()> {
+        let key = self.bulk_storage_key(self.h256_at(args.nth_checked(0)?)?);
+
+		let bytes_ptr: u32 = args.nth_checked(1)?;
+		let len: u64 = args.nth_checked(2)?;
+
 		let bytes = self.memory.get(bytes_ptr, len as usize)?;
-		let key = self.ext.store_bytes(&bytes).expect("Failed to generate key");
-		self.memory.set(args.nth_checked(2)?, &*key)?;
+        self.ext.bulk_set_storage(key, bytes).expect("Failed to generate key");
 
 		Ok(())
 	}
+
+    /// Transform the key from the wasm input into the actual key stored in the
+    /// underlying state trie.
+    fn bulk_storage_key(&self, key: H256) -> H256 {
+        hash::keccak(key)
+    }
 }
 
 mod ext_impl {
@@ -800,8 +817,9 @@ mod ext_impl {
 				SENDER_FUNC => void!(self.sender(args)),
 				ORIGIN_FUNC => void!(self.origin(args)),
 				ELOG_FUNC => void!(self.elog(args)),
-				FETCH_BYTES_FUNC => void!(self.fetch_bytes(args)),
-				// STORE_BYTES_FUNC => void!(self.store_bytes(args)),
+				GET_BYTES_FUNC => void!(self.get_bytes(args)),
+                GET_BYTES_LEN_FUNC => some!(self.get_bytes_len(args)),
+				SET_BYTES_FUNC => void!(self.set_bytes(args)),
 				_ => panic!("env module doesn't provide function at index {}", index),
 			}
 		}

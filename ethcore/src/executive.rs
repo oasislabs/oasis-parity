@@ -376,7 +376,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 
 		let vm_factory = self.state.vm_factory();
 		let mut ext = self.as_externalities(OriginInfo::from(&params), unconfirmed_substate, output_policy, tracer, vm_tracer, ext_tracer, static_call);
-		trace!(target: "executive", "ext.schedule.have_delegate_call: {}", ext.schedule().have_delegate_call);
+		println!("enclave ext.schedule.have_delegate_call: {}", ext.schedule().have_delegate_call);
 		let mut vm = vm_factory.create(&params, &schedule);
 		return vm.exec(params, &mut ext).finalize(ext);
 	}
@@ -499,7 +499,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 
 				vm_tracer.done_subtrace(subvmtracer);
 
-				trace!(target: "executive", "res={:?}", res);
+				println!("enclave res={:?}", res);
 
 				let traces = subtracer.drain();
 				match res {
@@ -513,10 +513,10 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					Err(ref e) => tracer.trace_failed_call(trace_info, traces, e.into()),
 				};
 
-				trace!(target: "executive", "substate={:?}; unconfirmed_substate={:?}\n", substate, unconfirmed_substate);
+				println!("enclave substate={:?}; unconfirmed_substate={:?}\n", substate, unconfirmed_substate);
 
 				self.enact_result(&res, substate, unconfirmed_substate);
-				trace!(target: "executive", "enacted: substate={:?}\n", substate);
+				println!("enclave enacted: substate={:?}\n", substate);
 				res
 			} else {
 				// otherwise it's just a basic transaction, only do tracing, if necessary.
