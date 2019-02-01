@@ -166,7 +166,6 @@ pub mod pod_state;
 pub mod spec;
 pub mod state;
 pub mod state_db;
-pub mod storage;
 pub mod trace;
 /// Ext (Externalities) tracing
 pub mod trace_ext;

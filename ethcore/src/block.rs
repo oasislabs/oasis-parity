@@ -37,7 +37,6 @@ use receipt::{Receipt, TransactionOutcome};
 use state::{State, ConfidentialCtx};
 use state::backend::{Wrapped as WrappedBackend};
 // use state_db::StateDB;
-use storage::Storage;
 use trace::Tracing;
 use transaction::{UnverifiedTransaction, SignedTransaction, Error as TransactionError};
 // use verification::PreverifiedBlock;
@@ -367,7 +366,6 @@ impl<'x> OpenBlock<'x> {
 		&mut self,
 		tx: SignedTransaction,
 		h: Option<H256>,
-		storage: &mut Storage
 	) -> Result<&Receipt, Error> {
 		if self.block.transactions_set.contains(&tx.hash()) {
 			return Err(TransactionError::AlreadyImported.into());
@@ -375,7 +373,7 @@ impl<'x> OpenBlock<'x> {
 
 		let env_info = self.env_info();
 
-		let outcome = self.block.state.apply(&env_info, self.engine.machine(), &tx, self.block.traces.is_enabled(), storage)?;
+		let outcome = self.block.state.apply(&env_info, self.engine.machine(), &tx, self.block.traces.is_enabled())?;
 
 		self.block.transactions_set.insert(h.unwrap_or_else(||tx.hash()));
 		self.block.transactions.push(tx.into());
@@ -390,23 +388,23 @@ impl<'x> OpenBlock<'x> {
 
 	/// Push transactions onto the block.
 	#[cfg(not(feature = "slow-blocks"))]
-	fn push_transactions(&mut self, transactions: Vec<SignedTransaction>, storage: &mut Storage) -> Result<(), Error> {
+	fn push_transactions(&mut self, transactions: Vec<SignedTransaction>) -> Result<(), Error> {
 		for t in transactions {
-			self.push_transaction(t, None, storage)?;
+			self.push_transaction(t, None)?;
 		}
 		Ok(())
 	}
 
 	/// Push transactions onto the block.
 	#[cfg(feature = "slow-blocks")]
-	fn push_transactions(&mut self, transactions: Vec<SignedTransaction>, storage: &mut Storage) -> Result<(), Error> {
+	fn push_transactions(&mut self, transactions: Vec<SignedTransaction>) -> Result<(), Error> {
 		use std::time;
 
 		let slow_tx = option_env!("SLOW_TX_DURATION").and_then(|v| v.parse().ok()).unwrap_or(100);
 		for t in transactions {
 			let hash = t.hash();
 			let start = time::Instant::now();
-			self.push_transaction(t, None, storage)?;
+			self.push_transaction(t, None)?;
 			let took = start.elapsed();
 			let took_ms = took.as_secs() * 1000 + took.subsec_nanos() as u64 / 1000000;
 			if took > time::Duration::from_millis(slow_tx) {
@@ -722,7 +720,6 @@ mod tests {
 	use ethereum_types::Address;
 	use std::sync::Arc;
 	use transaction::SignedTransaction;
-	use storage::NullStorage;
 	use state::Backend;
 
 	/// Enact the block given by `block_bytes` using `engine` on the database `db` with given `parent` block header
@@ -744,7 +741,6 @@ mod tests {
 			.map(|r| r.map_err(Into::into))
 			.collect();
 		let transactions = transactions?;
-		let mut storage = NullStorage::new();
 
 		{
 			if ::log::max_log_level() >= ::log::LogLevel::Trace {
@@ -770,7 +766,7 @@ mod tests {
 		)?;
 
 		b.populate_from(&header);
-		b.push_transactions(transactions, &mut storage)?;
+		b.push_transactions(transactions)?;
 
 		for u in &block.uncles() {
 			b.push_uncle(u.clone())?;
