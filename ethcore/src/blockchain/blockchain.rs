@@ -535,9 +535,13 @@ impl BlockChain {
 		// load best block
 		let best_block_hash = match bc.db.get(db::COL_EXTRA, b"best").unwrap() {
 			Some(best) => {
+				info!("best block loaded from blockchain database");
+
 				H256::from_slice(&best)
 			}
 			None => {
+				warn!("best block not found in blockchain database");
+
 				// best block does not exist
 				// we need to insert genesis into the cache
 				let block = view!(BlockView, genesis);
@@ -568,6 +572,7 @@ impl BlockChain {
 
 		{
 			// Fetch best block details
+			info!("fetching best block details");
 			let best_block_total_difficulty = bc.block_details(&best_block_hash).unwrap().total_difficulty;
 			let best_block_rlp = bc.block(&best_block_hash).unwrap();
 
@@ -581,6 +586,8 @@ impl BlockChain {
 		}
 
 		{
+			info!("fetching first/ancient blocks");
+
 			let best_block_number = bc.best_block.read().unwrap().header.number();
 			// Fetch first and best ancient block details
 			let raw_first = bc.db.get(db::COL_EXTRA, b"first").unwrap().map(|v| v.into_vec());
