@@ -5,11 +5,11 @@ panic_abort = {}
 
 [dependencies.std]
 git = "https://github.com/oasislabs/rust-sgx-sdk"
-tag = "v1.0.1-ekiden3"
+tag = "v1.0.5-ekiden1"
 features = ["backtrace", "stdio", "untrusted_time"]
 stage = 2
 
 [dependencies.xargo_sgx_rand]
 git = "https://github.com/oasislabs/rust-sgx-sdk"
-tag = "v1.0.1-ekiden3"
+tag = "v1.0.5-ekiden1"
 stage = 3
