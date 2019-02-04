@@ -253,16 +253,29 @@ impl Transaction {
 	}
 
 	/// Get the transaction cost in gas for the given params.
-	pub fn gas_required_for(is_create: bool, data: &[u8], schedule: &Schedule) -> u64 {
+	pub fn gas_required_for(is_create: bool, data: &[u8], schedule: &Schedule, confidential: bool) -> u64 {
 		data.iter().fold(
 			(if is_create {schedule.tx_create_gas} else {schedule.tx_gas}) as u64,
-			|g, b| g + (match *b { 0 => schedule.tx_data_zero_gas, _ => schedule.tx_data_non_zero_gas }) as u64
+			|g, b| {
+				// The data field of a confidential transaction has a variable number of zeroes,
+				// depending upon the encryption. As a result, under the  normal Ethereum gas
+				// model, which separates zero bytes from non-zero bytes, the gas required can vary since
+				// the number of zero bytes will vary depending upon the encryption. To address this,
+				// we treat every byte as a non-zero byte (for confidential txs) so that the gas required
+				// is always the same, irrespective of what the encrypted data looks like.
+				let byte_cost = if confidential {
+					schedule.tx_data_non_zero_gas as u64
+				} else {
+					(match *b { 0 => schedule.tx_data_zero_gas, _ => schedule.tx_data_non_zero_gas }) as u64
+				};
+				g + byte_cost
+			}
 		)
 	}
 
 	/// Get the transaction cost in gas for this transaction.
-	pub fn gas_required(&self, schedule: &Schedule) -> u64 {
-		Self::gas_required_for(match self.action{Action::Create=>true, Action::Call(_)=>false}, &self.data, schedule)
+	pub fn gas_required(&self, schedule: &Schedule, confidential: bool) -> u64 {
+		Self::gas_required_for(match self.action{Action::Create=>true, Action::Call(_)=>false},	&self.data, schedule, confidential)
 	}
 }
 

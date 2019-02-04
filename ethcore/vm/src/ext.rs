@@ -69,6 +69,14 @@ pub trait Ext {
 	/// Stores a value for given key.
 	fn set_storage(&mut self, key: H256, value: H256) -> Result<()>;
 
+	/// Returns the storage expiry for the origin account.
+	fn storage_expiry(&self) -> Result<u64>;
+
+	/// Returns the duration until the origin account's storage expires (in seconds).
+	///
+	/// Returns Err if the contract is expired.
+	fn seconds_until_expiry(&self) -> Result<u64>;
+
 	/// Determine whether an account exists.
 	fn exists(&self, address: &Address) -> Result<bool>;
 
@@ -135,7 +143,7 @@ pub trait Ext {
 	fn depth(&self) -> usize;
 
 	/// Increments sstore refunds count by 1.
-	fn inc_sstore_clears(&mut self);
+	fn inc_sstore_clears(&mut self) -> Result<()>;
 
 	/// Decide if any more operations should be traced. Passthrough for the VM trace.
 	fn trace_next_instruction(&mut self, _pc: usize, _instruction: u8, _current_gas: U256) -> bool { false }
@@ -155,7 +163,7 @@ pub trait Ext {
 
 	/// Opens up the confidential context to enable encryption. If set, logs will
 	/// be encrypted automatically and one may call the encrypt method.
-	fn open_confidential_ctx(&mut self, encrypted_data: Vec<u8>, contract: Address) -> Result<Vec<u8>>;
+	fn open_confidential_ctx(&mut self, contract: Address, encrypted_data: Option<Vec<u8>>) -> Result<Vec<u8>>;
 
 	/// Closes the confidential context so that logs are no longer encrypted and
 	/// the `encrypt` method returns an error.
@@ -163,9 +171,10 @@ pub trait Ext {
 
 	/// Encrypts the given data inside a confidential context. `open_confidential_ctx`
 	/// must be called prior to invoking this method.
-	fn encrypt(&self, data: Vec<u8>) -> Result<Vec<u8>>;
+	fn encrypt(&mut self, data: Vec<u8>) -> Result<Vec<u8>>;
 
 	/// Allocates and returns the long term public key associated with the given contract.
-	/// To be called upon creation of the contract.
-	fn create_long_term_public_key(&self, contract: Address) -> Result<Vec<u8>>;
+	/// To be called upon creation of the contract. Returns a tuple containing the
+	/// long term public key and a signature over the key by the KeyManager.
+	fn create_long_term_public_key(&self, contract: Address) -> Result<(Vec<u8>, Vec<u8>)>;
 }

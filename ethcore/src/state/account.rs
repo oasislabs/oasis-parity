@@ -55,12 +55,14 @@ pub struct Account {
 	nonce: U256,
 	// Trie-backed storage.
 	storage_root: H256,
+	// Storage expiry (Unix timestamp, seconds since the epoch).
+	storage_expiry: u64,
 	// LRU Cache of the trie-backed storage.
 	// This is limited to `STORAGE_CACHE_ITEMS` recent queries
-	storage_cache: RefCell<LruCache<H256, H256>>,
+	storage_cache: RefCell<LruCache<H256, Vec<u8>>>,
 	// Modified storage. Accumulates changes to storage made in `set_storage`
 	// Takes precedence over `storage_cache`.
-	storage_changes: HashMap<H256, H256>,
+	storage_changes: HashMap<H256, Vec<u8>>,
 	// Code hash of the account.
 	code_hash: H256,
 	// Size of the account code.
@@ -79,6 +81,7 @@ impl From<BasicAccount> for Account {
 			balance: basic.balance,
 			nonce: basic.nonce,
 			storage_root: basic.storage_root,
+			storage_expiry: basic.storage_expiry,
 			storage_cache: Self::empty_storage_cache(),
 			storage_changes: HashMap::new(),
 			code_hash: basic.code_hash,
@@ -93,11 +96,12 @@ impl From<BasicAccount> for Account {
 impl Account {
 	#[cfg(test)]
 	/// General constructor.
-	pub fn new(balance: U256, nonce: U256, storage: HashMap<H256, H256>, code: Bytes) -> Account {
+	pub fn new(balance: U256, nonce: U256, storage: HashMap<H256, Vec<u8>>, code: Bytes, storage_expiry: u64) -> Account {
 		Account {
 			balance: balance,
 			nonce: nonce,
 			storage_root: KECCAK_NULL_RLP,
+			storage_expiry: storage_expiry,
 			storage_cache: Self::empty_storage_cache(),
 			storage_changes: storage,
 			code_hash: keccak(&code),
@@ -108,7 +112,7 @@ impl Account {
 		}
 	}
 
-	fn empty_storage_cache() -> RefCell<LruCache<H256, H256>> {
+	fn empty_storage_cache() -> RefCell<LruCache<H256, Vec<u8>>> {
 		RefCell::new(LruCache::new(STORAGE_CACHE_ITEMS))
 	}
 
@@ -118,6 +122,7 @@ impl Account {
 			balance: pod.balance,
 			nonce: pod.nonce,
 			storage_root: KECCAK_NULL_RLP,
+			storage_expiry: pod.storage_expiry,
 			storage_cache: Self::empty_storage_cache(),
 			storage_changes: pod.storage.into_iter().collect(),
 			code_hash: pod.code.as_ref().map_or(KECCAK_EMPTY, |c| keccak(c)),
@@ -134,6 +139,7 @@ impl Account {
 			balance: balance,
 			nonce: nonce,
 			storage_root: KECCAK_NULL_RLP,
+			storage_expiry: 0,
 			storage_cache: Self::empty_storage_cache(),
 			storage_changes: HashMap::new(),
 			code_hash: KECCAK_EMPTY,
@@ -153,11 +159,12 @@ impl Account {
 
 	/// Create a new contract account.
 	/// NOTE: make sure you use `init_code` on this before `commit`ing.
-	pub fn new_contract(balance: U256, nonce: U256) -> Account {
+	pub fn new_contract(balance: U256, nonce: U256, storage_expiry: u64) -> Account {
 		Account {
 			balance: balance,
 			nonce: nonce,
 			storage_root: KECCAK_NULL_RLP,
+			storage_expiry: storage_expiry,
 			storage_cache: Self::empty_storage_cache(),
 			storage_changes: HashMap::new(),
 			code_hash: KECCAK_EMPTY,
@@ -183,7 +190,7 @@ impl Account {
 	}
 
 	/// Reset this account's code and storage to given values.
-	pub fn reset_code_and_storage(&mut self, code: Arc<Bytes>, storage: HashMap<H256, H256>) {
+	pub fn reset_code_and_storage(&mut self, code: Arc<Bytes>, storage: HashMap<H256, Vec<u8>>) {
 		self.code_hash = keccak(&*code);
 		self.code_cache = code;
 		self.code_size = Some(self.code_cache.len());
@@ -193,27 +200,29 @@ impl Account {
 	}
 
 	/// Set (and cache) the contents of the trie's storage at `key` to `value`.
-	pub fn set_storage(&mut self, key: H256, value: H256) {
+	pub fn set_storage(&mut self, key: H256, value: Vec<u8>) {
 		self.storage_changes.insert(key, value);
 	}
 
 	/// Get (and cache) the contents of the trie's storage at `key`.
 	/// Takes modified storage into account.
-	pub fn storage_at(&self, db: &HashDB, key: &H256) -> trie::Result<H256> {
+	/// Returns None in the result if the key doesn't exist in storage.
+	pub fn storage_at(&self, db: &HashDB, key: &H256) -> trie::Result<Option<Vec<u8>>> {
 		if let Some(value) = self.cached_storage_at(key) {
-			return Ok(value);
+			return Ok(Some(value));
 		}
 		let db = SecTrieDB::new(db, &self.storage_root)?;
 		let panicky_decoder = |bytes:&[u8]| ::rlp::decode(&bytes).expect("decoding db value failed");
-		let item: U256 = db.get_with(key, panicky_decoder)?.unwrap_or_else(U256::zero);
-		let value: H256 = item.into();
-		self.storage_cache.borrow_mut().insert(key.clone(), value.clone());
-		Ok(value)
+		let item: Option<Vec<u8>> = db.get_with(key, panicky_decoder)?;
+		Ok(item.map(|value| {
+			self.storage_cache.borrow_mut().insert(key.clone(), value.clone());
+			value
+		}))
 	}
 
 	/// Get cached storage value if any. Returns `None` if the
 	/// key is not in the cache.
-	pub fn cached_storage_at(&self, key: &H256) -> Option<H256> {
+	pub fn cached_storage_at(&self, key: &H256) -> Option<Vec<u8>> {
 		if let Some(value) = self.storage_changes.get(key) {
 			return Some(value.clone())
 		}
@@ -354,7 +363,11 @@ impl Account {
 	pub fn storage_root(&self) -> Option<&H256> { if self.storage_is_clean() {Some(&self.storage_root)} else {None} }
 
 	/// Return the storage overlay.
-	pub fn storage_changes(&self) -> &HashMap<H256, H256> { &self.storage_changes }
+	pub fn storage_changes(&self) -> &HashMap<H256, Vec<u8>> { &self.storage_changes }
+
+	/// Return the storage expiry timestamp associated with this account.
+	/// The value is a Unix timestamp.
+	pub fn storage_expiry(&self) -> u64 { self.storage_expiry }
 
 	/// Increment the nonce of the account by one.
 	pub fn inc_nonce(&mut self) {
@@ -379,9 +392,13 @@ impl Account {
 		for (k, v) in self.storage_changes.drain() {
 			// cast key and value to trait type,
 			// so we can call overloaded `to_bytes` method
-			match v.is_zero() {
+            //
+            // Note: for confidential contracts we never remove from storage, even if the storage is
+            //       zeroed out. This is guaranteed since the length will always be > 32 when
+            //       encrypted.
+			match v.len() == 32 && H256::from_slice(&v).is_zero() {
 				true => t.remove(&k)?,
-				false => t.insert(&k, &encode(&U256::from(&*v)))?,
+				false => t.insert(&k, &encode(&v))?,
 			};
 
 			self.storage_cache.borrow_mut().insert(k, v);
@@ -408,11 +425,12 @@ impl Account {
 
 	/// Export to RLP.
 	pub fn rlp(&self) -> Bytes {
-		let mut stream = RlpStream::new_list(4);
+		let mut stream = RlpStream::new_list(5);
 		stream.append(&self.nonce);
 		stream.append(&self.balance);
 		stream.append(&self.storage_root);
 		stream.append(&self.code_hash);
+		stream.append(&self.storage_expiry);
 		stream.out()
 	}
 
@@ -422,6 +440,7 @@ impl Account {
 			balance: self.balance.clone(),
 			nonce: self.nonce.clone(),
 			storage_root: self.storage_root.clone(),
+			storage_expiry: self.storage_expiry.clone(),
 			storage_cache: Self::empty_storage_cache(),
 			storage_changes: HashMap::new(),
 			code_hash: self.code_hash.clone(),
@@ -453,6 +472,7 @@ impl Account {
 		self.balance = other.balance;
 		self.nonce = other.nonce;
 		self.storage_root = other.storage_root;
+		self.storage_expiry = other.storage_expiry;
 		self.code_hash = other.code_hash;
 		self.code_filth = other.code_filth;
 		self.code_cache = other.code_cache;
@@ -472,17 +492,17 @@ impl Account {
 	/// trie.
 	/// `storage_key` is the hash of the desired storage key, meaning
 	/// this will only work correctly under a secure trie.
-	pub fn prove_storage(&self, db: &HashDB, storage_key: H256) -> Result<(Vec<Bytes>, H256), Box<TrieError>> {
+	pub fn prove_storage(&self, db: &HashDB, storage_key: H256) -> Result<(Vec<Bytes>, Vec<u8>), Box<TrieError>> {
 		use trie::{Trie, TrieDB};
 		use trie::recorder::Recorder;
 
 		let mut recorder = Recorder::new();
 
 		let trie = TrieDB::new(db, &self.storage_root)?;
-		let item: U256 = {
+		let item: Vec<u8> = {
 			let panicky_decoder = |bytes:&[u8]| ::rlp::decode(bytes).expect("decoding db value failed");
 			let query = (&mut recorder, panicky_decoder);
-			trie.get_with(&storage_key, query)?.unwrap_or_else(U256::zero)
+			trie.get_with(&storage_key, query)?.unwrap_or(H256::zero().to_vec())
 		};
 
 		Ok((recorder.drain().into_iter().map(|r| r.data).collect(), item.into()))
@@ -496,6 +516,7 @@ impl fmt::Debug for Account {
 			.field("nonce", &self.nonce)
 			.field("code", &self.code())
 			.field("storage", &self.storage_changes.iter().collect::<BTreeMap<_, _>>())
+			.field("storage_expiry", &self.storage_expiry)
 			.finish()
 	}
 }
@@ -523,8 +544,8 @@ mod tests {
 		let mut db = MemoryDB::new();
 		let mut db = AccountDBMut::new(&mut db, &Address::new());
 		let rlp = {
-			let mut a = Account::new_contract(69.into(), 0.into());
-			a.set_storage(0x00u64.into(), 0x1234u64.into());
+			let mut a = Account::new_contract(69.into(), 0.into(), 0);
+			a.set_storage(0x00u64.into(), H256::from(0x1234u64).to_vec());
 			a.commit_storage(&Default::default(), &mut db).unwrap();
 			a.init_code(vec![]);
 			a.commit_code(&mut db);
@@ -532,9 +553,9 @@ mod tests {
 		};
 
 		let a = Account::from_rlp(&rlp).expect("decoding db value failed");
-		assert_eq!(*a.storage_root().unwrap(), "c57e1afb758b07f8d2c8f13a3b6e44fa5ff94ab266facc5a4fd3f062426e50b2".into());
-		assert_eq!(a.storage_at(&db.immutable(), &0x00u64.into()).unwrap(), 0x1234u64.into());
-		assert_eq!(a.storage_at(&db.immutable(), &0x01u64.into()).unwrap(), H256::default());
+		assert_eq!(*a.storage_root().unwrap(), "0x82a0fa8c476a310ccb2aab5ef344ac5941d26d43c99b3bd3e1cb677ce22aa073".into());
+		assert_eq!(a.storage_at(&db.immutable(), &0x00u64.into()).unwrap().unwrap(), H256::from(0x1234u64).to_vec());
+		assert_eq!(a.storage_at(&db.immutable(), &0x01u64.into()).unwrap(), None);
 	}
 
 	#[test]
@@ -543,7 +564,7 @@ mod tests {
 		let mut db = AccountDBMut::new(&mut db, &Address::new());
 
 		let rlp = {
-			let mut a = Account::new_contract(69.into(), 0.into());
+			let mut a = Account::new_contract(69.into(), 0.into(), 0);
 			a.init_code(vec![0x55, 0x44, 0xffu8]);
 			a.commit_code(&mut db);
 			a.rlp()
@@ -558,32 +579,33 @@ mod tests {
 
 	#[test]
 	fn commit_storage() {
-		let mut a = Account::new_contract(69.into(), 0.into());
+		let mut a = Account::new_contract(69.into(), 0.into(), 0);
 		let mut db = MemoryDB::new();
 		let mut db = AccountDBMut::new(&mut db, &Address::new());
-		a.set_storage(0.into(), 0x1234.into());
+        let value = H256::from(0x1234);
+		a.set_storage(0.into(), value.to_vec());
 		assert_eq!(a.storage_root(), None);
 		a.commit_storage(&Default::default(), &mut db).unwrap();
-		assert_eq!(*a.storage_root().unwrap(), "c57e1afb758b07f8d2c8f13a3b6e44fa5ff94ab266facc5a4fd3f062426e50b2".into());
+		assert_eq!(*a.storage_root().unwrap(), "0x82a0fa8c476a310ccb2aab5ef344ac5941d26d43c99b3bd3e1cb677ce22aa073".into());
 	}
 
 	#[test]
 	fn commit_remove_commit_storage() {
-		let mut a = Account::new_contract(69.into(), 0.into());
+		let mut a = Account::new_contract(69.into(), 0.into(), 0);
 		let mut db = MemoryDB::new();
 		let mut db = AccountDBMut::new(&mut db, &Address::new());
-		a.set_storage(0.into(), 0x1234.into());
+		a.set_storage(0.into(), H256::from(0x1234).to_vec());
 		a.commit_storage(&Default::default(), &mut db).unwrap();
-		a.set_storage(1.into(), 0x1234.into());
+		a.set_storage(1.into(), H256::from(0x1234).to_vec());
 		a.commit_storage(&Default::default(), &mut db).unwrap();
-		a.set_storage(1.into(), 0.into());
+		a.set_storage(1.into(), H256::from(0).to_vec());
 		a.commit_storage(&Default::default(), &mut db).unwrap();
-		assert_eq!(*a.storage_root().unwrap(), "c57e1afb758b07f8d2c8f13a3b6e44fa5ff94ab266facc5a4fd3f062426e50b2".into());
+		assert_eq!(*a.storage_root().unwrap(), "0x82a0fa8c476a310ccb2aab5ef344ac5941d26d43c99b3bd3e1cb677ce22aa073".into());
 	}
 
 	#[test]
 	fn commit_code() {
-		let mut a = Account::new_contract(69.into(), 0.into());
+		let mut a = Account::new_contract(69.into(), 0.into(), 0);
 		let mut db = MemoryDB::new();
 		let mut db = AccountDBMut::new(&mut db, &Address::new());
 		a.init_code(vec![0x55, 0x44, 0xffu8]);
@@ -595,7 +617,7 @@ mod tests {
 
 	#[test]
 	fn reset_code() {
-		let mut a = Account::new_contract(69.into(), 0.into());
+		let mut a = Account::new_contract(69.into(), 0.into(), 0);
 		let mut db = MemoryDB::new();
 		let mut db = AccountDBMut::new(&mut db, &Address::new());
 		a.init_code(vec![0x55, 0x44, 0xffu8]);
@@ -611,7 +633,7 @@ mod tests {
 
 	#[test]
 	fn rlpio() {
-		let a = Account::new(69u8.into(), 0u8.into(), HashMap::new(), Bytes::new());
+		let a = Account::new(69u8.into(), 0u8.into(), HashMap::new(), Bytes::new(), 0);
 		let b = Account::from_rlp(&a.rlp()).unwrap();
 		assert_eq!(a.balance(), b.balance());
 		assert_eq!(a.nonce(), b.nonce());
@@ -621,8 +643,8 @@ mod tests {
 
 	#[test]
 	fn new_account() {
-		let a = Account::new(69u8.into(), 0u8.into(), HashMap::new(), Bytes::new());
-		assert_eq!(a.rlp().to_hex(), "f8448045a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a0c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470");
+		let a = Account::new(69u8.into(), 0u8.into(), HashMap::new(), Bytes::new(), 0);
+		assert_eq!(a.rlp().to_hex(), "f8458045a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a0c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a47080");
 		assert_eq!(*a.balance(), 69u8.into());
 		assert_eq!(*a.nonce(), 0u8.into());
 		assert_eq!(a.code_hash(), KECCAK_EMPTY);
@@ -631,8 +653,8 @@ mod tests {
 
 	#[test]
 	fn create_account() {
-		let a = Account::new(69u8.into(), 0u8.into(), HashMap::new(), Bytes::new());
-		assert_eq!(a.rlp().to_hex(), "f8448045a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a0c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470");
+		let a = Account::new(69u8.into(), 0u8.into(), HashMap::new(), Bytes::new(), 0);
+		assert_eq!(a.rlp().to_hex(), "f8458045a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a0c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a47080");
 	}
 
 }

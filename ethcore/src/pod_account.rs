@@ -39,7 +39,9 @@ pub struct PodAccount {
 	/// The code of the account or `None` in the special case that it is unknown.
 	pub code: Option<Bytes>,
 	/// The storage of the account.
-	pub storage: BTreeMap<H256, H256>,
+	pub storage: BTreeMap<H256, Vec<u8>>,
+	/// Storage expiry (Unix timestamp).
+	pub storage_expiry: u64,
 }
 
 impl PodAccount {
@@ -51,16 +53,18 @@ impl PodAccount {
 			nonce: *acc.nonce(),
 			storage: acc.storage_changes().iter().fold(BTreeMap::new(), |mut m, (k, v)| {m.insert(k.clone(), v.clone()); m}),
 			code: acc.code().map(|x| x.to_vec()),
+			storage_expiry: acc.storage_expiry(),
 		}
 	}
 
 	/// Returns the RLP for this account.
 	pub fn rlp(&self) -> Bytes {
-		let mut stream = RlpStream::new_list(4);
+		let mut stream = RlpStream::new_list(5);
 		stream.append(&self.nonce);
 		stream.append(&self.balance);
 		stream.append(&sec_trie_root(self.storage.iter().map(|(k, v)| (k, rlp::encode(&U256::from(&**v))))));
 		stream.append(&keccak(&self.code.as_ref().unwrap_or(&vec![])));
+		stream.append(&self.storage_expiry);
 		stream.out()
 	}
 
@@ -73,13 +77,14 @@ impl PodAccount {
 		let mut r = H256::new();
 		let mut t = factory.create(db, &mut r);
 		for (k, v) in &self.storage {
-			if let Err(e) = t.insert(k, &rlp::encode(&U256::from(&**v))) {
+			if let Err(e) = t.insert(k, &rlp::encode(v)) {
 				warn!("Encountered potential DB corruption: {}", e);
 			}
 		}
 	}
 }
 
+// It is assumed ethjson::blockchain::Account has storage values as H256.
 impl From<ethjson::blockchain::Account> for PodAccount {
 	fn from(a: ethjson::blockchain::Account) -> Self {
 		PodAccount {
@@ -89,12 +94,14 @@ impl From<ethjson::blockchain::Account> for PodAccount {
 			storage: a.storage.into_iter().map(|(key, value)| {
 				let key: U256 = key.into();
 				let value: U256 = value.into();
-				(H256::from(key), H256::from(value))
+				(H256::from(key), H256::from(value).to_vec())
 			}).collect(),
+			storage_expiry: a.storage_expiry,
 		}
 	}
 }
 
+// It is assumed ethjson::spec::Account has storage values as H256.
 impl From<ethjson::spec::Account> for PodAccount {
 	fn from(a: ethjson::spec::Account) -> Self {
 		PodAccount {
@@ -104,20 +111,22 @@ impl From<ethjson::spec::Account> for PodAccount {
 			storage: a.storage.map_or_else(BTreeMap::new, |s| s.into_iter().map(|(key, value)| {
 				let key: U256 = key.into();
 				let value: U256 = value.into();
-				(H256::from(key), H256::from(value))
+				(H256::from(key), H256::from(value).to_vec())
 			}).collect()),
+			storage_expiry: a.storage_expiry.unwrap_or(0),
 		}
 	}
 }
 
 impl fmt::Display for PodAccount {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "(bal={}; nonce={}; code={} bytes, #{}; storage={} items)",
+		write!(f, "(bal={}; nonce={}; code={} bytes, #{}; storage={} items; expiry={})",
 			self.balance,
 			self.nonce,
 			self.code.as_ref().map_or(0, |c| c.len()),
 			self.code.as_ref().map_or_else(H256::new, |c| keccak(c)),
 			self.storage.len(),
+			self.storage_expiry,
 		)
 	}
 }
@@ -131,16 +140,18 @@ pub fn diff_pod(pre: Option<&PodAccount>, post: Option<&PodAccount>) -> Option<A
 			nonce: Diff::Born(x.nonce),
 			code: Diff::Born(x.code.as_ref().expect("account is newly created; newly created accounts must be given code; all caches should remain in place; qed").clone()),
 			storage: x.storage.iter().map(|(k, v)| (k.clone(), Diff::Born(v.clone()))).collect(),
+			storage_expiry: Diff::Born(x.storage_expiry),
 		}),
 		(Some(x), None) => Some(AccountDiff {
 			balance: Diff::Died(x.balance),
 			nonce: Diff::Died(x.nonce),
 			code: Diff::Died(x.code.as_ref().expect("account is deleted; only way to delete account is running SUICIDE; account must have had own code cached to make operation; all caches should remain in place; qed").clone()),
 			storage: x.storage.iter().map(|(k, v)| (k.clone(), Diff::Died(v.clone()))).collect(),
+			storage_expiry: Diff::Died(x.storage_expiry),
 		}),
 		(Some(pre), Some(post)) => {
 			let storage: Vec<_> = pre.storage.keys().merge(post.storage.keys())
-				.filter(|k| pre.storage.get(k).unwrap_or(&H256::new()) != post.storage.get(k).unwrap_or(&H256::new()))
+				.filter(|k| pre.storage.get(k).unwrap_or(&H256::new().to_vec()) != post.storage.get(k).unwrap_or(&H256::new().to_vec()))
 				.collect();
 			let r = AccountDiff {
 				balance: Diff::new(pre.balance, post.balance),
@@ -151,11 +162,12 @@ pub fn diff_pod(pre: Option<&PodAccount>, post: Option<&PodAccount>) -> Option<A
 				},
 				storage: storage.into_iter().map(|k|
 					(k.clone(), Diff::new(
-						pre.storage.get(k).cloned().unwrap_or_else(H256::new),
-						post.storage.get(k).cloned().unwrap_or_else(H256::new)
+						pre.storage.get(k).cloned().unwrap_or_else(|| H256::new().to_vec()),
+						post.storage.get(k).cloned().unwrap_or_else(|| H256::new().to_vec())
 					))).collect(),
+				storage_expiry: Diff::new(pre.storage_expiry, post.storage_expiry),
 			};
-			if r.balance.is_same() && r.nonce.is_same() && r.code.is_same() && r.storage.is_empty() {
+			if r.balance.is_same() && r.nonce.is_same() && r.code.is_same() && r.storage.is_empty() && r.storage_expiry.is_same() {
 				None
 			} else {
 				Some(r)
@@ -169,41 +181,45 @@ pub fn diff_pod(pre: Option<&PodAccount>, post: Option<&PodAccount>) -> Option<A
 mod test {
 	use std::collections::BTreeMap;
 	use types::account_diff::*;
+    use ethereum_types::H256;
 	use super::{PodAccount, diff_pod};
 
 	#[test]
 	fn existence() {
-		let a = PodAccount{balance: 69.into(), nonce: 0.into(), code: Some(vec![]), storage: map![]};
+		let a = PodAccount{balance: 69.into(), nonce: 0.into(), code: Some(vec![]), storage: map![], storage_expiry: 0};
 		assert_eq!(diff_pod(Some(&a), Some(&a)), None);
 		assert_eq!(diff_pod(None, Some(&a)), Some(AccountDiff{
 			balance: Diff::Born(69.into()),
 			nonce: Diff::Born(0.into()),
 			code: Diff::Born(vec![]),
 			storage: map![],
+			storage_expiry: Diff::Born(0),
 		}));
 	}
 
 	#[test]
 	fn basic() {
-		let a = PodAccount{balance: 69.into(), nonce: 0.into(), code: Some(vec![]), storage: map![]};
-		let b = PodAccount{balance: 42.into(), nonce: 1.into(), code: Some(vec![]), storage: map![]};
+		let a = PodAccount{balance: 69.into(), nonce: 0.into(), code: Some(vec![]), storage: map![], storage_expiry: 0};
+		let b = PodAccount{balance: 42.into(), nonce: 1.into(), code: Some(vec![]), storage: map![], storage_expiry: 1000};
 		assert_eq!(diff_pod(Some(&a), Some(&b)), Some(AccountDiff {
 			balance: Diff::Changed(69.into(), 42.into()),
 			nonce: Diff::Changed(0.into(), 1.into()),
 			code: Diff::Same,
 			storage: map![],
+			storage_expiry: Diff::Changed(0, 1000),
 		}));
 	}
 
 	#[test]
 	fn code() {
-		let a = PodAccount{balance: 0.into(), nonce: 0.into(), code: Some(vec![]), storage: map![]};
-		let b = PodAccount{balance: 0.into(), nonce: 1.into(), code: Some(vec![0]), storage: map![]};
+		let a = PodAccount{balance: 0.into(), nonce: 0.into(), code: Some(vec![]), storage: map![], storage_expiry: 0};
+		let b = PodAccount{balance: 0.into(), nonce: 1.into(), code: Some(vec![0]), storage: map![], storage_expiry: 0};
 		assert_eq!(diff_pod(Some(&a), Some(&b)), Some(AccountDiff {
 			balance: Diff::Same,
 			nonce: Diff::Changed(0.into(), 1.into()),
 			code: Diff::Changed(vec![], vec![0]),
 			storage: map![],
+			storage_expiry: Diff::Same,
 		}));
 	}
 
@@ -213,25 +229,28 @@ mod test {
 			balance: 0.into(),
 			nonce: 0.into(),
 			code: Some(vec![]),
-			storage: map_into![1 => 1, 2 => 2, 3 => 3, 4 => 4, 5 => 0, 6 => 0, 7 => 0]
+			storage: map_into![1 => H256::from(1).to_vec(), 2 => H256::from(2).to_vec(), 3 => H256::from(3).to_vec(), 4 => H256::from(4).to_vec(), 5 => H256::from(0).to_vec(), 6 => H256::from(0).to_vec(), 7 => H256::from(0).to_vec()],
+			storage_expiry: 0,
 		};
 		let b = PodAccount {
 			balance: 0.into(),
 			nonce: 0.into(),
 			code: Some(vec![]),
-			storage: map_into![1 => 1, 2 => 3, 3 => 0, 5 => 0, 7 => 7, 8 => 0, 9 => 9]
+			storage: map_into![1 => H256::from(1).to_vec(), 2 => H256::from(3).to_vec(), 3 => H256::from(0).to_vec(), 5 => H256::from(0).to_vec(), 7 => H256::from(7).to_vec(), 8 => H256::from(0).to_vec(), 9 => H256::from(9).to_vec()],
+			storage_expiry: 0,
 		};
 		assert_eq!(diff_pod(Some(&a), Some(&b)), Some(AccountDiff {
 			balance: Diff::Same,
 			nonce: Diff::Same,
 			code: Diff::Same,
 			storage: map![
-				2.into() => Diff::new(2.into(), 3.into()),
-				3.into() => Diff::new(3.into(), 0.into()),
-				4.into() => Diff::new(4.into(), 0.into()),
-				7.into() => Diff::new(0.into(), 7.into()),
-				9.into() => Diff::new(0.into(), 9.into())
+				2.into() => Diff::new(H256::from(2).to_vec(), H256::from(3).to_vec()),
+				3.into() => Diff::new(H256::from(3).to_vec(), H256::from(0).to_vec()),
+				4.into() => Diff::new(H256::from(4).to_vec(), H256::from(0).to_vec()),
+				7.into() => Diff::new(H256::from(0).to_vec(), H256::from(7).to_vec()),
+				9.into() => Diff::new(H256::from(0).to_vec(), H256::from(9).to_vec())
 			],
+			storage_expiry: Diff::Same,
 		}));
 	}
 }

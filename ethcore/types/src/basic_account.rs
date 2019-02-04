@@ -29,4 +29,6 @@ pub struct BasicAccount {
 	pub storage_root: H256,
 	/// Code hash of the account.
 	pub code_hash: H256,
+	/// Storage expiry (Unix timestamp).
+	pub storage_expiry: u64,
 }

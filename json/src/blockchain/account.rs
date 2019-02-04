@@ -31,6 +31,8 @@ pub struct Account {
 	pub nonce: Uint,
 	/// Storage.
 	pub storage: BTreeMap<Uint, Uint>,
+	/// Storage expiry (Unix timestamp).
+	pub storage_expiry: u64,
 }
 
 #[cfg(test)]
@@ -44,6 +46,7 @@ mod tests {
 			"balance" : "0x09184e72a078",
 			"code" : "0x600140600155",
 			"nonce" : "0x00",
+			"storage_expiry" : 0,
 			"storage" : {
 				"0x01" : "0x9a10c2b5bb8f3c602e674006d9b21f09167df57c87a78a5ce96d4159ecb76520"
 			}

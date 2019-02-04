@@ -44,7 +44,6 @@ use spec::Genesis;
 use spec::seal::Generic as GenericSeal;
 use state::backend::Basic as BasicBackend;
 use state::{Backend, State, Substate};
-use storage::NullStorage;
 use trace::{NoopTracer, NoopVMTracer};
 use trace_ext::NoopExtTracer;
 
@@ -642,8 +641,7 @@ impl Spec {
 				let mut substate = Substate::new();
 
 				{
-					let mut dummy_storage = NullStorage::new();
-					let mut exec = Executive::new(&mut state, &env_info, self.engine.machine(), &mut dummy_storage);
+					let mut exec = Executive::new(&mut state, &env_info, self.engine.machine());
                                         let mut ext_tracer = NoopExtTracer;
 					if let Err(e) = exec.create(params, &mut substate, &mut None, &mut NoopTracer, &mut NoopVMTracer, &mut ext_tracer) {
 						warn!(target: "spec", "Genesis constructor execution at {} failed: {}.", address, e);
@@ -979,12 +977,12 @@ mod tests {
 
 		assert_eq!(
 			test_spec.state_root(),
-			"f3f4696bbf3b3b07775128eb7a3763279a394e382130f27c21e70233e04946a9".into()
+			"3d7b1d96eac33179be8440ffab10d501c935170fcd21de7337ee99ae61307dba".into()
 		);
 		let genesis = test_spec.genesis_block();
 		assert_eq!(
 			view!(BlockView, &genesis).header_view().hash(),
-			"0cd786a2425d16f152c658316c423e6ce1181e15c3295826d7c9904cba9ce303".into()
+			"ea442bedcd6a006e193ce94677e3d859b4ac10559c497ec548c13f9b2b54e289".into()
 		);
 	}
 

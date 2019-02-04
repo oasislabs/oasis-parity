@@ -104,7 +104,7 @@ impl FakeExt {
 
 impl Ext for FakeExt {
 
-	fn open_confidential_ctx(&mut self, encrypted_data: Vec<u8>, contract: Address) -> Result<Vec<u8>> {
+	fn open_confidential_ctx(&mut self, contract: Address, encrypted_data: Option<Vec<u8>>) -> Result<Vec<u8>> {
 		// no-op
 		Ok(vec![])
 	}
@@ -112,7 +112,7 @@ impl Ext for FakeExt {
 	fn close_confidential_ctx(&mut self) {
 		// no-op
 	}
-	fn encrypt(&self, data: Vec<u8>) -> Result<Vec<u8>> {
+	fn encrypt(&mut self, data: Vec<u8>) -> Result<Vec<u8>> {
 		Ok(data)
 	}
 
@@ -123,6 +123,16 @@ impl Ext for FakeExt {
 	fn set_storage(&mut self, key: H256, value: H256) -> Result<()> {
 		self.store.insert(key, value);
 		Ok(())
+	}
+
+	fn storage_expiry(&self) -> Result<u64> {
+		// TODO: implement?
+		unimplemented!()
+	}
+
+	fn seconds_until_expiry(&self) -> Result<u64> {
+		// TODO: implement?
+		unimplemented!()
 	}
 
 	fn exists(&self, address: &Address) -> Result<bool> {
@@ -222,8 +232,9 @@ impl Ext for FakeExt {
 		self.is_static
 	}
 
-	fn inc_sstore_clears(&mut self) {
+	fn inc_sstore_clears(&mut self) -> Result<()> {
 		self.sstore_clears += 1;
+		Ok(())
 	}
 
 	fn trace_next_instruction(&mut self, _pc: usize, _instruction: u8, _gas: U256) -> bool {
@@ -238,7 +249,7 @@ impl Ext for FakeExt {
 		Ok(H256::zero())
 	}
 
-	fn create_long_term_public_key(&self, contract: Address) -> Result<Vec<u8>> {
-		Ok(vec![])
+	fn create_long_term_public_key(&self, contract: Address) -> Result<(Vec<u8>, Vec<u8>)> {
+		Ok((vec![], vec![]))
 	}
 }

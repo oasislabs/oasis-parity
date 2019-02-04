@@ -47,8 +47,6 @@ pub enum Error {
 	OutOfBounds,
 	/// Execution has been reverted with REVERT instruction.
 	Reverted,
-	/// Storage error
-	Storage,
 }
 
 impl<'a> From<&'a VmError> for Error {
@@ -65,7 +63,6 @@ impl<'a> From<&'a VmError> for Error {
 			VmError::MutableCallInStaticContext => Error::MutableCallInStaticContext,
 			VmError::OutOfBounds => Error::OutOfBounds,
 			VmError::Reverted => Error::Reverted,
-			VmError::Storage { .. } => Error::Storage,
 		}
 	}
 }
@@ -91,7 +88,6 @@ impl fmt::Display for Error {
 			MutableCallInStaticContext => "Mutable Call In Static Context",
 			OutOfBounds => "Out of bounds",
 			Reverted => "Reverted",
-			Storage => "Storage error",
 		};
 		message.fmt(f)
 	}
@@ -112,7 +108,6 @@ impl Encodable for Error {
 			Wasm => 8,
 			OutOfBounds => 9,
 			Reverted => 10,
-			Storage => 11,
 		};
 
 		s.append_internal(&value);
