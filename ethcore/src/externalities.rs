@@ -133,6 +133,19 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 		}
 	}
 
+	fn storage_expiry(&self) -> vm::Result<u64> {
+		self.state.storage_expiry(&self.origin_info.address).map_err(Into::into)
+	}
+
+	fn seconds_until_expiry(&self) -> vm::Result<u64> {
+		let current_timestamp = self.env_info.timestamp;
+		let expiry_timestamp = self.storage_expiry()?;
+		if current_timestamp > expiry_timestamp {
+			return Err(vm::Error::Internal("Contract is expired".to_string()));
+		}
+		Ok(expiry_timestamp - current_timestamp)
+	}
+
 	fn is_static(&self) -> bool {
 		return self.static_flag
 	}
@@ -390,8 +403,15 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 		self.depth
 	}
 
-	fn inc_sstore_clears(&mut self) {
-		self.substate.sstore_clears_count = self.substate.sstore_clears_count + U256::one();
+	/// Updates gas refund for an SSTORE clear
+	fn inc_sstore_clears(&mut self) -> vm::Result<()> {
+		// gas refund prorated based on time until expiry
+		let duration_secs = self.seconds_until_expiry()?;
+
+		let refund = self.schedule.prorated_sstore_refund_gas(duration_secs);
+		self.substate.sstore_clears_refund = self.substate.sstore_clears_refund + refund;
+
+		Ok(())
 	}
 
 	fn trace_next_instruction(&mut self, pc: usize, instruction: u8, current_gas: U256) -> bool {
