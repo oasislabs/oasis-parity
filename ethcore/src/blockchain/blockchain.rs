@@ -585,61 +585,59 @@ impl BlockChain {
 			};
 		}
 
-		{
-			info!("fetching first/ancient blocks");
+		// {
+		// 	let best_block_number = bc.best_block.read().unwrap().header.number();
+		// 	// Fetch first and best ancient block details
+		// 	let raw_first = bc.db.get(db::COL_EXTRA, b"first").unwrap().map(|v| v.into_vec());
+		// 	let mut best_ancient = bc.db.get(db::COL_EXTRA, b"ancient").unwrap().map(|h| H256::from_slice(&h));
+		// 	let best_ancient_number;
+		// 	if best_ancient.is_none() && best_block_number > 1 && bc.block_hash(1).is_none() {
+		// 		best_ancient = Some(bc.genesis_hash());
+		// 		best_ancient_number = Some(0);
+		// 	} else {
+		// 		best_ancient_number = best_ancient.as_ref().and_then(|h| bc.block_number(h));
+		// 	}
 
-			let best_block_number = bc.best_block.read().unwrap().header.number();
-			// Fetch first and best ancient block details
-			let raw_first = bc.db.get(db::COL_EXTRA, b"first").unwrap().map(|v| v.into_vec());
-			let mut best_ancient = bc.db.get(db::COL_EXTRA, b"ancient").unwrap().map(|h| H256::from_slice(&h));
-			let best_ancient_number;
-			if best_ancient.is_none() && best_block_number > 1 && bc.block_hash(1).is_none() {
-				best_ancient = Some(bc.genesis_hash());
-				best_ancient_number = Some(0);
-			} else {
-				best_ancient_number = best_ancient.as_ref().and_then(|h| bc.block_number(h));
-			}
+		// 	// binary search for the first block.
+		// 	match raw_first {
+		// 		None => {
+		// 			let (mut f, mut hash) = (best_block_number, best_block_hash);
+		// 			let mut l = best_ancient_number.unwrap_or(0);
 
-			// binary search for the first block.
-			match raw_first {
-				None => {
-					let (mut f, mut hash) = (best_block_number, best_block_hash);
-					let mut l = best_ancient_number.unwrap_or(0);
+		// 			loop {
+		// 				if l >= f { break; }
 
-					loop {
-						if l >= f { break; }
+		// 				let step = (f - l) >> 1;
+		// 				let m = l + step;
 
-						let step = (f - l) >> 1;
-						let m = l + step;
+		// 				match bc.block_hash(m) {
+		// 					Some(h) => { f = m; hash = h },
+		// 					None => { l = m + 1 },
+		// 				}
+		// 			}
 
-						match bc.block_hash(m) {
-							Some(h) => { f = m; hash = h },
-							None => { l = m + 1 },
-						}
-					}
+		// 			if hash != bc.genesis_hash() {
+		// 				trace!("First block calculated: {:?}", hash);
+		// 				let mut batch = db.transaction();
+		// 				batch.put(db::COL_EXTRA, b"first", &hash);
+		// 				db.write(batch).expect("Low level database error.");
+		// 				bc.first_block = Some(hash);
+		// 			}
+		// 		},
+		// 		Some(raw_first) => {
+		// 			bc.first_block = Some(H256::from_slice(&raw_first));
+		// 		},
+		// 	}
 
-					if hash != bc.genesis_hash() {
-						trace!("First block calculated: {:?}", hash);
-						let mut batch = db.transaction();
-						batch.put(db::COL_EXTRA, b"first", &hash);
-						db.write(batch).expect("Low level database error.");
-						bc.first_block = Some(hash);
-					}
-				},
-				Some(raw_first) => {
-					bc.first_block = Some(H256::from_slice(&raw_first));
-				},
-			}
-
-			// and write them
-			if let (Some(hash), Some(number)) = (best_ancient, best_ancient_number) {
-				let mut best_ancient_block = bc.best_ancient_block.write().unwrap();
-				*best_ancient_block = Some(BestAncientBlock {
-					hash: hash,
-					number: number,
-				});
-			}
-		}
+		// 	// and write them
+		// 	if let (Some(hash), Some(number)) = (best_ancient, best_ancient_number) {
+		// 		let mut best_ancient_block = bc.best_ancient_block.write().unwrap();
+		// 		*best_ancient_block = Some(BestAncientBlock {
+		// 			hash: hash,
+		// 			number: number,
+		// 		});
+		// 	}
+		// }
 
 		bc
 	}
