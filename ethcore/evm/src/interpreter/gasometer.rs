@@ -126,10 +126,7 @@ impl<Gas: evm::CostType> Gasometer<Gas> {
 				let val = U256::from(&*ext.storage_at(&address)?);
 
 				// gas cost prorated based on time until expiry
-				let current_timestamp = ext.env_info().timestamp;
-				let expiry_timestamp = ext.storage_expiry()?;
-				assert!(expiry_timestamp >= current_timestamp);
-				let duration_secs = expiry_timestamp - current_timestamp;
+				let duration_secs = ext.seconds_until_expiry()?;
 
 				let gas = if val.is_zero() && !newval.is_zero() {
 					schedule.prorated_sstore_set_gas(duration_secs)

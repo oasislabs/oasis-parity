@@ -130,6 +130,11 @@ impl Ext for FakeExt {
 		unimplemented!()
 	}
 
+	fn seconds_until_expiry(&self) -> Result<u64> {
+		// TODO: implement?
+		unimplemented!()
+	}
+
 	fn exists(&self, address: &Address) -> Result<bool> {
 		Ok(self.balances.contains_key(address))
 	}

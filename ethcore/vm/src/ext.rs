@@ -72,6 +72,11 @@ pub trait Ext {
 	/// Returns the storage expiry for the origin account.
 	fn storage_expiry(&self) -> Result<u64>;
 
+	/// Returns the duration until the origin account's storage expires (in seconds).
+	///
+	/// Returns Err if the contract is expired.
+	fn seconds_until_expiry(&self) -> Result<u64>;
+
 	/// Determine whether an account exists.
 	fn exists(&self, address: &Address) -> Result<bool>;
 

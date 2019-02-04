@@ -277,10 +277,7 @@ impl<'a> Runtime<'a> {
 		let former_val = self.ext.storage_at(&key).map_err(|_| Error::StorageUpdateError)?;
 
 		// gas cost prorated based on time until expiry
-		let current_timestamp = self.ext.env_info().timestamp;
-		let expiry_timestamp = self.ext.storage_expiry().map_err(|_| Error::StorageUpdateError)?;
-		assert!(expiry_timestamp >= current_timestamp);
-		let duration_secs = expiry_timestamp - current_timestamp;
+		let duration_secs = self.ext.seconds_until_expiry().map_err(|_| Error::StorageUpdateError)?;
 
 		let gas = if former_val == H256::zero() && val != H256::zero() {
 			self.ext.schedule().prorated_sstore_set_gas(duration_secs)
