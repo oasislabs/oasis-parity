@@ -413,7 +413,7 @@ pub trait StateInfo {
 	fn storage_expiry(&self, a: &Address) -> trie::Result<u64>;
 
     /// Mutate storage of account `address` so that it is `value` for `key`.
-	fn bulk_storage_at(&self, address: &Address, key: &H256) -> trie::Result<Vec<u8>>;
+	fn storage_bytes_at(&self, address: &Address, key: &H256) -> trie::Result<Vec<u8>>;
 }
 
 impl<B: Backend> StateInfo for State<B> {
@@ -422,7 +422,7 @@ impl<B: Backend> StateInfo for State<B> {
 	fn storage_at(&self, address: &Address, key: &H256) -> trie::Result<H256> { State::storage_at(self, address, key) }
 	fn code(&self, address: &Address) -> trie::Result<Option<Arc<Bytes>>> { State::code(self, address) }
 	fn storage_expiry(&self, address: &Address) -> trie::Result<u64> { State::storage_expiry(self, address) }
-	fn bulk_storage_at(&self, address: &Address, key: &H256) -> trie::Result<Vec<u8>> { State::bulk_storage_at(self, address, key) }
+	fn storage_bytes_at(&self, address: &Address, key: &H256) -> trie::Result<Vec<u8>> { State::storage_bytes_at(self, address, key) }
 }
 
 const SEC_TRIE_DB_UNWRAP_STR: &'static str = "A state can only be created with valid root. Creating a SecTrieDB with a valid root will not fail. \
@@ -617,30 +617,20 @@ impl<B: Backend> State<B> {
 			|a| a.as_ref().map_or(0, |account| account.storage_expiry()))
 	}
 
-    /// Returns storage for the given key, translating the underlying
-    /// Arbitrary length byte array into a 256 bit word.
-    ///
-    /// Note: this means that the following will error:
-    ///
-    ///  - Rust contract sets storage > 256 bits.
-    ///  - Rust contract makes a delegate call from a Rust contract to a Solidity
-    ///    contract such that the Solidity contract attempts to modify the same
-    ///    storage that was set in step 1.
-    ///
-    /// If we don't want this to fail, we'd have to allow truncation from Vec<u8>
-    /// to H256. when accessing data through SSTORE.
+	/// Contract storage interface mapping H256 -> H256.
 	pub fn storage_at(&self, address: &Address, key: &H256) -> trie::Result<H256> {
-        let storage = self.bulk_storage_at(address, key)?;
-        if storage.len() != 32 {
-            panic!("TODO: REPLACE THIS PANIC WITH AN ERROR");
-        }
-        Ok(H256::from(storage.as_slice()))
-    }
+		let storage = self.storage_bytes_at(address, key)?;
+		if storage.len() != 32 {
+			error!("Key collision in the patricia trie! Bulk storage should not share a key with H256 storage.");
+			return Err(trie::TrieError::DecoderError(rlp::DecoderError::RlpIsTooBig));
+		}
+		Ok(H256::from(storage.as_slice()))
+	}
 
-    /// Contract storage interface mapping H256 -> H256. The underlying storage may or may
-	/// not be encrypted. As a result, we pre-process the key, encrypting it if we're in a
+	/// Contract storage interface . The underlying storage may or may not be encrypted.
+	/// As a result, we pre-process the key, encrypting it if we're in a
 	/// confidential context, and we post-process the value by decrypting it.
-    pub fn bulk_storage_at(&self, address: &Address, key: &H256) -> trie::Result<Vec<u8>> {
+	pub fn storage_bytes_at(&self, address: &Address, key: &H256) -> trie::Result<Vec<u8>> {
 		let key = self.to_storage_key(key);
 		let value = self._storage_at(address, &key)?;
 		Ok(self.from_storage_value(value))
@@ -770,10 +760,10 @@ impl<B: Backend> State<B> {
 	/// Analogous to storage_at, encrypts the key, value, if needed, before inserting into
 	/// the backing account storage.
 	pub fn set_storage(&mut self, a: &Address, key: H256, value: H256) -> trie::Result<()> {
-        self.bulk_set_storage(a, key, value.to_vec())
+        self.set_storage_bytes(a, key, value.to_vec())
 	}
 
-    pub fn bulk_set_storage(&mut self, a: &Address, key: H256, value: Vec<u8>) -> trie::Result<()> {
+    pub fn set_storage_bytes(&mut self, a: &Address, key: H256, value: Vec<u8>) -> trie::Result<()> {
         trace!(target: "state", "set_storage({}:{:x} to {:?})", a, key, value);
 		let key = self.to_storage_key(&key);
 		let value = self.to_storage_value(value);

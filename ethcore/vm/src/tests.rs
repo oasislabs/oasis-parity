@@ -130,15 +130,15 @@ impl Ext for FakeExt {
 		Ok(())
 	}
 
-    fn bulk_storage_at(&self, key: &H256) -> Result<Vec<u8>> {
+    fn storage_bytes_at(&self, key: &H256) -> Result<Vec<u8>> {
 		Ok(Vec::new())
 	}
 
-	fn bulk_storage_len(&self, key: &H256) -> Result<u32> {
+	fn storage_bytes_len(&self, key: &H256) -> Result<u32> {
 		Ok(0)
 	}
 
-    fn bulk_set_storage(&mut self, key: H256, value: Vec<u8>) -> Result<()> {
+    fn set_storage_bytes(&mut self, key: H256, value: Vec<u8>) -> Result<()> {
         Ok(())
     }
 

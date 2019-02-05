@@ -64,23 +64,23 @@ pub enum CreateContractAddress {
 /// Externalities interface for EVMs
 pub trait Ext {
 	/// Returns a value for a given key. Maintains the same H256 -> H256 interface
-    /// as Ethereum.
+	/// as Ethereum.
 	fn storage_at(&self, key: &H256) -> Result<H256>;
 
 	/// Stores a value for given key. Maintains the same H256 -> H256 interface
-    /// as Ethereum.
+	/// as Ethereum.
 	fn set_storage(&mut self, key: H256, value: H256) -> Result<()>;
 
-    /// Returns a value for a given key. Extends the storage interface to allow
-    /// for storage values of arbitrary length.
-    fn bulk_storage_at(&self, key: &H256) -> Result<Vec<u8>>;
+	/// Returns a value for a given key. Extends the storage interface to allow
+	/// for storage values of arbitrary length.
+	fn storage_bytes_at(&self, key: &H256) -> Result<Vec<u8>>;
 
-    /// Returns the length of the bulk_storage_at value.
-    fn bulk_storage_len(&self, key: &H256) -> Result<u32>;
+	/// Returns the length of the bulk_storage_at value.
+	fn storage_bytes_len(&self, key: &H256) -> Result<u32>;
 
-    /// Stores a value for given key. Extends the storage interface to allow
-    /// for storage values of arbitrary length.
-    fn bulk_set_storage(&mut self, key: H256, value: Vec<u8>) -> Result<()>;
+	/// Stores a value for given key. Extends the storage interface to allow
+	/// for storage values of arbitrary length.
+	fn set_storage_bytes(&mut self, key: H256, value: Vec<u8>) -> Result<()>;
 
 	/// Determine whether an account exists.
 	fn exists(&self, address: &Address) -> Result<bool>;

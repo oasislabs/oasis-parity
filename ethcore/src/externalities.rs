@@ -134,23 +134,23 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 		}
 	}
 
-    fn bulk_storage_at(&self, key: &H256) -> vm::Result<Vec<u8>> {
-        // self.ext_tracer.trace_storage_at(key);
-        // todo trace
-		self.state.bulk_storage_at(&self.origin_info.address, key).map_err(Into::into)
-    }
+	fn storage_bytes_at(&self, key: &H256) -> vm::Result<Vec<u8>> {
+		// self.ext_tracer.trace_storage_at(key);
+		// todo trace
+		self.state.storage_bytes_at(&self.origin_info.address, key).map_err(Into::into)
+	}
 
-    fn bulk_storage_len(&self, key: &H256) -> vm::Result<u32> {
-        self.bulk_storage_at(key).map(|bytes| bytes.len() as u32) // TODO: get it directly from RLP instead
-    }
+	fn storage_bytes_len(&self, key: &H256) -> vm::Result<u32> {
+		self.bulk_storage_at(key).map(|bytes| bytes.len() as u32) // TODO: get it directly from RLP instead
+	}
 
-    fn bulk_set_storage(&mut self, key: H256, value: Vec<u8>) -> vm::Result<()> {
-        if self.static_flag {
+	fn set_storage_bytes(&mut self, key: H256, value: Vec<u8>) -> vm::Result<()> {
+		if self.static_flag {
 			Err(vm::Error::MutableCallInStaticContext)
 		} else {
-			self.state.bulk_set_storage(&self.origin_info.address, key, value).map_err(Into::into)
+			self.state.set_storage_bytes(&self.origin_info.address, key, value).map_err(Into::into)
 		}
-    }
+	}
 
 	fn is_static(&self) -> bool {
 		return self.static_flag
