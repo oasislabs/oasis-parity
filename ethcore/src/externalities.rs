@@ -119,7 +119,6 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Externalities<'a, T, V, X, B>
 impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 	where T: Tracer, V: VMTracer, X: ExtTracer, B: StateBackend
 {
-
 	fn storage_at(&self, key: &H256) -> vm::Result<H256> {
 		self.ext_tracer.trace_storage_at(key);
 		self.state.storage_at(&self.origin_info.address, key).map_err(Into::into)

@@ -116,21 +116,16 @@ impl Ext for FakeExt {
 		Ok(data)
 	}
 
-    fn create_long_term_public_key(&self, contract: Address) -> Result<(Vec<u8>, Vec<u8>)> {
-        Ok((vec![], vec![]))
-    }
-
 	fn storage_at(&self, key: &H256) -> Result<H256> {
-		Ok(*self.store.get(key).unwrap_or(&H256::new()))
+		Ok(self.store.get(key).unwrap_or(&H256::new()).clone())
 	}
 
 	fn set_storage(&mut self, key: H256, value: H256) -> Result<()> {
-        assert_eq!(value.len(), 32);
-		self.store.insert(key, H256::from(&value[..]));
+		self.store.insert(key, value);
 		Ok(())
 	}
 
-    fn storage_bytes_at(&self, key: &H256) -> Result<Vec<u8>> {
+	fn storage_bytes_at(&self, key: &H256) -> Result<Vec<u8>> {
 		Ok(Vec::new())
 	}
 
@@ -138,9 +133,9 @@ impl Ext for FakeExt {
 		Ok(0)
 	}
 
-    fn set_storage_bytes(&mut self, key: H256, value: Vec<u8>) -> Result<()> {
-        Ok(())
-    }
+	fn set_storage_bytes(&mut self, key: H256, value: Vec<u8>) -> Result<()> {
+		Ok(())
+	}
 
 	fn exists(&self, address: &Address) -> Result<bool> {
 		Ok(self.balances.contains_key(address))
@@ -245,5 +240,9 @@ impl Ext for FakeExt {
 
 	fn trace_next_instruction(&mut self, _pc: usize, _instruction: u8, _gas: U256) -> bool {
 		self.tracing
+	}
+
+	fn create_long_term_public_key(&self, contract: Address) -> Result<(Vec<u8>, Vec<u8>)> {
+		Ok((vec![], vec![]))
 	}
 }

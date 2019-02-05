@@ -627,7 +627,7 @@ impl<B: Backend> State<B> {
 		Ok(H256::from(storage.as_slice()))
 	}
 
-	/// Contract storage interface . The underlying storage may or may not be encrypted.
+	/// Contract storage interface. The underlying storage may or may not be encrypted.
 	/// As a result, we pre-process the key, encrypting it if we're in a
 	/// confidential context, and we post-process the value by decrypting it.
 	pub fn storage_bytes_at(&self, address: &Address, key: &H256) -> trie::Result<Vec<u8>> {
@@ -760,15 +760,15 @@ impl<B: Backend> State<B> {
 	/// Analogous to storage_at, encrypts the key, value, if needed, before inserting into
 	/// the backing account storage.
 	pub fn set_storage(&mut self, a: &Address, key: H256, value: H256) -> trie::Result<()> {
-        self.set_storage_bytes(a, key, value.to_vec())
+		self.set_storage_bytes(a, key, value.to_vec())
 	}
 
-    pub fn set_storage_bytes(&mut self, a: &Address, key: H256, value: Vec<u8>) -> trie::Result<()> {
-        trace!(target: "state", "set_storage({}:{:x} to {:?})", a, key, value);
+	pub fn set_storage_bytes(&mut self, a: &Address, key: H256, value: Vec<u8>) -> trie::Result<()> {
+		trace!(target: "state", "set_storage({}:{:x} to {:?})", a, key, value);
 		let key = self.to_storage_key(&key);
 		let value = self.to_storage_value(value);
 		self._set_storage(a, key, value)
-    }
+	}
 
 	/// Mutate storage of account `a` so that it is `value` for `key`.
 	fn _set_storage(&mut self, a: &Address, key: H256, value: Vec<u8>) -> trie::Result<()> {

@@ -254,7 +254,7 @@ impl<'a> Runtime<'a> {
 	}
 
 	/// Read from the storage to wasm memory
-    /// All storage written through here *must* be an H256.
+	/// All storage written through here *must* be an H256.
 	pub fn storage_read(&mut self, args: RuntimeArgs) -> Result<()>
 	{
 		let key = self.h256_at(args.nth_checked(0)?)?;
@@ -270,7 +270,7 @@ impl<'a> Runtime<'a> {
 	}
 
 	/// Write to storage from wasm memory
-    /// All storage written through here *must* be an H256.
+	/// All storage written through here *must* be an H256.
 	pub fn storage_write(&mut self, args: RuntimeArgs) -> Result<()>
 	{
 		let key = self.h256_at(args.nth_checked(0)?)?;
@@ -818,7 +818,7 @@ mod ext_impl {
 				ORIGIN_FUNC => void!(self.origin(args)),
 				ELOG_FUNC => void!(self.elog(args)),
 				GET_BYTES_FUNC => void!(self.get_bytes(args)),
-                GET_BYTES_LEN_FUNC => some!(self.get_bytes_len(args)),
+				GET_BYTES_LEN_FUNC => some!(self.get_bytes_len(args)),
 				SET_BYTES_FUNC => void!(self.set_bytes(args)),
 				_ => panic!("env module doesn't provide function at index {}", index),
 			}
