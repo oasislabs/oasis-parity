@@ -297,7 +297,7 @@ impl wasmi::ModuleImportResolver for ImportResolver {
 			"origin" => host(signatures::ORIGIN, ids::ORIGIN_FUNC),
 			"elog" => host(signatures::ELOG, ids::ELOG_FUNC),
 			"get_bytes" => host(signatures::GET_BYTES, ids::GET_BYTES_FUNC),
-   			"get_bytes_len" => host(signatures::GET_BYTES_LEN, ids::GET_BYTES_LEN_FUNC),
+			"get_bytes_len" => host(signatures::GET_BYTES_LEN, ids::GET_BYTES_LEN_FUNC),
 			"set_bytes" => host(signatures::SET_BYTES, ids::SET_BYTES_FUNC),
 			_ => {
 				return Err(wasmi::Error::Instantiation(
