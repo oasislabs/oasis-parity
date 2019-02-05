@@ -140,7 +140,7 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 	}
 
 	fn storage_bytes_len(&self, key: &H256) -> vm::Result<u32> {
-		self.bulk_storage_at(key).map(|bytes| bytes.len() as u32) // TODO: get it directly from RLP instead
+		self.storage_bytes_at(key).map(|bytes| bytes.len() as u32) // TODO: get it directly from RLP instead
 	}
 
 	fn set_storage_bytes(&mut self, key: H256, value: Vec<u8>) -> vm::Result<()> {

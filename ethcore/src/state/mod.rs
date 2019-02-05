@@ -622,7 +622,7 @@ impl<B: Backend> State<B> {
 		let storage = self.storage_bytes_at(address, key)?;
 		if storage.len() != 32 {
 			error!("Key collision in the patricia trie! Bulk storage should not share a key with H256 storage.");
-			return Err(trie::TrieError::DecoderError(rlp::DecoderError::RlpIsTooBig));
+			return Err(Box::new(trie::TrieError::DecoderError(rlp::DecoderError::RlpIsTooBig)));
 		}
 		Ok(H256::from(storage.as_slice()))
 	}
