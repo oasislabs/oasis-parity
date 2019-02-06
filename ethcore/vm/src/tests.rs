@@ -125,6 +125,17 @@ impl Ext for FakeExt {
 		Ok(())
 	}
 
+	fn storage_bytes_at(&self, key: &H256) -> Result<Vec<u8>> {
+		Ok(Vec::new())
+	}
+
+	fn storage_bytes_len(&self, key: &H256) -> Result<u64> {
+		Ok(0)
+	}
+
+	fn set_storage_bytes(&mut self, key: H256, value: Vec<u8>) -> Result<()> {
+		Ok(())
+  }
 	fn storage_expiry(&self) -> Result<u64> {
 		// TODO: implement?
 		unimplemented!()
@@ -232,21 +243,13 @@ impl Ext for FakeExt {
 		self.is_static
 	}
 
-	fn inc_sstore_clears(&mut self) -> Result<()> {
+	fn inc_sstore_clears(&mut self, bytes_len: u64) -> Result<()> {
 		self.sstore_clears += 1;
 		Ok(())
 	}
 
 	fn trace_next_instruction(&mut self, _pc: usize, _instruction: u8, _gas: U256) -> bool {
 		self.tracing
-	}
-
-	fn fetch_bytes(&self, _key: &H256) -> Result<Vec<u8>> {
-		Ok(Vec::new())
-	}
-
-	fn store_bytes(&mut self, _bytes: &[u8]) -> Result<H256> {
-		Ok(H256::zero())
 	}
 
 	fn create_long_term_public_key(&self, contract: Address) -> Result<(Vec<u8>, Vec<u8>)> {

@@ -13,3 +13,4 @@ pwasm-utils = { git = "https://github.com/oasislabs/wasm-utils", branch = "ekide
 vm = { path = "../vm" }
 # ethcore-logger = { path = "../../logger" }
 wasmi = { git = "https://github.com/oasislabs/wasmi", branch = "ekiden" }
+keccak-hash = { path = "../../util/hash" }

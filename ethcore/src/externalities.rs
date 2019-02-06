@@ -133,6 +133,26 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 		}
 	}
 
+	fn storage_bytes_at(&self, key: &H256) -> vm::Result<Vec<u8>> {
+		self.ext_tracer.trace_storage_at(key);
+		self.state.storage_bytes_at(&self.origin_info.address, key).map_err(Into::into)
+	}
+
+	fn storage_bytes_len(&self, key: &H256) -> vm::Result<u64> {
+		self.state.storage_bytes_at(&self.origin_info.address, key)
+			.map(|bytes| bytes.len() as u64)
+			.map_err(Into::into)
+	}
+
+	fn set_storage_bytes(&mut self, key: H256, value: Vec<u8>) -> vm::Result<()> {
+		if self.static_flag {
+			Err(vm::Error::MutableCallInStaticContext)
+		} else {
+			self.ext_tracer.trace_set_storage(&key);
+			self.state.set_storage_bytes(&self.origin_info.address, key, value).map_err(Into::into)
+		}
+	}
+
 	fn storage_expiry(&self) -> vm::Result<u64> {
 		self.state.storage_expiry(&self.origin_info.address).map_err(Into::into)
 	}
@@ -404,11 +424,11 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 	}
 
 	/// Updates gas refund for an SSTORE clear
-	fn inc_sstore_clears(&mut self) -> vm::Result<()> {
+	fn inc_sstore_clears(&mut self, bytes_len: u64) -> vm::Result<()> {
 		// gas refund prorated based on time until expiry
 		let duration_secs = self.seconds_until_expiry()?;
 
-		let refund = self.schedule.prorated_sstore_refund_gas(duration_secs);
+		let refund = self.schedule.prorated_sstore_refund_gas(duration_secs, bytes_len);
 		self.substate.sstore_clears_refund = self.substate.sstore_clears_refund + refund;
 
 		Ok(())
@@ -425,16 +445,6 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 	fn trace_executed(&mut self, gas_used: U256, stack_push: &[U256], mem_diff: Option<(usize, &[u8])>, store_diff: Option<(U256, U256)>) {
 		self.vm_tracer.trace_executed(gas_used, stack_push, mem_diff, store_diff)
 	}
-
-    fn fetch_bytes(&self, key: &H256) -> vm::Result<Vec<u8>> {
-        // TODO: https://github.com/oasislabs/runtime-ethereum/issues/474
-        Ok(vec![])
-    }
-
-    fn store_bytes(&mut self, bytes: &[u8]) -> vm::Result<H256> {
-        // TODO: https://github.com/oasislabs/runtime-ethereum/issues/474
-        Ok(H256::from(0))
-    }
 
 	fn create_long_term_public_key(&self, contract: Address) -> vm::Result<(Vec<u8>, Vec<u8>)> {
 		if self.state.confidential_ctx.is_none() {

@@ -19,6 +19,7 @@
 extern crate byteorder;
 // extern crate ethcore_logger;
 extern crate ethereum_types;
+extern crate keccak_hash as hash;
 #[macro_use] extern crate log;
 // extern crate libc;
 extern crate parity_wasm;

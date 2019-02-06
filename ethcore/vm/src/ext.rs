@@ -63,11 +63,24 @@ pub enum CreateContractAddress {
 
 /// Externalities interface for EVMs
 pub trait Ext {
-	/// Returns a value for given key.
+	/// Returns a value for a given key. Maintains the same H256 -> H256 interface
+	/// as Ethereum.
 	fn storage_at(&self, key: &H256) -> Result<H256>;
 
-	/// Stores a value for given key.
+	/// Stores a value for given key. Maintains the same H256 -> H256 interface
+	/// as Ethereum.
 	fn set_storage(&mut self, key: H256, value: H256) -> Result<()>;
+
+	/// Returns a value for a given key. Extends the storage interface to allow
+	/// for storage values of arbitrary length.
+	fn storage_bytes_at(&self, key: &H256) -> Result<Vec<u8>>;
+
+	/// Returns the length of the storage_bytes_at value.
+	fn storage_bytes_len(&self, key: &H256) -> Result<u64>;
+
+	/// Stores a value for given key. Extends the storage interface to allow
+	/// for storage values of arbitrary length.
+	fn set_storage_bytes(&mut self, key: H256, value: Vec<u8>) -> Result<()>;
 
 	/// Returns the storage expiry for the origin account.
 	fn storage_expiry(&self) -> Result<u64>;
@@ -143,7 +156,7 @@ pub trait Ext {
 	fn depth(&self) -> usize;
 
 	/// Increments sstore refunds count by 1.
-	fn inc_sstore_clears(&mut self) -> Result<()>;
+	fn inc_sstore_clears(&mut self, bytes_len: u64) -> Result<()>;
 
 	/// Decide if any more operations should be traced. Passthrough for the VM trace.
 	fn trace_next_instruction(&mut self, _pc: usize, _instruction: u8, _current_gas: U256) -> bool { false }
@@ -156,10 +169,6 @@ pub trait Ext {
 
 	/// Check if running in static context.
 	fn is_static(&self) -> bool;
-
-	fn fetch_bytes(&self, key: &H256) -> Result<Vec<u8>>;
-
-	fn store_bytes(&mut self, bytes: &[u8]) -> Result<H256>;
 
 	/// Opens up the confidential context to enable encryption. If set, logs will
 	/// be encrypted automatically and one may call the encrypt method.
