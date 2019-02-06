@@ -402,20 +402,20 @@ mod tests {
 		let schedule = Schedule::new_post_eip150(24576, true, true, true);
 
 		// default storage duration
-		let gas = schedule.prorated_sstore_set_gas(schedule.default_storage_duration);
+		let gas = schedule.prorated_sstore_set_gas(schedule.default_storage_duration, 32);
 		assert_eq!(gas, U256::from(schedule.sstore_set_gas));
 
 		// 2x default storage duration
-		let gas = schedule.prorated_sstore_reset_gas(2 * schedule.default_storage_duration);
+		let gas = schedule.prorated_sstore_reset_gas(2 * schedule.default_storage_duration, 32);
 		assert_eq!(gas, U256::from(schedule.sstore_reset_gas * 2));
 
 		// check that we round up for costs
-		let gas = schedule.prorated_sstore_set_gas(1);
+		let gas = schedule.prorated_sstore_set_gas(1, 32);
 		assert!(schedule.sstore_set_gas < schedule.default_storage_duration as usize);
 		assert!(gas > U256::from(0));
 
 		// check that we round down for refunds
-		let gas = schedule.prorated_sstore_refund_gas(1);
+		let gas = schedule.prorated_sstore_refund_gas(1, 32);
 		assert!(schedule.sstore_set_gas < schedule.default_storage_duration as usize);
 		assert_eq!(gas, U256::from(0));
 	}
