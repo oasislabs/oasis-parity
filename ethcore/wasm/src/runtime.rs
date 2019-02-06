@@ -732,20 +732,20 @@ impl<'a> Runtime<'a> {
 		Ok(())
 	}
 
-	/// Signature: `fn get_bytes(key: *const u8, result: *mut u8)`
-	pub fn get_bytes(&mut self, args: RuntimeArgs) -> Result<()> {
-		let key = self.storage_bytes_key(self.h256_at(args.nth_checked(0)?)?);
-		let bytes = self.ext.storage_bytes_at(&key).map_err(|_| Error::StorageReadError)?;
-		self.memory.set(args.nth_checked(1)?, &bytes)?;
-		Ok(())
-	}
+    /// Signature: `fn get_bytes(key: *const u8, result: *mut u8)`
+    pub fn get_bytes(&mut self, args: RuntimeArgs) -> Result<()> {
+        let key = self.storage_bytes_key(self.h256_at(args.nth_checked(0)?)?);
+        let bytes = self.ext.storage_bytes_at(&key).map_err(|_| Error::StorageReadError)?;
+        self.memory.set(args.nth_checked(1)?, &bytes)?;
+        Ok(())
+    }
 
-	/// Signature: `fn get_bytes_len(key: *const u8) -> u32`
-	pub fn get_bytes_len(&mut self, args: RuntimeArgs) -> Result<RuntimeValue> {
-		let key = self.storage_bytes_key(self.h256_at(args.nth_checked(0)?)?);
-		let len = self.ext.storage_bytes_len(&key).map_err(|_| Error::StorageReadError)?;
-		Ok(RuntimeValue::I32(len as i32))
-	}
+    /// Signature: `fn get_bytes_len(key: *const u8) -> u32`
+    pub fn get_bytes_len(&mut self, args: RuntimeArgs) -> Result<RuntimeValue> {
+        let key = self.storage_bytes_key(self.h256_at(args.nth_checked(0)?)?);
+        let len = self.ext.storage_bytes_len(&key).map_err(|_| Error::StorageReadError)?;
+        Ok(RuntimeValue::I64(len as i64))
+    }
 
 	/// Signature: `fn set_bytes(key: *const u8, bytes: *mut u8, len: u64)`
 	pub fn set_bytes(&mut self, args: RuntimeArgs) -> Result<()> {

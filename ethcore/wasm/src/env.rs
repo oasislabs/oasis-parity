@@ -192,7 +192,7 @@ pub mod signatures {
 	);
 
 	pub const ELOG: StaticSignature = StaticSignature(
-		&[I32, I32, I32, I32],
+		&[I32, I32, I32, I64],
 		None,
 	);
 
