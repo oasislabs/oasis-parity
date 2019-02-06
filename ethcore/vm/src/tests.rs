@@ -135,6 +135,15 @@ impl Ext for FakeExt {
 
 	fn set_storage_bytes(&mut self, key: H256, value: Vec<u8>) -> Result<()> {
 		Ok(())
+  }
+	fn storage_expiry(&self) -> Result<u64> {
+		// TODO: implement?
+		unimplemented!()
+	}
+
+	fn seconds_until_expiry(&self) -> Result<u64> {
+		// TODO: implement?
+		unimplemented!()
 	}
 
 	fn exists(&self, address: &Address) -> Result<bool> {
@@ -234,8 +243,9 @@ impl Ext for FakeExt {
 		self.is_static
 	}
 
-	fn inc_sstore_clears(&mut self) {
+	fn inc_sstore_clears(&mut self) -> Result<()> {
 		self.sstore_clears += 1;
+		Ok(())
 	}
 
 	fn trace_next_instruction(&mut self, _pc: usize, _instruction: u8, _gas: U256) -> bool {

@@ -571,13 +571,13 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		let schedule = self.machine.schedule(self.info.number);
 		let nonce_offset = if schedule.no_empty {1} else {0}.into();
 		let prev_bal = self.state.balance(&params.address)?;
+		// TODO: configurable expiry
+		let storage_expiry = self.info.timestamp + schedule.default_storage_duration;
 		if let ActionValue::Transfer(val) = params.value {
 			self.state.sub_balance(&params.sender, &val, &mut substate.to_cleanup_mode(&schedule))?;
-			// TODO: set storage expiry timestamp (currently defaults to 0)
-			self.state.new_contract(&params.address, val + prev_bal, nonce_offset, 0);
+			self.state.new_contract(&params.address, val + prev_bal, nonce_offset, storage_expiry);
 		} else {
-			// TODO: set storage expiry timestamp (currently defaults to 0)
-			self.state.new_contract(&params.address, prev_bal, nonce_offset, 0);
+			self.state.new_contract(&params.address, prev_bal, nonce_offset, storage_expiry);
 		}
 
 		let trace_info = tracer.prepare_trace_create(&params);
@@ -630,7 +630,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		let schedule = self.machine.schedule(self.info.number);
 
 		// refunds from SSTORE nonzero -> zero
-		let sstore_refunds = U256::from(schedule.sstore_refund_gas) * substate.sstore_clears_count;
+		let sstore_refunds = substate.sstore_clears_refund;
 		// refunds from contract suicides
 		let suicide_refunds = U256::from(schedule.suicide_refund_gas) * U256::from(substate.suicides.len());
 		let refunds_bound = sstore_refunds + suicide_refunds;
@@ -961,6 +961,9 @@ mod tests {
 		state.add_balance(&sender, &U256::from(100), CleanupMode::NoEmpty).unwrap();
 		let info = EnvInfo::default();
 		let machine = make_frontier_machine(5);
+		// create the pre-existing contract with default expiry
+		let schedule = machine.schedule(info.number);
+		state.new_contract(&address, U256::from(0), U256::from(0), info.timestamp + schedule.default_storage_duration);
 		let mut substate = Substate::new();
 		let mut tracer = ExecutiveTracer::default();
 		let mut vm_tracer = ExecutiveVMTracer::toplevel();
@@ -1078,6 +1081,9 @@ mod tests {
 		state.add_balance(&sender, &U256::from(100), CleanupMode::NoEmpty).unwrap();
 		let info = EnvInfo::default();
 		let machine = ::ethereum::new_byzantium_test_machine();
+		// create the pre-existing contract with default expiry
+		let schedule = machine.schedule(info.number);
+		state.new_contract(&address, U256::from(0), U256::from(0), info.timestamp + schedule.default_storage_duration);
 		let mut substate = Substate::new();
 		let mut tracer = ExecutiveTracer::default();
 		let mut vm_tracer = ExecutiveVMTracer::toplevel();
@@ -1595,6 +1601,9 @@ mod tests {
 		params.value = ActionValue::Transfer(U256::zero());
 		let info = EnvInfo::default();
 		let machine = ::ethereum::new_byzantium_test_machine();
+		// create the pre-existing contract with default expiry
+		let schedule = machine.schedule(info.number);
+		state.new_contract(&contract_address, U256::from(0), U256::from(0), info.timestamp + schedule.default_storage_duration);
 		let mut substate = Substate::new();
 
 		let mut output = [0u8; 14];
@@ -1647,7 +1656,7 @@ mod tests {
 			ex.call(params.clone(), &mut Substate::new(), BytesRef::Fixed(&mut output), &mut NoopTracer, &mut NoopVMTracer, &mut ext_tracer).unwrap()
 		};
 
-		assert_eq!(result, U256::from(18433)); // NOTICE: This value will change if the gas model changes, so please update accordingly.
+		assert_eq!(result, U256::from(15781)); // NOTICE: This value will change if the gas model changes, so please update accordingly.
 		// Transaction successfully returned sender
 		assert_eq!(output[..], sender[..]);
 
@@ -1660,7 +1669,7 @@ mod tests {
 			ex.call(params, &mut Substate::new(), BytesRef::Fixed(&mut output), &mut NoopTracer, &mut NoopVMTracer, &mut ext_tracer).unwrap()
 		};
 
-		assert_eq!(result, U256::from(20025)); // NOTICE: This value will change if the gas model changes, so please update accordingly.
+		assert_eq!(result, U256::from(20025));
 		// Since transaction errored due to wasm was not activated, result is just empty
 		assert_eq!(output[..], [0u8; 20][..]);
 	}

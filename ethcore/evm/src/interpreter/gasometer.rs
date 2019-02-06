@@ -125,14 +125,17 @@ impl<Gas: evm::CostType> Gasometer<Gas> {
 				let newval = stack.peek(1);
 				let val = U256::from(&*ext.storage_at(&address)?);
 
+				// gas cost prorated based on time until expiry
+				let duration_secs = ext.seconds_until_expiry()?;
+
 				let gas = if val.is_zero() && !newval.is_zero() {
-					schedule.sstore_set_gas
+					schedule.prorated_sstore_set_gas(duration_secs)
 				} else {
 					// Refund for below case is added when actually executing sstore
 					// !is_zero(&val) && is_zero(newval)
-					schedule.sstore_reset_gas
+					schedule.prorated_sstore_reset_gas(duration_secs)
 				};
-				Request::Gas(Gas::from(gas))
+				Request::Gas(Gas::from_u256(gas)?)
 			},
 			instructions::SLOAD => {
 				Request::Gas(Gas::from(schedule.sload_gas))

@@ -279,16 +279,26 @@ impl<'a> Runtime<'a> {
 		let val = self.h256_at(val_ptr)?;
 		let former_val = self.ext.storage_at(&key).map_err(|_| Error::StorageUpdateError)?;
 
-		if former_val == H256::zero() && val != H256::zero() {
-			self.adjusted_charge(|schedule| schedule.sstore_set_gas as u64)?;
+		// gas cost prorated based on time until expiry
+		let duration_secs = self.ext.seconds_until_expiry().map_err(|_| Error::StorageUpdateError)?;
+
+		let gas = if former_val == H256::zero() && val != H256::zero() {
+			self.ext.schedule().prorated_sstore_set_gas(duration_secs)
 		} else {
-			self.adjusted_charge(|schedule| schedule.sstore_reset_gas as u64)?;
+			self.ext.schedule().prorated_sstore_reset_gas(duration_secs)
+		};
+
+		// charge gas after checking for u64 overflow
+		if gas > U256::from(std::u64::MAX) {
+			return Err(Error::GasLimit);
+		} else {
+			self.adjusted_charge(|_| gas.as_u64())?;
 		}
 
 		self.ext.set_storage(key, val).map_err(|_| Error::StorageUpdateError)?;
 
 		if former_val != H256::zero() && val == H256::zero() {
-			self.ext.inc_sstore_clears();
+			self.ext.inc_sstore_clears().map_err(|_| Error::StorageUpdateError)?;
 		}
 
 		Ok(())

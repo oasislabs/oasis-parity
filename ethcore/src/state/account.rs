@@ -56,7 +56,6 @@ pub struct Account {
 	// Trie-backed storage.
 	storage_root: H256,
 	// Storage expiry (Unix timestamp, seconds since the epoch).
-	// A special value of 0 indicates that the account's storage does not expire.
 	storage_expiry: u64,
 	// LRU Cache of the trie-backed storage.
 	// This is limited to `STORAGE_CACHE_ITEMS` recent queries
@@ -367,8 +366,7 @@ impl Account {
 	pub fn storage_changes(&self) -> &HashMap<H256, Vec<u8>> { &self.storage_changes }
 
 	/// Return the storage expiry timestamp associated with this account.
-	/// The value is a Unix timestamp. A special value of 0 indicates that the account's
-	/// storage does not expire.
+	/// The value is a Unix timestamp.
 	pub fn storage_expiry(&self) -> u64 { self.storage_expiry }
 
 	/// Increment the nonce of the account by one.
@@ -518,6 +516,7 @@ impl fmt::Debug for Account {
 			.field("nonce", &self.nonce)
 			.field("code", &self.code())
 			.field("storage", &self.storage_changes.iter().collect::<BTreeMap<_, _>>())
+			.field("storage_expiry", &self.storage_expiry)
 			.finish()
 	}
 }
