@@ -134,22 +134,24 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 	}
 
 	fn storage_bytes_at(&self, key: &H256) -> vm::Result<Vec<u8>> {
-		// self.ext_tracer.trace_storage_at(key);
-		// todo trace
+		self.ext_tracer.trace_storage_at(key);
 		self.state.storage_bytes_at(&self.origin_info.address, key).map_err(Into::into)
 	}
 
-	fn storage_bytes_len(&self, key: &H256) -> vm::Result<u32> {
-		self.storage_bytes_at(key).map(|bytes| bytes.len() as u32) // TODO: get it directly from RLP instead
+	fn storage_bytes_len(&self, key: &H256) -> vm::Result<u64> {
+		self.state.storage_bytes_at(&self.origin_info.address, key)
+			.map(|bytes| bytes.len() as u64)
+			.map_err(Into::into)
 	}
 
 	fn set_storage_bytes(&mut self, key: H256, value: Vec<u8>) -> vm::Result<()> {
 		if self.static_flag {
 			Err(vm::Error::MutableCallInStaticContext)
 		} else {
+			self.ext_tracer.trace_set_storage(&key);
 			self.state.set_storage_bytes(&self.origin_info.address, key, value).map_err(Into::into)
 		}
-  }
+	}
 
 	fn storage_expiry(&self) -> vm::Result<u64> {
 		self.state.storage_expiry(&self.origin_info.address).map_err(Into::into)
@@ -422,11 +424,11 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 	}
 
 	/// Updates gas refund for an SSTORE clear
-	fn inc_sstore_clears(&mut self) -> vm::Result<()> {
+	fn inc_sstore_clears(&mut self, bytes_len: u64) -> vm::Result<()> {
 		// gas refund prorated based on time until expiry
 		let duration_secs = self.seconds_until_expiry()?;
 
-		let refund = self.schedule.prorated_sstore_refund_gas(duration_secs);
+		let refund = self.schedule.prorated_sstore_refund_gas(duration_secs, bytes_len);
 		self.substate.sstore_clears_refund = self.substate.sstore_clears_refund + refund;
 
 		Ok(())

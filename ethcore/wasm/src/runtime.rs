@@ -254,7 +254,7 @@ impl<'a> Runtime<'a> {
 	}
 
 	/// Read from the storage to wasm memory
-	/// All storage written through here *must* be an H256.
+	/// All storage read through here *must* be an H256.
 	pub fn storage_read(&mut self, args: RuntimeArgs) -> Result<()>
 	{
 		let key = self.h256_at(args.nth_checked(0)?)?;
@@ -275,30 +275,36 @@ impl<'a> Runtime<'a> {
 	{
 		let key = self.h256_at(args.nth_checked(0)?)?;
 		let val_ptr: u32 = args.nth_checked(1)?;
-
 		let val = self.h256_at(val_ptr)?;
+
 		let former_val = self.ext.storage_at(&key).map_err(|_| Error::StorageUpdateError)?;
-
-		// gas cost prorated based on time until expiry
-		let duration_secs = self.ext.seconds_until_expiry().map_err(|_| Error::StorageUpdateError)?;
-
-		let gas = if former_val == H256::zero() && val != H256::zero() {
-			self.ext.schedule().prorated_sstore_set_gas(duration_secs)
-		} else {
-			self.ext.schedule().prorated_sstore_reset_gas(duration_secs)
-		};
-
-		// charge gas after checking for u64 overflow
-		if gas > U256::from(std::u64::MAX) {
-			return Err(Error::GasLimit);
-		} else {
-			self.adjusted_charge(|_| gas.as_u64())?;
-		}
+		let reset = !(former_val == H256::zero() && val != H256::zero());
+		self.storage_bytes_charge(val.len() as u64, reset)?;
 
 		self.ext.set_storage(key, val).map_err(|_| Error::StorageUpdateError)?;
 
 		if former_val != H256::zero() && val == H256::zero() {
-			self.ext.inc_sstore_clears().map_err(|_| Error::StorageUpdateError)?;
+			self.ext.inc_sstore_clears(former_val.len() as u64).map_err(|_| Error::StorageUpdateError)?;
+		}
+
+		Ok(())
+	}
+
+	/// Gas charge prorated based on time until expiry and the number of bytes we're storing.
+	fn storage_bytes_charge(&mut self, bytes_len: u64, reset: bool) -> Result<()> {
+		let duration_secs = self.ext.seconds_until_expiry().map_err(|_| Error::StorageUpdateError)?;
+
+		let gas = if !reset {
+			self.ext.schedule().prorated_sstore_set_gas(duration_secs, bytes_len)
+		} else {
+			self.ext.schedule().prorated_sstore_reset_gas(duration_secs, bytes_len)
+		};
+
+		// Charge gas after checking for u64 overflow.
+		if gas > U256::from(std::u64::MAX) {
+			return Err(Error::GasLimit);
+		} else {
+			self.adjusted_charge(|_| gas.as_u64())?;
 		}
 
 		Ok(())
@@ -742,30 +748,40 @@ impl<'a> Runtime<'a> {
 		Ok(())
 	}
 
-    /// Signature: `fn get_bytes(key: *const u8, result: *mut u8)`
-    pub fn get_bytes(&mut self, args: RuntimeArgs) -> Result<()> {
-        let key = self.storage_bytes_key(self.h256_at(args.nth_checked(0)?)?);
-        let bytes = self.ext.storage_bytes_at(&key).map_err(|_| Error::StorageReadError)?;
-        self.memory.set(args.nth_checked(1)?, &bytes)?;
-        Ok(())
-    }
+	/// Signature: `fn get_bytes(key: *const u8, result: *mut u8)`
+	pub fn get_bytes(&mut self, args: RuntimeArgs) -> Result<()> {
+		let key = self.storage_bytes_key(self.h256_at(args.nth_checked(0)?)?);
+		let bytes = self.ext.storage_bytes_at(&key).map_err(|_| Error::StorageReadError)?;
+		self.memory.set(args.nth_checked(1)?, &bytes)?;
+		Ok(())
+	}
 
-    /// Signature: `fn get_bytes_len(key: *const u8) -> u32`
-    pub fn get_bytes_len(&mut self, args: RuntimeArgs) -> Result<RuntimeValue> {
-        let key = self.storage_bytes_key(self.h256_at(args.nth_checked(0)?)?);
-        let len = self.ext.storage_bytes_len(&key).map_err(|_| Error::StorageReadError)?;
-        Ok(RuntimeValue::I64(len as i64))
-    }
+	/// Signature: `fn get_bytes_len(key: *const u8) -> u64`
+	pub fn get_bytes_len(&mut self, args: RuntimeArgs) -> Result<RuntimeValue> {
+		let key = self.storage_bytes_key(self.h256_at(args.nth_checked(0)?)?);
+		let len = self.ext.storage_bytes_len(&key).map_err(|_| Error::StorageReadError)?;
+		Ok(RuntimeValue::I64(len as i64))
+	}
 
 	/// Signature: `fn set_bytes(key: *const u8, bytes: *mut u8, len: u64)`
 	pub fn set_bytes(&mut self, args: RuntimeArgs) -> Result<()> {
 		let key = self.storage_bytes_key(self.h256_at(args.nth_checked(0)?)?);
 
+		let former_bytes = self.ext.storage_bytes_at(&key).map_err(|_| Error::StorageUpdateError)?;
+
 		let bytes_ptr: u32 = args.nth_checked(1)?;
 		let len: u64 = args.nth_checked(2)?;
-
 		let bytes = self.memory.get(bytes_ptr, len as usize)?;
-		self.ext.set_storage_bytes(key, bytes).expect("Failed to generate key");
+		let is_bytes_empty = bytes.is_empty();
+
+		let reset = !(former_bytes.is_empty() && !is_bytes_empty);
+		self.storage_bytes_charge(len, reset)?;
+
+		self.ext.set_storage_bytes(key, bytes).map_err(|_| Error::StorageUpdateError)?;
+
+		if !former_bytes.is_empty() && is_bytes_empty {
+			self.ext.inc_sstore_clears(former_bytes.len() as u64).map_err(|_| Error::StorageUpdateError)?;
+		}
 
 		Ok(())
 	}

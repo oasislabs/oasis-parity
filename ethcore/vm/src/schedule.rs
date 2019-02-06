@@ -343,33 +343,32 @@ impl Schedule {
 		self.wasm.as_ref().expect("Wasm schedule expected to exist while checking wasm contract. Misconfigured client?")
 	}
 
-	/// Gas price for setting new value to storage (`storage==0`, `new!=0`), prorated for expiry
-	pub fn prorated_sstore_set_gas(&self, duration_secs: u64) -> U256 {
-		Self::prorated_sstore_gas(self.sstore_set_gas, self.default_storage_duration, duration_secs, false)
+	/// Gas price for setting new value to storage (`storage==0`, `new!=0`), prorated for expiry.
+	pub fn prorated_sstore_set_gas(&self, duration_secs: u64, bytes_len: u64) -> U256 {
+		Self::prorated_sstore_gas(self.sstore_set_gas, self.default_storage_duration, duration_secs, bytes_len, false)
 	}
 
-	/// Gas price for altering value in storage, prorated for expiry
-	pub fn prorated_sstore_reset_gas(&self, duration_secs: u64) -> U256 {
-		Self::prorated_sstore_gas(self.sstore_reset_gas, self.default_storage_duration, duration_secs, false)
+	/// Gas price for altering value in storage, prorated for expiry.
+	pub fn prorated_sstore_reset_gas(&self, duration_secs: u64, bytes_len: u64) -> U256 {
+		Self::prorated_sstore_gas(self.sstore_reset_gas, self.default_storage_duration, duration_secs, bytes_len, false)
 	}
 
-	/// Gas refund for `SSTORE` clearing (when `storage!=0`, `new==0`), prorated for expiry
-	pub fn prorated_sstore_refund_gas(&self, duration_secs: u64) -> U256 {
-		Self::prorated_sstore_gas(self.sstore_refund_gas, self.default_storage_duration, duration_secs, true)
+	/// Gas refund for `SSTORE` clearing (when `storage!=0`, `new==0`), prorated for expiry.
+	pub fn prorated_sstore_refund_gas(&self, duration_secs: u64, bytes_len: u64) -> U256 {
+		Self::prorated_sstore_gas(self.sstore_refund_gas, self.default_storage_duration, duration_secs, bytes_len, true)
 	}
 
-	/// Calculates prorated gas price for SSTORE based on expiry
-	fn prorated_sstore_gas(default_gas: usize, default_storage_duration: u64, duration_secs: u64, refund: bool) -> U256 {
+	/// Calculates prorated gas price for SSTORE based on expiry.
+	fn prorated_sstore_gas(default_gas: usize, default_storage_duration: u64, duration_secs: u64, bytes_len: u64, refund: bool) -> U256 {
 		let duration = U256::from(duration_secs);
 		let default_gas = U256::from(default_gas);
 		let default_storage_duration = U256::from(default_storage_duration);
-
-		// prorated gas cost <- duration * default_gas / default_storage_duration
+		// prorated gas cost <- duration * default_gas * bytes_len / (default_storage_duration / 32)
 		// cannot overflow as duration and default_gas are converted from u64s
-		let mut gas = duration * default_gas / default_storage_duration;
+		let mut gas = default_gas * duration * bytes_len / (default_storage_duration * U256::from(32));
 
 		// if this is a charge (not a refund), round up
-		if !refund && duration * default_gas % default_storage_duration != U256::from(0) {
+		if !refund && duration * default_gas * bytes_len % (default_storage_duration * U256::from(32)) != U256::from(0) {
 			gas = gas + U256::from(1)
 		}
 

@@ -8,7 +8,7 @@
 
 // Parity is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
@@ -48,8 +48,8 @@ pub mod ids {
 	pub const ORIGIN_FUNC: usize = 200;
 	pub const ELOG_FUNC: usize = 210;
 	pub const GET_BYTES_FUNC: usize = 220;
-    pub const GET_BYTES_LEN_FUNC: usize = 230;
-    pub const SET_BYTES_FUNC: usize = 240;
+	pub const GET_BYTES_LEN_FUNC: usize = 230;
+	pub const SET_BYTES_FUNC: usize = 240;
 
 	pub const PANIC_FUNC: usize = 1000;
 	pub const DEBUG_FUNC: usize = 1010;
@@ -201,9 +201,9 @@ pub mod signatures {
 		None,
 	);
 
-    pub const GET_BYTES_LEN: StaticSignature = StaticSignature(
+	pub const GET_BYTES_LEN: StaticSignature = StaticSignature(
 		&[I32],
-		Some(I32),
+		Some(I64),
 	);
 
 	pub const SET_BYTES: StaticSignature = StaticSignature(

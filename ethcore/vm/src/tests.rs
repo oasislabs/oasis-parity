@@ -129,7 +129,7 @@ impl Ext for FakeExt {
 		Ok(Vec::new())
 	}
 
-	fn storage_bytes_len(&self, key: &H256) -> Result<u32> {
+	fn storage_bytes_len(&self, key: &H256) -> Result<u64> {
 		Ok(0)
 	}
 
@@ -243,7 +243,7 @@ impl Ext for FakeExt {
 		self.is_static
 	}
 
-	fn inc_sstore_clears(&mut self) -> Result<()> {
+	fn inc_sstore_clears(&mut self, bytes_len: u64) -> Result<()> {
 		self.sstore_clears += 1;
 		Ok(())
 	}

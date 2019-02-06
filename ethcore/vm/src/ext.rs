@@ -75,8 +75,8 @@ pub trait Ext {
 	/// for storage values of arbitrary length.
 	fn storage_bytes_at(&self, key: &H256) -> Result<Vec<u8>>;
 
-	/// Returns the length of the bulk_storage_at value.
-	fn storage_bytes_len(&self, key: &H256) -> Result<u32>;
+	/// Returns the length of the storage_bytes_at value.
+	fn storage_bytes_len(&self, key: &H256) -> Result<u64>;
 
 	/// Stores a value for given key. Extends the storage interface to allow
 	/// for storage values of arbitrary length.
@@ -156,7 +156,7 @@ pub trait Ext {
 	fn depth(&self) -> usize;
 
 	/// Increments sstore refunds count by 1.
-	fn inc_sstore_clears(&mut self) -> Result<()>;
+	fn inc_sstore_clears(&mut self, bytes_len: u64) -> Result<()>;
 
 	/// Decide if any more operations should be traced. Passthrough for the VM trace.
 	fn trace_next_instruction(&mut self, _pc: usize, _instruction: u8, _current_gas: U256) -> bool { false }

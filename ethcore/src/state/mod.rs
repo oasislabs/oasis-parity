@@ -617,9 +617,15 @@ impl<B: Backend> State<B> {
 			|a| a.as_ref().map_or(0, |account| account.storage_expiry()))
 	}
 
-	/// Contract storage interface mapping H256 -> H256.
+	/// Contract storage interface mapping H256 -> H256. If no storage is stored
+	/// returns H256::zero(). If bulk storage is accessed, returns an error.
+	/// It is assumed bulk storage uses a different keyspace and so such collisions
+	/// should never occur.
 	pub fn storage_at(&self, address: &Address, key: &H256) -> trie::Result<H256> {
 		let storage = self.storage_bytes_at(address, key)?;
+		if storage.is_empty() {
+			return Ok(H256::zero());
+		}
 		if storage.len() != 32 {
 			error!("Key collision in the patricia trie! Bulk storage should not share a key with H256 storage.");
 			return Err(Box::new(trie::TrieError::DecoderError(rlp::DecoderError::RlpIsTooBig)));
@@ -763,6 +769,8 @@ impl<B: Backend> State<B> {
 		self.set_storage_bytes(a, key, value.to_vec())
 	}
 
+    /// Sets the given key value pair directly into the contract's storage trie. Encrypts
+    /// the value if in a confidential ctx.
 	pub fn set_storage_bytes(&mut self, a: &Address, key: H256, value: Vec<u8>) -> trie::Result<()> {
 		trace!(target: "state", "set_storage({}:{:x} to {:?})", a, key, value);
 		let key = self.to_storage_key(&key);
@@ -1225,11 +1233,10 @@ impl<B: Backend> State<B> {
 
 	/// Transforms the given value--from storage--into its plaintext representation.
 	/// If a confidential context is open, then decrypts the value, otherwise returns
-	/// the value as given, as an H256. Assumes all *unencrypted* contract storage
-	/// values are H256.
+	/// the value as given.
 	fn from_storage_value(&self, value: Option<Vec<u8>>) -> Vec<u8> {
 		if value.is_none() {
-			return H256::new().to_vec();
+			return vec![];
 		}
 		let value = value.unwrap();
 		if self.is_confidential_ctx_open() {
