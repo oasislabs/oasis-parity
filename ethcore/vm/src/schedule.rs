@@ -178,8 +178,8 @@ impl Default for WasmCosts {
 			grow_mem: 0,
 			memcpy: 1,
 			max_stack_height: 4096*1024,
-			opcodes_mul: 3,
-			opcodes_div: 8,
+			opcodes_mul: 1,
+			opcodes_div: 1,
 		}
 	}
 }

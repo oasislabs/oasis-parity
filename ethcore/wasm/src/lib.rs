@@ -97,7 +97,10 @@ impl vm::Vm for WasmInterpreter {
 			&wasmi::ImportsBuilder::new().with_resolver("env", &instantiation_resolver)
 		).map_err(Error::Interpreter)?;
 
-		if params.gas > ::std::u64::MAX.into()
+		let adjusted_gas = params.gas * U256::from(ext.schedule().wasm().opcodes_div) /
+			U256::from(ext.schedule().wasm().opcodes_mul);
+
+		if adjusted_gas > ::std::u64::MAX.into()
 		{
 			return Err(vm::Error::Wasm("Wasm interpreter cannot run contracts with gas (wasm adjusted) >= 2^64".to_owned()));
 		}
@@ -110,7 +113,7 @@ impl vm::Vm for WasmInterpreter {
 				ext,
 				instantiation_resolver.memory_ref(),
 				// cannot overflow, checked above
-				params.gas.low_u64(),
+				adjusted_gas.low_u64(),
 				data.to_vec(),
 				RuntimeContext {
 					address: params.address,
@@ -158,7 +161,9 @@ impl vm::Vm for WasmInterpreter {
 			)
 		};
 
-		let gas_left = U256::from(gas_left);
+		let gas_left =
+			U256::from(gas_left) * U256::from(ext.schedule().wasm().opcodes_mul)
+				/ U256::from(ext.schedule().wasm().opcodes_div);
 
 		if result.is_empty() {
 			trace!(target: "wasm", "Contract execution result is empty.");
