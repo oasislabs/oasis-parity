@@ -13,9 +13,13 @@ keccak-hash = { path = "../../util/hash" }
 rlp = { path = "../../util/rlp" }
 unexpected = { path = "../../util/unexpected" }
 ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
+byteorder = "1.0"
+serde_json = "1.0"
 
 [dev-dependencies]
+elastic-array = "0.10"
 rustc-hex= "1.0"
 
 [features]
 json-tests = []
+ethkey-test = ["ethkey/test"]

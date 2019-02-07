@@ -100,3 +100,5 @@ test-helpers = []
 enable-confidential = []
 # Don't allow non-confidential transctions. Used for an exlusively confidential chain.
 disable-non-confidential = []
+# Enable ethkey features needed for tests (i.e., rand)
+ethkey-test = ["ethkey/test"]

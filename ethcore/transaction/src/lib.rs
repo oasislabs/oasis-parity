@@ -16,20 +16,28 @@
 
 //! Ethereum Transactions
 
+extern crate byteorder;
 extern crate ethereum_types;
 extern crate ethjson;
 extern crate ethkey;
 extern crate evm;
 extern crate heapsize;
 extern crate keccak_hash as hash;
+#[macro_use]
+extern crate serde_json;
 extern crate rlp;
 extern crate unexpected;
+
+#[cfg(test)]
+extern crate elastic_array;
 
 #[cfg(test)]
 extern crate rustc_hex;
 
 mod error;
+mod header;
 mod transaction;
 
 pub use error::Error;
+pub use header::*;
 pub use transaction::*;
