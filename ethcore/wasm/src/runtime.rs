@@ -399,7 +399,6 @@ impl<'a> Runtime<'a> {
 	}
 
 	/// Rust syscall
-	#[cfg(debug_assertions)]
 	fn syscall(&mut self, args: RuntimeArgs) -> Result<RuntimeValue>
 	{
 		let syscall_id: u32 = args.nth_checked(0)?;
@@ -415,16 +414,19 @@ impl<'a> Runtime<'a> {
 				match payload[0] {
 					1 => print!("{}", out_str),
 					2 => print!("error: {}", out_str),
-					_ => panic!("invalid output stream {}", payload[0])
+					_ => println!("invalid output stream {}", payload[0])
 				};
 				1
 			},
-			2 => panic!("syscall exit with code {}", args.nth_checked::<u32>(1)?),
-			3 => unimplemented!(), // args
-			4 => 0, //unimplemented!(), // getenv
-			5 => unreachable!(),   // doesn't exist?
-			6 => unimplemented!(), // time
-			_ => unimplemented!()
+			2 => println!("syscall exit with code {}", args.nth_checked::<u32>(1)?),
+			5 => {
+				println!("Unreachable syscall 5");
+				1
+			},
+			_ => {
+				println!("Unimplemented syscall {}", syscall_id);
+				1
+			},
 		}.into())
 	}
 
