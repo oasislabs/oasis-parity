@@ -399,6 +399,7 @@ impl<'a> Runtime<'a> {
 	}
 
 	/// Rust syscall
+	#[cfg(debug_assertions)]
 	fn syscall(&mut self, args: RuntimeArgs) -> Result<RuntimeValue>
 	{
 		let syscall_id: u32 = args.nth_checked(0)?;
