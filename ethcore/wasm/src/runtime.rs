@@ -408,26 +408,54 @@ impl<'a> Runtime<'a> {
 			1 => {
 				let mem_bytes = self.memory.get(data_ptr, 4 * 3)?; // 3 words
 				let payload = unsafe { mem::transmute::<Vec<u8>, Vec<u32>>(mem_bytes) };
-				let out_str = String::from_utf8(
-					self.memory.get(payload[1] as u32, payload[2] as usize)?)
-					.map_err(|_| Error::BadUtf8)?;
-				match payload[0] {
-					1 => print!("{}", out_str),
-					2 => print!("error: {}", out_str),
-					_ => println!("invalid output stream {}", payload[0])
-				};
-				1
-			},
-			2 => println!("syscall exit with code {}", args.nth_checked::<u32>(1)?),
-			5 => {
-				println!("Unreachable syscall 5");
-				1
-			},
-			_ => {
-				println!("Unimplemented syscall {}", syscall_id);
-				1
-			},
-		}.into())
+				let out_str =
+					String::from_utf8(self.memory.get(payload[1] as u32, payload[2] as usize)?)
+						.map_err(|_| Error::BadUtf8)?;
+				match payload.get(0) {
+					Some(1) | Some(2) => {
+						print!("{}", out_str);
+						Ok(1)
+					}
+					Some(stream_id) => {
+						Err(Error::Panic(format!("invalid output stream {}", stream_id)))
+					}
+					None => Err(Error::MemoryAccessViolation),
+				}
+			}
+			2 => {
+				let mem_bytes = self.memory.get(data_ptr, 4)?; // 1 word
+				let payload = unsafe { mem::transmute::<Vec<u8>, Vec<u32>>(mem_bytes) };
+				Err(Error::Panic(format!(
+					"contract requested exit with code {}",
+					payload.get(0).ok_or(Error::MemoryAccessViolation)?
+				)))
+			}
+			3 => {
+				// getargs(ret_buf_ptr: &mut u8, ret_buf_len: u32, args_len: *mut u8);
+				// set the return buffer length to zero = no args
+				self.memory.zero(data_ptr as usize + 4 * 2, 4)?;
+				Ok(1)
+			}
+			4 => {
+				// getenv(key_ptr: &u32, key_len: u32, val_ptr: &mut u8, val_len: &mut u32)
+				// set val length to zero = no val
+				self.memory.zero(data_ptr as usize + 4 * 3, 4)?;
+				Ok(1)
+			}
+			6 => {
+				// time(_: u32, high_s: &mut u32, low_s: &mut u32, subseC_nanos: &mut u32);
+				let ts_bytes = self.ext.env_info().timestamp.to_le_bytes();
+				self.memory.set(data_ptr + 4 * 1, &ts_bytes[0..4])?;
+				self.memory.set(data_ptr + 4 * 2, &ts_bytes[4..8])?;
+				self.memory.zero(data_ptr as usize + 4 * 3, 4)?;
+				Ok(1)
+			}
+			_ => Err(Error::Panic(format!(
+				"Unimplemented syscall {}",
+				syscall_id
+			))),
+		}?
+		.into())
 	}
 
 	fn expf(&mut self, args: RuntimeArgs) -> Result<RuntimeValue> {
