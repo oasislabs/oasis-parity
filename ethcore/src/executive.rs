@@ -403,7 +403,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 			return Err(vm::Error::MutableCallInStaticContext);
 		}
 
-		// fail the call immediately if the contract is expired
+		// Fail the call immediately if the contract is expired.
 		if self.info.timestamp > self.state.storage_expiry(&params.code_address)? {
 			let trace_info = tracer.prepare_trace_call(&params);
 			tracer.trace_failed_call(trace_info, vec![], vm::Error::Reverted.into());
