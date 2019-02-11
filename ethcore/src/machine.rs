@@ -146,6 +146,7 @@ impl EthereumMachine {
 			call_type: CallType::Call,
 			params_type: ParamsType::Separate,
 			confidential: false,
+			expiry: None,
 		};
 		let mut ex = Executive::new(&mut state, &env_info, self);
 		let mut substate = Substate::new();

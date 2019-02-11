@@ -264,7 +264,12 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		let sender = t.sender();
 		let nonce = self.state.nonce(&sender)?;
 
+		// extract deployment header from code
+		let header = self.state.extract_header(t)
+					   .map_err(|e| ExecutionError::TransactionMalformed(e))?;
+
 		let schedule = self.machine.schedule(self.info.number);
+		// TODO: check deployment header for confidential flag
 		let confidential = self.state.is_confidential(t)
 					   .map_err(|_| ExecutionError::NotConfidential)?;
 		let base_gas_required = U256::from(t.gas_required(&schedule, confidential));
@@ -315,6 +320,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		let (result, output) = match t.action {
 			Action::Create => {
 				let (new_address, code_hash) = contract_address(self.machine.create_address_scheme(self.info.number), &sender, &nonce, &t.data);
+				// TODO: remove deployment header
 				let code: Bytes = t.data.clone();
 				let params = ActionParams {
 					code_address: new_address.clone(),
@@ -330,12 +336,14 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					call_type: CallType::None,
 					params_type: vm::ParamsType::Embedded,
 					confidential: confidential,
+					expiry: header.map_or(None, |h| h.expiry),
 				};
 				let mut out = if output_from_create { Some(vec![]) } else { None };
 				(self.create(params, &mut substate, &mut out, &mut tracer, &mut vm_tracer, &mut ext_tracer), out.unwrap_or_else(Vec::new))
 			},
 			Action::Call(ref address) => {
 				let code = self.state.code(address)?;
+				// TODO: remove deployment header
 				let params = ActionParams {
 					code_address: address.clone(),
 					address: address.clone(),
@@ -350,6 +358,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					call_type: CallType::Call,
 					params_type: vm::ParamsType::Separate,
 					confidential: confidential,
+					expiry: None,
 				};
 				let mut out = vec![];
 				(self.call(params, &mut substate, BytesRef::Flexible(&mut out), &mut tracer, &mut vm_tracer, &mut ext_tracer), out)
@@ -576,12 +585,24 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		// part of substate that may be reverted
 		let mut unconfirmed_substate = Substate::new();
 
-		// create contract and transfer value to it if necessary
 		let schedule = self.machine.schedule(self.info.number);
+
+		// storage expiry
+		let storage_expiry = match params.expiry {
+			Some(timestamp) => timestamp,
+			None => self.info.timestamp + schedule.default_storage_duration,
+		};
+
+		// fail if expiry has passed
+		if self.info.timestamp > storage_expiry {
+			let trace_info = tracer.prepare_trace_create(&params);
+			tracer.trace_failed_create(trace_info, vec![], vm::Error::Reverted.into());
+			return Err(vm::Error::Reverted);
+		}
+
+		// create contract and transfer value to it if necessary
 		let nonce_offset = if schedule.no_empty {1} else {0}.into();
 		let prev_bal = self.state.balance(&params.address)?;
-		// TODO: configurable expiry
-		let storage_expiry = self.info.timestamp + schedule.default_storage_duration;
 		if let ActionValue::Transfer(val) = params.value {
 			self.state.sub_balance(&params.sender, &val, &mut substate.to_cleanup_mode(&schedule))?;
 			self.state.new_contract(&params.address, val + prev_bal, nonce_offset, storage_expiry);

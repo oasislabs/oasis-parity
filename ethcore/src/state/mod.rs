@@ -39,7 +39,7 @@ use pod_state::{self, PodState};
 use types::basic_account::BasicAccount;
 use executed::{Executed, ExecutionError};
 use types::state_diff::StateDiff;
-use transaction::{self, SignedTransaction};
+use transaction::{self, ContractHeader, SignedTransaction};
 use state_db::StateDB;
 use factory::VmFactory;
 use journaldb::overlaydb::OverlayDB;
@@ -1171,6 +1171,12 @@ impl<B: Backend> State<B> {
 		let code = self.tx_code(transaction)?;
 		ConfidentialVm::is_confidential(code.as_ref().map(|c| c.as_slice()))
 			.map_err(|e| format!("{:?}", e))
+	}
+
+	/// Returns the contract deployment header (or None)
+	pub fn extract_header(&self, transaction: &SignedTransaction) -> Result<Option<ContractHeader>, String> {
+		let code = self.tx_code(transaction)?;
+		code.as_ref().map_or(Ok(None), |c| ContractHeader::extract_from_data(c.as_slice()))
 	}
 
 	/// Returns true if in a confidential context, i.e., all contract state is encrypted/decrypted
