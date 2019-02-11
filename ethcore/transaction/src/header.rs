@@ -14,6 +14,7 @@ pub struct ContractHeader {
 	pub value: Value,
 	pub confidential: bool,
 	pub expiry: Option<u64>,
+	pub code: Vec<u8>,
 }
 
 impl ContractHeader {
@@ -59,10 +60,10 @@ impl ContractHeader {
 				if n.is_u64() {
 					n.as_u64()
 				} else {
-					return Err("Expiration must be an integer".to_string());
+					return Err("Expiry must be an integer".to_string());
 				}
 			}
-			_ => return Err("Expiration must be an integer".to_string()),
+			_ => return Err("Expiry must be an integer".to_string()),
 		};
 		let confidential = match value[KEY_CONFIDENTIAL] {
 			Value::Null => false,
@@ -70,12 +71,16 @@ impl ContractHeader {
 			_ => return Err("Confidential must be a boolean".to_string()),
 		};
 
+		// the actual bytecode
+		let code = data[contents_length..].to_vec();
+
 		Ok(Some(Self {
 			length,
 			version,
 			value,
 			confidential,
 			expiry,
+			code,
 		}))
 	}
 }
@@ -114,7 +119,7 @@ mod tests {
 		data.append_slice(&contents);
 
 		// append some dummy body data
-		data.append_slice(b"contract data");
+		data.append_slice(b"contract code");
 
 		data.into_vec()
 	}
@@ -132,6 +137,7 @@ mod tests {
 		// check fields
 		assert_eq!(header.confidential, true);
 		assert_eq!(header.expiry, Some(1577836800));
+		assert_eq!(header.code, "contract code".as_bytes());
 	}
 
 	#[test]
