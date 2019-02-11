@@ -12,19 +12,11 @@ pub struct ContractHeader {
 	pub length: usize,
 	pub version: usize,
 	pub value: Value,
-	confidential: bool,
-	expiry: Option<u64>,
+	pub confidential: bool,
+	pub expiry: Option<u64>,
 }
 
 impl ContractHeader {
-	pub fn get_expiry(&self) -> Option<u64> {
-		self.expiry
-	}
-
-	pub fn is_confidential(&self) -> bool {
-		self.confidential
-	}
-
 	pub fn extract_from_data(data: &[u8]) -> Result<Option<Self>, String> {
 		// check for prefix
 		if !has_header_prefix(data) {
@@ -138,8 +130,8 @@ mod tests {
 		let header = ContractHeader::extract_from_data(&data).unwrap().unwrap();
 
 		// check fields
-		assert_eq!(header.is_confidential(), true);
-		assert_eq!(header.get_expiry(), Some(1577836800));
+		assert_eq!(header.confidential, true);
+		assert_eq!(header.expiry, Some(1577836800));
 	}
 
 	#[test]
