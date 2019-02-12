@@ -591,6 +591,11 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 			None => None,
 		};
 
+		let mut no_header_params = params.clone();
+		if let Some(ref h) = header {
+			no_header_params.code = Some(h.code.clone());
+		}
+
 		// storage expiry
 		let storage_expiry = header.map(|h| h.expiry).and_then(Into::into)
 			.unwrap_or(self.info.timestamp + schedule.default_storage_duration);
@@ -623,7 +628,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		let mut subexttracer = ext_tracer.subtracer(&params.address);
 		let res = self.exec_vm(
 			schedule,
-			params,
+			no_header_params,
 			&mut unconfirmed_substate,
 			OutputPolicy::InitContract(output.as_mut().or(trace_output.as_mut())),
 			&mut subtracer,

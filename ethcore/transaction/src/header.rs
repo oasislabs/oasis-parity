@@ -1,5 +1,6 @@
 use byteorder::{ByteOrder, BigEndian};
 use serde_json::Value;
+use std::sync::Arc;
 
 /// 4-byte prefix prepended to data field indicating header
 const HEADER_PREFIX: &'static [u8; 4] = b"\0sis";
@@ -14,7 +15,7 @@ pub struct ContractHeader {
 	pub value: Value,
 	pub confidential: bool,
 	pub expiry: Option<u64>,
-	pub code: Vec<u8>,
+	pub code: Arc<Vec<u8>>,
 }
 
 impl ContractHeader {
@@ -80,7 +81,7 @@ impl ContractHeader {
 			value,
 			confidential,
 			expiry,
-			code,
+			code: Arc::new(code),
 		}))
 	}
 }
@@ -137,7 +138,7 @@ mod tests {
 		// check fields
 		assert_eq!(header.confidential, true);
 		assert_eq!(header.expiry, Some(1577836800));
-		assert_eq!(header.code, "contract code".as_bytes());
+		assert_eq!(header.code, Arc::new("contract code".as_bytes().to_vec()));
 	}
 
 	#[test]
