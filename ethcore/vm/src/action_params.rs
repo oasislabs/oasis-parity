@@ -96,7 +96,6 @@ pub struct ActionParams {
 	/// confidential creates to be triggered from inside the vm, e.g., CREATE
 	/// or CALL in the EVM.
 	pub confidential: bool,
-	pub expiry: Option<u64>,
 }
 
 impl ActionParams {
@@ -124,7 +123,6 @@ impl Default for ActionParams {
 			call_type: CallType::None,
 			params_type: ParamsType::Separate,
 			confidential: false,
-			expiry: None,
 		}
 	}
 }
@@ -147,7 +145,6 @@ impl From<ethjson::vm::Transaction> for ActionParams {
 			params_type: ParamsType::Separate,
 			// don't allow confidential transaction deserialization for now
 			confidential: false,
-			expiry: None,
 		}
 	}
 }

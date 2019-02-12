@@ -31,7 +31,7 @@ use vm::{
 use externalities::*;
 use trace::{self, Tracer, VMTracer};
 use trace_ext::{CountingTracer, ExtTracer, FullExtTracer, FullTracerCallTrace, FullTracerRecord, NoopExtTracer};
-use transaction::{Action, SignedTransaction};
+use transaction::{Action, ContractHeader, SignedTransaction};
 pub use executed::{Executed, ExecutionResult};
 use confidential_vm::ConfidentialVm;
 
@@ -336,7 +336,6 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					call_type: CallType::None,
 					params_type: vm::ParamsType::Embedded,
 					confidential: confidential,
-					expiry: header.map_or(None, |h| h.expiry),
 				};
 				let mut out = if output_from_create { Some(vec![]) } else { None };
 				(self.create(params, &mut substate, &mut out, &mut tracer, &mut vm_tracer, &mut ext_tracer), out.unwrap_or_else(Vec::new))
@@ -358,7 +357,6 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					call_type: CallType::Call,
 					params_type: vm::ParamsType::Separate,
 					confidential: confidential,
-					expiry: None,
 				};
 				let mut out = vec![];
 				(self.call(params, &mut substate, BytesRef::Flexible(&mut out), &mut tracer, &mut vm_tracer, &mut ext_tracer), out)
@@ -587,11 +585,15 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 
 		let schedule = self.machine.schedule(self.info.number);
 
-		// storage expiry
-		let storage_expiry = match params.expiry {
-			Some(timestamp) => timestamp,
-			None => self.info.timestamp + schedule.default_storage_duration,
+		// extract header (TODO: remove from code)
+		let header = match params.code {
+			Some(ref code) => ContractHeader::extract_from_data(code).map_err(|_| vm::Error::Reverted)?,
+			None => None,
 		};
+
+		// storage expiry
+		let storage_expiry = header.map(|h| h.expiry).and_then(Into::into)
+			.unwrap_or(self.info.timestamp + schedule.default_storage_duration);
 
 		// fail if expiry has passed
 		if self.info.timestamp > storage_expiry {

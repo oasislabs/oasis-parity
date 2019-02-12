@@ -228,7 +228,6 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 			call_type: CallType::None,
 			params_type: vm::ParamsType::Embedded,
 			confidential: false,
-			expiry: None,
 		};
 
 		if !self.static_flag {
@@ -293,7 +292,6 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 			call_type: call_type,
 			params_type: vm::ParamsType::Separate,
 			confidential: false,
-			expiry: None,
 		};
 
 		if let Some(value) = value {
