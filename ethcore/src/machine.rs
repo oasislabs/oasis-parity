@@ -136,7 +136,7 @@ impl EthereumMachine {
 
 		// extract header
 		let header = if let Some(ref code) = code {
-			ContractHeader::extract_from_data(code)?
+			ContractHeader::extract_from_code(code)?
 		}
 		else {
 			None

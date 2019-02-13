@@ -1,7 +1,7 @@
 use byteorder::{ByteOrder, BigEndian};
 use serde_json::Value;
 
-/// 4-byte prefix prepended to data field indicating header
+/// 4-byte prefix prepended to contract code indicating header
 const HEADER_PREFIX: &'static [u8; 4] = b"\0sis";
 
 pub const KEY_CONFIDENTIAL: &str = "confidential";
@@ -19,7 +19,7 @@ pub struct ContractHeader {
 }
 
 impl ContractHeader {
-	pub fn extract_from_data(raw_data: &[u8]) -> Result<Option<Self>, String> {
+	pub fn extract_from_code(raw_data: &[u8]) -> Result<Option<Self>, String> {
 		// check for prefix
 		if !has_header_prefix(raw_data) {
 			return Ok(None);
@@ -137,7 +137,7 @@ mod tests {
 		}));
 
 		// extract header from slice
-		let header = ContractHeader::extract_from_data(&data).unwrap().unwrap();
+		let header = ContractHeader::extract_from_code(&data).unwrap().unwrap();
 
 		// check fields
 		assert_eq!(header.confidential, true);
@@ -149,7 +149,7 @@ mod tests {
 	fn test_no_header() {
 		let data = b"data without a header";
 
-		let header = ContractHeader::extract_from_data(&data[..]).expect("No header");
+		let header = ContractHeader::extract_from_code(&data[..]).expect("No header");
 
 		assert!(header.is_none());
 	}
@@ -158,17 +158,17 @@ mod tests {
 	fn test_invalid_encoding() {
 		// invalid length
 		let data = b"\0sis\xff";
-		let result = ContractHeader::extract_from_data(&data[..]);
+		let result = ContractHeader::extract_from_code(&data[..]);
 		assert!(result.is_err());
 
 		// data too short
 		let data = b"\0sis\0\x01";
-		let result = ContractHeader::extract_from_data(&data[..]);
+		let result = ContractHeader::extract_from_code(&data[..]);
 		assert!(result.is_err());
 
 		// malformed JSON
 		let data = b"\0sis\0\x05\0\x01\xff\xff\xff";
-		let result = ContractHeader::extract_from_data(&data[..]);
+		let result = ContractHeader::extract_from_code(&data[..]);
 		assert!(result.is_err());
 	}
 
@@ -180,7 +180,7 @@ mod tests {
 			"expiry": "1577836800",
 		}));
 
-		let result = ContractHeader::extract_from_data(&data);
+		let result = ContractHeader::extract_from_code(&data);
 		assert!(result.is_err());
 	}
 }

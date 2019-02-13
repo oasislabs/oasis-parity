@@ -1176,7 +1176,7 @@ impl<B: Backend> State<B> {
 	/// Returns the contract deployment header (or None)
 	pub fn extract_header(&self, transaction: &SignedTransaction) -> Result<Option<ContractHeader>, String> {
 		let code = self.tx_code(transaction)?;
-		code.as_ref().map_or(Ok(None), |c| ContractHeader::extract_from_data(c.as_slice()))
+		code.as_ref().map_or(Ok(None), |c| ContractHeader::extract_from_code(c.as_slice()))
 	}
 
 	/// Returns true if in a confidential context, i.e., all contract state is encrypted/decrypted

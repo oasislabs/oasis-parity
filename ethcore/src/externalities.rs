@@ -214,7 +214,7 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 		};
 
 		// extract header
-		let header = match ContractHeader::extract_from_data(code) {
+		let header = match ContractHeader::extract_from_code(code) {
 			Ok(header) => header,
 			Err(_) => return ContractCreateResult::Failed,
 		};
@@ -291,7 +291,7 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 
 		// extract header
 		let header = if let Some(ref code) = code {
-			match ContractHeader::extract_from_data(code) {
+			match ContractHeader::extract_from_code(code) {
 				Ok(header) => header,
 				Err(_) => return MessageCallResult::Failed,
 			}
