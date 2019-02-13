@@ -269,9 +269,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					   .map_err(|e| ExecutionError::TransactionMalformed(e))?;
 
 		let schedule = self.machine.schedule(self.info.number);
-		// TODO: check deployment header for confidential flag
-		let confidential = self.state.is_confidential(t)
-					   .map_err(|_| ExecutionError::NotConfidential)?;
+		let confidential = header.as_ref().map_or(false, |h| h.confidential);
 		let base_gas_required = U256::from(t.gas_required(&schedule, confidential));
 
 		if t.gas < base_gas_required {
