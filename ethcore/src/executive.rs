@@ -328,10 +328,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					gas_price: t.gas_price,
 					value: ActionValue::Transfer(t.value),
 					// strip contract header (if present)
-					code: Some(match header {
-						Some(ref h) => h.code.clone(),
-						None => Arc::new(t.data.clone()),
-					}),
+					code: Some(header.as_ref().map_or(Arc::new(t.data.clone()), |h| h.code.clone())),
 					data: None,
 					call_type: CallType::None,
 					params_type: vm::ParamsType::Embedded,
@@ -342,11 +339,6 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 				(self.create(params, &mut substate, &mut out, &mut tracer, &mut vm_tracer, &mut ext_tracer), out.unwrap_or_else(Vec::new))
 			},
 			Action::Call(ref address) => {
-				// strip contract header (if present)
-				let code = match header {
-					Some(ref h) => Some(h.code.clone()),
-					None => self.state.code(address)?,
-				};
 				let params = ActionParams {
 					code_address: address.clone(),
 					address: address.clone(),
@@ -355,7 +347,8 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					gas: init_gas,
 					gas_price: t.gas_price,
 					value: ActionValue::Transfer(t.value),
-					code: code,
+					// strip contract header (if present)
+					code: header.as_ref().map_or(self.state.code(address)?, |h| Some(h.code.clone())),
 					code_hash: Some(self.state.code_hash(address)?),
 					data: Some(t.data.clone()),
 					call_type: CallType::Call,
