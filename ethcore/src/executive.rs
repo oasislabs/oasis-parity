@@ -264,7 +264,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		let sender = t.sender();
 		let nonce = self.state.nonce(&sender)?;
 
-		// extract deployment header from code
+		// Extract contract deployment header, if present.
 		let header = self.state.extract_header(t)
 					   .map_err(|e| ExecutionError::TransactionMalformed(e))?;
 
@@ -327,7 +327,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					gas: init_gas,
 					gas_price: t.gas_price,
 					value: ActionValue::Transfer(t.value),
-					// strip contract header (if present)
+					// Code stripped of contract header, if present.
 					code: Some(header.as_ref().map_or(Arc::new(t.data.clone()), |h| h.code.clone())),
 					data: None,
 					call_type: CallType::None,
@@ -347,7 +347,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					gas: init_gas,
 					gas_price: t.gas_price,
 					value: ActionValue::Transfer(t.value),
-					// strip contract header (if present)
+					// Code stripped of contract header, if present.
 					code: header.as_ref().map_or(self.state.code(address)?, |h| Some(h.code.clone())),
 					code_hash: Some(self.state.code_hash(address)?),
 					data: Some(t.data.clone()),
@@ -379,7 +379,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		let depth_threshold = local_stack_size.saturating_sub(STACK_SIZE_ENTRY_OVERHEAD) / STACK_SIZE_PER_DEPTH;
 		let static_call = params.call_type == CallType::StaticCall;
 
-		// if this is a create with a header, save the raw header bytes to prepend to the bytecode
+		// If this is a create with a header, copy the raw header bytes to prepend to the bytecode.
 		let raw_header = if params.call_type == CallType::None {
 			params.header.as_ref().map(|h| h.raw_header.clone())
 		}
@@ -393,7 +393,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		let mut vm = vm_factory.create(&params, &schedule);
 		let ret = vm.exec(params, &mut ext);
 
-		// prepend header to the bytecode that is stored in the account
+		// Prepend the header to the bytecode that is stored in the account.
 		if let Some(bytes) = raw_header {
 			if let Ok(GasLeft::NeedsReturn { gas_left, data, apply_state }) = ret {
 				let mut bytecode = bytes;
@@ -607,11 +607,11 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 
 		let schedule = self.machine.schedule(self.info.number);
 
-		// storage expiry
+		// Read requested storage expiry from header, if present.
 		let storage_expiry = params.header.as_ref().map(|h| h.expiry).and_then(Into::into)
 			.unwrap_or(self.info.timestamp + schedule.default_storage_duration);
 
-		// fail if expiry has passed
+		// Fail immediately if requested expiry has passed.
 		if self.info.timestamp > storage_expiry {
 			let trace_info = tracer.prepare_trace_create(&params);
 			tracer.trace_failed_create(trace_info, vec![], vm::Error::Reverted.into());

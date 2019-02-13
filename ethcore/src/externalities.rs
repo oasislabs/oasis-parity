@@ -213,7 +213,7 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 			}
 		};
 
-		// extract header
+		// Extract contract deployment header, if present.
 		let header = match ContractHeader::extract_from_code(code) {
 			Ok(header) => header,
 			Err(_) => return ContractCreateResult::Failed,
@@ -228,7 +228,7 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 			gas: *gas,
 			gas_price: self.origin_info.gas_price,
 			value: ActionValue::Transfer(*value),
-			// strip contract header (if present)
+			// Code stripped of contract header, if present.
 			code: Some(header.as_ref().map_or(Arc::new(code.to_vec()), |h| h.code.clone())),
 			code_hash: code_hash,
 			data: None,
@@ -286,7 +286,7 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 			Err(_) => return MessageCallResult::Failed,
 		};
 
-		// extract header
+		// Extract contract deployment header, if present.
 		let header = if let Some(ref code) = code {
 			match ContractHeader::extract_from_code(code) {
 				Ok(header) => header,
@@ -305,7 +305,7 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 			origin: self.origin_info.origin.clone(),
 			gas: *gas,
 			gas_price: self.origin_info.gas_price,
-			// strip contract header (if present)
+			// Code stripped of contract header, if present.
 			code: header.as_ref().map_or(code, |h| Some(h.code.clone())),
 			code_hash: Some(code_hash),
 			data: Some(data.to_vec()),

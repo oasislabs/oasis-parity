@@ -134,7 +134,7 @@ impl EthereumMachine {
 		let mut state = block.state_mut();
 		let code = state.code(&contract_address)?;
 
-		// extract header
+		// Extract contract deployment header, if present.
 		let header = if let Some(ref code) = code {
 			ContractHeader::extract_from_code(code)?
 		}
@@ -150,7 +150,7 @@ impl EthereumMachine {
 			gas: gas,
 			gas_price: 0.into(),
 			value: ActionValue::Transfer(0.into()),
-			// strip contract header (if present)
+			// Code stripped of contract header, if present.
 			code: header.map_or(code, |h| Some(h.code)),
 			code_hash: Some(state.code_hash(&contract_address)?),
 			data: data,
