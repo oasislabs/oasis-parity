@@ -388,12 +388,31 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		let local_stack_size = ::std::usize::MAX;
 		let depth_threshold = local_stack_size.saturating_sub(STACK_SIZE_ENTRY_OVERHEAD) / STACK_SIZE_PER_DEPTH;
 		let static_call = params.call_type == CallType::StaticCall;
+		let create = params.call_type == CallType::None;
 
 		let vm_factory = self.state.vm_factory();
 		let mut ext = self.as_externalities(OriginInfo::from(&params), unconfirmed_substate, output_policy, tracer, vm_tracer, ext_tracer, static_call);
 		trace!(target: "executive", "ext.schedule.have_delegate_call: {}", ext.schedule().have_delegate_call);
 		let mut vm = vm_factory.create(&params, &schedule);
-		return vm.exec(params, &mut ext).finalize(ext);
+		let ret = vm.exec(params.clone(), &mut ext);
+
+		// prepend header to the bytecode that is stored in the account
+		if create {
+			if let Some(header) = params.header {
+				if let Ok(GasLeft::NeedsReturn { gas_left, data, apply_state }) = ret {
+					let mut bytecode = header.raw_header;
+					bytecode.append(&mut data.to_vec());
+					let size = bytecode.len();
+					return Ok(GasLeft::NeedsReturn {
+						gas_left,
+						data: ReturnData::new(bytecode, 0, size),
+						apply_state
+					}).finalize(ext);
+				}
+			}
+		}
+
+		ret.finalize(ext)
 	}
 
 	/// Calls contract function with given contract params.

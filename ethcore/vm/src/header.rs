@@ -15,18 +15,19 @@ pub struct ContractHeader {
 	pub value: Value,
 	pub confidential: bool,
 	pub expiry: Option<u64>,
+	pub raw_header: Vec<u8>,
 	pub code: Arc<Vec<u8>>,
 }
 
 impl ContractHeader {
-	pub fn extract_from_data(data: &[u8]) -> Result<Option<Self>, String> {
+	pub fn extract_from_data(raw_data: &[u8]) -> Result<Option<Self>, String> {
 		// check for prefix
-		if !has_header_prefix(data) {
+		if !has_header_prefix(raw_data) {
 			return Ok(None);
 		}
 
 		// strip prefix
-		let data = &data[HEADER_PREFIX.len()..];
+		let data = &raw_data[HEADER_PREFIX.len()..];
 
 		// read length (2 bytes, big-endian)
 		if data.len() < 2 {
@@ -72,6 +73,9 @@ impl ContractHeader {
 			_ => return Err("Confidential must be a boolean".to_string()),
 		};
 
+		// the raw header
+		let raw_header = raw_data[0..HEADER_PREFIX.len() + 2 + length].to_vec();
+
 		// the actual bytecode
 		let code = data[contents_length..].to_vec();
 
@@ -81,6 +85,7 @@ impl ContractHeader {
 			value,
 			confidential,
 			expiry,
+			raw_header,
 			code: Arc::new(code),
 		}))
 	}
