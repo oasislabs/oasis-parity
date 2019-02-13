@@ -150,7 +150,7 @@ impl EthereumMachine {
 			gas: gas,
 			gas_price: 0.into(),
 			value: ActionValue::Transfer(0.into()),
-			// strip header
+			// strip contract header (if present)
 			code: match header {
 				Some(h) => Some(Arc::new(h.code)),
 				None => code,

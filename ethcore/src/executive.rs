@@ -320,7 +320,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		let (result, output) = match t.action {
 			Action::Create => {
 				let (new_address, code_hash) = contract_address(self.machine.create_address_scheme(self.info.number), &sender, &nonce, &t.data);
-				// strip header
+				// strip contract header (if present)
 				let code: Bytes = match header {
 					Some(ref h) => h.code.clone(),
 					None => t.data.clone(),
@@ -345,7 +345,11 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 				(self.create(params, &mut substate, &mut out, &mut tracer, &mut vm_tracer, &mut ext_tracer), out.unwrap_or_else(Vec::new))
 			},
 			Action::Call(ref address) => {
-				let code = self.state.code(address)?;
+				// strip contract header (if present)
+				let code = match header {
+					Some(ref h) => Some(Arc::new(h.code.clone())),
+					None => self.state.code(address)?,
+				};
 				let params = ActionParams {
 					code_address: address.clone(),
 					address: address.clone(),
@@ -354,11 +358,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					gas: init_gas,
 					gas_price: t.gas_price,
 					value: ActionValue::Transfer(t.value),
-					// strip header
-					code: match header {
-						Some(ref h) => Some(Arc::new(h.code.clone())),
-						None => code,
-					},
+					code: code,
 					code_hash: Some(self.state.code_hash(address)?),
 					data: Some(t.data.clone()),
 					call_type: CallType::Call,

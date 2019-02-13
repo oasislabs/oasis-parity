@@ -228,7 +228,7 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 			gas: *gas,
 			gas_price: self.origin_info.gas_price,
 			value: ActionValue::Transfer(*value),
-			// strip header
+			// strip contract header (if present)
 			code: Some(Arc::new(match header {
 				Some(ref h) => h.code.clone(),
 				None => code.to_vec(),
@@ -308,7 +308,7 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 			origin: self.origin_info.origin.clone(),
 			gas: *gas,
 			gas_price: self.origin_info.gas_price,
-			// strip header
+			// strip contract header (if present)
 			code: match header {
 				Some(ref h) => Some(Arc::new(h.code.clone())),
 				None => code,
