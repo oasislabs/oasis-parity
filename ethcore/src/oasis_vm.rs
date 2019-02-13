@@ -8,13 +8,14 @@ const CONFIDENTIAL_PREFIX: &'static [u8; 4] = b"\0enc";
 /// The H256 topic that the long term public key is logged under for a confidential deploy.
 const CONFIDENTIAL_LOG_TOPIC: &'static str = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
 
-/// ConfidentialVm is a wrapper around a WASM or EVM vm for executing confidential contracts.
-pub struct ConfidentialVm {
+/// OasisVm is a wrapper around a WASM or EVM vm for executing contracts with Oasis-specific
+/// functionality (e.g., confidentiality and storage expiry).
+pub struct OasisVm {
 	/// Underlying EVM or WASM vm to execute decrypted transactions.
 	vm: Box<vm::Vm>
 }
 
-impl Vm for ConfidentialVm {
+impl Vm for OasisVm {
 	fn exec(&mut self, params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
 		let mut no_prefix_params = params.clone();
 		no_prefix_params.code = params.code.map(|code| Arc::new(Self::remove_prefix(code.to_vec())));
@@ -25,9 +26,9 @@ impl Vm for ConfidentialVm {
 	}
 }
 
-impl ConfidentialVm {
+impl OasisVm {
 	pub fn new(vm: Box<vm::Vm>) -> Self {
-		ConfidentialVm { vm }
+		OasisVm { vm }
 	}
 
 	/// Returns true if the given bytecode represents a confidential contract.

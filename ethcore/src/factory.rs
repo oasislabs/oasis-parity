@@ -16,7 +16,7 @@
 
 use trie::TrieFactory;
 use account_db::Factory as AccountFactory;
-use confidential_vm::ConfidentialVm;
+use oasis_vm::OasisVm;
 use evm::{Factory as EvmFactory, VMType};
 use vm::{Vm, ActionParams, Schedule};
 use wasm::WasmInterpreter;
@@ -34,7 +34,7 @@ impl VmFactory {
 	pub fn create(&self, params: &ActionParams, schedule: &Schedule) -> Box<Vm> {
 		let mut vm = self._create(params, schedule);
 		if params.confidential {
-			Box::new(ConfidentialVm::new(vm))
+			Box::new(OasisVm::new(vm))
 		} else {
 			vm
 		}
@@ -53,7 +53,7 @@ impl VmFactory {
 	fn raw_code(params: &ActionParams) -> Bytes {
 		params.code.as_ref().map_or(vec![], |code| {
 			if params.confidential {
-				ConfidentialVm::remove_prefix(code.to_vec())
+				OasisVm::remove_prefix(code.to_vec())
 			} else {
 				code.to_vec()
 			}
