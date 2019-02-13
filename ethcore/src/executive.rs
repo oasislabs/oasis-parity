@@ -388,27 +388,32 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		let local_stack_size = ::std::usize::MAX;
 		let depth_threshold = local_stack_size.saturating_sub(STACK_SIZE_ENTRY_OVERHEAD) / STACK_SIZE_PER_DEPTH;
 		let static_call = params.call_type == CallType::StaticCall;
-		let create = params.call_type == CallType::None;
+
+		// if this is a create with a header, save the raw header bytes to prepend to the bytecode
+		let raw_header = if params.call_type == CallType::None {
+			params.header.as_ref().map(|h| h.raw_header.clone())
+		}
+		else {
+			None
+		};
 
 		let vm_factory = self.state.vm_factory();
 		let mut ext = self.as_externalities(OriginInfo::from(&params), unconfirmed_substate, output_policy, tracer, vm_tracer, ext_tracer, static_call);
 		trace!(target: "executive", "ext.schedule.have_delegate_call: {}", ext.schedule().have_delegate_call);
 		let mut vm = vm_factory.create(&params, &schedule);
-		let ret = vm.exec(params.clone(), &mut ext);
+		let ret = vm.exec(params, &mut ext);
 
 		// prepend header to the bytecode that is stored in the account
-		if create {
-			if let Some(header) = params.header {
-				if let Ok(GasLeft::NeedsReturn { gas_left, data, apply_state }) = ret {
-					let mut bytecode = header.raw_header;
-					bytecode.append(&mut data.to_vec());
-					let size = bytecode.len();
-					return Ok(GasLeft::NeedsReturn {
-						gas_left,
-						data: ReturnData::new(bytecode, 0, size),
-						apply_state
-					}).finalize(ext);
-				}
+		if let Some(bytes) = raw_header {
+			if let Ok(GasLeft::NeedsReturn { gas_left, data, apply_state }) = ret {
+				let mut bytecode = bytes;
+				bytecode.append(&mut data.to_vec());
+				let size = bytecode.len();
+				return Ok(GasLeft::NeedsReturn {
+					gas_left,
+					data: ReturnData::new(bytecode, 0, size),
+					apply_state
+				}).finalize(ext);
 			}
 		}
 
