@@ -1166,7 +1166,7 @@ impl<B: Backend> State<B> {
 		Ok(self.require(a, false)?.reset_code_and_storage(code, storage))
 	}
 
-	/// Returns the contract deployment header (or None)
+	/// Returns the contract deployment header (or None, if not present).
 	pub fn extract_header(&self, transaction: &SignedTransaction) -> Result<Option<ContractHeader>, String> {
 		let code = self.tx_code(transaction)?;
 		code.as_ref().map_or(Ok(None), |c| ContractHeader::extract_from_code(c.as_slice()))

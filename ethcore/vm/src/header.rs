@@ -34,6 +34,13 @@ impl ContractHeader {
 		// strip prefix
 		let data = &raw_code[HEADER_PREFIX.len()..];
 
+		// read version (2 bytes, big-endian)
+		if data.len() < 2 {
+			return Err("Invalid header version".to_string());
+		}
+		let version = BigEndian::read_u16(&data[..2]) as usize;
+		let data = &data[2..];
+
 		// read length (2 bytes, big-endian)
 		if data.len() < 2 {
 			return Err("Invalid header length".to_string());
@@ -46,16 +53,8 @@ impl ContractHeader {
 			return Err("Data too short".to_string());
 		}
 
-		// read version (2 bytes, big-endian)
-		if length < 2 || data.len() < 2 {
-			return Err("Invalid header version".to_string());
-		}
-		let version = BigEndian::read_u16(&data[..2]) as usize;
-		let contents_length = length - 2;
-		let data = &data[2..];
-
 		// parse JSON contents
-		let value: Value = match serde_json::from_slice(&data[..contents_length]) {
+		let value: Value = match serde_json::from_slice(&data[..length]) {
 			Ok(val) => val,
 			Err(e) => return Err("Malformed header".to_string()),
 		};
@@ -79,7 +78,7 @@ impl ContractHeader {
 		};
 
 		// split the raw code into header and bytecode
-		let header_len = HEADER_PREFIX.len() + 2 + length;
+		let header_len = HEADER_PREFIX.len() + 4 + length;
 		let raw_header = raw_code[0..header_len].to_vec();
 		let code = raw_code[header_len..].to_vec();
 
@@ -114,17 +113,17 @@ mod tests {
 		// contents (JSON)
 		let contents = header_json.to_string().into_bytes();
 
-		// header length (version + contents)
-		let mut length = [0u8; 2];
-		BigEndian::write_u16(&mut length, (contents.len() + 2) as u16);
-
 		// header version
 		let mut version = [0u8; 2];
 		BigEndian::write_u16(&mut version, 1 as u16);
 
+		// header contents length
+		let mut length = [0u8; 2];
+		BigEndian::write_u16(&mut length, contents.len() as u16);
+
 		// append header length, version and contents
-		data.append_slice(&length);
 		data.append_slice(&version);
+		data.append_slice(&length);
 		data.append_slice(&contents);
 
 		// append some dummy body data
