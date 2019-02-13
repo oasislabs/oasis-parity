@@ -152,7 +152,7 @@ impl EthereumMachine {
 			value: ActionValue::Transfer(0.into()),
 			// strip contract header (if present)
 			code: match header {
-				Some(h) => Some(Arc::new(h.code)),
+				Some(h) => Some(h.code),
 				None => code,
 			},
 			code_hash: Some(state.code_hash(&contract_address)?),

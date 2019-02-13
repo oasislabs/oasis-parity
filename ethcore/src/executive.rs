@@ -320,11 +320,6 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		let (result, output) = match t.action {
 			Action::Create => {
 				let (new_address, code_hash) = contract_address(self.machine.create_address_scheme(self.info.number), &sender, &nonce, &t.data);
-				// strip contract header (if present)
-				let code: Bytes = match header {
-					Some(ref h) => h.code.clone(),
-					None => t.data.clone(),
-				};
 				let params = ActionParams {
 					code_address: new_address.clone(),
 					code_hash: code_hash,
@@ -334,7 +329,11 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					gas: init_gas,
 					gas_price: t.gas_price,
 					value: ActionValue::Transfer(t.value),
-					code: Some(Arc::new(code)),
+					// strip contract header (if present)
+					code: Some(match header {
+						Some(ref h) => h.code.clone(),
+						None => Arc::new(t.data.clone()),
+					}),
 					data: None,
 					call_type: CallType::None,
 					params_type: vm::ParamsType::Embedded,
@@ -347,7 +346,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 			Action::Call(ref address) => {
 				// strip contract header (if present)
 				let code = match header {
-					Some(ref h) => Some(Arc::new(h.code.clone())),
+					Some(ref h) => Some(h.code.clone()),
 					None => self.state.code(address)?,
 				};
 				let params = ActionParams {
