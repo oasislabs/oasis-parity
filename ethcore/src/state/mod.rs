@@ -28,7 +28,7 @@ use hash::{KECCAK_NULL_RLP, KECCAK_EMPTY, keccak};
 
 use receipt::{Receipt, TransactionOutcome};
 use machine::EthereumMachine as Machine;
-use vm::EnvInfo;
+use vm::{ContractHeader, EnvInfo};
 use error::{Error, ErrorKind};
 use executive::{Executive, TransactOptions};
 use factory::Factories;
@@ -39,7 +39,7 @@ use pod_state::{self, PodState};
 use types::basic_account::BasicAccount;
 use executed::{Executed, ExecutionError};
 use types::state_diff::StateDiff;
-use transaction::{self, ContractHeader, SignedTransaction};
+use transaction::{self, SignedTransaction};
 use state_db::StateDB;
 use factory::VmFactory;
 use journaldb::overlaydb::OverlayDB;

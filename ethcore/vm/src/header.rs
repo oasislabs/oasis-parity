@@ -8,7 +8,7 @@ const HEADER_PREFIX: &'static [u8; 4] = b"\0sis";
 pub const KEY_CONFIDENTIAL: &str = "confidential";
 pub const KEY_EXPIRY: &str = "expiry";
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ContractHeader {
 	pub length: usize,
 	pub version: usize,

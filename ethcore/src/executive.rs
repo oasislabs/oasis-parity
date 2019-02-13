@@ -26,12 +26,12 @@ use error::ExecutionError;
 use evm::{CallType, Finalize, FinalizationResult};
 use vm::{
 	self, Ext, EnvInfo, CreateContractAddress, ReturnData, CleanDustMode, ActionParams,
-	ActionValue, Schedule, GasLeft
+	ActionValue, Schedule, GasLeft, ContractHeader
 };
 use externalities::*;
 use trace::{self, Tracer, VMTracer};
 use trace_ext::{CountingTracer, ExtTracer, FullExtTracer, FullTracerCallTrace, FullTracerRecord, NoopExtTracer};
-use transaction::{Action, ContractHeader, SignedTransaction};
+use transaction::{Action, SignedTransaction};
 pub use executed::{Executed, ExecutionResult};
 
 #[cfg(debug_assertions)]
@@ -335,6 +335,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					call_type: CallType::None,
 					params_type: vm::ParamsType::Embedded,
 					confidential: confidential,
+					header: header,
 				};
 				let mut out = if output_from_create { Some(vec![]) } else { None };
 				(self.create(params, &mut substate, &mut out, &mut tracer, &mut vm_tracer, &mut ext_tracer), out.unwrap_or_else(Vec::new))
@@ -356,6 +357,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					call_type: CallType::Call,
 					params_type: vm::ParamsType::Separate,
 					confidential: confidential,
+					header: header,
 				};
 				let mut out = vec![];
 				(self.call(params, &mut substate, BytesRef::Flexible(&mut out), &mut tracer, &mut vm_tracer, &mut ext_tracer), out)
@@ -584,19 +586,8 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 
 		let schedule = self.machine.schedule(self.info.number);
 
-		// extract header (TODO: remove from code)
-		let header = match params.code {
-			Some(ref code) => ContractHeader::extract_from_data(code).map_err(|_| vm::Error::Reverted)?,
-			None => None,
-		};
-
-		let mut no_header_params = params.clone();
-		if let Some(ref h) = header {
-			no_header_params.code = Some(h.code.clone());
-		}
-
 		// storage expiry
-		let storage_expiry = header.map(|h| h.expiry).and_then(Into::into)
+		let storage_expiry = params.header.as_ref().map(|h| h.expiry).and_then(Into::into)
 			.unwrap_or(self.info.timestamp + schedule.default_storage_duration);
 
 		// fail if expiry has passed
@@ -627,7 +618,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		let mut subexttracer = ext_tracer.subtracer(&params.address);
 		let res = self.exec_vm(
 			schedule,
-			no_header_params,
+			params,
 			&mut unconfirmed_substate,
 			OutputPolicy::InitContract(output.as_mut().or(trace_output.as_mut())),
 			&mut subtracer,

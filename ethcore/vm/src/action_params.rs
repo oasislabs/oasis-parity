@@ -19,6 +19,7 @@ use ethereum_types::{U256, H256, Address};
 use bytes::Bytes;
 use hash::{keccak, KECCAK_EMPTY};
 use ethjson;
+use header::ContractHeader;
 
 use call_type::CallType;
 
@@ -96,6 +97,7 @@ pub struct ActionParams {
 	/// confidential creates to be triggered from inside the vm, e.g., CREATE
 	/// or CALL in the EVM.
 	pub confidential: bool,
+	pub header: Option<ContractHeader>,
 }
 
 impl ActionParams {
@@ -123,6 +125,7 @@ impl Default for ActionParams {
 			call_type: CallType::None,
 			params_type: ParamsType::Separate,
 			confidential: false,
+			header: None,
 		}
 	}
 }
@@ -145,6 +148,7 @@ impl From<ethjson::vm::Transaction> for ActionParams {
 			params_type: ParamsType::Separate,
 			// don't allow confidential transaction deserialization for now
 			confidential: false,
+			header: None,
 		}
 	}
 }

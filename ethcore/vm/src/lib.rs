@@ -23,6 +23,12 @@ extern crate ethjson;
 extern crate rlp;
 extern crate keccak_hash as hash;
 extern crate patricia_trie as trie;
+extern crate byteorder;
+#[macro_use]
+extern crate serde_json;
+
+#[cfg(test)]
+extern crate elastic_array;
 
 mod action_params;
 mod call_type;
@@ -31,6 +37,7 @@ mod schedule;
 mod ext;
 mod return_data;
 mod error;
+mod header;
 
 pub mod tests;
 
@@ -41,6 +48,7 @@ pub use schedule::{Schedule, CleanDustMode, WasmCosts};
 pub use ext::{Ext, MessageCallResult, ContractCreateResult, CreateContractAddress};
 pub use return_data::{ReturnData, GasLeft};
 pub use error::{Error, Result};
+pub use header::*;
 
 /// Virtual Machine interface
 pub trait Vm {

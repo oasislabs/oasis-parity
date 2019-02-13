@@ -25,7 +25,7 @@ use executive::*;
 use vm::{
 	self, ActionParams, ActionValue, EnvInfo, CallType, Schedule,
 	Ext, ContractCreateResult, MessageCallResult, CreateContractAddress,
-	ReturnData
+	ReturnData, ContractHeader
 };
 use evm::FinalizationResult;
 use transaction::UNSIGNED_SENDER;
@@ -213,6 +213,12 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 			}
 		};
 
+		// extract header
+		let header = match ContractHeader::extract_from_data(code) {
+			Ok(header) => header,
+			Err(_) => return ContractCreateResult::Failed,
+		};
+
 		// prepare the params
 		let params = ActionParams {
 			code_address: address.clone(),
@@ -222,12 +228,17 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 			gas: *gas,
 			gas_price: self.origin_info.gas_price,
 			value: ActionValue::Transfer(*value),
-			code: Some(Arc::new(code.to_vec())),
+			// strip header
+			code: Some(match header {
+				Some(ref h) => h.code.clone(),
+				None => Arc::new(code.to_vec()),
+			}),
 			code_hash: code_hash,
 			data: None,
 			call_type: CallType::None,
 			params_type: vm::ParamsType::Embedded,
 			confidential: false,
+			header: header,
 		};
 
 		if !self.static_flag {
@@ -278,6 +289,17 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 			Err(_) => return MessageCallResult::Failed,
 		};
 
+		// extract header
+		let header = if let Some(ref code) = code {
+			match ContractHeader::extract_from_data(code) {
+				Ok(header) => header,
+				Err(_) => return MessageCallResult::Failed,
+			}
+		}
+		else {
+			None
+		};
+
 		let mut params = ActionParams {
 			sender: sender_address.clone(),
 			address: receive_address.clone(),
@@ -286,12 +308,17 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 			origin: self.origin_info.origin.clone(),
 			gas: *gas,
 			gas_price: self.origin_info.gas_price,
-			code: code,
+			// strip header
+			code: match header {
+				Some(ref h) => Some(h.code.clone()),
+				None => code,
+			},
 			code_hash: Some(code_hash),
 			data: Some(data.to_vec()),
 			call_type: call_type,
 			params_type: vm::ParamsType::Separate,
 			confidential: false,
+			header: header,
 		};
 
 		if let Some(value) = value {
