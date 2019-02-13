@@ -43,7 +43,7 @@ use transaction::{self, SignedTransaction};
 use state_db::StateDB;
 use factory::VmFactory;
 use journaldb::overlaydb::OverlayDB;
-use oasis_vm::OasisVm;
+use confidential_vm::ConfidentialVm;
 
 use ethereum_types::{H256, U256, Address};
 use hashdb::{HashDB, AsHashDB};
@@ -1169,7 +1169,7 @@ impl<B: Backend> State<B> {
 	/// Returns true if the given transaction is to or will create a confidential contract.
 	pub fn is_confidential(&self, transaction: &SignedTransaction) -> Result<bool, String> {
 		let code = self.tx_code(transaction)?;
-		OasisVm::is_confidential(code.as_ref().map(|c| c.as_slice()))
+		ConfidentialVm::is_confidential(code.as_ref().map(|c| c.as_slice()))
 			.map_err(|e| format!("{:?}", e))
 	}
 

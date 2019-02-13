@@ -33,6 +33,7 @@ use trace::{self, Tracer, VMTracer};
 use trace_ext::{CountingTracer, ExtTracer, FullExtTracer, FullTracerCallTrace, FullTracerRecord, NoopExtTracer};
 use transaction::{Action, SignedTransaction};
 pub use executed::{Executed, ExecutionResult};
+use confidential_vm::ConfidentialVm;
 
 #[cfg(debug_assertions)]
 /// Roughly estimate what stack size each level of evm depth will use. (Debug build)
