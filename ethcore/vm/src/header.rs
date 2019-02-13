@@ -10,12 +10,17 @@ pub const KEY_EXPIRY: &str = "expiry";
 
 #[derive(Debug, Clone)]
 pub struct ContractHeader {
-	pub length: usize,
+	/// Header version.
 	pub version: usize,
+	/// The JSON value stored in the header.
 	pub value: Value,
+	/// Flag indicating whether contract is confidential.
 	pub confidential: bool,
+	/// Expiration timestamp for contract's storage (None if unspecified).
 	pub expiry: Option<u64>,
+	/// Raw bytes of header, to be prepended to stored bytecode.
 	pub raw_header: Vec<u8>,
+	/// Copy of the contract code with header removed.
 	pub code: Arc<Vec<u8>>,
 }
 
@@ -79,7 +84,6 @@ impl ContractHeader {
 		let code = raw_code[header_len..].to_vec();
 
 		Ok(Some(Self {
-			length,
 			version,
 			value,
 			confidential,
@@ -134,6 +138,7 @@ mod tests {
 		let data = make_data_payload(json!({
 			"confidential": true,
 			"expiry": 1577836800,
+			"other_key": "some value",
 		}));
 
 		// extract header from slice
@@ -174,13 +179,18 @@ mod tests {
 
 	#[test]
 	fn test_invalid_values() {
-		// create a header with incorrect types
-		let data = make_data_payload(json!({
+		// create a header with incorrect confidential type
+		let invalid_confidential = make_data_payload(json!({
 			"confidential": "true",
+			"expiry": 1577836800,
+		}));
+		assert!(ContractHeader::extract_from_code(&invalid_confidential).is_err());
+
+		// create a header with incorrect expiry type
+		let invalid_expiry = make_data_payload(json!({
+			"confidential": true,
 			"expiry": "1577836800",
 		}));
-
-		let result = ContractHeader::extract_from_code(&data);
-		assert!(result.is_err());
+		assert!(ContractHeader::extract_from_code(&invalid_expiry).is_err());
 	}
 }
