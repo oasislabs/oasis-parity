@@ -1166,6 +1166,14 @@ impl<B: Backend> State<B> {
 		Ok(self.require(a, false)?.reset_code_and_storage(code, storage))
 	}
 
+	/// Returns true if the given transaction is to or will create a confidential contract.
+	/// TODO: need a cheaper way to check this
+	pub fn is_confidential(&self, transaction: &SignedTransaction) -> Result<bool, String> {
+		let code = self.tx_code(transaction)?;
+		code.as_ref().map_or(Ok(false), |c| ContractHeader::extract_from_code(c.as_slice())
+			.and_then(|h| Ok(h.map_or(false, |h| h.confidential))))
+	}
+
 	/// Returns the contract deployment header (or None)
 	pub fn extract_header(&self, transaction: &SignedTransaction) -> Result<Option<ContractHeader>, String> {
 		let code = self.tx_code(transaction)?;
