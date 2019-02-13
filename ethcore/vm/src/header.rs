@@ -20,14 +20,14 @@ pub struct ContractHeader {
 }
 
 impl ContractHeader {
-	pub fn extract_from_code(raw_data: &[u8]) -> Result<Option<Self>, String> {
+	pub fn extract_from_code(raw_code: &[u8]) -> Result<Option<Self>, String> {
 		// check for prefix
-		if !has_header_prefix(raw_data) {
+		if !has_header_prefix(raw_code) {
 			return Ok(None);
 		}
 
 		// strip prefix
-		let data = &raw_data[HEADER_PREFIX.len()..];
+		let data = &raw_code[HEADER_PREFIX.len()..];
 
 		// read length (2 bytes, big-endian)
 		if data.len() < 2 {
@@ -73,11 +73,10 @@ impl ContractHeader {
 			_ => return Err("Confidential must be a boolean".to_string()),
 		};
 
-		// the raw header
-		let raw_header = raw_data[0..HEADER_PREFIX.len() + 2 + length].to_vec();
-
-		// the actual bytecode
-		let code = data[contents_length..].to_vec();
+		// split the raw code into header and bytecode
+		let header_len = HEADER_PREFIX.len() + 2 + length;
+		let raw_header = raw_code[0..header_len].to_vec();
+		let code = raw_code[header_len..].to_vec();
 
 		Ok(Some(Self {
 			length,

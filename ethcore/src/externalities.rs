@@ -306,10 +306,7 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 			gas: *gas,
 			gas_price: self.origin_info.gas_price,
 			// strip contract header (if present)
-			code: match header {
-				Some(ref h) => Some(h.code.clone()),
-				None => code,
-			},
+			code: header.as_ref().map_or(code, |h| Some(h.code.clone())),
 			code_hash: Some(code_hash),
 			data: Some(data.to_vec()),
 			call_type: call_type,

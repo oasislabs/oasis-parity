@@ -83,7 +83,8 @@ pub struct ActionParams {
 	pub gas_price: U256,
 	/// Transaction value.
 	pub value: ActionValue,
-	/// Code being executed.
+	/// Code being executed. The contract deployment header, if present in the
+	/// original code, has been stripped off.
 	pub code: Option<Arc<Bytes>>,
 	/// Input data.
 	pub data: Option<Bytes>,
@@ -97,6 +98,7 @@ pub struct ActionParams {
 	/// confidential creates to be triggered from inside the vm, e.g., CREATE
 	/// or CALL in the EVM.
 	pub confidential: bool,
+	/// The contract deployment header extracted from the code (if present).
 	pub header: Option<ContractHeader>,
 }
 
