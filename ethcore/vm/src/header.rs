@@ -6,9 +6,6 @@ use std::sync::Arc;
 /// 4-byte prefix prepended to contract code indicating header
 const HEADER_PREFIX: &'static [u8; 4] = b"\0sis";
 
-pub const KEY_CONFIDENTIAL: &str = "confidential";
-pub const KEY_EXPIRY: &str = "expiry";
-
 #[derive(Debug, Clone)]
 pub struct ContractHeader {
 	/// Header version.
