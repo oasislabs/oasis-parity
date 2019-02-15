@@ -1,4 +1,5 @@
 use byteorder::{ByteOrder, BigEndian};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -12,8 +13,6 @@ pub const KEY_EXPIRY: &str = "expiry";
 pub struct ContractHeader {
 	/// Header version.
 	pub version: usize,
-	/// The JSON value stored in the header.
-	pub value: Value,
 	/// Flag indicating whether contract is confidential.
 	pub confidential: bool,
 	/// Expiration timestamp for contract's storage (None if unspecified).
@@ -22,6 +21,13 @@ pub struct ContractHeader {
 	pub raw_header: Vec<u8>,
 	/// Copy of the contract code with header removed.
 	pub code: Arc<Vec<u8>>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct HeaderJson {
+	confidential: Option<bool>,
+	expiry: Option<u64>,
 }
 
 impl ContractHeader {
@@ -53,28 +59,10 @@ impl ContractHeader {
 			return Err("Data too short".to_string());
 		}
 
-		// parse JSON contents
-		let value: Value = match serde_json::from_slice(&data[..length]) {
+		// parse JSON
+		let h: HeaderJson = match serde_json::from_slice(&data[..length]) {
 			Ok(val) => val,
 			Err(e) => return Err("Malformed header".to_string()),
-		};
-
-		// parse expiry and confidential flag
-		let expiry = match value[KEY_EXPIRY] {
-			Value::Null => None,
-			Value::Number(ref n) => {
-				if n.is_u64() {
-					n.as_u64()
-				} else {
-					return Err("Expiry must be an integer".to_string());
-				}
-			}
-			_ => return Err("Expiry must be an integer".to_string()),
-		};
-		let confidential = match value[KEY_CONFIDENTIAL] {
-			Value::Null => false,
-			Value::Bool(b) => b,
-			_ => return Err("Confidential must be a boolean".to_string()),
 		};
 
 		// split the raw code into header and bytecode
@@ -84,9 +72,8 @@ impl ContractHeader {
 
 		Ok(Some(Self {
 			version,
-			value,
-			confidential,
-			expiry,
+			confidential: h.confidential.unwrap_or(false),
+			expiry: h.expiry,
 			raw_header,
 			code: Arc::new(code),
 		}))
@@ -106,12 +93,12 @@ mod tests {
 	use super::*;
 	use elastic_array::ElasticArray128;
 
-	fn make_data_payload(header_json: Value) -> Vec<u8> {
+	fn make_data_payload(json_str: String) -> Vec<u8> {
 		// start with header prefix
 		let mut data = ElasticArray128::from_slice(&HEADER_PREFIX[..]);
 
 		// contents (JSON)
-		let contents = header_json.to_string().into_bytes();
+		let contents = json_str.into_bytes();
 
 		// header version
 		let mut version = [0u8; 2];
@@ -137,8 +124,7 @@ mod tests {
 		let data = make_data_payload(json!({
 			"confidential": true,
 			"expiry": 1577836800,
-			"other_key": "some value",
-		}));
+		}).to_string());
 
 		// extract header from slice
 		let header = ContractHeader::extract_from_code(&data).unwrap().unwrap();
@@ -150,28 +136,85 @@ mod tests {
 	}
 
 	#[test]
+	fn test_confidential_only() {
+		let data = make_data_payload(json!({
+			"confidential": true,
+		}).to_string());
+
+		// extract header from slice
+		let header = ContractHeader::extract_from_code(&data).unwrap().unwrap();
+
+		// check fields
+		assert_eq!(header.confidential, true);
+		assert_eq!(header.expiry, None);
+	}
+
+	#[test]
+	fn test_expiry_only() {
+		let data = make_data_payload(json!({
+			"expiry": 1577836800,
+		}).to_string());
+
+		// extract header from slice
+		let header = ContractHeader::extract_from_code(&data).unwrap().unwrap();
+
+		// check fields
+		assert_eq!(header.confidential, false);
+		assert_eq!(header.expiry, Some(1577836800));
+	}
+
+	#[test]
+	fn test_invalid_key() {
+		let data = make_data_payload(json!({
+			"expiry": 1577836800,
+			"unknown": "something",
+			"blah": "blah",
+		}).to_string());
+
+		let result = ContractHeader::extract_from_code(&data);
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_duplicate_key() {
+		let data = make_data_payload(
+			"{\"expiry\":1577836800,\"confidential\":true,\"expiry\":1577836801}"
+			.to_string());
+
+		let result = ContractHeader::extract_from_code(&data);
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_invalid_json() {
+		let data = make_data_payload(json!("expiry").to_string());
+
+		let result = ContractHeader::extract_from_code(&data);
+		assert!(result.is_err());
+	}
+
+	#[test]
 	fn test_no_header() {
 		let data = b"data without a header";
 
 		let header = ContractHeader::extract_from_code(&data[..]).expect("No header");
-
 		assert!(header.is_none());
 	}
 
 	#[test]
 	fn test_invalid_encoding() {
 		// invalid length
-		let data = b"\0sis\xff";
+		let data = b"\0sis\0\x01\xff";
 		let result = ContractHeader::extract_from_code(&data[..]);
 		assert!(result.is_err());
 
 		// data too short
-		let data = b"\0sis\0\x01";
+		let data = b"\0sis\0\x01\0\x01";
 		let result = ContractHeader::extract_from_code(&data[..]);
 		assert!(result.is_err());
 
 		// malformed JSON
-		let data = b"\0sis\0\x05\0\x01\xff\xff\xff";
+		let data = b"\0sis\0\x01\0\x03\xff\xff\xff";
 		let result = ContractHeader::extract_from_code(&data[..]);
 		assert!(result.is_err());
 	}
@@ -182,14 +225,18 @@ mod tests {
 		let invalid_confidential = make_data_payload(json!({
 			"confidential": "true",
 			"expiry": 1577836800,
-		}));
-		assert!(ContractHeader::extract_from_code(&invalid_confidential).is_err());
+		}).to_string());
+
+		let result = ContractHeader::extract_from_code(&invalid_confidential[..]);
+		assert!(result.is_err());
 
 		// create a header with incorrect expiry type
 		let invalid_expiry = make_data_payload(json!({
 			"confidential": true,
 			"expiry": "1577836800",
-		}));
-		assert!(ContractHeader::extract_from_code(&invalid_expiry).is_err());
+		}).to_string());
+
+		let result = ContractHeader::extract_from_code(&invalid_expiry[..]);
+		assert!(result.is_err());
 	}
 }
