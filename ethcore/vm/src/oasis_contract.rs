@@ -7,28 +7,28 @@ use std::sync::Arc;
 const HEADER_PREFIX: &'static [u8; 4] = b"\0sis";
 
 #[derive(Debug, Clone)]
-pub struct ContractHeader {
+pub struct OasisContract {
 	/// Header version.
-	pub version: usize,
+	pub header_version: usize,
 	/// Flag indicating whether contract is confidential.
 	pub confidential: bool,
 	/// Expiration timestamp for contract's storage (None if unspecified).
 	pub expiry: Option<u64>,
-	/// Raw bytes of header, to be prepended to stored bytecode.
-	pub raw_header: Vec<u8>,
+	/// Header, to be prepended to stored bytecode.
+	pub header: Vec<u8>,
 	/// Copy of the contract code with header removed.
 	pub code: Arc<Vec<u8>>,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct HeaderJson {
+struct Header {
 	confidential: Option<bool>,
 	expiry: Option<u64>,
 }
 
-impl ContractHeader {
-	pub fn extract_from_code(raw_code: &[u8]) -> Result<Option<Self>, String> {
+impl OasisContract {
+	pub fn from_code(raw_code: &[u8]) -> Result<Option<Self>, String> {
 		// check for prefix
 		if !has_header_prefix(raw_code) {
 			return Ok(None);
@@ -41,7 +41,7 @@ impl ContractHeader {
 		if data.len() < 2 {
 			return Err("Invalid header version".to_string());
 		}
-		let version = BigEndian::read_u16(&data[..2]) as usize;
+		let header_version = BigEndian::read_u16(&data[..2]) as usize;
 		let data = &data[2..];
 
 		// read length (2 bytes, big-endian)
@@ -57,7 +57,7 @@ impl ContractHeader {
 		}
 
 		// parse JSON
-		let h: HeaderJson = match serde_json::from_slice(&data[..length]) {
+		let h: Header = match serde_json::from_slice(&data[..length]) {
 			Ok(val) => val,
 			Err(e) => return Err("Malformed header".to_string()),
 		};
@@ -68,16 +68,16 @@ impl ContractHeader {
 		let code = raw_code[header_len..].to_vec();
 
 		Ok(Some(Self {
-			version,
+			header_version,
 			confidential: h.confidential.unwrap_or(false),
 			expiry: h.expiry,
-			raw_header,
+			header: raw_header,
 			code: Arc::new(code),
 		}))
 	}
 }
 
-pub fn has_header_prefix(data: &[u8]) -> bool {
+fn has_header_prefix(data: &[u8]) -> bool {
 	if data.len() < HEADER_PREFIX.len() {
 		return false;
 	}
@@ -123,13 +123,11 @@ mod tests {
 			"expiry": 1577836800,
 		}).to_string());
 
-		// extract header from slice
-		let header = ContractHeader::extract_from_code(&data).unwrap().unwrap();
+		let contract = OasisContract::from_code(&data).unwrap().unwrap();
 
-		// check fields
-		assert_eq!(header.confidential, true);
-		assert_eq!(header.expiry, Some(1577836800));
-		assert_eq!(header.code, Arc::new("contract code".as_bytes().to_vec()));
+		assert_eq!(contract.confidential, true);
+		assert_eq!(contract.expiry, Some(1577836800));
+		assert_eq!(contract.code, Arc::new("contract code".as_bytes().to_vec()));
 	}
 
 	#[test]
@@ -138,12 +136,10 @@ mod tests {
 			"confidential": true,
 		}).to_string());
 
-		// extract header from slice
-		let header = ContractHeader::extract_from_code(&data).unwrap().unwrap();
+		let contract = OasisContract::from_code(&data).unwrap().unwrap();
 
-		// check fields
-		assert_eq!(header.confidential, true);
-		assert_eq!(header.expiry, None);
+		assert_eq!(contract.confidential, true);
+		assert_eq!(contract.expiry, None);
 	}
 
 	#[test]
@@ -152,12 +148,10 @@ mod tests {
 			"expiry": 1577836800,
 		}).to_string());
 
-		// extract header from slice
-		let header = ContractHeader::extract_from_code(&data).unwrap().unwrap();
+		let contract = OasisContract::from_code(&data).unwrap().unwrap();
 
-		// check fields
-		assert_eq!(header.confidential, false);
-		assert_eq!(header.expiry, Some(1577836800));
+		assert_eq!(contract.confidential, false);
+		assert_eq!(contract.expiry, Some(1577836800));
 	}
 
 	#[test]
@@ -168,7 +162,7 @@ mod tests {
 			"blah": "blah",
 		}).to_string());
 
-		let result = ContractHeader::extract_from_code(&data);
+		let result = OasisContract::from_code(&data);
 		assert!(result.is_err());
 	}
 
@@ -178,7 +172,7 @@ mod tests {
 			"{\"expiry\":1577836800,\"confidential\":true,\"expiry\":1577836801}"
 			.to_string());
 
-		let result = ContractHeader::extract_from_code(&data);
+		let result = OasisContract::from_code(&data);
 		assert!(result.is_err());
 	}
 
@@ -186,7 +180,7 @@ mod tests {
 	fn test_invalid_json() {
 		let data = make_data_payload(json!("expiry").to_string());
 
-		let result = ContractHeader::extract_from_code(&data);
+		let result = OasisContract::from_code(&data);
 		assert!(result.is_err());
 	}
 
@@ -194,25 +188,25 @@ mod tests {
 	fn test_no_header() {
 		let data = b"data without a header";
 
-		let header = ContractHeader::extract_from_code(&data[..]).expect("No header");
-		assert!(header.is_none());
+		let contract = OasisContract::from_code(&data[..]).expect("No header");
+		assert!(contract.is_none());
 	}
 
 	#[test]
 	fn test_invalid_encoding() {
 		// invalid length
 		let data = b"\0sis\0\x01\xff";
-		let result = ContractHeader::extract_from_code(&data[..]);
+		let result = OasisContract::from_code(&data[..]);
 		assert!(result.is_err());
 
 		// data too short
 		let data = b"\0sis\0\x01\0\x01";
-		let result = ContractHeader::extract_from_code(&data[..]);
+		let result = OasisContract::from_code(&data[..]);
 		assert!(result.is_err());
 
 		// malformed JSON
 		let data = b"\0sis\0\x01\0\x03\xff\xff\xff";
-		let result = ContractHeader::extract_from_code(&data[..]);
+		let result = OasisContract::from_code(&data[..]);
 		assert!(result.is_err());
 	}
 
@@ -224,7 +218,7 @@ mod tests {
 			"expiry": 1577836800,
 		}).to_string());
 
-		let result = ContractHeader::extract_from_code(&invalid_confidential[..]);
+		let result = OasisContract::from_code(&invalid_confidential[..]);
 		assert!(result.is_err());
 
 		// create a header with incorrect expiry type
@@ -233,7 +227,7 @@ mod tests {
 			"expiry": "1577836800",
 		}).to_string());
 
-		let result = ContractHeader::extract_from_code(&invalid_expiry[..]);
+		let result = OasisContract::from_code(&invalid_expiry[..]);
 		assert!(result.is_err());
 	}
 }

@@ -38,7 +38,7 @@ mod schedule;
 mod ext;
 mod return_data;
 mod error;
-mod header;
+mod oasis_contract;
 
 pub mod tests;
 
@@ -49,7 +49,7 @@ pub use schedule::{Schedule, CleanDustMode, WasmCosts};
 pub use ext::{Ext, MessageCallResult, ContractCreateResult, CreateContractAddress};
 pub use return_data::{ReturnData, GasLeft};
 pub use error::{Error, Result};
-pub use header::*;
+pub use oasis_contract::OasisContract;
 
 /// Virtual Machine interface
 pub trait Vm {

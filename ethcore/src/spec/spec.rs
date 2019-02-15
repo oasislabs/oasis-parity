@@ -636,7 +636,7 @@ impl Spec {
 					params_type: ParamsType::Embedded,
 					// cannot run confidential contracts pre-defined in genesis/SPEC for now
 					confidential: false,
-					header: None,
+					oasis_contract: None,
 				};
 
 				let mut substate = Substate::new();
