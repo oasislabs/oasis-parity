@@ -49,7 +49,7 @@ pub use schedule::{Schedule, CleanDustMode, WasmCosts};
 pub use ext::{Ext, MessageCallResult, ContractCreateResult, CreateContractAddress};
 pub use return_data::{ReturnData, GasLeft};
 pub use error::{Error, Result};
-pub use oasis_contract::OasisContract;
+pub use oasis_contract::{OasisContract, OASIS_HEADER_PREFIX};
 
 /// Virtual Machine interface
 pub trait Vm {

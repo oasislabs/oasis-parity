@@ -4,7 +4,7 @@ use serde_json::Value;
 use std::sync::Arc;
 
 /// 4-byte prefix prepended to contract code indicating header
-const HEADER_PREFIX: &'static [u8; 4] = b"\0sis";
+pub const OASIS_HEADER_PREFIX: &'static [u8; 4] = b"\0sis";
 
 #[derive(Debug, Clone)]
 pub struct OasisContract {
@@ -35,7 +35,7 @@ impl OasisContract {
 		}
 
 		// strip prefix
-		let data = &raw_code[HEADER_PREFIX.len()..];
+		let data = &raw_code[OASIS_HEADER_PREFIX.len()..];
 
 		// read version (2 bytes, big-endian)
 		if data.len() < 2 {
@@ -67,7 +67,7 @@ impl OasisContract {
 		};
 
 		// split the raw code into header and bytecode
-		let header_len = HEADER_PREFIX.len() + 4 + length;
+		let header_len = OASIS_HEADER_PREFIX.len() + 4 + length;
 		let raw_header = raw_code[0..header_len].to_vec();
 		let code = raw_code[header_len..].to_vec();
 
@@ -82,11 +82,11 @@ impl OasisContract {
 }
 
 fn has_header_prefix(data: &[u8]) -> bool {
-	if data.len() < HEADER_PREFIX.len() {
+	if data.len() < OASIS_HEADER_PREFIX.len() {
 		return false;
 	}
-	let prefix = &data[..HEADER_PREFIX.len()];
-	return prefix == HEADER_PREFIX;
+	let prefix = &data[..OASIS_HEADER_PREFIX.len()];
+	return prefix == OASIS_HEADER_PREFIX;
 }
 
 #[cfg(test)]
@@ -96,7 +96,7 @@ mod tests {
 
 	fn make_data_payload(version: usize, json_str: String) -> Vec<u8> {
 		// start with header prefix
-		let mut data = ElasticArray128::from_slice(&HEADER_PREFIX[..]);
+		let mut data = ElasticArray128::from_slice(&OASIS_HEADER_PREFIX[..]);
 
 		// contents (JSON)
 		let contents = json_str.into_bytes();
