@@ -25,7 +25,7 @@ use executive::*;
 use vm::{
 	self, ActionParams, ActionValue, EnvInfo, CallType, Schedule,
 	Ext, ContractCreateResult, MessageCallResult, CreateContractAddress,
-	ReturnData
+	ReturnData, OasisContract
 };
 use evm::FinalizationResult;
 use transaction::UNSIGNED_SENDER;
@@ -213,6 +213,12 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 			}
 		};
 
+		// Extract contract deployment header, if present.
+		let oasis_contract = match OasisContract::from_code(code) {
+			Ok(contract) => contract,
+			Err(_) => return ContractCreateResult::Failed,
+		};
+
 		// prepare the params
 		let params = ActionParams {
 			code_address: address.clone(),
@@ -222,12 +228,14 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 			gas: *gas,
 			gas_price: self.origin_info.gas_price,
 			value: ActionValue::Transfer(*value),
-			code: Some(Arc::new(code.to_vec())),
+			// Code stripped of contract header, if present.
+			code: Some(oasis_contract.as_ref().map_or(Arc::new(code.to_vec()), |c| c.code.clone())),
 			code_hash: code_hash,
 			data: None,
 			call_type: CallType::None,
 			params_type: vm::ParamsType::Embedded,
 			confidential: false,
+			oasis_contract: oasis_contract,
 		};
 
 		if !self.static_flag {
@@ -278,6 +286,17 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 			Err(_) => return MessageCallResult::Failed,
 		};
 
+		// Extract contract deployment header, if present.
+		let oasis_contract = if let Some(ref code) = code {
+			match OasisContract::from_code(code) {
+				Ok(contract) => contract,
+				Err(_) => return MessageCallResult::Failed,
+			}
+		}
+		else {
+			None
+		};
+
 		let mut params = ActionParams {
 			sender: sender_address.clone(),
 			address: receive_address.clone(),
@@ -286,12 +305,14 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 			origin: self.origin_info.origin.clone(),
 			gas: *gas,
 			gas_price: self.origin_info.gas_price,
-			code: code,
+			// Code stripped of contract header, if present.
+			code: oasis_contract.as_ref().map_or(code, |c| Some(c.code.clone())),
 			code_hash: Some(code_hash),
 			data: Some(data.to_vec()),
 			call_type: call_type,
 			params_type: vm::ParamsType::Separate,
 			confidential: false,
+			oasis_contract: oasis_contract,
 		};
 
 		if let Some(value) = value {

@@ -19,6 +19,7 @@ use ethereum_types::{U256, H256, Address};
 use bytes::Bytes;
 use hash::{keccak, KECCAK_EMPTY};
 use ethjson;
+use oasis_contract::OasisContract;
 
 use call_type::CallType;
 
@@ -82,7 +83,8 @@ pub struct ActionParams {
 	pub gas_price: U256,
 	/// Transaction value.
 	pub value: ActionValue,
-	/// Code being executed.
+	/// Code being executed. The contract deployment header, if present in the
+	/// original code, has been stripped off.
 	pub code: Option<Arc<Bytes>>,
 	/// Input data.
 	pub data: Option<Bytes>,
@@ -96,6 +98,8 @@ pub struct ActionParams {
 	/// confidential creates to be triggered from inside the vm, e.g., CREATE
 	/// or CALL in the EVM.
 	pub confidential: bool,
+	/// The Oasis contract extracted from the code (if header is present).
+	pub oasis_contract: Option<OasisContract>,
 }
 
 impl ActionParams {
@@ -123,6 +127,7 @@ impl Default for ActionParams {
 			call_type: CallType::None,
 			params_type: ParamsType::Separate,
 			confidential: false,
+			oasis_contract: None,
 		}
 	}
 }
@@ -145,6 +150,7 @@ impl From<ethjson::vm::Transaction> for ActionParams {
 			params_type: ParamsType::Separate,
 			// don't allow confidential transaction deserialization for now
 			confidential: false,
+			oasis_contract: None,
 		}
 	}
 }

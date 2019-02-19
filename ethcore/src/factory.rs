@@ -41,23 +41,11 @@ impl VmFactory {
 	}
 
 	fn _create(&self, params: &ActionParams, schedule: &Schedule) -> Box<Vm> {
-		let raw_code = Self::raw_code(params);
-		if schedule.wasm.is_some() && raw_code.len() > 4 && &raw_code[0..4] == WASM_MAGIC_NUMBER {
+		if schedule.wasm.is_some() && params.code.as_ref().map_or(false, |code| code.len() > 4 && &code[0..4] == WASM_MAGIC_NUMBER) {
 			Box::new(WasmInterpreter)
 		} else {
 			self.evm.create(&params.gas)
 		}
-	}
-
-	/// Removes the confidential prefix from the ActionParams' code, if needed.
-	fn raw_code(params: &ActionParams) -> Bytes {
-		params.code.as_ref().map_or(vec![], |code| {
-			if params.confidential {
-				ConfidentialVm::remove_prefix(code.to_vec())
-			} else {
-				code.to_vec()
-			}
-		})
 	}
 
 	pub fn new(evm: VMType, cache_size: usize) -> Self {

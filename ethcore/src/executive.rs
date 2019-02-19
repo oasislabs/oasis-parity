@@ -26,7 +26,7 @@ use error::ExecutionError;
 use evm::{CallType, Finalize, FinalizationResult};
 use vm::{
 	self, Ext, EnvInfo, CreateContractAddress, ReturnData, CleanDustMode, ActionParams,
-	ActionValue, Schedule, GasLeft
+	ActionValue, Schedule, GasLeft, OasisContract
 };
 use externalities::*;
 use trace::{self, Tracer, VMTracer};
@@ -264,9 +264,12 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		let sender = t.sender();
 		let nonce = self.state.nonce(&sender)?;
 
+		// Extract contract deployment header, if present.
+		let oasis_contract = self.state.oasis_contract(t)
+					   .map_err(|e| ExecutionError::TransactionMalformed(e))?;
+
 		let schedule = self.machine.schedule(self.info.number);
-		let confidential = self.state.is_confidential(t)
-					   .map_err(|_| ExecutionError::NotConfidential)?;
+		let confidential = oasis_contract.as_ref().map_or(false, |c| c.confidential);
 		let base_gas_required = U256::from(t.gas_required(&schedule, confidential));
 
 		if t.gas < base_gas_required {
@@ -315,7 +318,6 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		let (result, output) = match t.action {
 			Action::Create => {
 				let (new_address, code_hash) = contract_address(self.machine.create_address_scheme(self.info.number), &sender, &nonce, &t.data);
-				let code: Bytes = t.data.clone();
 				let params = ActionParams {
 					code_address: new_address.clone(),
 					code_hash: code_hash,
@@ -325,17 +327,18 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					gas: init_gas,
 					gas_price: t.gas_price,
 					value: ActionValue::Transfer(t.value),
-					code: Some(Arc::new(code)),
+					// Code stripped of contract header, if present.
+					code: Some(oasis_contract.as_ref().map_or(Arc::new(t.data.clone()), |c| c.code.clone())),
 					data: None,
 					call_type: CallType::None,
 					params_type: vm::ParamsType::Embedded,
 					confidential: confidential,
+					oasis_contract: oasis_contract,
 				};
 				let mut out = if output_from_create { Some(vec![]) } else { None };
 				(self.create(params, &mut substate, &mut out, &mut tracer, &mut vm_tracer, &mut ext_tracer), out.unwrap_or_else(Vec::new))
 			},
 			Action::Call(ref address) => {
-				let code = self.state.code(address)?;
 				let params = ActionParams {
 					code_address: address.clone(),
 					address: address.clone(),
@@ -344,12 +347,14 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					gas: init_gas,
 					gas_price: t.gas_price,
 					value: ActionValue::Transfer(t.value),
-					code: code,
+					// Code stripped of contract header, if present.
+					code: oasis_contract.as_ref().map_or(self.state.code(address)?, |c| Some(c.code.clone())),
 					code_hash: Some(self.state.code_hash(address)?),
 					data: Some(t.data.clone()),
 					call_type: CallType::Call,
 					params_type: vm::ParamsType::Separate,
 					confidential: confidential,
+					oasis_contract: oasis_contract,
 				};
 				let mut out = vec![];
 				(self.call(params, &mut substate, BytesRef::Flexible(&mut out), &mut tracer, &mut vm_tracer, &mut ext_tracer), out)
@@ -374,11 +379,35 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		let depth_threshold = local_stack_size.saturating_sub(STACK_SIZE_ENTRY_OVERHEAD) / STACK_SIZE_PER_DEPTH;
 		let static_call = params.call_type == CallType::StaticCall;
 
+		// If this is a create with a header, copy the raw header bytes to prepend to the bytecode.
+		let header = if params.call_type == CallType::None {
+			params.oasis_contract.as_ref().map(|c| c.header.clone())
+		}
+		else {
+			None
+		};
+
 		let vm_factory = self.state.vm_factory();
 		let mut ext = self.as_externalities(OriginInfo::from(&params), unconfirmed_substate, output_policy, tracer, vm_tracer, ext_tracer, static_call);
 		trace!(target: "executive", "ext.schedule.have_delegate_call: {}", ext.schedule().have_delegate_call);
 		let mut vm = vm_factory.create(&params, &schedule);
-		return vm.exec(params, &mut ext).finalize(ext);
+		let ret = vm.exec(params, &mut ext);
+
+		// Prepend the header to the bytecode that is stored in the account.
+		if let Some(bytes) = header {
+			if let Ok(GasLeft::NeedsReturn { gas_left, data, apply_state }) = ret {
+				let mut bytecode = bytes;
+				bytecode.append(&mut data.to_vec());
+				let size = bytecode.len();
+				return Ok(GasLeft::NeedsReturn {
+					gas_left,
+					data: ReturnData::new(bytecode, 0, size),
+					apply_state
+				}).finalize(ext);
+			}
+		}
+
+		ret.finalize(ext)
 	}
 
 	/// Calls contract function with given contract params.
@@ -576,12 +605,22 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		// part of substate that may be reverted
 		let mut unconfirmed_substate = Substate::new();
 
-		// create contract and transfer value to it if necessary
 		let schedule = self.machine.schedule(self.info.number);
+
+		// Read requested storage expiry from header, if present.
+		let storage_expiry = params.oasis_contract.as_ref().map(|c| c.expiry).and_then(Into::into)
+			.unwrap_or(self.info.timestamp + schedule.default_storage_duration);
+
+		// Fail immediately if requested expiry has passed.
+		if self.info.timestamp > storage_expiry {
+			let trace_info = tracer.prepare_trace_create(&params);
+			tracer.trace_failed_create(trace_info, vec![], vm::Error::Reverted.into());
+			return Err(vm::Error::Reverted);
+		}
+
+		// create contract and transfer value to it if necessary
 		let nonce_offset = if schedule.no_empty {1} else {0}.into();
 		let prev_bal = self.state.balance(&params.address)?;
-		// TODO: configurable expiry
-		let storage_expiry = self.info.timestamp + schedule.default_storage_duration;
 		if let ActionValue::Transfer(val) = params.value {
 			self.state.sub_balance(&params.sender, &val, &mut substate.to_cleanup_mode(&schedule))?;
 			self.state.new_contract(&params.address, val + prev_bal, nonce_offset, storage_expiry);

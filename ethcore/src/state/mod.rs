@@ -28,7 +28,7 @@ use hash::{KECCAK_NULL_RLP, KECCAK_EMPTY, keccak};
 
 use receipt::{Receipt, TransactionOutcome};
 use machine::EthereumMachine as Machine;
-use vm::EnvInfo;
+use vm::{OasisContract, EnvInfo};
 use error::{Error, ErrorKind};
 use executive::{Executive, TransactOptions};
 use factory::Factories;
@@ -1166,11 +1166,10 @@ impl<B: Backend> State<B> {
 		Ok(self.require(a, false)?.reset_code_and_storage(code, storage))
 	}
 
-	/// Returns true if the given transaction is to or will create a confidential contract.
-	pub fn is_confidential(&self, transaction: &SignedTransaction) -> Result<bool, String> {
+	/// Returns the Oasis contract associated with this transaction's code (or None, if header not present).
+	pub fn oasis_contract(&self, transaction: &SignedTransaction) -> Result<Option<OasisContract>, String> {
 		let code = self.tx_code(transaction)?;
-		ConfidentialVm::is_confidential(code.as_ref().map(|c| c.as_slice()))
-			.map_err(|e| format!("{:?}", e))
+		code.as_ref().map_or(Ok(None), |c| OasisContract::from_code(c.as_slice()))
 	}
 
 	/// Returns true if in a confidential context, i.e., all contract state is encrypted/decrypted

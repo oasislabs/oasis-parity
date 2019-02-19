@@ -36,7 +36,7 @@ use transaction::{self, SYSTEM_ADDRESS, UnverifiedTransaction, SignedTransaction
 use ethereum_types::{U256, Address};
 use bytes::BytesRef;
 use rlp::Rlp;
-use vm::{CallType, ActionParams, ActionValue, ParamsType};
+use vm::{CallType, ActionParams, ActionValue, ParamsType, OasisContract};
 use vm::{EnvInfo, Schedule, CreateContractAddress};
 
 /// Parity tries to round block.gas_limit to multiple of this constant
@@ -132,6 +132,16 @@ impl EthereumMachine {
 		};
 
 		let mut state = block.state_mut();
+		let code = state.code(&contract_address)?;
+
+		// Extract contract deployment header, if present.
+		let oasis_contract = if let Some(ref code) = code {
+			OasisContract::from_code(code)?
+		}
+		else {
+			None
+		};
+
 		let params = ActionParams {
 			code_address: contract_address.clone(),
 			address: contract_address.clone(),
@@ -140,12 +150,14 @@ impl EthereumMachine {
 			gas: gas,
 			gas_price: 0.into(),
 			value: ActionValue::Transfer(0.into()),
-			code: state.code(&contract_address)?,
+			// Code stripped of contract header, if present.
+			code: oasis_contract.as_ref().map_or(code, |c| Some(c.code.clone())),
 			code_hash: Some(state.code_hash(&contract_address)?),
 			data: data,
 			call_type: CallType::Call,
 			params_type: ParamsType::Separate,
 			confidential: false,
+			oasis_contract: oasis_contract,
 		};
 		let mut ex = Executive::new(&mut state, &env_info, self);
 		let mut substate = Substate::new();
