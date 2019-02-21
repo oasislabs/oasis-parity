@@ -395,7 +395,7 @@ pub fn vm(error: &VMError, output: &[u8]) -> Error {
 
 	Error {
 		code: ErrorCode::ServerError(codes::EXECUTION_ERROR),
-		message: "VM execution error.".into(),
+		message: format!("VM execution error: {}", data).into(),
 		data: Some(Value::String(data)),
 	}
 }
