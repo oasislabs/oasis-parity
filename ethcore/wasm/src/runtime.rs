@@ -752,6 +752,25 @@ impl<'a> Runtime<'a> {
 	pub fn get_bytes(&mut self, args: RuntimeArgs) -> Result<()> {
 		let key = self.storage_bytes_key(self.h256_at(args.nth_checked(0)?)?);
 		let bytes = self.ext.storage_bytes_at(&key).map_err(|_| Error::StorageReadError)?;
+
+		// Charge sload gas, scaled by number of bytes.
+		let sload_gas = U256::from(self.schedule().sload_gas);
+		let bytes_len = U256::from(bytes.len());
+
+		// gas <- ceiling(sload_gas * bytes_len / 32)
+		// Cannot overflow as gas and len are converted from u64s.
+		let mut gas = sload_gas * bytes_len / U256::from(32);
+		if sload_gas * bytes_len % U256::from(32) != U256::from(0) {
+			gas = gas + U256::from(1);
+		}
+
+		// Charge gas after checking for u64 overflow.
+		if gas > U256::from(std::u64::MAX) {
+			return Err(Error::GasLimit);
+		} else {
+			self.adjusted_charge(|_| gas.as_u64())?;
+		}
+
 		self.memory.set(args.nth_checked(1)?, &bytes)?;
 		Ok(())
 	}
