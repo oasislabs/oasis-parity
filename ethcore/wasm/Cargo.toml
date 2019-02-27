@@ -14,3 +14,6 @@ vm = { path = "../vm" }
 # ethcore-logger = { path = "../../logger" }
 wasmi = { git = "https://github.com/oasislabs/wasmi", branch = "ekiden" }
 keccak-hash = { path = "../../util/hash" }
+
+[dev-dependencies]
+ethcore-logger = { path = "../../logger" }
