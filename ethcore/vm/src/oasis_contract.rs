@@ -1,6 +1,5 @@
 use byteorder::{ByteOrder, BigEndian};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::sync::Arc;
 
 /// 4-byte prefix prepended to contract code indicating header
@@ -63,7 +62,7 @@ impl OasisContract {
 		// parse JSON
 		let h: Header = match serde_json::from_slice(&data[..length]) {
 			Ok(val) => val,
-			Err(e) => return Err("Malformed header".to_string()),
+			Err(_) => return Err("Malformed header".to_string()),
 		};
 
 		// split the raw code into header and bytecode
