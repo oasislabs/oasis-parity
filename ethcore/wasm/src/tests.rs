@@ -86,7 +86,7 @@ fn empty() {
 		test_finalize(interpreter.exec(params, &mut ext)).unwrap()
 	};
 
-	assert_eq!(gas_left, U256::from(95_900));
+	assert_eq!(gas_left, U256::from(91_804));
 }
 
 // This test checks if the contract deserializes payload header properly.
@@ -297,10 +297,10 @@ fn create() {
 	assert!(ext.calls.contains(
 		&FakeCall {
 			call_type: FakeCallType::Create,
-			gas: U256::from(61_556),
+			gas: U256::from(55144),
 			sender_address: None,
 			receive_address: None,
-			value: Some(1_000_000_000.into()),
+			value: Some(500_000_000.into()),
 			data: vec![0u8, 2, 4, 8, 16, 32, 64, 128],
 			code_address: None,
 		}
@@ -486,7 +486,7 @@ fn alloc() {
 				GasLeft::NeedsReturn { gas_left: gas, data: result, apply_state: _apply } => (gas, result.to_vec()),
 		}
 	};
-	assert_eq!(result, vec![5u8; 1024*450]);
+	assert_eq!(result, vec![5u8; 1024*400]);
 	// assert_eq!(gas_left, U256::from(6_506_844));
 }
 
