@@ -431,19 +431,19 @@ impl<'a> Runtime<'a> {
 				)))
 			}
 			3 => {
-				// getargs(ret_buf_ptr: &mut u8, ret_buf_len: u32, args_len: *mut u8);
+				// getargs(ret_buf_ptr: &mut u8, ret_buf_len: u32, args_len: &mut u32);
 				// set the return buffer length to zero = no args
 				self.memory.zero(data_ptr as usize + 4 * 2, 4)?;
 				Ok(1)
 			}
 			4 => {
-				// getenv(key_ptr: &u32, key_len: u32, val_ptr: &mut u8, val_len: &mut u32)
+				// getenv(key_ptr: *const char, key_len: u32, val_ptr: &mut u8, ret_buf_len: mut u32, val_len: mut u32)
 				// set val length to zero = no val
-				self.memory.zero(data_ptr as usize + 4 * 3, 4)?;
+				self.memory.zero(data_ptr as usize + 4 * 4, 4)?;
 				Ok(1)
 			}
 			6 => {
-				// time(_: u32, high_s: &mut u32, low_s: &mut u32, subseC_nanos: &mut u32);
+				// time(_: u32, high_s: mut u32, low_s: mut u32, subsec_nanos: mut u32);
 				let ts_bytes = self.ext.env_info().timestamp.to_le_bytes();
 				self.memory.set(data_ptr + 4 * 1, &ts_bytes[0..4])?;
 				self.memory.set(data_ptr + 4 * 2, &ts_bytes[4..8])?;

@@ -142,8 +142,8 @@ impl Ext for FakeExt {
 	}
 
 	fn seconds_until_expiry(&self) -> Result<u64> {
-		// TODO: implement?
-		unimplemented!()
+		// unimplemented!() // return value needed to allow wasm tests to run
+		Ok(42)
 	}
 
 	fn exists(&self, address: &Address) -> Result<bool> {
