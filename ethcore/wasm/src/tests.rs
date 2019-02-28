@@ -858,92 +858,63 @@ fn events() {
 #[derive(serde::Serialize, serde::Deserialize)]
 struct TestInput {
 	syscall_index: usize,
-	payload: Vec<u32>,
-	data: Vec<u8>,
-	relocations: Vec<usize>,
+	input: Vec<InputItem>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+enum InputItem {
+	Prim(u32),
+	Blob(Vec<u8>),
 }
 
 #[test]
 fn syscall() {
 	use std::{mem, slice};
 
-	let data = "hello, runtime!";
+	fn test(inp: TestInput) -> Result<Vec<u8>, vm::Error> {
+		reqrep_test!("syscall.wasm", serde_cbor::to_vec(&inp).unwrap()).map(|(_gas_left, result)| result)
+	}
 
 	// syscall 1: write
 
-	let println_input = TestInput {
-		syscall_index: 1,
-		payload: vec![1, 0 /* reloc data */, data.len() as u32],
-		data: data.to_string().into_bytes(),
-		relocations: vec![1],
-	};
-	// let (_gas_left, _result) = reqrep_test!(
-	reqrep_test!(
-		"syscall.wasm",
-		serde_cbor::to_vec(&println_input).unwrap()
-	).expect("println");
+	fn make_write_input(stream_id: u32, with_invalid_ptr: bool) -> TestInput {
+		let data = "hello, runtime!";
+		TestInput {
+			syscall_index: 1,
+			input: vec![
+				InputItem::Prim(stream_id),
+				match with_invalid_ptr {
+					true => InputItem::Prim(0xfffffff),
+					false => InputItem::Blob(data.to_string().into_bytes()),
+				},
+				InputItem::Prim(data.len() as u32),
+			]
+		}
+	}
 
-	let eprintln_input = TestInput {
-		syscall_index: 1,
-		payload: vec![2, 0 /* reloc data */, data.len() as u32],
-		data: data.to_string().into_bytes(),
-		relocations: vec![1],
-	};
-	reqrep_test!(
-		"syscall.wasm",
-		serde_cbor::to_vec(&eprintln_input).unwrap()
-	).expect("eprintln");
-
-	let write_invalid_stream_input = TestInput {
-		syscall_index: 1,
-		payload: vec![0, 0 /* reloc data */, data.len() as u32],
-		data: data.to_string().into_bytes(),
-		relocations: vec![1],
-	};
-	reqrep_test!(
-		"syscall.wasm",
-		serde_cbor::to_vec(&write_invalid_stream_input).unwrap()
-	).expect_err("invalid stream");
-
-	let write_invalid_data_ptr_input = TestInput {
-		syscall_index: 1,
-		payload: vec![0, 0xfffffff /* reloc data */, data.len() as u32],
-		data: Vec::new(),
-		relocations: Vec::new(),
-	};
-	reqrep_test!(
-		"syscall.wasm",
-		serde_cbor::to_vec(&write_invalid_data_ptr_input).unwrap()
-	).expect_err("write_invalid_data_ptr");
-
+	test(make_write_input(1, false)).expect("println");
+	test(make_write_input(2, false)).expect("eprintln");
+	test(make_write_input(3, false)).expect_err("write invalid stream");
+	test(make_write_input(1, true)).expect_err("write invalid ptr");
 
 	// syscall 2: exit
 
-	let exit_input = TestInput {
-		syscall_index: 1,
-		payload: vec![42 /* exit code */],
-		data: Vec::new(),
-		relocations: Vec::new(),
-	};
-	reqrep_test!(
-		"syscall.wasm",
-		serde_cbor::to_vec(&exit_input).unwrap()
-	).expect_err("exit_input");
+	test(TestInput {
+		syscall_index: 2,
+		input: vec![InputItem::Prim(42 /* exit code */)]
+	}).expect_err("exit");
 
 
 	// syscall 3: getargs
 
-	let getargs_input = TestInput {
+	let result = test(TestInput {
 		syscall_index: 3,
-		// getargs(ret_buf_ptr: &mut u8, ret_buf_len: u32, args_len: *mut u8);
-		payload: vec![0, 0xffff, 42],
-		data: Vec::new(),
-		relocations: Vec::new(),
-	};
-	let (_gas_left, result) = reqrep_test!(
-		"syscall.wasm",
-		serde_cbor::to_vec(&getargs_input).unwrap()
-	).expect("getargs");
+		input: vec![
+			InputItem::Prim(0 /* ret_buf_ptr: &mut u8 */ ),
+			InputItem::Prim(0xffff /* ret_buf_len: usize */),
+			InputItem::Prim(99 /* args_len: &mut usize */),
+		],
+	}).expect("getargs");
 	assert_eq!(unsafe {
 		slice::from_raw_parts(result.as_ptr() as *const u32, result.len() / mem::size_of::<u32>())
 	}[2], 0);
@@ -951,30 +922,32 @@ fn syscall() {
 
 	// syscall 4: getenv
 
-	let getenv_input = TestInput {
+	let result = test(TestInput {
 		syscall_index: 4,
-		// getenv(key_ptr: &u32, key_len: u32, val_ptr: &mut u8, val_len: &mut u32)
-		payload: vec![0, 0xffff, 0, 42],
-		data: Vec::new(),
-		relocations: Vec::new(),
-	};
-	let (_gas_left, result) = reqrep_test!(
-		"syscall.wasm",
-		serde_cbor::to_vec(&getenv_input).unwrap()
-	).expect("getenv");
+		input: vec![
+			InputItem::Prim(0 /* key_ptr: &char */ ),
+			InputItem::Prim(4 /* key_len: &char */ ),
+			InputItem::Prim(0 /* val_ptr: &mut char */ ),
+			InputItem::Prim(77 /* ret_buf_len: usize */ ),
+			InputItem::Prim(99 /* val_len: mut usize */ ),
+		],
+	}).expect("getenv");
 	assert_eq!(unsafe {
 		slice::from_raw_parts(result.as_ptr() as *const u32, result.len() / mem::size_of::<u32>())
-	}[3], 0);
+	}[4], 0);
 
 
 	// syscall 6: time
+	// time(_: u32, high_s: mut u32, low_s: mut u32, subsec_nanos: mut u32);
 
 	let time_input = TestInput {
 		syscall_index: 6,
-		// time(_: u32, high_s: &mut u32, low_s: &mut u32, subsec_nanos: &mut u32);
-		payload: vec![0, 0, 0, 0],
-		data: Vec::new(),
-		relocations: Vec::new(),
+		input: vec![
+			InputItem::Prim(0),
+			InputItem::Prim(0),
+			InputItem::Prim(0),
+			InputItem::Prim(0),
+		],
 	};
 	let (_gas_left, result) = reqrep_test!(
 		"syscall.wasm",
@@ -997,15 +970,9 @@ fn syscall() {
 	// syscall _: invalid
 
 	for bad_idx in [0usize, 5, 7].into_iter() {
-		let invalid_syscall_input = TestInput {
+		test(TestInput {
 			syscall_index: *bad_idx,
-			payload: vec![0],
-			data: Vec::new(),
-			relocations: Vec::new(),
-		};
-		reqrep_test!(
-			"syscall.wasm",
-			serde_cbor::to_vec(&invalid_syscall_input).unwrap()
-		).expect_err(&format!("{}", bad_idx));
+			input: vec![],
+		}).expect_err("invalid index");
 	}
 }
