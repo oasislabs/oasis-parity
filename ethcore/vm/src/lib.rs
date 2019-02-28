@@ -25,6 +25,7 @@ extern crate keccak_hash as hash;
 extern crate patricia_trie as trie;
 extern crate byteorder;
 extern crate serde;
+#[macro_use]
 extern crate serde_json;
 
 #[cfg(test)]
