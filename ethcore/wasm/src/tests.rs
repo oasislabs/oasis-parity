@@ -138,6 +138,7 @@ fn logger() {
 		U256::from(1_000_000_000),
 		"Logger sets 0x04 key to the trasferred value"
 	);
+	// NOTICE: check disabled, as this value will change with gas model
 	// assert_eq!(gas_left, U256::from(17_578));
 }
 
@@ -173,6 +174,7 @@ fn identity() {
 		sender,
 		"Idenity test contract does not return the sender passed"
 	);
+	// NOTICE: check disabled, as this value will change with gas model
 	// assert_eq!(gas_left, U256::from(98_408));
 }
 
@@ -207,6 +209,7 @@ fn dispersion() {
 		result,
 		vec![0u8, 0, 125, 11, 197, 7, 255, 8, 19, 0]
 	);
+	// NOTICE: check disabled, as this value will change with gas model
 	// assert_eq!(gas_left, U256::from(94_013));
 }
 
@@ -235,6 +238,7 @@ fn suicide_not() {
 		result,
 		vec![0u8]
 	);
+	// NOTICE: check disabled, as this value will change with gas model
 	// assert_eq!(gas_left, U256::from(94_984));
 }
 
@@ -267,6 +271,7 @@ fn suicide() {
 	};
 
 	assert!(ext.suicides.contains(&refund));
+	// NOTICE: check disabled, as this value will change with gas model
 	// assert_eq!(gas_left, U256::from(94_925));
 }
 
@@ -305,6 +310,7 @@ fn create() {
 			code_address: None,
 		}
 	));
+	// NOTICE: check disabled, as this value will change with gas model
 	// assert_eq!(gas_left, U256::from(60_900));
 }
 
@@ -349,6 +355,7 @@ fn call_msg() {
 		}
 	));
 
+	// NOTICE: check disabled, as this value will change with gas model
 	// assert_eq!(gas_left, U256::from(93_511));
 }
 
@@ -394,6 +401,7 @@ fn call_code() {
 	// siphash result
 	let res = LittleEndian::read_u32(&result[..]);
 	assert_eq!(res, 4198595614);
+	// NOTICE: check disabled, as this value will change with gas model
 	// assert_eq!(gas_left, U256::from(92_381));
 }
 
@@ -442,6 +450,7 @@ fn call_static() {
 	let res = LittleEndian::read_u32(&result[..]);
 	assert_eq!(res, 317632590);
 
+	// NOTICE: check disabled, as this value will change with gas model
 	// assert_eq!(gas_left, U256::from(92_381));
 }
 
@@ -465,6 +474,7 @@ fn realloc() {
 		}
 	};
 	assert_eq!(result, vec![0u8; 2]);
+	// NOTICE: check disabled, as this value will change with gas model
 	// assert_eq!(gas_left, U256::from(94_372));
 }
 
@@ -487,6 +497,7 @@ fn alloc() {
 		}
 	};
 	assert_eq!(result, vec![5u8; 1024*400]);
+	// NOTICE: check disabled, as this value will change with gas model
 	// assert_eq!(gas_left, U256::from(6_506_844));
 }
 
@@ -515,6 +526,7 @@ fn storage_read() {
 	};
 
 	assert_eq!(Address::from(&result[12..32]), address);
+	// NOTICE: check disabled, as this value will change with gas model
 	// assert_eq!(gas_left, U256::from(98_298));
 }
 
@@ -541,6 +553,7 @@ fn keccak() {
 	};
 
 	assert_eq!(H256::from_slice(&result), H256::from("68371d7e884c168ae2022c82bd837d51837718a7f7dfb7aa3f753074a35e1d87"));
+	// NOTICE: check disabled, as this value will change with gas model
 	// assert_eq!(gas_left, U256::from(84_240));
 }
 
@@ -570,6 +583,7 @@ fn math_add() {
 		U256::from_dec_str("1888888888888888888888888888887").unwrap(),
 		(&result[..]).into()
 	);
+	// NOTICE: check disabled, as this value will change with gas model
 	// assert_eq!(gas_left, U256::from(93_814));
 }
 
@@ -592,6 +606,7 @@ fn math_mul() {
 		U256::from_dec_str("888888888888888888888888888887111111111111111111111111111112").unwrap(),
 		(&result[..]).into()
 	);
+	// NOTICE: check disabled, as this value will change with gas model
 	// assert_eq!(gas_left, U256::from(93_300));
 }
 
@@ -614,6 +629,7 @@ fn math_sub() {
 		U256::from_dec_str("111111111111111111111111111111").unwrap(),
 		(&result[..]).into()
 	);
+	// NOTICE: check disabled, as this value will change with gas model
 	// assert_eq!(gas_left, U256::from(93_826));
 }
 
@@ -656,6 +672,7 @@ fn math_div() {
 		U256::from_dec_str("1125000").unwrap(),
 		(&result[..]).into()
 	);
+	// NOTICE: check disabled, as this value will change with gas model
 	// assert_eq!(gas_left, U256::from(90_603));
 }
 
@@ -684,6 +701,7 @@ fn storage_metering() {
 	};
 
 	// 0 -> not 0
+	// NOTICE: check disabled, as this value will change with gas model
 	// assert_eq!(gas_left, U256::from(74_338));
 
 	// #2
@@ -703,6 +721,7 @@ fn storage_metering() {
 	};
 
 	// not 0 -> not 0
+	// NOTICE: check disabled, as this value will change with gas model
 	// assert_eq!(gas_left, U256::from(89_338));
 }
 
@@ -791,6 +810,7 @@ fn externs() {
 		"Gas limit requested and returned does not match"
 	);
 
+	// NOTICE: check disabled, as this value will change with gas model
 	// assert_eq!(gas_left, U256::from(92_110));
 }
 
@@ -817,6 +837,7 @@ fn embedded_keccak() {
 	};
 
 	assert_eq!(H256::from_slice(&result), H256::from("68371d7e884c168ae2022c82bd837d51837718a7f7dfb7aa3f753074a35e1d87"));
+	// NOTICE: check disabled, as this value will change with gas model
 	// assert_eq!(gas_left, U256::from(84_240));
 }
 
@@ -852,6 +873,7 @@ fn events() {
 	assert_eq!(&log_entry.data, b"gnihtemos");
 
 	assert_eq!(&result, b"gnihtemos");
+	// NOTICE: check disabled, as this value will change with gas model
 	// assert_eq!(gas_left, U256::from(81_292));
 }
 
