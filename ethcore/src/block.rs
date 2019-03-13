@@ -34,10 +34,10 @@ use factory::Factories;
 use header::{Header, ExtendedHeader};
 use journaldb::overlaydb::OverlayDB;
 use receipt::{Receipt, TransactionOutcome};
-use state::{State, ConfidentialCtx};
+use state::{State, ConfidentialCtx, ApplyResult};
 use state::backend::{Wrapped as WrappedBackend};
 // use state_db::StateDB;
-use trace::Tracing;
+use trace::{Tracing, FlatTrace, VMTrace};
 use transaction::{UnverifiedTransaction, SignedTransaction, Error as TransactionError};
 // use verification::PreverifiedBlock;
 use views::BlockView;
@@ -353,6 +353,27 @@ impl<'x> OpenBlock<'x> {
 		self.block.env_info()
 	}
 
+	/// Push a transaction into a block and return the full
+	/// outcome of the transaction. Useful to have access to the
+	/// bytes of the transaction
+	pub fn push_transaction_with_outcome(&mut self, t: SignedTransaction, h: Option<H256>) -> ApplyResult<FlatTrace, VMTrace> {
+		if self.block.transactions_set.contains(&t.hash()) {
+			return Err(TransactionError::AlreadyImported.into());
+		}
+
+		let env_info = self.env_info();
+		let outcome = self.block.state.apply(&env_info, self.engine.machine(), &t, self.block.traces.is_enabled())?;
+
+		self.block.transactions_set.insert(h.unwrap_or_else(||t.hash()));
+		self.block.transactions.push(t.into());
+		if let Tracing::Enabled(ref mut traces) = self.block.traces {
+			traces.push(outcome.trace.clone().into());
+		}
+
+		self.block.receipts.push(outcome.receipt.clone());
+		Ok(outcome)
+	}
+
 	/// Push a transaction into the block.
 	///
 	/// If valid, it will be executed, and archived together with the receipt.
@@ -367,24 +388,11 @@ impl<'x> OpenBlock<'x> {
 		&mut self,
 		tx: SignedTransaction,
 		h: Option<H256>,
-	) -> Result<&Receipt, Error> {
-		if self.block.transactions_set.contains(&tx.hash()) {
-			return Err(TransactionError::AlreadyImported.into());
+	) -> Result<Receipt, Error> {
+		match self.push_transaction_with_outcome(tx, h) {
+			Ok(outcome) => Ok(outcome.receipt),
+			Err(err) => Err(err)
 		}
-
-		let env_info = self.env_info();
-
-		let outcome = self.block.state.apply(&env_info, self.engine.machine(), &tx, self.block.traces.is_enabled())?;
-
-		self.block.transactions_set.insert(h.unwrap_or_else(||tx.hash()));
-		self.block.transactions.push(tx.into());
-		if let Tracing::Enabled(ref mut traces) = self.block.traces {
-			traces.push(outcome.trace.into());
-		}
-
-		self.block.receipts.push(outcome.receipt);
-
-		Ok(self.block.receipts.last().expect("receipt just pushed; qed"))
 	}
 
 	/// Push transactions onto the block.
