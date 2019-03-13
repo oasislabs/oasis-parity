@@ -62,7 +62,7 @@ pub enum Kind {
 	Syncing,
 	/// Completed Transactions subscription.
 	#[serde(rename="completedTransaction")]
-	CompletedTransactions
+	CompletedTransaction,
 }
 
 /// Subscription kind.
