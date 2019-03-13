@@ -33,9 +33,9 @@ use error::{Error, BlockError};
 use factory::Factories;
 use header::{Header, ExtendedHeader};
 use receipt::{Receipt, TransactionOutcome};
-use state::State;
+use state::{State, ApplyResult};
 use state_db::StateDB;
-use trace::Tracing;
+use trace::{Tracing, FlatTrace, VMTrace};
 use transaction::{UnverifiedTransaction, SignedTransaction, Error as TransactionError};
 use verification::PreverifiedBlock;
 use views::BlockView;
@@ -343,10 +343,10 @@ impl<'x> OpenBlock<'x> {
 		self.block.env_info()
 	}
 
-	/// Push a transaction into the block.
-	///
-	/// If valid, it will be executed, and archived together with the receipt.
-	pub fn push_transaction(&mut self, t: SignedTransaction, h: Option<H256>) -> Result<&Receipt, Error> {
+	/// Push a transaction into a block and return the full
+	/// outcome of the transaction. Useful to have access to the
+	/// bytes of the transaction
+	pub fn push_transaction_with_outcome(&mut self, t: SignedTransaction, h: Option<H256>) -> ApplyResult<FlatTrace, VMTrace> {
 		if self.block.transactions_set.contains(&t.hash()) {
 			return Err(TransactionError::AlreadyImported.into());
 		}
@@ -357,10 +357,21 @@ impl<'x> OpenBlock<'x> {
 		self.block.transactions_set.insert(h.unwrap_or_else(||t.hash()));
 		self.block.transactions.push(t.into());
 		if let Tracing::Enabled(ref mut traces) = self.block.traces {
-			traces.push(outcome.trace.into());
+			traces.push(outcome.trace.clone().into());
 		}
-		self.block.receipts.push(outcome.receipt);
-		Ok(self.block.receipts.last().expect("receipt just pushed; qed"))
+
+		self.block.receipts.push(outcome.receipt.clone());
+		Ok(outcome)
+	}
+
+	/// Push a transaction into the block.
+	///
+	/// If valid, it will be executed, and archived together with the receipt.
+	pub fn push_transaction(&mut self, t: SignedTransaction, h: Option<H256>) -> Result<Receipt, Error> {
+		match self.push_transaction_with_outcome(t, h) {
+			Err(err) => Err(err),
+			Ok(outcome) => Ok(outcome.receipt)
+		}
 	}
 
 	/// Push transactions onto the block.
