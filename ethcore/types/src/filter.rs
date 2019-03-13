@@ -20,6 +20,24 @@ use ethereum_types::{H256, Address, Bloom, BloomInput};
 use ids::BlockId;
 use log_entry::LogEntry;
 
+/// TxFilter is a filter for transactions
+pub struct TxFilter {
+	/// Transaction hash.
+	///
+	/// If None, all transactions match, otherwise only
+	/// the transaction with the specific hash will match
+	pub transaction_hash: Option<H256>
+}
+
+impl TxFilter {
+	pub fn matches(&self, transaction_hash: &H256) -> bool {
+		match self.transaction_hash {
+			Some(hash) => *transaction_hash == hash,
+			None => true
+		}
+	}
+}
+
 /// Blockchain Filter.
 #[derive(Debug, PartialEq)]
 pub struct Filter {
@@ -174,8 +192,8 @@ mod tests {
 			from_block: BlockId::Earliest,
 			to_block: BlockId::Latest,
 			address: Some(vec![
-						  "b372018f3be9e171df0581136b59d2faf73a7d5d".into(),
-						  "b372018f3be9e171df0581136b59d2faf73a7d5d".into(),
+				"b372018f3be9e171df0581136b59d2faf73a7d5d".into(),
+				"b372018f3be9e171df0581136b59d2faf73a7d5d".into(),
 			]),
 			topics: vec![
 				Some(vec![

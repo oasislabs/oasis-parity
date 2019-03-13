@@ -18,6 +18,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::{Error, DeserializeOwned};
 use serde_json::{Value, from_value};
 use ethcore::filter::Filter as EthFilter;
+use ethcore::filter::TxFilter as EthTxFilter;
 use ethcore::ids::BlockId;
 use v1::types::{BlockNumber, H160, H256, Log};
 
@@ -51,6 +52,21 @@ impl<'a, T> Deserialize<'a> for VariadicValue<T> where T: DeserializeOwned {
 pub type FilterAddress = VariadicValue<H160>;
 /// Topic
 pub type Topic = VariadicValue<H256>;
+
+/// TxFilter is a filter for transactions
+pub struct TxFilter {
+	/// Transaction hash.
+	#[serde(rename="transactionHash")]
+	pub transaction_hash: Option<H256>
+}
+
+impl Into<EthTxFilter> for TxFilter {
+	pub fn into(&self) -> EthTxFilter {
+		EthTxFilter {
+			transaction_hash: self.transaction_hash.clone()
+		}
+	}
+}
 
 /// Filter
 #[derive(Debug, PartialEq, Clone, Deserialize, Eq, Hash)]

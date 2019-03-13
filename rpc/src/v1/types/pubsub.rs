@@ -60,6 +60,9 @@ pub enum Kind {
 	/// Node syncing status subscription.
 	#[serde(rename="syncing")]
 	Syncing,
+	/// Completed Transactions subscription.
+	#[serde(rename="completedTransaction")]
+	CompletedTransactions
 }
 
 /// Subscription kind.
