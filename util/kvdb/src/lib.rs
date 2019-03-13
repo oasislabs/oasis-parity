@@ -20,6 +20,7 @@
 extern crate error_chain;
 extern crate elastic_array;
 extern crate ethcore_bytes as bytes;
+extern crate storagestudy;
 
 use std::io;
 use std::path::Path;
@@ -97,6 +98,7 @@ impl DBTransaction {
 
 	/// Insert a key-value pair in the transaction. Any existing value will be overwritten upon write.
 	pub fn put(&mut self, col: Option<u32>, key: &[u8], value: &[u8]) {
+		storagestudy::dump("tx-put");
 		let mut ekey = ElasticArray32::new();
 		ekey.append_slice(key);
 		self.ops.push(DBOp::Insert {

@@ -24,6 +24,7 @@ extern crate ethcore_bytes as bytes;
 extern crate elastic_array;
 extern crate memorydb;
 // extern crate ethcore_logger;
+extern crate storagestudy;
 
 #[cfg(test)]
 extern crate trie_standardmap as standardmap;

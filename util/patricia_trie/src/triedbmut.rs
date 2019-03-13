@@ -243,6 +243,7 @@ impl NodeStorage {
 
 	/// Allocate a new node in the storage.
 	fn alloc(&mut self, stored: Stored) -> StorageHandle {
+		storagestudy::dump("tr-alloc");
 		if let Some(idx) = self.free_indices.pop_front() {
 			self.nodes[idx] = stored;
 			StorageHandle(idx)

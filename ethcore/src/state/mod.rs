@@ -531,6 +531,7 @@ impl<B: Backend> State<B> {
 		// In all other cases account is read as clean first, and after that made
 		// dirty in and added to the checkpoint with `note_cache`.
 		let is_dirty = account.is_dirty();
+		storagestudy::dump("st-insert");
 		let old_value = self.cache.borrow_mut().insert(*address, account);
 		if is_dirty {
 			if let Some(ref mut checkpoint) = self.checkpoints.borrow_mut().last_mut() {
@@ -978,6 +979,7 @@ impl<B: Backend> State<B> {
 	pub fn populate_from(&mut self, accounts: PodState) {
 		assert!(self.checkpoints.borrow().is_empty());
 		for (add, acc) in accounts.drain().into_iter() {
+			storagestudy::dump("st-insert");
 			self.cache.borrow_mut().insert(add, AccountEntry::new_dirty(Some(Account::from_pod(acc))));
 		}
 	}

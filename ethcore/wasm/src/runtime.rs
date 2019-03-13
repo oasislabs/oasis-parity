@@ -17,6 +17,7 @@ use std::mem;
 
 use ethereum_types::{U256, H256, Address};
 use hash;
+use storagestudy;
 use vm::{self, CallType};
 use wasmi::{self, MemoryRef, RuntimeArgs, RuntimeValue, Error as InterpreterError, Trap, TrapKind};
 use super::panic_payload;
@@ -193,6 +194,7 @@ impl<'a> Runtime<'a> {
 	/// Returns false if gas limit exceeded and true if not.
 	/// Intuition about the return value sense is to aswer the question 'are we allowed to continue?'
 	fn charge_gas(&mut self, amount: u64) -> bool {
+		storagestudy::dump(&format!("charge-gas({})", amount));
 		let prev = self.gas_counter;
 		match prev.checked_add(amount) {
 		 	// gas charge overflow protection

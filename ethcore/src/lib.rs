@@ -95,6 +95,7 @@ extern crate rand;
 // extern crate rayon;
 pub extern crate rlp;
 extern crate rlp_compress;
+extern crate storagestudy;
 extern crate keccak_hash as hash;
 extern crate heapsize;
 extern crate memorydb;

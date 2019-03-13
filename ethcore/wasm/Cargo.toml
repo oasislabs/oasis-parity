@@ -10,6 +10,7 @@ log = "0.3"
 parity-wasm = { git = "https://github.com/oasislabs/parity-wasm", branch = "ekiden" }
 # libc = "0.2"
 pwasm-utils = { git = "https://github.com/oasislabs/wasm-utils", branch = "ekiden" }
+storagestudy = { path = "../../../storagestudy" }
 vm = { path = "../vm" }
 # ethcore-logger = { path = "../../logger" }
 wasmi = { git = "https://github.com/oasislabs/wasmi", branch = "ekiden" }

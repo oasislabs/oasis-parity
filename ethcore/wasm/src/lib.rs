@@ -25,6 +25,7 @@ extern crate keccak_hash as hash;
 extern crate parity_wasm;
 extern crate vm;
 extern crate pwasm_utils as wasm_utils;
+extern crate storagestudy;
 extern crate wasmi;
 
 mod runtime;
