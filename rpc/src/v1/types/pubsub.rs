@@ -19,7 +19,7 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::Error;
 use serde_json::{Value, from_value};
-use v1::types::{RichHeader, Filter, Log, H256};
+use v1::types::{RichHeader, Filter, Log, H256, TxFilter};
 
 /// Subscription result.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,6 +72,8 @@ pub enum Params {
 	None,
 	/// Log parameters.
 	Logs(Filter),
+	/// Transaction filter parameters.
+	Transaction(TxFilter),
 }
 
 impl Default for Params {

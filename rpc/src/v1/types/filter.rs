@@ -53,21 +53,6 @@ pub type FilterAddress = VariadicValue<H160>;
 /// Topic
 pub type Topic = VariadicValue<H256>;
 
-/// TxFilter is a filter for transactions
-pub struct TxFilter {
-	/// Transaction hash.
-	#[serde(rename="transactionHash")]
-	pub transaction_hash: Option<H256>
-}
-
-impl Into<EthTxFilter> for TxFilter {
-	pub fn into(&self) -> EthTxFilter {
-		EthTxFilter {
-			transaction_hash: self.transaction_hash.clone()
-		}
-	}
-}
-
 /// Filter
 #[derive(Debug, PartialEq, Clone, Deserialize, Eq, Hash)]
 #[serde(deny_unknown_fields)]
@@ -130,6 +115,26 @@ pub enum FilterChanges {
 	Hashes(Vec<H256>),
 	/// Empty result,
 	Empty,
+}
+
+/// TxFilter is a filter for transactions
+#[derive(Debug, PartialEq, Clone, Deserialize, Eq, Hash)]
+#[serde(deny_unknown_fields)]
+pub struct TxFilter {
+	/// Transaction hash.
+	#[serde(rename="transactionHash")]
+	pub transaction_hash: Option<H256>
+}
+
+impl Into<EthTxFilter> for TxFilter {
+	fn into(self) -> EthTxFilter {
+		EthTxFilter {
+			transaction_hash: match self.transaction_hash {
+				Some(hash) => Some(hash.into()),
+				None => None,
+			}
+		}
+	}
 }
 
 impl Serialize for FilterChanges {
