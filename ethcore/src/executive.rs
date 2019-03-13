@@ -389,7 +389,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 
 		let vm_factory = self.state.vm_factory();
 		let mut ext = self.as_externalities(OriginInfo::from(&params), unconfirmed_substate, output_policy, tracer, vm_tracer, ext_tracer, static_call);
-		trace!(target: "executive", "ext.schedule.have_delegate_call: {}", ext.schedule().have_delegate_call);
+		println!("ext.schedule.have_delegate_call: {}", ext.schedule().have_delegate_call);
 		let mut vm = vm_factory.create(&params, &schedule);
 		let ret = vm.exec(params, &mut ext);
 
@@ -424,7 +424,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		ext_tracer: &mut X
 	) -> vm::Result<FinalizationResult> where T: Tracer, V: VMTracer, X: ExtTracer {
 
-		trace!("Executive::call(params={:?}) self.env_info={:?}, static={}", params, self.info, self.static_flag);
+		println!("Executive::call(params={:?}) self.env_info={:?}, static={}", params, self.info, self.static_flag);
 		if (params.call_type == CallType::StaticCall ||
 				((params.call_type == CallType::Call) &&
 				self.static_flag))
@@ -537,7 +537,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 
 				vm_tracer.done_subtrace(subvmtracer);
 
-				trace!(target: "executive", "res={:?}", res);
+				println!("res={:?}", res);
 
 				let traces = subtracer.drain();
 				match res {
@@ -551,10 +551,10 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					Err(ref e) => tracer.trace_failed_call(trace_info, traces, e.into()),
 				};
 
-				trace!(target: "executive", "substate={:?}; unconfirmed_substate={:?}\n", substate, unconfirmed_substate);
+				println!("substate={:?}; unconfirmed_substate={:?}\n", substate, unconfirmed_substate);
 
 				self.enact_result(&res, substate, unconfirmed_substate);
-				trace!(target: "executive", "enacted: substate={:?}\n", substate);
+				println!("enacted: substate={:?}\n", substate);
 				res
 			} else {
 				// otherwise it's just a basic transaction, only do tracing, if necessary.
@@ -592,7 +592,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 			return Err(vm::Error::OutOfGas);
 		}
 
-		trace!("Executive::create(params={:?}) self.env_info={:?}, static={}", params, self.info, self.static_flag);
+		println!("Executive::create(params={:?}) self.env_info={:?}, static={}", params, self.info, self.static_flag);
 		if params.call_type == CallType::StaticCall || self.static_flag {
 			let trace_info = tracer.prepare_trace_create(&params);
 			tracer.trace_failed_create(trace_info, vec![], vm::Error::MutableCallInStaticContext.into());
@@ -692,14 +692,14 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		let refund_value = gas_left * t.gas_price;
 		let fees_value = gas_used * t.gas_price;
 
-		trace!("exec::finalize: t.gas={}, sstore_refunds={}, suicide_refunds={}, refunds_bound={}, gas_left_prerefund={}, refunded={}, gas_left={}, gas_used={}, refund_value={}, fees_value={}\n",
+		println!("exec::finalize: t.gas={}, sstore_refunds={}, suicide_refunds={}, refunds_bound={}, gas_left_prerefund={}, refunded={}, gas_left={}, gas_used={}, refund_value={}, fees_value={}\n",
 			t.gas, sstore_refunds, suicide_refunds, refunds_bound, gas_left_prerefund, refunded, gas_left, gas_used, refund_value, fees_value);
 
 		let sender = t.sender();
-		trace!("exec::finalize: Refunding refund_value={}, sender={}\n", refund_value, sender);
+		println!("exec::finalize: Refunding refund_value={}, sender={}\n", refund_value, sender);
 		// Below: NoEmpty is safe since the sender must already be non-null to have sent this transaction
 		self.state.add_balance(&sender, &refund_value, CleanupMode::NoEmpty)?;
-		trace!("exec::finalize: Compensating author: fees_value={}, author={}\n", fees_value, &self.info.author);
+		println!("exec::finalize: Compensating author: fees_value={}, author={}\n", fees_value, &self.info.author);
 		self.state.add_balance(&self.info.author, &fees_value, substate.to_cleanup_mode(&schedule))?;
 
 		// perform suicides
@@ -714,7 +714,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		match result {
 			Err(vm::Error::Internal(msg)) => Err(ExecutionError::Internal(msg)),
 			Err(exception) => {
-				trace!("Executive::finalize: exception={}", exception);
+				println!("Executive::finalize: exception={}", exception);
 				Ok(Executed {
 					exception: Some(exception),
 					gas: t.gas,
