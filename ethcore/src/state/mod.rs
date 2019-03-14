@@ -804,10 +804,13 @@ impl<B: Backend> State<B> {
 	/// Execute a given transaction, producing a receipt and an optional trace.
 	/// This will change the state accordingly.
 	pub fn apply(&mut self, env_info: &EnvInfo, machine: &Machine, t: &SignedTransaction, tracing: bool) -> ApplyResult<FlatTrace, VMTrace> {
+      println!("subscribe apply  1");
 		if tracing {
+        println!("subscribe apply  2");
 			let options = TransactOptions::with_tracing();
 			self.apply_with_tracing(env_info, machine, t, options.tracer, options.vm_tracer, options.ext_tracer)
 		} else {
+        println!("subscribe apply  3");
 			let options = TransactOptions::with_no_tracing();
 			self.apply_with_tracing(env_info, machine, t, options.tracer, options.vm_tracer, options.ext_tracer)
 		}
@@ -828,11 +831,14 @@ impl<B: Backend> State<B> {
 		V: trace::VMTracer,
 		X: ExtTracer,
 	{
+      println!("subscribe apply tracing 1");
 		let options = match machine.params().benchmarking {
 			true => TransactOptions::new(tracer, vm_tracer, ext_tracer).dont_check_nonce(),
 			false => TransactOptions::new(tracer, vm_tracer, ext_tracer)
 		};
+      println!("subscribe apply tracing 2");
 		let e = self.execute(env_info, machine, t, options, false)?;
+      println!("subscribe apply tracing 3");
 		let params = machine.params();
 
 		let eip658 = env_info.number >= params.eip658_transition;
@@ -840,6 +846,7 @@ impl<B: Backend> State<B> {
 			eip658 ||
 			(env_info.number >= params.eip98_transition && env_info.number >= params.validate_receipts_transition);
 
+      println!("subscribe apply tracing 4");
 		let outcome = if no_intermediate_commits {
 			if eip658 {
 				TransactionOutcome::StatusCode(if e.exception.is_some() { 0 } else { 1 })
@@ -851,6 +858,7 @@ impl<B: Backend> State<B> {
 			TransactionOutcome::StateRoot(self.root().clone())
 		};
 
+      println!("subscribe apply tracing 5");
 		let output = e.output;
 		let receipt = Receipt::new(outcome, e.cumulative_gas_used, e.logs);
 		trace!(target: "state", "Transaction receipt: {:?}", receipt);

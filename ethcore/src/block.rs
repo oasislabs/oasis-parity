@@ -357,18 +357,22 @@ impl<'x> OpenBlock<'x> {
 	/// outcome of the transaction. Useful to have access to the
 	/// bytes of the transaction
 	pub fn push_transaction_with_outcome(&mut self, t: SignedTransaction, h: Option<H256>) -> ApplyResult<FlatTrace, VMTrace> {
+      println!("subscribe with_outcome  1");
 		if self.block.transactions_set.contains(&t.hash()) {
 			return Err(TransactionError::AlreadyImported.into());
 		}
 
+      println!("subscribe with_outcome  2");
 		let env_info = self.env_info();
 		let outcome = self.block.state.apply(&env_info, self.engine.machine(), &t, self.block.traces.is_enabled())?;
 
+      println!("subscribe with_outcome  3");
 		self.block.transactions_set.insert(h.unwrap_or_else(||t.hash()));
 		self.block.transactions.push(t.into());
 		if let Tracing::Enabled(ref mut traces) = self.block.traces {
 			traces.push(outcome.trace.clone().into());
 		}
+      println!("subscribe with_outcome  4");
 
 		  self.block.receipts.push(outcome.receipt.clone());
       println!("subscribe outcome bytes: {}", outcome.output.len());
