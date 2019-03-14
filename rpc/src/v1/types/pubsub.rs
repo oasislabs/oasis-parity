@@ -19,7 +19,7 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::Error;
 use serde_json::{Value, from_value};
-use v1::types::{RichHeader, Filter, Log, H256, TxFilter};
+use v1::types::{RichHeader, Filter, Log, H256, TxFilter, TransactionOutcome};
 
 /// Subscription result.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,6 +30,8 @@ pub enum Result {
 	Log(Log),
 	/// Transaction hash
 	TransactionHash(H256),
+	/// Transaction outcome
+	TransactionOutcome(TransactionOutcome)
 }
 
 impl Serialize for Result {
@@ -40,6 +42,7 @@ impl Serialize for Result {
 			Result::Header(ref header) => header.serialize(serializer),
 			Result::Log(ref log) => log.serialize(serializer),
 			Result::TransactionHash(ref hash) => hash.serialize(serializer),
+			Result::TransactionOutcome(ref outcome) => outcome.serialize(serializer),
 		}
 	}
 }
@@ -91,7 +94,6 @@ impl<'a> Deserialize<'a> for Params {
 			return Ok(Params::None);
 		}
 
-    println!("ATTEMPT TO DESERIALIZE PARAMS");
 		let result_logs = from_value(v.clone()).map(Params::Logs)
 			.map_err(|e| D::Error::custom(format!("Invalid Pub-Sub parameters: {}", e)));
 		let result_tx = from_value(v.clone()).map(Params::Transaction)
@@ -99,9 +101,7 @@ impl<'a> Deserialize<'a> for Params {
 
     
 		if result_tx.is_ok() { result_tx }
-		  else {
-          println!("RESULT TX {}", result_tx.err().unwrap());
-          result_logs }
+		else { result_logs }
 	}
 }
 
