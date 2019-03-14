@@ -91,6 +91,7 @@ impl<'a> Deserialize<'a> for Params {
 			return Ok(Params::None);
 		}
 
+      println!("ATTEMPT TO DESERIALIZE PARAMS");
 		let result_logs = from_value(v.clone()).map(Params::Logs)
 			.map_err(|e| D::Error::custom(format!("Invalid Pub-Sub parameters: {}", e)));
 		let result_tx = from_value(v.clone()).map(Params::Transaction)
