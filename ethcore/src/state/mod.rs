@@ -855,6 +855,7 @@ impl<B: Backend> State<B> {
 		let receipt = Receipt::new(outcome, e.cumulative_gas_used, e.logs);
 		trace!(target: "state", "Transaction receipt: {:?}", receipt);
 
+      println!("subscribe output len in apply with tracing: {:?}", output.len());
 		Ok(ApplyOutcome {
 			receipt,
 			output,

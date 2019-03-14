@@ -370,7 +370,8 @@ impl<'x> OpenBlock<'x> {
 			traces.push(outcome.trace.clone().into());
 		}
 
-		self.block.receipts.push(outcome.receipt.clone());
+		  self.block.receipts.push(outcome.receipt.clone());
+      println!("subscribe outcome bytes: {}", outcome.output.len());
 		Ok(outcome)
 	}
 
