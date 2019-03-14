@@ -392,7 +392,6 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		trace!(target: "executive", "ext.schedule.have_delegate_call: {}", ext.schedule().have_delegate_call);
 		let mut vm = vm_factory.create(&params, &schedule);
 		let ret = vm.exec(params, &mut ext);
-		println!("vm.exec returned: {:?}", ret);
 
 		// Prepend the header to the bytecode that is stored in the account.
 		if let Some(bytes) = header {
