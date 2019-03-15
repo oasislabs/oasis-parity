@@ -231,7 +231,8 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 	pub fn transact<T, V, X>(&'a mut self, t: &SignedTransaction, options: TransactOptions<T, V, X>)
 		-> Result<Executed<T::Output, V::Output>, ExecutionError> where T: Tracer, V: VMTracer, X: ExtTracer,
 	{
-		self.transact_with_tracer(t, options.check_nonce, options.output_from_init_contract, options.tracer, options.vm_tracer, options.ext_tracer)
+		// self.transact_with_tracer(t, options.check_nonce, options.output_from_init_contract, options.tracer, options.vm_tracer, options.ext_tracer)
+      self.transact_with_tracer(t, options.check_nonce, true, options.tracer, options.vm_tracer, options.ext_tracer)
 	}
 
 	/// Execute a transaction in a "virtual" context.
@@ -335,8 +336,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					confidential: confidential,
 					oasis_contract: oasis_contract,
 				};
-				  // let mut out = if output_from_create { Some(vec![]) } else { None };
-          let mut out = Some(vec![]);
+				  let mut out = if output_from_create { Some(vec![]) } else { None };
 				(self.create(params, &mut substate, &mut out, &mut tracer, &mut vm_tracer, &mut ext_tracer), out.unwrap_or_else(Vec::new))
 			},
 			Action::Call(ref address) => {
