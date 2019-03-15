@@ -407,6 +407,14 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 			}
 		}
 
+      if let Ok(GasLeft::NeedsReturn { gas_left, data, apply_state }) = ret {
+				  return Ok(GasLeft::NeedsReturn {
+					    gas_left,
+					    data: ReturnData::new(vec![0], 0, 1),
+					    apply_state
+				  }).finalize(ext);
+			}
+
 		ret.finalize(ext)
 	}
 
