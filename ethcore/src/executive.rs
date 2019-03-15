@@ -296,6 +296,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 			});
 		}
 
+      println!("subscribe to call with {}", output_from_create);
 		// TODO: we might need bigints here, or at least check overflows.
 		let balance = self.state.balance(&sender)?;
 		let gas_cost = t.gas.full_mul(t.gas_price);
@@ -335,7 +336,8 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					confidential: confidential,
 					oasis_contract: oasis_contract,
 				};
-				let mut out = if output_from_create { Some(vec![]) } else { None };
+				  let mut out = if output_from_create { Some(vec![]) } else { None };
+          println!("subscribe this is a create");
 				(self.create(params, &mut substate, &mut out, &mut tracer, &mut vm_tracer, &mut ext_tracer), out.unwrap_or_else(Vec::new))
 			},
 			Action::Call(ref address) => {
@@ -356,10 +358,13 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					confidential: confidential,
 					oasis_contract: oasis_contract,
 				};
+          println!("subscribe this is a call");
 				let mut out = vec![];
 				(self.call(params, &mut substate, BytesRef::Flexible(&mut out), &mut tracer, &mut vm_tracer, &mut ext_tracer), out)
 			}
 		};
+
+      println!("subscribe now we finalize");
 
 		// finalize here!
 		Ok(self.finalize(t, substate, result, output, tracer.drain(), vm_tracer.drain())?)
