@@ -335,7 +335,8 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					confidential: confidential,
 					oasis_contract: oasis_contract,
 				};
-				let mut out = if output_from_create { Some(vec![]) } else { None };
+				  // let mut out = if output_from_create { Some(vec![]) } else { None };
+          let mut out = Some(vec![]);
 				(self.create(params, &mut substate, &mut out, &mut tracer, &mut vm_tracer, &mut ext_tracer), out.unwrap_or_else(Vec::new))
 			},
 			Action::Call(ref address) => {
