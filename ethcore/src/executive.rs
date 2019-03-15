@@ -335,7 +335,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					confidential: confidential,
 					oasis_contract: oasis_contract,
 				};
-				  let mut out = if output_from_create { Some(vec![]) } else { None };
+				let mut out = if output_from_create { Some(vec![]) } else { None };
 				(self.create(params, &mut substate, &mut out, &mut tracer, &mut vm_tracer, &mut ext_tracer), out.unwrap_or_else(Vec::new))
 			},
 			Action::Call(ref address) => {
@@ -387,12 +387,12 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 			None
 		};
 
-      println!("exec_vm: call_type: {:?}, params: {:?}", params.call_type, params);
 		let vm_factory = self.state.vm_factory();
 		let mut ext = self.as_externalities(OriginInfo::from(&params), unconfirmed_substate, output_policy, tracer, vm_tracer, ext_tracer, static_call);
 		println!("ext.schedule.have_delegate_call: {}", ext.schedule().have_delegate_call);
 		let mut vm = vm_factory.create(&params, &schedule);
 		let ret = vm.exec(params, &mut ext);
+		println!("vm.exec returned: {:?}", ret);
 
 		// Prepend the header to the bytecode that is stored in the account.
 		if let Some(bytes) = header {
@@ -408,22 +408,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 			}
 		}
 
-      if let Ok(GasLeft::NeedsReturn { gas_left, data, apply_state }) = ret {
-				  return Ok(GasLeft::NeedsReturn {
-					    gas_left,
-					    data: ReturnData::new(vec![1], 0, 1),
-					    apply_state
-				  }).finalize(ext);
-
-			} else if let Ok(GasLeft::Known(gas_left)) = ret {
-          return Ok(GasLeft::NeedsReturn {
-					    gas_left: gas_left,
-					    data: ReturnData::new(vec![1], 0, 1),
-					    apply_state: true,
-          }).finalize(ext);
-      }
-
-		  ret.finalize(ext)
+		ret.finalize(ext)
 	}
 
 	/// Calls contract function with given contract params.
@@ -553,7 +538,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 
 				vm_tracer.done_subtrace(subvmtracer);
 
-				println!("new res={:?}", res);
+				println!("res={:?}", res);
 
 				let traces = subtracer.drain();
 				match res {
