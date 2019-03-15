@@ -387,6 +387,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 			None
 		};
 
+      println!("exec_vm: call_type: {:?}, params: {:?}", params.call_type, params);
 		let vm_factory = self.state.vm_factory();
 		let mut ext = self.as_externalities(OriginInfo::from(&params), unconfirmed_substate, output_policy, tracer, vm_tracer, ext_tracer, static_call);
 		println!("ext.schedule.have_delegate_call: {}", ext.schedule().have_delegate_call);
@@ -552,7 +553,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 
 				vm_tracer.done_subtrace(subvmtracer);
 
-				println!("res={:?}", res);
+				println!("new res={:?}", res);
 
 				let traces = subtracer.drain();
 				match res {
