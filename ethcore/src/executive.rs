@@ -296,7 +296,6 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 			});
 		}
 
-      println!("subscribe to call with {}", output_from_create);
 		// TODO: we might need bigints here, or at least check overflows.
 		let balance = self.state.balance(&sender)?;
 		let gas_cost = t.gas.full_mul(t.gas_price);
@@ -336,8 +335,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					confidential: confidential,
 					oasis_contract: oasis_contract,
 				};
-				  let mut out = if output_from_create { Some(vec![]) } else { None };
-          println!("subscribe this is a create");
+				let mut out = if output_from_create { Some(vec![]) } else { None };
 				(self.create(params, &mut substate, &mut out, &mut tracer, &mut vm_tracer, &mut ext_tracer), out.unwrap_or_else(Vec::new))
 			},
 			Action::Call(ref address) => {
@@ -358,13 +356,10 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					confidential: confidential,
 					oasis_contract: oasis_contract,
 				};
-          println!("subscribe this is a call");
 				let mut out = vec![];
 				(self.call(params, &mut substate, BytesRef::Flexible(&mut out), &mut tracer, &mut vm_tracer, &mut ext_tracer), out)
 			}
 		};
-
-      println!("subscribe now we finalize");
 
 		// finalize here!
 		Ok(self.finalize(t, substate, result, output, tracer.drain(), vm_tracer.drain())?)
@@ -397,7 +392,6 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		trace!(target: "executive", "ext.schedule.have_delegate_call: {}", ext.schedule().have_delegate_call);
 		let mut vm = vm_factory.create(&params, &schedule);
 		let ret = vm.exec(params, &mut ext);
-		println!("vm.exec returned: {:?}", ret);
 
 		// Prepend the header to the bytecode that is stored in the account.
 		if let Some(bytes) = header {
