@@ -410,12 +410,19 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
       if let Ok(GasLeft::NeedsReturn { gas_left, data, apply_state }) = ret {
 				  return Ok(GasLeft::NeedsReturn {
 					    gas_left,
-					    data: ReturnData::new(vec![0], 0, 1),
+					    data: ReturnData::new(vec![1], 0, 1),
 					    apply_state
 				  }).finalize(ext);
-			}
 
-		ret.finalize(ext)
+			} else if let Ok(GasLeft::Known(gas_left)) = ret {
+          return Ok(GasLeft::NeedsReturn {
+					    gas_left: gas_left,
+					    data: ReturnData::new(vec![1], 0, 1),
+					    apply_state: true,
+          }).finalize(ext);
+      }
+
+		  ret.finalize(ext)
 	}
 
 	/// Calls contract function with given contract params.
