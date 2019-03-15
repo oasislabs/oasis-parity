@@ -2569,7 +2569,7 @@ mod tests {
 					nonce: U256::zero(),
 					code: Some(Default::default()),
 					storage: vec![(H256::from(&U256::from(1u64)), H256::from(&U256::from(100u64)).to_vec())]
-						into_iter().collect(),
+						.into_iter().collect(),
 					storage_expiry: 0,
 				})).as_ref());
 	}
