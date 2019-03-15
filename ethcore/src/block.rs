@@ -356,7 +356,7 @@ impl<'x> OpenBlock<'x> {
 	/// Push a transaction into a block and return the full
 	/// outcome of the transaction. Useful to have access to the
 	/// bytes of the transaction
-	pub fn push_transaction_with_outcome(&mut self, t: SignedTransaction, h: Option<H256>) -> ApplyResult<FlatTrace, VMTrace> {
+	pub fn push_transaction_with_outcome(&mut self, t: SignedTransaction, h: Option<H256>, should_return_value: bool) -> ApplyResult<FlatTrace, VMTrace> {
       println!("subscribe with_outcome  1");
 		if self.block.transactions_set.contains(&t.hash()) {
 			return Err(TransactionError::AlreadyImported.into());
@@ -364,7 +364,7 @@ impl<'x> OpenBlock<'x> {
 
       println!("subscribe with_outcome  2");
 		let env_info = self.env_info();
-		let outcome = self.block.state.apply(&env_info, self.engine.machine(), &t, self.block.traces.is_enabled())?;
+		let outcome = self.block.state.apply(&env_info, self.engine.machine(), &t, self.block.traces.is_enabled(), should_return_value)?;
 
       println!("subscribe with_outcome  3");
 		self.block.transactions_set.insert(h.unwrap_or_else(||t.hash()));
@@ -394,7 +394,7 @@ impl<'x> OpenBlock<'x> {
 		tx: SignedTransaction,
 		h: Option<H256>,
 	) -> Result<Receipt, Error> {
-		match self.push_transaction_with_outcome(tx, h) {
+		match self.push_transaction_with_outcome(tx, h, false) {
 			Ok(outcome) => Ok(outcome.receipt),
 			Err(err) => Err(err)
 		}

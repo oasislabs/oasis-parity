@@ -803,18 +803,37 @@ impl<B: Backend> State<B> {
 
 	/// Execute a given transaction, producing a receipt and an optional trace.
 	/// This will change the state accordingly.
-	pub fn apply(&mut self, env_info: &EnvInfo, machine: &Machine, t: &SignedTransaction, tracing: bool) -> ApplyResult<FlatTrace, VMTrace> {
+	pub fn apply(&mut self, env_info: &EnvInfo, machine: &Machine, t: &SignedTransaction, tracing: bool, should_return_value: bool) -> ApplyResult<FlatTrace, VMTrace> {
       println!("subscribe apply  1");
 		if tracing {
         println!("subscribe apply  2");
-			let options = TransactOptions::with_tracing();
-			self.apply_with_tracing(env_info, machine, t, options.tracer, options.vm_tracer, options.ext_tracer)
+			  let options = TransactOptions::with_tracing();
+			self.apply_with_tracing(env_info, machine, t, options.tracer, options.vm_tracer, options.ext_tracer, should_return_value)
 		} else {
         println!("subscribe apply  3");
 			let options = TransactOptions::with_no_tracing();
-			self.apply_with_tracing(env_info, machine, t, options.tracer, options.vm_tracer, options.ext_tracer)
+			  self.apply_with_tracing(env_info, machine, t, options.tracer, options.vm_tracer, options.ext_tracer, should_return_value)
 		}
 	}
+
+    fn get_options<T, V, X>(tracer: T,
+		                        vm_tracer: V,
+		                        ext_tracer: X,
+                            benchmarking: bool,
+                            should_return_value: bool) -> TransactOptions<T, V, X> {
+        let mut options = match benchmarking {
+			      true => TransactOptions::new(tracer, vm_tracer, ext_tracer).dont_check_nonce(),
+			      false => TransactOptions::new(tracer, vm_tracer, ext_tracer)
+		    };
+
+        let options = if should_return_value {
+            options.save_output_from_contract()
+        } else {
+            options
+        };
+
+        return options
+    }
 
 	/// Execute a given transaction with given tracer and VM tracer producing a receipt and an optional trace.
 	/// This will change the state accordingly.
@@ -825,17 +844,17 @@ impl<B: Backend> State<B> {
 		t: &SignedTransaction,
 		tracer: T,
 		vm_tracer: V,
-		ext_tracer: X,
+		  ext_tracer: X,
+      should_return_value: bool
 	) -> ApplyResult<T::Output, V::Output> where
 		T: trace::Tracer,
 		V: trace::VMTracer,
 		X: ExtTracer,
 	{
       println!("subscribe apply tracing 1");
-		let options = match machine.params().benchmarking {
-			true => TransactOptions::new(tracer, vm_tracer, ext_tracer).dont_check_nonce(),
-			false => TransactOptions::new(tracer, vm_tracer, ext_tracer)
-		};
+      let options = Self::get_options(tracer, vm_tracer, ext_tracer,
+                                machine.params().benchmarking, should_return_value);
+
       println!("subscribe apply tracing 2");
 		let e = self.execute(env_info, machine, t, options, false)?;
       println!("subscribe apply tracing 3");
