@@ -769,8 +769,8 @@ impl<B: Backend> State<B> {
 		self.set_storage_bytes(a, key, value.to_vec())
 	}
 
-    /// Sets the given key value pair directly into the contract's storage trie. Encrypts
-    /// the value if in a confidential ctx.
+	/// Sets the given key value pair directly into the contract's storage trie. Encrypts
+	/// the value if in a confidential ctx.
 	pub fn set_storage_bytes(&mut self, a: &Address, key: H256, value: Vec<u8>) -> trie::Result<()> {
 		trace!(target: "state", "set_storage({}:{:x} to {:?})", a, key, value);
 		let key = self.to_storage_key(&key);
@@ -1385,6 +1385,8 @@ mod tests {
 	use ethereum_types::{H256, U256, Address};
 	use test_helpers::{get_temp_state, get_temp_state_db};
 	use machine::EthereumMachine;
+	use state::State;
+	use state_db::StateDB;
 	use vm::EnvInfo;
 	use spec::*;
 	use transaction::*;
@@ -2572,5 +2574,23 @@ mod tests {
 						.into_iter().collect(),
 					storage_expiry: 0,
 				})).as_ref());
+	}
+
+	#[test]
+	fn should_have_output_from_init_contract() {
+		let base_options = TransactOptions::with_tracing();
+		let options = State::<StateDB>::get_options(base_options.tracer , base_options.vm_tracer,
+			base_options.ext_tracer, false, true);
+
+		assert_eq!(options.output_from_init_contract, true);
+		}
+
+	#[test]
+	fn should_not_have_output_from_init_contract() {
+		let base_options = TransactOptions::with_tracing();
+		let options = State::<StateDB>::get_options(base_options.tracer , base_options.vm_tracer,
+			base_options.ext_tracer, false, false);
+
+		assert_eq!(options.output_from_init_contract, false);
 	}
 }

@@ -272,5 +272,8 @@ mod tests {
 
         assert_eq!(filter.matches("0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into()), true);
         assert_eq!(filter.matches("0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6e1234".into()), false);
+        assert_eq!(TxFilter{
+            transaction_hash: None,
+        }.matches("0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into()), false)
     }
 }
