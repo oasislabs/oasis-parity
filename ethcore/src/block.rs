@@ -389,10 +389,8 @@ impl<'x> OpenBlock<'x> {
 		tx: SignedTransaction,
 		h: Option<H256>,
 	) -> Result<Receipt, Error> {
-		match self.push_transaction_with_outcome(tx, h, false) {
-			Ok(outcome) => Ok(outcome.receipt),
-			Err(err) => Err(err)
-		}
+		self.push_transaction_with_outcome(tx, h, false)
+			.map(|outcome| outcome.receipt)
 	}
 
 	/// Push transactions onto the block.

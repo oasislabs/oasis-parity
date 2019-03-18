@@ -20,7 +20,7 @@ use ethereum_types::{H256, Address, Bloom, BloomInput};
 use ids::BlockId;
 use log_entry::LogEntry;
 
-/// TxFilter is a filter for transactions
+/// TxFilter is a filter for transactions.
 pub struct TxFilter {
 	/// Transaction hash.
 	///
@@ -128,7 +128,7 @@ impl Filter {
 #[cfg(test)]
 mod tests {
 	use ethereum_types::Bloom;
-	use filter::Filter;
+	use filter::{Filter, TxFilter};
 	use ids::BlockId;
 	use log_entry::LogEntry;
 
@@ -263,4 +263,14 @@ mod tests {
 		assert_eq!(filter.matches(&entry1), false);
 		assert_eq!(filter.matches(&entry2), false);
 	}
+
+    #[test]
+    fn test_tx_filter_matches() {
+        let filter = TxFilter{
+            transaction_hash: Some("0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into()),
+        };
+
+        assert_eq!(filter.matches("0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into()), true);
+        assert_eq!(filter.matches("0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6e1234".into()), false);
+    }
 }

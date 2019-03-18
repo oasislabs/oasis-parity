@@ -851,7 +851,7 @@ impl<B: Backend> State<B> {
 		X: ExtTracer,
 	{
 		let options = Self::get_options(tracer, vm_tracer, ext_tracer,
-																		machine.params().benchmarking, should_return_value);
+			machine.params().benchmarking, should_return_value);
 
 		let e = self.execute(env_info, machine, t, options, false)?;
 		let params = machine.params();

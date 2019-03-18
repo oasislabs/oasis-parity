@@ -212,4 +212,26 @@ mod tests {
 			limit: None,
 		});
 	}
+
+	#[test]
+	fn tx_filter_deserialization() {
+		let s = r#"{"transactionHash":"0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b"}"#;
+		let deserialized: TxFilter = serde_json::from_str(s).unwrap();
+			assert_eq!(deserialized, TxFilter {
+				transaction_hash: "0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+		});
+	}
+
+	#[test]
+	fn filter_conversion() {
+		let filter = TxFilter {
+			transactionHash: "0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+		};
+
+		let eth_filter: EthTxFilter = filter.into();
+
+		assert_eq!(eth_filter, EthTxFilter {
+			transactionHash: "0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b"
+		});
+	}
 }
