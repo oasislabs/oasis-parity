@@ -18,6 +18,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::{Error, DeserializeOwned};
 use serde_json::{Value, from_value};
 use ethcore::filter::Filter as EthFilter;
+use ethcore::filter::TxFilter as EthTxFilter;
 use ethcore::ids::BlockId;
 use v1::types::{BlockNumber, H160, H256, Log};
 
@@ -116,6 +117,26 @@ pub enum FilterChanges {
 	Empty,
 }
 
+/// TxFilter is a filter for transactions
+#[derive(Debug, PartialEq, Clone, Deserialize, Eq, Hash)]
+#[serde(deny_unknown_fields)]
+pub struct TxFilter {
+	/// Transaction hash.
+	#[serde(rename="transactionHash")]
+	pub transaction_hash: Option<H256>
+}
+
+impl Into<EthTxFilter> for TxFilter {
+	fn into(self) -> EthTxFilter {
+		EthTxFilter {
+			transaction_hash: match self.transaction_hash {
+				Some(hash) => Some(hash.into()),
+				None => None,
+			}
+		}
+	}
+}
+
 impl Serialize for FilterChanges {
 	fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error> where S: Serializer {
 		match *self {
@@ -189,6 +210,28 @@ mod tests {
 				None,
 			],
 			limit: None,
+		});
+	}
+
+	#[test]
+	fn tx_filter_deserialization() {
+		let s = r#"{"transactionHash":"0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b"}"#;
+		let deserialized: TxFilter = serde_json::from_str(s).unwrap();
+			assert_eq!(deserialized, TxFilter {
+				transaction_hash: "0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+		});
+	}
+
+	#[test]
+	fn filter_conversion() {
+		let filter = TxFilter {
+			transactionHash: "0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+		};
+
+		let eth_filter: EthTxFilter = filter.into();
+
+		assert_eq!(eth_filter, EthTxFilter {
+			transactionHash: "0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b"
 		});
 	}
 }

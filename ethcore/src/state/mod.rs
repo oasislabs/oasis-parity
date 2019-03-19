@@ -769,8 +769,8 @@ impl<B: Backend> State<B> {
 		self.set_storage_bytes(a, key, value.to_vec())
 	}
 
-    /// Sets the given key value pair directly into the contract's storage trie. Encrypts
-    /// the value if in a confidential ctx.
+	/// Sets the given key value pair directly into the contract's storage trie. Encrypts
+	/// the value if in a confidential ctx.
 	pub fn set_storage_bytes(&mut self, a: &Address, key: H256, value: Vec<u8>) -> trie::Result<()> {
 		trace!(target: "state", "set_storage({}:{:x} to {:?})", a, key, value);
 		let key = self.to_storage_key(&key);
@@ -803,14 +803,35 @@ impl<B: Backend> State<B> {
 
 	/// Execute a given transaction, producing a receipt and an optional trace.
 	/// This will change the state accordingly.
-	pub fn apply(&mut self, env_info: &EnvInfo, machine: &Machine, t: &SignedTransaction, tracing: bool) -> ApplyResult<FlatTrace, VMTrace> {
+	pub fn apply(&mut self, env_info: &EnvInfo, machine: &Machine, t: &SignedTransaction, tracing: bool, should_return_value: bool) -> ApplyResult<FlatTrace, VMTrace> {
 		if tracing {
 			let options = TransactOptions::with_tracing();
-			self.apply_with_tracing(env_info, machine, t, options.tracer, options.vm_tracer, options.ext_tracer)
+			self.apply_with_tracing(env_info, machine, t, options.tracer, options.vm_tracer, options.ext_tracer, should_return_value)
 		} else {
 			let options = TransactOptions::with_no_tracing();
-			self.apply_with_tracing(env_info, machine, t, options.tracer, options.vm_tracer, options.ext_tracer)
+			self.apply_with_tracing(env_info, machine, t, options.tracer, options.vm_tracer, options.ext_tracer, should_return_value)
 		}
+	}
+
+	fn get_options<T, V, X>(
+		tracer: T,
+		vm_tracer: V,
+		ext_tracer: X,
+		benchmarking: bool,
+		should_return_value: bool
+	) -> TransactOptions<T, V, X> {
+		let mut options = match benchmarking {
+			true => TransactOptions::new(tracer, vm_tracer, ext_tracer).dont_check_nonce(),
+			false => TransactOptions::new(tracer, vm_tracer, ext_tracer)
+		};
+
+		let options = if should_return_value {
+			options.save_output_from_contract()
+		} else {
+			options
+		};
+
+		return options
 	}
 
 	/// Execute a given transaction with given tracer and VM tracer producing a receipt and an optional trace.
@@ -823,15 +844,15 @@ impl<B: Backend> State<B> {
 		tracer: T,
 		vm_tracer: V,
 		ext_tracer: X,
+		should_return_value: bool
 	) -> ApplyResult<T::Output, V::Output> where
 		T: trace::Tracer,
 		V: trace::VMTracer,
 		X: ExtTracer,
 	{
-		let options = match machine.params().benchmarking {
-			true => TransactOptions::new(tracer, vm_tracer, ext_tracer).dont_check_nonce(),
-			false => TransactOptions::new(tracer, vm_tracer, ext_tracer)
-		};
+		let options = Self::get_options(tracer, vm_tracer, ext_tracer,
+			machine.params().benchmarking, should_return_value);
+
 		let e = self.execute(env_info, machine, t, options, false)?;
 		let params = machine.params();
 
@@ -1364,6 +1385,8 @@ mod tests {
 	use ethereum_types::{H256, U256, Address};
 	use test_helpers::{get_temp_state, get_temp_state_db};
 	use machine::EthereumMachine;
+	use state::State;
+	use state_db::StateDB;
 	use vm::EnvInfo;
 	use spec::*;
 	use transaction::*;
@@ -1405,7 +1428,7 @@ mod tests {
 		}.sign(&secret(), None);
 
 		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
-		let result = state.apply(&info, &machine, &t, true).unwrap();
+		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
 			subtraces: 0,
@@ -1463,7 +1486,7 @@ mod tests {
 		}.sign(&secret(), None);
 
 		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
-		let result = state.apply(&info, &machine, &t, true).unwrap();
+		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
 			action: trace::Action::Create(trace::Create {
@@ -1474,6 +1497,7 @@ mod tests {
 			}),
 			result: trace::Res::FailedCreate(TraceError::OutOfGas),
 			subtraces: 0
+
 		}];
 
 		assert_eq!(result.trace, expected_trace);
@@ -1500,7 +1524,7 @@ mod tests {
 
 		state.init_code(&0xa.into(), FromHex::from_hex("6000").unwrap()).unwrap();
 		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
-		let result = state.apply(&info, &machine, &t, true).unwrap();
+		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
 			action: trace::Action::Call(trace::Call {
@@ -1541,7 +1565,7 @@ mod tests {
 		}.sign(&secret(), None);
 
 		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
-		let result = state.apply(&info, &machine, &t, true).unwrap();
+		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
 			action: trace::Action::Call(trace::Call {
@@ -1581,7 +1605,7 @@ mod tests {
 			data: vec![],
 		}.sign(&secret(), None);
 
-		let result = state.apply(&info, &machine, &t, true).unwrap();
+		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
@@ -1623,7 +1647,7 @@ mod tests {
 		}.sign(&secret(), None);
 
 		state.init_code(&0xa.into(), FromHex::from_hex("600060006000600060006001610be0f1").unwrap()).unwrap();
-		let result = state.apply(&info, &machine, &t, true).unwrap();
+		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
@@ -1666,7 +1690,7 @@ mod tests {
 
 		state.init_code(&0xa.into(), FromHex::from_hex("60006000600060006000600b611000f2").unwrap()).unwrap();
 		state.init_code(&0xb.into(), FromHex::from_hex("6000").unwrap()).unwrap();
-		let result = state.apply(&info, &machine, &t, true).unwrap();
+		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
@@ -1725,7 +1749,7 @@ mod tests {
 
 		state.init_code(&0xa.into(), FromHex::from_hex("6000600060006000600b618000f4").unwrap()).unwrap();
 		state.init_code(&0xb.into(), FromHex::from_hex("60056000526001601ff3").unwrap()).unwrap();
-		let result = state.apply(&info, &machine, &t, true).unwrap();
+		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
@@ -1783,7 +1807,7 @@ mod tests {
 
 		state.init_code(&0xa.into(), FromHex::from_hex("5b600056").unwrap()).unwrap();
 		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
-		let result = state.apply(&info, &machine, &t, true).unwrap();
+		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
 			action: trace::Action::Call(trace::Call {
@@ -1823,7 +1847,7 @@ mod tests {
 		state.init_code(&0xa.into(), FromHex::from_hex("60006000600060006000600b602b5a03f1").unwrap()).unwrap();
 		state.init_code(&0xb.into(), FromHex::from_hex("6000").unwrap()).unwrap();
 		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
-		let result = state.apply(&info, &machine, &t, true).unwrap();
+		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
@@ -1881,7 +1905,7 @@ mod tests {
 
 		state.init_code(&0xa.into(), FromHex::from_hex("60006000600060006045600b6000f1").unwrap()).unwrap();
 		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
-		let result = state.apply(&info, &machine, &t, true).unwrap();
+		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
 			subtraces: 1,
@@ -1935,7 +1959,7 @@ mod tests {
 
 		state.init_code(&0xa.into(), FromHex::from_hex("600060006000600060ff600b6000f1").unwrap()).unwrap();	// not enough funds.
 		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
-		let result = state.apply(&info, &machine, &t, true).unwrap();
+		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
 			subtraces: 0,
@@ -1978,7 +2002,7 @@ mod tests {
 		state.init_code(&0xa.into(), FromHex::from_hex("60006000600060006000600b602b5a03f1").unwrap()).unwrap();
 		state.init_code(&0xb.into(), FromHex::from_hex("5b600056").unwrap()).unwrap();
 		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
-		let result = state.apply(&info, &machine, &t, true).unwrap();
+		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
 			subtraces: 1,
@@ -2034,7 +2058,7 @@ mod tests {
 		state.init_code(&0xb.into(), FromHex::from_hex("60006000600060006000600c602b5a03f1").unwrap()).unwrap();
 		state.init_code(&0xc.into(), FromHex::from_hex("6000").unwrap()).unwrap();
 		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
-		let result = state.apply(&info, &machine, &t, true).unwrap();
+		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
 			subtraces: 1,
@@ -2108,7 +2132,7 @@ mod tests {
 		state.init_code(&0xb.into(), FromHex::from_hex("60006000600060006000600c602b5a03f1505b601256").unwrap()).unwrap();
 		state.init_code(&0xc.into(), FromHex::from_hex("6000").unwrap()).unwrap();
 		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
-		let result = state.apply(&info, &machine, &t, true).unwrap();
+		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
@@ -2179,7 +2203,7 @@ mod tests {
 		state.init_code(&0xa.into(), FromHex::from_hex("73000000000000000000000000000000000000000bff").unwrap()).unwrap();
 		state.add_balance(&0xa.into(), &50.into(), CleanupMode::NoEmpty).unwrap();
 		state.add_balance(&t.sender(), &100.into(), CleanupMode::NoEmpty).unwrap();
-		let result = state.apply(&info, &machine, &t, true).unwrap();
+		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
 			subtraces: 1,
@@ -2503,13 +2527,13 @@ mod tests {
 		assert_eq!(diff_map.len(), 1);
 		assert!(diff_map.get(&a).is_some());
 		assert_eq!(diff_map.get(&a),
-				   pod_account::diff_pod(Some(&PodAccount {
-					   balance: U256::from(100),
-					   nonce: U256::zero(),
-					   code: Some(Default::default()),
-					   storage_expiry: 0,
-					   storage: Default::default()
-				   }), None).as_ref());
+				pod_account::diff_pod(Some(&PodAccount {
+					balance: U256::from(100),
+					nonce: U256::zero(),
+					code: Some(Default::default()),
+					storage_expiry: 0,
+					storage: Default::default()
+				}), None).as_ref());
 	}
 
 	#[test]
@@ -2535,20 +2559,38 @@ mod tests {
 		assert_eq!(diff_map.len(), 1);
 		assert!(diff_map.get(&a).is_some());
 		assert_eq!(diff_map.get(&a),
-				   pod_account::diff_pod(Some(&PodAccount {
-					   balance: U256::zero(),
-					   nonce: U256::zero(),
-					   code: Some(Default::default()),
-					   storage: vec![(H256::from(&U256::from(1u64)), H256::from(&U256::from(20u64)).to_vec())]
-						   .into_iter().collect(),
-					   storage_expiry: 0,
-				   }), Some(&PodAccount {
-					   balance: U256::zero(),
-					   nonce: U256::zero(),
-					   code: Some(Default::default()),
-					   storage: vec![(H256::from(&U256::from(1u64)), H256::from(&U256::from(100u64)).to_vec())]
-						   .into_iter().collect(),
-					   storage_expiry: 0,
-				   })).as_ref());
+				pod_account::diff_pod(Some(&PodAccount {
+					balance: U256::zero(),
+					nonce: U256::zero(),
+					code: Some(Default::default()),
+					storage: vec![(H256::from(&U256::from(1u64)), H256::from(&U256::from(20u64)).to_vec())]
+						.into_iter().collect(),
+					storage_expiry: 0,
+				}), Some(&PodAccount {
+					balance: U256::zero(),
+					nonce: U256::zero(),
+					code: Some(Default::default()),
+					storage: vec![(H256::from(&U256::from(1u64)), H256::from(&U256::from(100u64)).to_vec())]
+						.into_iter().collect(),
+					storage_expiry: 0,
+				})).as_ref());
+	}
+
+	#[test]
+	fn should_have_output_from_init_contract() {
+		let base_options = TransactOptions::with_tracing();
+		let options = State::<StateDB>::get_options(base_options.tracer , base_options.vm_tracer,
+			base_options.ext_tracer, false, true);
+
+		assert_eq!(options.output_from_init_contract, true);
+		}
+
+	#[test]
+	fn should_not_have_output_from_init_contract() {
+		let base_options = TransactOptions::with_tracing();
+		let options = State::<StateDB>::get_options(base_options.tracer , base_options.vm_tracer,
+			base_options.ext_tracer, false, false);
+
+		assert_eq!(options.output_from_init_contract, false);
 	}
 }

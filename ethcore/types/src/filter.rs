@@ -20,6 +20,24 @@ use ethereum_types::{H256, Address, Bloom, BloomInput};
 use ids::BlockId;
 use log_entry::LogEntry;
 
+/// TxFilter is a filter for transactions.
+pub struct TxFilter {
+	/// Transaction hash.
+	///
+	/// If None, all transactions match, otherwise only
+	/// the transaction with the specific hash will match
+	pub transaction_hash: Option<H256>
+}
+
+impl TxFilter {
+	pub fn matches(&self, transaction_hash: &H256) -> bool {
+		match self.transaction_hash {
+			Some(hash) => *transaction_hash == hash,
+			None => true
+		}
+	}
+}
+
 /// Blockchain Filter.
 #[derive(Debug, PartialEq)]
 pub struct Filter {
@@ -110,7 +128,7 @@ impl Filter {
 #[cfg(test)]
 mod tests {
 	use ethereum_types::Bloom;
-	use filter::Filter;
+	use filter::{Filter, TxFilter};
 	use ids::BlockId;
 	use log_entry::LogEntry;
 
@@ -174,8 +192,8 @@ mod tests {
 			from_block: BlockId::Earliest,
 			to_block: BlockId::Latest,
 			address: Some(vec![
-						  "b372018f3be9e171df0581136b59d2faf73a7d5d".into(),
-						  "b372018f3be9e171df0581136b59d2faf73a7d5d".into(),
+				"b372018f3be9e171df0581136b59d2faf73a7d5d".into(),
+				"b372018f3be9e171df0581136b59d2faf73a7d5d".into(),
 			]),
 			topics: vec![
 				Some(vec![
@@ -245,4 +263,17 @@ mod tests {
 		assert_eq!(filter.matches(&entry1), false);
 		assert_eq!(filter.matches(&entry2), false);
 	}
+
+    #[test]
+    fn test_tx_filter_matches() {
+        let filter = TxFilter{
+            transaction_hash: Some("0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into()),
+        };
+
+        assert_eq!(filter.matches("0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into()), true);
+        assert_eq!(filter.matches("0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6e1234".into()), false);
+        assert_eq!(TxFilter{
+            transaction_hash: None,
+        }.matches("0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into()), false)
+    }
 }

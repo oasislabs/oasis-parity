@@ -19,7 +19,7 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::Error;
 use serde_json::{Value, from_value};
-use v1::types::{RichHeader, Filter, Log, H256};
+use v1::types::{RichHeader, Filter, Log, H256, TxFilter, TransactionOutcome};
 
 /// Subscription result.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,6 +30,8 @@ pub enum Result {
 	Log(Log),
 	/// Transaction hash
 	TransactionHash(H256),
+	/// Transaction outcome
+	TransactionOutcome(TransactionOutcome)
 }
 
 impl Serialize for Result {
@@ -40,6 +42,7 @@ impl Serialize for Result {
 			Result::Header(ref header) => header.serialize(serializer),
 			Result::Log(ref log) => log.serialize(serializer),
 			Result::TransactionHash(ref hash) => hash.serialize(serializer),
+			Result::TransactionOutcome(ref outcome) => outcome.serialize(serializer),
 		}
 	}
 }
@@ -72,6 +75,8 @@ pub enum Params {
 	None,
 	/// Log parameters.
 	Logs(Filter),
+	/// Transaction filter parameters.
+	Transaction(TxFilter),
 }
 
 impl Default for Params {
@@ -89,8 +94,13 @@ impl<'a> Deserialize<'a> for Params {
 			return Ok(Params::None);
 		}
 
-		from_value(v.clone()).map(Params::Logs)
-			.map_err(|e| D::Error::custom(format!("Invalid Pub-Sub parameters: {}", e)))
+		let result_logs = from_value(v.clone()).map(Params::Logs)
+			.map_err(|e| D::Error::custom(format!("Invalid Pub-Sub parameters: {}", e)));
+		let result_tx = from_value(v.clone()).map(Params::Transaction)
+			.map_err(|e| D::Error::custom(format!("Invalid Pub-Sub parameters: {}", e)));
+
+		if result_tx.is_ok() { result_tx }
+		else { result_logs }
 	}
 }
 
@@ -107,6 +117,24 @@ mod tests {
 		assert_eq!(serde_json::from_str::<Kind>(r#""logs""#).unwrap(), Kind::Logs);
 		assert_eq!(serde_json::from_str::<Kind>(r#""newPendingTransactions""#).unwrap(), Kind::NewPendingTransactions);
 		assert_eq!(serde_json::from_str::<Kind>(r#""syncing""#).unwrap(), Kind::Syncing);
+		assert_eq!(serde_json::from_str::<Kind>(r#""completedTransaction""#).unwrap(), Kind::CompletedTransaction);
+	}
+
+	#[test]
+	fn should_deserialize_transaction() {
+		let none = serde_json::from_str::<Params>(r#"null"#).unwrap();
+		assert_eq!(none, Params::None);
+
+		let transaction1 = serde_json::from_str::<Params>(r#"{}"#).unwrap();
+		let transaction2 = serde_json::from_str::<Params>(r#"{"transactionHash":"0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b"}"#).unwrap();
+
+		assert_eq!(transaction1, Params::Transaction(TxFilter {
+			transactionHash: None,
+		}));
+
+		assert_eq!(transaction2, Params::Transaction(TxFilter {
+			transactionHash: "0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+		}));
 	}
 
 	#[test]
