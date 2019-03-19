@@ -27,7 +27,7 @@ pub enum Result {
 	/// New block header.
 	Header(RichHeader),
 	/// Log
-  Log(Log),
+	Log(Log),
 	/// Transaction hash
 	TransactionHash(H256),
 	/// Transaction outcome
