@@ -127,13 +127,18 @@ mod tests {
 
 		let transaction1 = serde_json::from_str::<Params>(r#"{}"#).unwrap();
 		let transaction2 = serde_json::from_str::<Params>(r#"{"transactionHash":"0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b"}"#).unwrap();
+		let transaction3 = serde_json::from_str::<Params>(r#"{"transactionHash":"0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b", "fromAddress": "b372018f3be9e171df0581136b59d2faf73a7d5d"}"#).unwrap();
 
 		assert_eq!(transaction1, Params::Transaction(TxFilter {
 			transactionHash: None,
 		}));
 
 		assert_eq!(transaction2, Params::Transaction(TxFilter {
-			transactionHash: "0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+			transactionHash: Some("0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into()),
+		}));
+		assert_eq!(transaction3, Params::Transaction(TxFilter {
+			transactionHash: Some("0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into()),
+			fromAddress: Some("b372018f3be9e171df0581136b59d2faf73a7d5d".into()),
 		}));
 	}
 
