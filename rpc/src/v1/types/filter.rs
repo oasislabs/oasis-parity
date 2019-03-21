@@ -20,6 +20,7 @@ use serde_json::{Value, from_value};
 use ethcore::filter::Filter as EthFilter;
 use ethcore::filter::TxFilter as EthTxFilter;
 use ethcore::ids::BlockId;
+use ethereum_types::Address;
 use v1::types::{BlockNumber, H160, H256, Log};
 
 /// Variadic value
@@ -123,7 +124,11 @@ pub enum FilterChanges {
 pub struct TxFilter {
 	/// Transaction hash.
 	#[serde(rename="transactionHash")]
-	pub transaction_hash: Option<H256>
+	pub transaction_hash: Option<H256>,
+
+	/// From address
+	#[serde(rename="fromAddress")]
+	pub from_address: Option<Address>
 }
 
 impl Into<EthTxFilter> for TxFilter {
@@ -131,6 +136,10 @@ impl Into<EthTxFilter> for TxFilter {
 		EthTxFilter {
 			transaction_hash: match self.transaction_hash {
 				Some(hash) => Some(hash.into()),
+				None => None,
+			},
+			from_address: match self.from_address {
+				Some(from_address) => Some(from_address),
 				None => None,
 			}
 		}
@@ -162,12 +171,12 @@ mod tests {
 		let s = r#"["0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b", null, ["0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b", "0x0000000000000000000000000aff3454fce5edbc8cca8697c15331677e6ebccc"]]"#;
 		let deserialized: Vec<Topic> = serde_json::from_str(s).unwrap();
 		assert_eq!(deserialized, vec![
-				   VariadicValue::Single(H256::from_str("000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b").unwrap().into()),
-				   VariadicValue::Null,
-				   VariadicValue::Multiple(vec![
-								   H256::from_str("000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b").unwrap().into(),
-								   H256::from_str("0000000000000000000000000aff3454fce5edbc8cca8697c15331677e6ebccc").unwrap().into(),
-				   ])
+				VariadicValue::Single(H256::from_str("000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b").unwrap().into()),
+				VariadicValue::Null,
+				VariadicValue::Multiple(vec![
+								H256::from_str("000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b").unwrap().into(),
+								H256::from_str("0000000000000000000000000aff3454fce5edbc8cca8697c15331677e6ebccc").unwrap().into(),
+				])
 		]);
 	}
 

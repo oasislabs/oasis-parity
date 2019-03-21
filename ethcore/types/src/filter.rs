@@ -20,21 +20,42 @@ use ethereum_types::{H256, Address, Bloom, BloomInput};
 use ids::BlockId;
 use log_entry::LogEntry;
 
-/// TxFilter is a filter for transactions.
+/// TxEntry represents the transaction fields that could be
+/// used for filtering on a TxFilter
+pub struct TxEntry {
+	pub transaction_hash: H256,
+	pub from_address: Address,
+}
+
+/// TxFilter is a filter for transactions. If no
+/// parameters are set for the TxFilter, there is
+/// no match
 pub struct TxFilter {
 	/// Transaction hash.
 	///
 	/// If None, all transactions match, otherwise only
 	/// the transaction with the specific hash will match
-	pub transaction_hash: Option<H256>
+	pub transaction_hash: Option<H256>,
+
+	/// From address of a transaction.
+	/// If None, all transactions match. Otherwise only transactions
+	/// originated by the specified from address match
+	pub from_address: Option<Address>
 }
 
 impl TxFilter {
-	pub fn matches(&self, transaction_hash: &H256) -> bool {
+	pub fn matches(&self, entry: &TxEntry) -> bool {
 		match self.transaction_hash {
-			Some(hash) => *transaction_hash == hash,
-			None => true
+			Some(hash) => return entry.transaction_hash == hash,
+			_ => { }
 		}
+
+		match self.from_address {
+			Some(from) => return from == entry.from_address,
+			_ => { }
+		}
+
+		false
 	}
 }
 
@@ -128,7 +149,7 @@ impl Filter {
 #[cfg(test)]
 mod tests {
 	use ethereum_types::Bloom;
-	use filter::{Filter, TxFilter};
+	use filter::{Filter, TxFilter, TxEntry};
 	use ids::BlockId;
 	use log_entry::LogEntry;
 
@@ -264,16 +285,44 @@ mod tests {
 		assert_eq!(filter.matches(&entry2), false);
 	}
 
-    #[test]
-    fn test_tx_filter_matches() {
-        let filter = TxFilter{
-            transaction_hash: Some("0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into()),
-        };
+	#[test]
+	fn test_tx_filter_transaction_hash_matches() {
+		let filter = TxFilter{
+			transaction_hash: Some("0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into()),
+			from_address: None,
+		};
 
-        assert_eq!(filter.matches("0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into()), true);
-        assert_eq!(filter.matches("0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6e1234".into()), false);
-        assert_eq!(TxFilter{
-            transaction_hash: None,
-        }.matches("0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into()), false)
-    }
+		assert_eq!(filter.matches(&TxEntry{
+			transaction_hash: "0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into(),
+			from_address: "b372018f3be9e171df0581136b59d2faf73a7d5d".into(),
+		}), true);
+		assert_eq!(filter.matches(&TxEntry{
+			transaction_hash: "0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6e1234".into(),
+			from_address: "b372018f3be9e171df0581136b59d2faf73a7d5d".into(),
+		}), false);
+		assert_eq!(TxFilter{
+			transaction_hash: None,
+			from_address: None
+		}.matches(&TxEntry{
+			transaction_hash: "0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6e1234".into(),
+			from_address: "b372018f3be9e171df0581136b59d2faf73a7d5d".into(),
+		}), false)
+	}
+
+	#[test]
+	fn test_tx_filter_transaction_from_address_matches() {
+		let filter = TxFilter{
+			transaction_hash: None,
+			from_address: Some("b372018f3be9e171df0581136b59d2faf73a7d5d".into()),
+		};
+
+		assert_eq!(filter.matches(&TxEntry{
+			transaction_hash: "0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into(),
+			from_address: "b372018f3be9e171df0581136b59d2faf73a7d5d".into(),
+		}), true);
+		assert_eq!(filter.matches(&TxEntry{
+			transaction_hash: "0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into(),
+			from_address: "b372018f3be9e171df0581136b59d2faf73a1234".into(),
+		}), false);
+	}
 }
