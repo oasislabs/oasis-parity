@@ -118,6 +118,7 @@ extern crate memory_cache;
 pub extern crate journaldb;
 #[cfg(test)]
 extern crate tempdir;
+extern crate failure;
 
 #[macro_use]
 extern crate ethabi_derive;

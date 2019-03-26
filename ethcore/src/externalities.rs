@@ -478,7 +478,7 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 			.as_ref()
 			.unwrap()
 			.create_long_term_public_key(contract)
-			.map_err(|err| vm::Error::Internal(err))
+			.map_err(|err| vm::Error::Internal(format!("{}", err)))
 	}
 
 	fn open_confidential_ctx(&mut self, contract: Address, encrypted_data: Option<Vec<u8>>) -> vm::Result<Vec<u8>> {
@@ -492,7 +492,7 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 			.as_mut()
 			.unwrap()
 			.open(contract, encrypted_data)
-			.map_err(|err| vm::Error::Internal(err))
+			.map_err(|err| vm::Error::Internal(format!("{}", err)))
 	}
 
 	fn encrypt(&mut self, data: Vec<u8>) -> vm::Result<Vec<u8>> {

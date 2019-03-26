@@ -70,6 +70,7 @@ triehash = { path = "../util/triehash" }
 unexpected = { path = "../util/unexpected" }
 journaldb = { path = "../util/journaldb" }
 siphasher = "0.1.1"
+failure = "0.1.5"
 
 [dev-dependencies]
 tempdir = "0.3"
