@@ -185,5 +185,5 @@ pub trait Ext {
 	/// Allocates and returns the long term public key associated with the given contract.
 	/// To be called upon creation of the contract. Returns a tuple containing the
 	/// long term public key and a signature over the key by the KeyManager.
-	fn create_long_term_public_key(&self, contract: Address) -> Result<(Vec<u8>, Vec<u8>)>;
+	fn create_long_term_public_key(&mut self, contract: Address) -> Result<(Vec<u8>, Vec<u8>)>;
 }

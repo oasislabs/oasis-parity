@@ -252,7 +252,7 @@ impl Ext for FakeExt {
 		self.tracing
 	}
 
-	fn create_long_term_public_key(&self, contract: Address) -> Result<(Vec<u8>, Vec<u8>)> {
+	fn create_long_term_public_key(&mut self, contract: Address) -> Result<(Vec<u8>, Vec<u8>)> {
 		Ok((vec![], vec![]))
 	}
 }
