@@ -213,6 +213,16 @@ pub mod signatures {
 		None,
 	);
 
+	pub const FETCH_RETURN: StaticSignature = StaticSignature(
+		&[I32],
+		None,
+	);
+
+	pub const RETURN_LENGTH: StaticSignature = StaticSignature(
+		&[],
+		Some(I32),
+	);
+
 	impl Into<wasmi::Signature> for StaticSignature {
 		fn into(self) -> wasmi::Signature {
 			wasmi::Signature::new(self.0, self.1)
