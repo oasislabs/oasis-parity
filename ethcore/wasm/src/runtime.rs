@@ -380,7 +380,7 @@ impl<'a> Runtime<'a> {
 		let return_length = self.result.len() as u64;
 		self.charge(|s| return_length * s.wasm().memcpy as u64)?;
 
-		self.memory.set(ptr, &self.result[..]?);
+		self.memory.set(ptr, &self.result[..])?;
 		Ok(())
 	}
 
@@ -560,7 +560,7 @@ impl<'a> Runtime<'a> {
 						/ self.ext.schedule().wasm().opcodes_mul as u64;
 
 				self.memory.set(result_ptr, &result)?;
-				self.result = result.clone();
+				self.result = result;
 				Ok(0i32.into())
 			},
 			vm::MessageCallResult::Reverted(gas_left, _) => {
