@@ -50,6 +50,8 @@ pub mod ids {
 	pub const GET_BYTES_FUNC: usize = 220;
 	pub const GET_BYTES_LEN_FUNC: usize = 230;
 	pub const SET_BYTES_FUNC: usize = 240;
+	pub const RETURN_LENGTH_FUNC: usize = 250;
+	pub const FETCH_RETURN_FUNC: usize = 260;
 
 	pub const PANIC_FUNC: usize = 1000;
 	pub const DEBUG_FUNC: usize = 1010;

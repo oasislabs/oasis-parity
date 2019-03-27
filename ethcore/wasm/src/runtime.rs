@@ -353,7 +353,7 @@ impl<'a> Runtime<'a> {
 	}
 
 	/// Query the length of the input bytes
-	fn input_legnth(&mut self) -> RuntimeValue {
+	fn input_length(&mut self) -> RuntimeValue {
 		RuntimeValue::I32(self.args.len() as i32)
 	}
 
@@ -365,6 +365,22 @@ impl<'a> Runtime<'a> {
 		self.charge(|s| args_len * s.wasm().memcpy as u64)?;
 
 		self.memory.set(ptr, &self.args[..])?;
+		Ok(())
+	}
+
+	/// Query the length of the return bytes
+	fn return_length(&mut self) -> RuntimeValue {
+		RuntimeValue::I32(self.result.len() as i32)
+	}
+
+	/// Write return bytes to the memory location using the passed pointer
+	fn fetch_return(&mut self, args: RuntimeArgs) -> Result<()> {
+		let ptr: u32 = args.nth_checked(0)?;
+
+		let return_length = self.result.len() as u64;
+		self.charge(|s| return_length * s.wasm().memcpy as u64)?;
+
+		self.memory.set(ptr, &self.result[..]?);
 		Ok(())
 	}
 
@@ -544,6 +560,7 @@ impl<'a> Runtime<'a> {
 						/ self.ext.schedule().wasm().opcodes_mul as u64;
 
 				self.memory.set(result_ptr, &result)?;
+				self.result = result.clone();
 				Ok(0i32.into())
 			},
 			vm::MessageCallResult::Reverted(gas_left, _) => {
@@ -871,7 +888,7 @@ mod ext_impl {
 				STORAGE_READ_FUNC => void!(self.storage_read(args)),
 				RET_FUNC => void!(self.ret(args)),
 				GAS_FUNC => void!(self.gas(args)),
-				INPUT_LENGTH_FUNC => cast!(self.input_legnth()),
+				INPUT_LENGTH_FUNC => cast!(self.input_length()),
 				FETCH_INPUT_FUNC => void!(self.fetch_input(args)),
 				PANIC_FUNC => void!(self.panic(args)),
 				DEBUG_FUNC => void!(self.debug(args)),
@@ -896,6 +913,8 @@ mod ext_impl {
 				GET_BYTES_FUNC => void!(self.get_bytes(args)),
 				GET_BYTES_LEN_FUNC => some!(self.get_bytes_len(args)),
 				SET_BYTES_FUNC => void!(self.set_bytes(args)),
+				RETURN_LENGTH_FUNC => cast!(self.return_length()),
+				FETCH_RETURN_FUNC => void!(self.fetch_return(args)),
 				_ => panic!("env module doesn't provide function at index {}", index),
 			}
 		}
