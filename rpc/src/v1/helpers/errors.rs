@@ -130,7 +130,7 @@ pub fn invalid_params<T: fmt::Debug>(param: &str, details: T) -> Error {
 pub fn execution<T: fmt::Debug>(data: T) -> Error {
 	Error {
 		code: ErrorCode::ServerError(codes::EXECUTION_ERROR),
-		message: "Transaction execution error.".into(),
+		message: format!("Transaction execution error with cause {:?}", data),
 		data: Some(Value::String(format!("{:?}", data))),
 	}
 }

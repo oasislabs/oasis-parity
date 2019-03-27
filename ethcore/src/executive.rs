@@ -436,8 +436,8 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		if let Some(ref code) = params.code {
 			if code.len() > 0 && self.info.timestamp > self.state.storage_expiry(&params.code_address)? {
 				let trace_info = tracer.prepare_trace_call(&params);
-				tracer.trace_failed_call(trace_info, vec![], vm::Error::Reverted.into());
-				return Err(vm::Error::Reverted);
+				tracer.trace_failed_call(trace_info, vec![], vm::Error::ContractExpired.into());
+				return Err(vm::Error::ContractExpired);
 			}
 		}
 
@@ -550,7 +550,6 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					Ok(_) => tracer.trace_failed_call(trace_info, traces, vm::Error::Reverted.into()),
 					Err(ref e) => tracer.trace_failed_call(trace_info, traces, e.into()),
 				};
-
 				trace!(target: "executive", "substate={:?}; unconfirmed_substate={:?}\n", substate, unconfirmed_substate);
 
 				self.enact_result(&res, substate, unconfirmed_substate);
@@ -614,8 +613,8 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		// Fail immediately if requested expiry has passed.
 		if self.info.timestamp > storage_expiry {
 			let trace_info = tracer.prepare_trace_create(&params);
-			tracer.trace_failed_create(trace_info, vec![], vm::Error::Reverted.into());
-			return Err(vm::Error::Reverted);
+			tracer.trace_failed_create(trace_info, vec![], vm::Error::ContractExpired.into());
+			return Err(vm::Error::ContractExpired);
 		}
 
 		// create contract and transfer value to it if necessary
@@ -759,6 +758,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 				| Err(vm::Error::MutableCallInStaticContext)
 				| Err(vm::Error::OutOfBounds)
 				| Err(vm::Error::Reverted)
+				| Err(vm::Error::ContractExpired)
 				| Ok(FinalizationResult { apply_state: false, .. }) => {
 					self.state.revert_to_checkpoint();
 			},

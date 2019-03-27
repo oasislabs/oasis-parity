@@ -861,9 +861,14 @@ impl<B: Backend> State<B> {
 			eip658 ||
 			(env_info.number >= params.eip98_transition && env_info.number >= params.validate_receipts_transition);
 
+		let result = if e.exception.is_some() { 0 } else { 1 };
+		info!(target: "state", "call_type: TransactionExecuted, \
+			sender: {:?}, transaction_hash: {:?}, success: {:?}, error: {:?}",
+			t.sender(), &t.hash(), e.exception.is_none(), e.exception);
+
 		let outcome = if no_intermediate_commits {
 			if eip658 {
-				TransactionOutcome::StatusCode(if e.exception.is_some() { 0 } else { 1 })
+				TransactionOutcome::StatusCode(result)
 			} else {
 				TransactionOutcome::Unknown
 			}

@@ -47,6 +47,8 @@ pub enum Error {
 	OutOfBounds,
 	/// Execution has been reverted with REVERT instruction.
 	Reverted,
+	/// Execution could not be performed because contract expired
+	ContractExpired,
 }
 
 impl<'a> From<&'a VmError> for Error {
@@ -63,6 +65,7 @@ impl<'a> From<&'a VmError> for Error {
 			VmError::MutableCallInStaticContext => Error::MutableCallInStaticContext,
 			VmError::OutOfBounds => Error::OutOfBounds,
 			VmError::Reverted => Error::Reverted,
+			VmError::ContractExpired => Error::ContractExpired
 		}
 	}
 }
@@ -88,6 +91,7 @@ impl fmt::Display for Error {
 			MutableCallInStaticContext => "Mutable Call In Static Context",
 			OutOfBounds => "Out of bounds",
 			Reverted => "Reverted",
+			ContractExpired => "Contract expired",
 		};
 		message.fmt(f)
 	}
@@ -108,6 +112,7 @@ impl Encodable for Error {
 			Wasm => 8,
 			OutOfBounds => 9,
 			Reverted => 10,
+			ContractExpired => 11,
 		};
 
 		s.append_internal(&value);
@@ -130,6 +135,7 @@ impl Decodable for Error {
 			8 => Ok(Wasm),
 			9 => Ok(OutOfBounds),
 			10 => Ok(Reverted),
+			11 => Ok(ContractExpired),
 			_ => Err(DecoderError::Custom("Invalid error type")),
 		}
 	}
