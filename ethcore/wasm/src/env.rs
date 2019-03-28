@@ -290,6 +290,8 @@ impl wasmi::ModuleImportResolver for ImportResolver {
 			"gas" => host(signatures::GAS, ids::GAS_FUNC),
 			"input_length" => host(signatures::INPUT_LENGTH, ids::INPUT_LENGTH_FUNC),
 			"fetch_input" => host(signatures::FETCH_INPUT, ids::FETCH_INPUT_FUNC),
+			"return_length" => host(signatures::RETURN_LENGTH, ids::RETURN_LENGTH_FUNC),
+			"fetch_return" => host(signatures::FETCH_RETURN, ids::FETCH_RETURN_FUNC),
 			"panic" => host(signatures::PANIC, ids::PANIC_FUNC),
 			"debug" => host(signatures::DEBUG, ids::DEBUG_FUNC),
 			"ccall" => host(signatures::CCALL, ids::CCALL_FUNC),
