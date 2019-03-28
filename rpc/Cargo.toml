@@ -43,7 +43,7 @@ ethcore-devtools = { path = "../devtools" }
 ethcore-io = { path = "../util/io" }
 #ethcore-light = { path = "../ethcore/light" }
 ethcore-logger = { path = "../logger" }
-ethcore-miner = { path = "../miner" }
+#ethcore-miner = { path = "../miner" }
 #ethcore-private-tx = { path = "../ethcore/private-tx" }
 #ethcore-sync = { path = "../ethcore/sync" }
 ethcore-transaction = { path = "../ethcore/transaction" }
@@ -52,7 +52,7 @@ ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ek
 ethjson = { path = "../json" }
 ethkey = { path = "../ethkey" }
 #ethstore = { path = "../ethstore" }
-fetch = { path = "../util/fetch" }
+#fetch = { path = "../util/fetch" }
 #hardware-wallet = { path = "../hw" }
 keccak-hash = { path = "../util/hash" }
 node-health = { path = "../dapps/node-health" }
