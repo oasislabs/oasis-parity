@@ -998,3 +998,11 @@ fn syscall() {
 		}).expect_err("invalid index");
 	}
 }
+
+#[test]
+fn fetch_return() {
+	ethcore_logger::init_log();
+
+	let (_gas_left, result) = reqrep_test!("fetch_return.wasm", Vec::new()).expect("fetch_return failed");
+	assert_eq!(result.as_slice(), [1u8; 257]);
+}
