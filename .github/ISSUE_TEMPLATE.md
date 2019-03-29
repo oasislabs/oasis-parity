@@ -1,13 +1,8 @@
-_Before filing a new issue, please **provide the following information**._
+_A clear and concise description of what the task/bug is._
 
-> I'm running:
->
-> - **Which Parity version?**: 0.0.0
-> - **Which operating system?**: Windows / MacOS / Linux
-> - **How installed?**: via installer / homebrew / binaries / from source
-> - **Are you fully synchronized?**: no / yes
-> - **Which network are you connected to?**: ethereum / ropsten / kovan / ...
-> - **Did you try to restart the node?**: no / yes
+## Details
 
-_Your issue description goes here below. Try to include **actual** vs. **expected behavior** and **steps to reproduce** the issue._
+Add any other context about the problem here.
 
+## Acceptance Criteria
+* What indicates the issue is resolved?
