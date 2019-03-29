@@ -32,3 +32,7 @@ collaborators:
   - username: peterjgilbert
     permission: admin
   
+  # armaniferrante is the owner of this repository
+  - username: armaniferrante
+    permission: admin
+  
