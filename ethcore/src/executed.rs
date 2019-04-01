@@ -129,25 +129,23 @@ impl fmt::Display for ExecutionError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		use self::ExecutionError::*;
 
-		let msg = match *self {
+		match *self {
 			NotEnoughBaseGas { ref required, ref got } =>
-				format!("Not enough base gas. {} is required, but only {} paid", required, got),
+				write!(f, "Not enough base gas. {} is required, but only {} paid", required, got),
 			BlockGasLimitReached { ref gas_limit, ref gas_used, ref gas } =>
-				format!("Block gas limit reached. The limit is {}, {} has \
+				write!(f, "Block gas limit reached. The limit is {}, {} has \
 					already been used, and {} more is required", gas_limit, gas_used, gas),
 			InvalidNonce { ref expected, ref got } =>
-				format!("Invalid transaction nonce: expected {}, found {}", expected, got),
+				write!(f, "Invalid transaction nonce: expected {}, found {}", expected, got),
 			NotEnoughCash { ref required, ref got } =>
-				format!("Cost of transaction exceeds sender balance. {} is required \
+				write!(f, "Cost of transaction exceeds sender balance. {} is required \
 					but the sender only has {}", required, got),
-			MutableCallInStaticContext => "Mutable Call in static context".to_owned(),
-			SenderMustExist => "Transacting from an empty account".to_owned(),
-			Internal(ref msg) => msg.clone(),
-			TransactionMalformed(ref err) => format!("Malformed transaction: {}", err),
-			NotConfidential => "Tried executing a non-confidential transaction in confidential mode".to_owned(),
-		};
-
-		f.write_fmt(format_args!("Transaction execution error ({}).", msg))
+			MutableCallInStaticContext => write!(f, "Mutable Call in static context"),
+			SenderMustExist => write!(f, "Transacting from an empty account"),
+			Internal(ref msg) => write!(f, "{}", msg),
+			TransactionMalformed(ref err) => write!(f, "Malformed transaction: {}", err),
+			NotConfidential => write!(f, "Tried executing a non-confidential transaction in confidential mode"),
+		}
 	}
 }
 

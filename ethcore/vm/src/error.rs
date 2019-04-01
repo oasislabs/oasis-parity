@@ -69,6 +69,8 @@ pub enum Error {
 	OutOfBounds,
 	/// Execution has been reverted with REVERT.
 	Reverted,
+	/// Execution cannot be run because contract has expired
+	ContractExpired,
 }
 
 impl From<Box<trie::TrieError>> for Error {
@@ -98,6 +100,7 @@ impl fmt::Display for Error {
 			Wasm(ref msg) => write!(f, "Internal error: {}", msg),
 			OutOfBounds => write!(f, "Out of bounds"),
 			Reverted => write!(f, "Reverted"),
+			ContractExpired => write!(f, "Contract Expired"),
 		}
 	}
 }
