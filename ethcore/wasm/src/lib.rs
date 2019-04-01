@@ -136,7 +136,7 @@ impl vm::Vm for WasmInterpreter {
 			let module_instance = module_instance.run_start(&mut runtime).map_err(Error::Trap)?;
 
 			let invoke_result = module_instance.invoke_export("call", &[], &mut runtime);
-
+        println!("invoke_result: {:?}", invoke_result);
 			let mut execution_outcome = ExecutionOutcome::NotSpecial;
 			if let Err(InterpreterError::Trap(ref trap)) = invoke_result {
 				if let wasmi::TrapKind::Host(ref boxed) = *trap.kind() {
