@@ -92,7 +92,7 @@ impl vm::Vm for WasmInterpreter {
 		let (module, data) = parser::payload(&params, ext.schedule().wasm())?;
 
 		let value: Value = from_slice(data).unwrap();
-		trace!("DATA RECEIEVED: {:?}", value);
+		error!("DATA RECEIEVED: {:?}", value);
 
 		let loaded_module = wasmi::Module::from_parity_wasm_module(module).map_err(Error::Interpreter)?;
 
