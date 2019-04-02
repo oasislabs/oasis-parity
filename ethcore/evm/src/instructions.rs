@@ -95,7 +95,7 @@ fn test_get_log_topics() {
 	assert_eq!(get_log_topics(LOG4), 4);
 }
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum GasPriceTier {
 	/// 0 Zero
 	Zero,
@@ -139,7 +139,7 @@ pub fn get_tier_idx (tier: GasPriceTier) -> usize {
 }
 
 /// EVM instruction information.
-#[derive(Copy, Clone, Default)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct InstructionInfo {
 	/// Mnemonic name.
 	pub name: &'static str,

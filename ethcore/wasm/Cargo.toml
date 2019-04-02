@@ -12,7 +12,7 @@ parity-wasm = { git = "https://github.com/oasislabs/parity-wasm", branch = "ekid
 pwasm-utils = { git = "https://github.com/oasislabs/wasm-utils", branch = "ekiden" }
 vm = { path = "../vm" }
 # ethcore-logger = { path = "../../logger" }
-wasmi = { git = "https://github.com/oasislabs/wasmi", branch = "ekiden" }
+wasmi = { git = "https://github.com/oasislabs/wasmi", branch = "eauge/debug/panic-string-return-error" }
 keccak-hash = { path = "../../util/hash" }
 
 [dev-dependencies]

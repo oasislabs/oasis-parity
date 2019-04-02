@@ -38,6 +38,7 @@ pub enum ContractCreateResult {
 }
 
 /// Result of externalities call function.
+#[derive(Debug)]
 pub enum MessageCallResult {
 	/// Returned when message call was successfull.
 	/// Contains gas left and output data.

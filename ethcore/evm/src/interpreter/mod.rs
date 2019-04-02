@@ -295,6 +295,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 		stack: &mut Stack<U256>,
 		provided: Option<Cost>
 	) -> vm::Result<InstructionResult<Cost>> {
+      println!("EXEC_INSTRUCTION EVM: {:?}, name: {:?}", instruction, instructions::INSTRUCTIONS[instruction as usize]);
 		match instruction {
 			instructions::JUMP => {
 				let jump = stack.pop_back();
@@ -355,6 +356,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 				};
 			},
 			instructions::CALL | instructions::CALLCODE | instructions::DELEGATECALL | instructions::STATICCALL => {
+          println!("EXEC_INSTRUCTION EVM ::CALL: ");
 				assert!(ext.schedule().call_value_transfer_gas > ext.schedule().call_stipend, "overflow possible");
 
 				stack.pop_back();
@@ -383,7 +385,8 @@ impl<Cost: CostType> Interpreter<Cost> {
 
 				// Get sender & receive addresses, check if we have balance
 				let (sender_address, receive_address, has_balance, call_type) = match instruction {
-					instructions::CALL => {
+					  instructions::CALL => {
+                println!("EXEC_INSTRUCTION EVM ::CALL2: ");
 						if ext.is_static() && value.map_or(false, |v| !v.is_zero()) {
 							return Err(vm::Error::MutableCallInStaticContext);
 						}
@@ -391,11 +394,18 @@ impl<Cost: CostType> Interpreter<Cost> {
 						(&params.address, &code_address, has_balance, CallType::Call)
 					},
 					instructions::CALLCODE => {
+              println!("EXEC_INSTRUCTION EVM ::CALLCODE2: ");
 						let has_balance = ext.balance(&params.address)? >= value.expect("value set for all but delegate call; qed");
 						(&params.address, &params.address, has_balance, CallType::CallCode)
 					},
-					instructions::DELEGATECALL => (&params.sender, &params.address, true, CallType::DelegateCall),
-					instructions::STATICCALL => (&params.address, &code_address, true, CallType::StaticCall),
+					  instructions::DELEGATECALL => {
+                println!("EXEC_INSTRUCTION EVM ::DELETECALL: ");
+                (&params.sender, &params.address, true, CallType::DelegateCall)
+            },
+					  instructions::STATICCALL => {
+                println!("EXEC_INSTRUCTION EVM ::STATICCALL: ");
+                (&params.address, &code_address, true, CallType::StaticCall)
+            },
 					_ => panic!(format!("Unexpected instruction {} in CALL branch.", instruction))
 				};
 
@@ -416,6 +426,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 					ext.call(&call_gas.as_u256(), sender_address, receive_address, value, input, &code_address, output, call_type)
 				};
 
+          println!("EXEC_INSTRUCTION EVM ::CALLRESULT: {:?}", call_result);
 				return match call_result {
 					MessageCallResult::Success(gas_left, data) => {
 						stack.push(U256::one());
