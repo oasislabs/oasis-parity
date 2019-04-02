@@ -10,6 +10,7 @@ log = "0.3"
 parity-wasm = { git = "https://github.com/oasislabs/parity-wasm", branch = "ekiden" }
 # libc = "0.2"
 pwasm-utils = { git = "https://github.com/oasislabs/wasm-utils", branch = "ekiden" }
+serde_cbor = "0.9.0"
 vm = { path = "../vm" }
 # ethcore-logger = { path = "../../logger" }
 wasmi = { git = "https://github.com/oasislabs/wasmi", branch = "ekiden" }
@@ -18,4 +19,3 @@ keccak-hash = { path = "../../util/hash" }
 [dev-dependencies]
 ethcore-logger = { path = "../../logger" }
 serde = {version = "1.0", features = ["derive"]}
-serde_cbor = "0.9.0"

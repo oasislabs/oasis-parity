@@ -40,6 +40,7 @@ use wasmi::{Error as InterpreterError, Trap};
 use runtime::{Runtime, RuntimeContext};
 
 use ethereum_types::U256;
+use serde_cbor::{from_slice, Value};
 
 /// Wrapped interpreter error
 #[derive(Debug)]
@@ -88,6 +89,9 @@ impl vm::Vm for WasmInterpreter {
 
 	fn exec(&mut self, params: ActionParams, ext: &mut vm::Ext) -> vm::Result<GasLeft> {
 		let (module, data) = parser::payload(&params, ext.schedule().wasm())?;
+
+		let value: Value = from_slice(data).unwrap();
+		trace!("DATA RECEIEVED: {:?}", value);
 
 		let loaded_module = wasmi::Module::from_parity_wasm_module(module).map_err(Error::Interpreter)?;
 
