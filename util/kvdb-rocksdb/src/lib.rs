@@ -22,7 +22,7 @@ extern crate interleaved_ordered;
 extern crate num_cpus;
 extern crate parking_lot;
 extern crate regex;
-extern crate rocksdb;
+extern crate parity_rocksdb;
 
 extern crate ethereum_types;
 extern crate kvdb;
@@ -34,7 +34,7 @@ use std::path::{PathBuf, Path};
 use std::{fs, io, mem, result};
 
 use parking_lot::{Mutex, MutexGuard, RwLock};
-use rocksdb::{
+use parity_rocksdb::{
 	DB, Writable, WriteBatch, WriteOptions, IteratorMode, DBIterator,
 	Options, BlockBasedOptions, Direction, Cache, Column, ReadOptions
 };
