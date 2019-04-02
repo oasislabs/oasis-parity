@@ -362,9 +362,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		};
 
 		// finalize here!
-		  let final_result = Ok(self.finalize(t, substate, result, output, tracer.drain(), vm_tracer.drain())?);
-      println!("EXEC_INSTRUCTION FINAL RESULT does not raise an error");
-		return final_result;
+		Ok(self.finalize(t, substate, result, output, tracer.drain(), vm_tracer.drain())?)
 	}
 
 	fn exec_vm<T, V, X>(
@@ -669,6 +667,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 	/// Converts execution errors from 0x08c379a0 to a utf8
 	/// convertible byte array
 	fn format_abi_error_output(output: &[u8]) -> Bytes {
+		// from https://solidity.readthedocs.io/en/v0.4.24/control-structures.html#error-handling-assert-require-revert-and-exceptions
 		// example of expected output
 		//
 		// 0x08c379a0                                                         // Error(string)
@@ -677,25 +676,21 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		// 0x4e6f7420656e6f7567682045746865722070726f76696465642e000000000000 // String data
 		let min_length = 8 + 32 + 32 + 32;
 
-      println!("EXEC 1");
 		if output.len() < min_length {
 			return Bytes::from(output);
 		}
 
-      println!("EXEC 2");
 		// Verify that output starts with an Error code
 		let is_error = output[0] == 8 && output[1] == 195 && output[2] == 121 && output[3] == 160;
 		if !is_error {
 			return Bytes::from(output);
 		}
 
-      println!("EXEC 3");
 		let offset = H256::from_slice(&output[4..36]).low_u64() as usize;
 		if offset != 32 {
 			return Bytes::from(output);
 		}
 
-      println!("EXEC 4");
 		let length = H256::from_slice(&output[36..68]).low_u64() as usize;
 		let data = &output[68..];
 		if data.len() < length {
@@ -755,8 +750,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 
 		match result {
 			Err(vm::Error::Internal(msg)) => Err(ExecutionError::Internal(msg)),
-			  Err(exception) => {
-            println!("EXEC 1003");
+			Err(exception) => {
 				trace!("Executive::finalize: exception={}", exception);
 				Ok(Executed {
 					exception: Some(exception),
@@ -772,13 +766,10 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					state_diff: None,
 				})
 			},
-			  Ok(r) => {
-            println!("EXEC 1000");
+			Ok(r) => {
 				let final_output = if r.apply_state {
-            println!("EXEC 1001");
 					output
 				} else {
-            println!("EXEC 1002");
 					Self::format_abi_error_output(&output[..])
 				};
 
