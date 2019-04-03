@@ -91,12 +91,6 @@ impl vm::Vm for WasmInterpreter {
 	fn exec(&mut self, params: ActionParams, ext: &mut vm::Ext) -> vm::Result<GasLeft> {
 		let (module, data) = parser::payload(&params, ext.schedule().wasm())?;
 
-		error!("DATA: {:?}", data);
-		match from_slice::<Value>(data) {
-			Ok(value) => error!("DATA RECEIEVED: {:?}", value),
-			Err(e) => error!("ERROR: {:?}", e),
-		};
-
 		let loaded_module = wasmi::Module::from_parity_wasm_module(module).map_err(Error::Interpreter)?;
 
 		let instantiation_resolver = env::ImportResolver::with_limit(<u32>::max_value() - 1);

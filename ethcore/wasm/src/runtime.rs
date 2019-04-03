@@ -364,6 +364,8 @@ impl<'a> Runtime<'a> {
 		let args_len = self.args.len() as u64;
 		self.charge(|s| args_len * s.wasm().memcpy as u64)?;
 
+		error!("ARGS: {:#x?}", self.args[..]);
+
 		self.memory.set(ptr, &self.args[..])?;
 		Ok(())
 	}
