@@ -106,6 +106,8 @@ impl vm::Vm for WasmInterpreter {
 			return Err(vm::Error::Wasm("Wasm interpreter cannot run contracts with gas (wasm adjusted) >= 2^64".to_owned()));
 		}
 
+		error!("EXPORTS: {:?}", module_instance.get_exports());
+
 		let initial_memory = instantiation_resolver.memory_size().map_err(Error::Interpreter)?;
 		trace!(target: "wasm", "Contract requested {:?} pages of initial memory", initial_memory);
 
