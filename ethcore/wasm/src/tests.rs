@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::string::String;
 use std::sync::Arc;
 use std::collections::HashMap;
 use byteorder::{LittleEndian, ByteOrder};
@@ -1005,4 +1006,15 @@ fn fetch_return() {
 
 	let (_gas_left, result) = reqrep_test!("fetch_return.wasm", Vec::new()).expect("fetch_return failed");
 	assert_eq!(result.as_slice(), vec![1u8; 257].as_slice());
+}
+
+#[test]
+fn exports() {
+	ethcore_logger::init_log();
+
+	let (_gas_left, result) = reqrep_test!("exports.wasm", vec![1u8]).expect("exports test failed with first call");
+	assert_eq!(result.as_slice(), vec![1u8].as_slice());
+
+	let (_gas_left, result) = reqrep_test!("exports.wasm", String::from("func00").into_bytes()).expect("exports test failed with second call");
+	assert_eq!(result.as_slice(), vec![2u8].as_slice());
 }
