@@ -112,7 +112,7 @@ impl vm::Vm for WasmInterpreter {
 		trace!(target: "wasm", "Contract requested {:?} pages of initial memory", initial_memory);
 
 		let (gas_left, result) = {
-			let mut method_sig = if data.len() >= 4 { str::from_utf8(&data[..4]).unwrap_or("call") } else { "" };
+			let mut method_sig = if data.len() >= 4 { str::from_utf8(&data[..4]).unwrap_or("") } else { "" };
 			let mut args = data;
 			match module_instance.not_started_instance().export_by_name(method_sig) {
 				Some(_) => args = &data[4..],
