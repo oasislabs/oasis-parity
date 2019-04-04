@@ -41,6 +41,8 @@ use runtime::{Runtime, RuntimeContext};
 
 use ethereum_types::U256;
 
+use std::str;
+
 /// Wrapped interpreter error
 #[derive(Debug)]
 pub enum Error {
@@ -106,18 +108,23 @@ impl vm::Vm for WasmInterpreter {
 			return Err(vm::Error::Wasm("Wasm interpreter cannot run contracts with gas (wasm adjusted) >= 2^64".to_owned()));
 		}
 
-		error!("EXPORTS: {:?}", module_instance.get_exports());
-
 		let initial_memory = instantiation_resolver.memory_size().map_err(Error::Interpreter)?;
 		trace!(target: "wasm", "Contract requested {:?} pages of initial memory", initial_memory);
 
 		let (gas_left, result) = {
+			let mut method_sig = str::from_utf8(&data[..4]).unwrap_or("call");
+			let mut args = data;
+			match module_instance.not_started_instance().export_by_name(method_sig) {
+				Some(_) => args = &data[4..],
+				None => method_sig = "call",
+			};
+
 			let mut runtime = Runtime::with_params(
 				ext,
 				instantiation_resolver.memory_ref(),
 				// cannot overflow, checked above
 				adjusted_gas.low_u64(),
-				data.to_vec(),
+				args.to_vec(),
 				RuntimeContext {
 					address: params.address,
 					sender: params.sender,
@@ -137,7 +144,7 @@ impl vm::Vm for WasmInterpreter {
 
 			let module_instance = module_instance.run_start(&mut runtime).map_err(Error::Trap)?;
 
-			let invoke_result = module_instance.invoke_export("call", &[], &mut runtime);
+			let invoke_result = module_instance.invoke_export(method_sig, &[], &mut runtime);
 
 			let mut execution_outcome = ExecutionOutcome::NotSpecial;
 			if let Err(InterpreterError::Trap(ref trap)) = invoke_result {
