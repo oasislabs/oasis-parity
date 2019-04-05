@@ -132,5 +132,4 @@ members = [
 ]
 
 [patch.crates-io]
-parity-wasm = { git = "https://github.com/oasislabs/parity-wasm", branch = "ekiden" }
 ring = { git = "https://github.com/oasislabs/ring", branch = "0.14.0-ekiden" }

@@ -9,7 +9,7 @@ ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ek
 log = "0.3"
 parity-wasm = { git = "https://github.com/oasislabs/parity-wasm", branch = "ekiden" }
 # libc = "0.2"
-owasm-utils = { git = "https://github.com/oasislabs/owasm-utils" }
+pwasm-utils = { git = "https://github.com/oasislabs/wasm-utils", branch = "ekiden" }
 vm = { path = "../vm" }
 # ethcore-logger = { path = "../../logger" }
 wasmi = { git = "https://github.com/oasislabs/wasmi", branch = "ekiden" }
