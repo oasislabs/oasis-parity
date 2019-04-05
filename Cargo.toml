@@ -134,3 +134,7 @@ members = [
 [patch.crates-io]
 # TODO: Remove when merged upstream (briansmith/ring#738).
 ring = { git = "https://github.com/akash-fortanix/ring", branch = "sgx-target" }
+# TODO: Remove when merged upstream (rust-lang-deprecated/rustc-serialize#195).
+rustc-serialize = { git = "https://github.com/jethrogb/rustc-serialize", branch = "portability" }
+# NOTE: Required because heapsize doesn't work on SGX due to a different allocator.
+heapsize = { git = "https://github.com/oasislabs/heapsize", branch = "sgx-target" }
