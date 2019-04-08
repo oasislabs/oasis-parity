@@ -49,6 +49,7 @@ use ethereum_types::{H256, U256, Address};
 use hashdb::{HashDB, AsHashDB};
 use kvdb::DBValue;
 use bytes::Bytes;
+use failure::Fallible;
 
 use trie;
 use trie::{Trie, TrieError, TrieDB};
@@ -352,26 +353,33 @@ pub trait ConfidentialCtx {
 	/// for cross-contract calls in a confidential setting. To switch the confidential
 	/// context to encrypt under a new contract, swap out the `contract_keypair` to a
 	/// new set of keys.
-	fn open(&mut self, contract: Address, encrypted_data: Option<Vec<u8>>) -> Result<Vec<u8>, String>;
+	fn open(&mut self, contract: Address, encrypted_data: Option<Vec<u8>>) -> Fallible<Vec<u8>>;
+
 	/// Returns true if open has previously been called.
 	fn is_open(&self) -> bool;
+
 	/// Closes the context. If called, subsequent calls to `encrypt` should fail.
 	fn close(&mut self);
+
 	/// Encrypts the given data under the given context, i.e., using the active session
 	/// and contract keys so that the *client* which initiated the transaction to open the
 	/// context can decrypt the data. Returns an error if the confidential context is
 	/// not open.
-	fn encrypt(&mut self, data: Vec<u8>) -> Result<Vec<u8>, String>;
+	fn encrypt(&mut self, data: Vec<u8>) -> Fallible<Vec<u8>>;
+
 	/// Encrypts the given data to be placed into contract storage	under the context.
 	/// The runtime allows *only a given contract* to encrypt/decrypt this data, as
 	/// opposed to the `encrypt` method, which allows a user's client to decrypt.
-	fn encrypt_storage(&self, data: Vec<u8>) -> Result<Vec<u8>, String>;
+	fn encrypt_storage(&self, data: Vec<u8>) -> Fallible<Vec<u8>>;
+
 	/// Analog to `encrypt_storage` for decyrpting data.
-	fn decrypt_storage(&self, data: Vec<u8>) -> Result<Vec<u8>, String>;
+	fn decrypt_storage(&self, data: Vec<u8>) -> Fallible<Vec<u8>>;
+
 	/// Creates the long term public key for the given contract. If it already
 	/// exists, returns the existing key. The first item is the key, the second
     /// is a signature over the key by the KeyManager.
-	fn create_long_term_public_key(&self, contract: Address) -> Result<(Vec<u8>, Vec<u8>), String>;
+	fn create_long_term_public_key(&mut self, contract: Address) -> Fallible<(Vec<u8>, Vec<u8>)>;
+
 	/// Returns the public key of the peer connecting through a secure channel to the runtime.
 	/// Returns None if no such key exists, e.g., if a confidential contract is being created.
 	fn peer(&self) -> Option<Vec<u8>>;

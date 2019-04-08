@@ -8,7 +8,7 @@ license = "GPL-3.0"
 [dependencies]
 elastic-array = "0.10"
 log = "0.3"
-# rand = "0.4"
+# rand = "0.6.5"
 ethcore-bytes = { version = "0.1.0", path = "../bytes" }
 ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
 keccak-hash = { version = "0.1.0", path = "../hash" }

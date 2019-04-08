@@ -118,6 +118,7 @@ extern crate memory_cache;
 pub extern crate journaldb;
 #[cfg(test)]
 extern crate tempdir;
+extern crate failure;
 
 #[macro_use]
 extern crate ethabi_derive;
@@ -195,3 +196,7 @@ pub mod test_helpers;
 pub use types::*;
 pub use executive::contract_address;
 pub use evm::CreateContractAddress;
+
+#[cfg(target_env = "sgx")]
+#[doc(hidden)]
+pub mod malloc;

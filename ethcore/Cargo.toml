@@ -9,7 +9,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 # ansi_term = "0.10"
 bloomchain = { path = "../util/bloomchain" }
-bn = { git = "https://github.com/oasislabs/bn", branch = "ekiden", default-features = false }
+bn = { git = "https://github.com/paritytech/bn", default-features = false }
 byteorder = "1.0"
 common-types = { path = "types" }
 # crossbeam = "0.3"
@@ -49,7 +49,7 @@ num-traits = { version = "0.1", default-features = false }
 parity-machine = { path = "../machine" }
 # parking_lot = "0.5"
 # rayon = "1.0"
-# rand = "0.4"
+rand = "0.6.5"
 rlp = { path = "../util/rlp" }
 rlp_compress = { path = "../util/rlp_compress" }
 rlp_derive = { path = "../util/rlp_derive" }
@@ -70,12 +70,13 @@ triehash = { path = "../util/triehash" }
 unexpected = { path = "../util/unexpected" }
 journaldb = { path = "../util/journaldb" }
 siphasher = "0.1.1"
+failure = "0.1.5"
 
 [dev-dependencies]
 tempdir = "0.3"
 trie-standardmap = { path = "../util/trie-standardmap" }
 # kvdb-rocksdb = { path = "../util/kvdb-rocksdb" }
-rand = "0.5"
+rand = "0.6.5"
 
 [features]
 default = ["enable-confidential"]

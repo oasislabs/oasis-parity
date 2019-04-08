@@ -6,7 +6,8 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
 quick-error = "1.2"
-ring = { git = "https://github.com/oasislabs/ring", default-features = false, features = [ "use_heap" ], branch = "0.14.0-ekiden" }
+# TODO: Remove when merged upstream (briansmith/ring#738).
+ring = { git = "https://github.com/akash-fortanix/ring", branch = "sgx-target" }
 # rust-crypto = "0.2.36"
 ripemd160 = "0.8.0"
 tiny-keccak = "1.4"

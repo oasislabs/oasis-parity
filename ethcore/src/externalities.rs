@@ -467,7 +467,7 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 		self.vm_tracer.trace_executed(gas_used, stack_push, mem_diff, store_diff)
 	}
 
-	fn create_long_term_public_key(&self, contract: Address) -> vm::Result<(Vec<u8>, Vec<u8>)> {
+	fn create_long_term_public_key(&mut self, contract: Address) -> vm::Result<(Vec<u8>, Vec<u8>)> {
 		if self.state.confidential_ctx.is_none() {
 			return Err(vm::Error::Internal(
 				"Can't create a long term public key without a confidential ctx".to_string()
@@ -475,10 +475,10 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 		}
 		self.state
 			.confidential_ctx
-			.as_ref()
+			.as_mut()
 			.unwrap()
 			.create_long_term_public_key(contract)
-			.map_err(|err| vm::Error::Internal(err))
+			.map_err(|err| vm::Error::Internal(format!("{}", err)))
 	}
 
 	fn open_confidential_ctx(&mut self, contract: Address, encrypted_data: Option<Vec<u8>>) -> vm::Result<Vec<u8>> {
@@ -492,7 +492,7 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 			.as_mut()
 			.unwrap()
 			.open(contract, encrypted_data)
-			.map_err(|err| vm::Error::Internal(err))
+			.map_err(|err| vm::Error::Internal(format!("{}", err)))
 	}
 
 	fn encrypt(&mut self, data: Vec<u8>) -> vm::Result<Vec<u8>> {

@@ -19,7 +19,7 @@ use std::sync::Arc;
 use serde::{Serialize, Serializer};
 use serde::ser::SerializeStruct;
 use ethcore::{contract_address, CreateContractAddress};
-use miner;
+//use miner;
 use transaction::{LocalizedTransaction, Action, PendingTransaction, SignedTransaction};
 use v1::types::{Bytes, H160, H256, U256, H512, U64, TransactionCondition};
 
@@ -247,7 +247,7 @@ impl Transaction {
 	}
 }
 
-impl LocalTransactionStatus {
+/*impl LocalTransactionStatus {
 	/// Convert `LocalTransactionStatus` into RPC `LocalTransactionStatus`.
 	pub fn from(s: miner::pool::local_transactions::Status, block_number: u64, eip86_transition: u64) -> Self {
 		let convert = |tx: Arc<miner::pool::VerifiedTransaction>| {
@@ -268,7 +268,7 @@ impl LocalTransactionStatus {
 			),
 		}
 	}
-}
+}*/
 
 #[cfg(test)]
 mod tests {
