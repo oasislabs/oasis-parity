@@ -104,18 +104,6 @@ impl FakeExt {
 
 impl Ext for FakeExt {
 
-	fn open_confidential_ctx(&mut self, contract: Address, encrypted_data: Option<Vec<u8>>) -> Result<Vec<u8>> {
-		// no-op
-		Ok(vec![])
-	}
-
-	fn close_confidential_ctx(&mut self) {
-		// no-op
-	}
-	fn encrypt(&mut self, data: Vec<u8>) -> Result<Vec<u8>> {
-		Ok(data)
-	}
-
 	fn storage_at(&self, key: &H256) -> Result<H256> {
 		Ok(self.store.get(key).unwrap_or(&H256::new()).clone())
 	}
@@ -252,7 +240,7 @@ impl Ext for FakeExt {
 		self.tracing
 	}
 
-	fn create_long_term_public_key(&mut self, contract: Address) -> Result<(Vec<u8>, Vec<u8>)> {
-		Ok((vec![], vec![]))
+	fn is_confidential_contract(&self, contract: &Address) -> Result<bool> {
+		Ok(false)
 	}
 }

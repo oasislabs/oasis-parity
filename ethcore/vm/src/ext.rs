@@ -170,20 +170,7 @@ pub trait Ext {
 	/// Check if running in static context.
 	fn is_static(&self) -> bool;
 
-	/// Opens up the confidential context to enable encryption. If set, logs will
-	/// be encrypted automatically and one may call the encrypt method.
-	fn open_confidential_ctx(&mut self, contract: Address, encrypted_data: Option<Vec<u8>>) -> Result<Vec<u8>>;
+	/// Returns true if the given contract is confidential.
+	fn is_confidential_contract(&self, contract: &Address) -> Result<bool>;
 
-	/// Closes the confidential context so that logs are no longer encrypted and
-	/// the `encrypt` method returns an error.
-	fn close_confidential_ctx(&mut self);
-
-	/// Encrypts the given data inside a confidential context. `open_confidential_ctx`
-	/// must be called prior to invoking this method.
-	fn encrypt(&mut self, data: Vec<u8>) -> Result<Vec<u8>>;
-
-	/// Allocates and returns the long term public key associated with the given contract.
-	/// To be called upon creation of the contract. Returns a tuple containing the
-	/// long term public key and a signature over the key by the KeyManager.
-	fn create_long_term_public_key(&mut self, contract: Address) -> Result<(Vec<u8>, Vec<u8>)>;
 }

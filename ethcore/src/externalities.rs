@@ -200,10 +200,16 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 	}
 
 	fn create(&mut self, gas: &U256, value: &U256, code: &[u8], address_scheme: CreateContractAddress) -> ContractCreateResult {
-		if self.state.is_confidential_ctx_open() {
-			error!("Can't create a contract when executing a confidential contract");
-			return ContractCreateResult::Failed;
-		}
+		if self.state.confidential_ctx.is_some()
+			&& self.state.confidential_ctx
+			.as_ref()
+			.unwrap()
+			.borrow()
+			.activated() {
+				error!("Can't create a contract when executing a confidential contract");
+				return ContractCreateResult::Failed;
+			}
+
 		// create new contract address
 		let (address, code_hash) = match self.state.nonce(&self.origin_info.address) {
 			Ok(nonce) => contract_address(address_scheme, &self.origin_info.address, &nonce, &code),
@@ -234,7 +240,6 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 			data: None,
 			call_type: CallType::None,
 			params_type: vm::ParamsType::Embedded,
-			confidential: false,
 			oasis_contract: oasis_contract,
 		};
 
@@ -273,11 +278,6 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 	) -> MessageCallResult {
 		trace!(target: "externalities", "call");
 
-		if self.state.is_confidential_ctx_open() {
-			error!("Can't make a contract call when executing a confidential contract");
-			return MessageCallResult::Failed;
-		}
-
 		let code_res = self.state.code(code_address)
 			.and_then(|code| self.state.code_hash(code_address).map(|hash| (code, hash)));
 
@@ -311,7 +311,6 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 			data: Some(data.to_vec()),
 			call_type: call_type,
 			params_type: vm::ParamsType::Separate,
-			confidential: false,
 			oasis_contract: oasis_contract,
 		};
 
@@ -384,17 +383,28 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 
 		let address = self.origin_info.address.clone();
 
-		// Only encrypt the log if we're in a confidential context with a peer.
-		// If we're creating a confidential contract, don't encrypt the log.
-		let data = if self.state.is_confidential_ctx_open()
-			&& self.state.confidential_ctx
-			.as_ref()
-			.unwrap()
-			.peer()
-			.is_some() {
-			self.encrypt(data.to_vec())?
-		} else {
-			data.to_vec()
+		// Only encrypt the log if the the confidential context has a peer.
+		// Otherwise, the log will be in plaintext, i.e., when creating a
+		// confidential contract *or* when the top level contract execution
+		// is not confidential.
+		let data = {
+			if self.state.is_encrypting()
+				&& self.state
+				.confidential_ctx
+				.as_ref()
+				.expect("The state must have a confidential context if it is encrypting")
+				.borrow()
+				.peer()
+				.is_some() {
+					self.state
+						.confidential_ctx
+						.as_ref()
+						.expect("The state must have a confidential context if it is encrypting")
+						.borrow_mut()
+						.encrypt_session(data.to_vec())?
+				} else {
+					data.to_vec()
+				}
 		};
 
 		self.substate.logs.push(LogEntry {
@@ -467,56 +477,11 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 		self.vm_tracer.trace_executed(gas_used, stack_push, mem_diff, store_diff)
 	}
 
-	fn create_long_term_public_key(&mut self, contract: Address) -> vm::Result<(Vec<u8>, Vec<u8>)> {
-		if self.state.confidential_ctx.is_none() {
-			return Err(vm::Error::Internal(
-				"Can't create a long term public key without a confidential ctx".to_string()
-			));
-		}
-		self.state
-			.confidential_ctx
-			.as_mut()
-			.unwrap()
-			.create_long_term_public_key(contract)
-			.map_err(|err| vm::Error::Internal(format!("{}", err)))
-	}
+    fn is_confidential_contract(&self, contract: &Address) -> vm::Result<bool> {
+        self.state.is_confidential_contract(contract)
+            .map_err(|err| vm::Error::Internal(err))
+    }
 
-	fn open_confidential_ctx(&mut self, contract: Address, encrypted_data: Option<Vec<u8>>) -> vm::Result<Vec<u8>> {
-		if self.state.confidential_ctx.is_none() {
-			return Err(vm::Error::Internal(
-				"Can't set an encryption key without a confidential context".to_string()
-			));
-		}
-		self.state
-			.confidential_ctx
-			.as_mut()
-			.unwrap()
-			.open(contract, encrypted_data)
-			.map_err(|err| vm::Error::Internal(format!("{}", err)))
-	}
-
-	fn encrypt(&mut self, data: Vec<u8>) -> vm::Result<Vec<u8>> {
-		if !self.state.is_confidential_ctx_open() {
-			return Err(vm::Error::Internal("Can't encrypt without an encrypter or key".to_string()));
-		}
-		self.state
-			.confidential_ctx
-			.as_mut()
-			.unwrap()
-			.encrypt(data)
-			.map_err(|err| vm::Error::Internal(format!("Could not encrypt {}", err)))
-	}
-
-	fn close_confidential_ctx(&mut self) {
-		if !self.state.is_confidential_ctx_open() {
-			return;
-		}
-		self.state
-			.confidential_ctx
-			.as_mut()
-			.unwrap()
-			.close();
-	}
 }
 
 #[cfg(test)]

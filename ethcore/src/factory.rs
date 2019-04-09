@@ -16,11 +16,11 @@
 
 use trie::TrieFactory;
 use account_db::Factory as AccountFactory;
-use confidential_vm::ConfidentialVm;
 use evm::{Factory as EvmFactory, VMType};
-use vm::{Vm, ActionParams, Schedule};
+use vm::{Vm, ConfidentialCtx, OasisVm, ActionParams, Schedule};
 use wasm::WasmInterpreter;
 use bytes::Bytes;
+use std::{cell::RefCell, rc::Rc};
 
 const WASM_MAGIC_NUMBER: &'static [u8; 4] = b"\0asm";
 
@@ -31,21 +31,15 @@ pub struct VmFactory {
 }
 
 impl VmFactory {
-	pub fn create(&self, params: &ActionParams, schedule: &Schedule) -> Box<Vm> {
-		let mut vm = self._create(params, schedule);
-		if params.confidential {
-			Box::new(ConfidentialVm::new(vm))
-		} else {
-			vm
-		}
-	}
-
-	fn _create(&self, params: &ActionParams, schedule: &Schedule) -> Box<Vm> {
-		if schedule.wasm.is_some() && params.code.as_ref().map_or(false, |code| code.len() > 4 && &code[0..4] == WASM_MAGIC_NUMBER) {
-			Box::new(WasmInterpreter)
-		} else {
-			self.evm.create(&params.gas)
-		}
+	pub fn create(&self, ctx: Option<Rc<RefCell<Box<ConfidentialCtx>>>>, params: &ActionParams, schedule: &Schedule) -> Box<Vm> {
+		let vm = {
+			if schedule.wasm.is_some() && params.code.as_ref().map_or(false, |code| code.len() > 4 && &code[0..4] == WASM_MAGIC_NUMBER) {
+				Box::new(WasmInterpreter)
+			} else {
+				self.evm.create(&params.gas)
+			}
+		};
+		Box::new(OasisVm::new(ctx, vm))
 	}
 
 	pub fn new(evm: VMType, cache_size: usize) -> Self {

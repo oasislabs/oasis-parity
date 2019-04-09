@@ -20,6 +20,7 @@
 //! or rolled back.
 
 use std::cell::{RefCell, RefMut};
+use std::rc::Rc;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, BTreeMap, BTreeSet, HashSet};
 use std::fmt;
@@ -28,7 +29,7 @@ use hash::{KECCAK_NULL_RLP, KECCAK_EMPTY, keccak};
 
 use receipt::{Receipt, TransactionOutcome};
 use machine::EthereumMachine as Machine;
-use vm::{OasisContract, EnvInfo};
+use vm::{ConfidentialCtx, OasisContract, EnvInfo};
 use error::{Error, ErrorKind};
 use executive::{Executive, TransactOptions};
 use factory::Factories;
@@ -43,7 +44,6 @@ use transaction::{self, SignedTransaction};
 use state_db::StateDB;
 use factory::VmFactory;
 use journaldb::overlaydb::OverlayDB;
-use confidential_vm::ConfidentialVm;
 
 use ethereum_types::{H256, U256, Address};
 use hashdb::{HashDB, AsHashDB};
@@ -317,72 +317,17 @@ pub struct State<B: Backend> {
 	checkpoints: RefCell<Vec<HashMap<Address, Option<AccountEntry>>>>,
 	account_start_nonce: U256,
 	factories: Factories,
-	pub confidential_ctx: Option<Box<ConfidentialCtx>>,
-}
-
-/// ConfidentialCtx provides a collection of services to be injected into the state
-/// to enable confidential contracts.
-///
-/// The expected usage is to first `open` the confidential context, e.g., before
-/// executing a confidential contract, at which point any of the other methods
-/// can be called, for example, to encrypt/decrypt storage or logs. Upon completion,
-/// one should call `close` to shut down and clear the confidential context.
-pub trait ConfidentialCtx {
-	/// Opens the confidential context by unsealing the given `encrypted_data`,
-	/// destined for the given `contract`.
-	///
-	/// Assumes `encrypted_data` is the `data` field in a transaction of the form
-	/// NONCE || PEER_PUBLIC_SESSION_KEY || CIPHER. Note that it's an option since
-	/// this may be called on the creation of a confidential contract, which will not
-	/// have an encrypted data payload. In this case, we do not set the
-	/// peer_public_key on the confidential context, and so we can only encrypt or
-	/// decrypt storage but cannot encrypt or decrypt logs.
-	///
-	/// Being "open" means not only that one may encrypt storage. Being open with
-	/// an `encrypted_data` payload means that one can encrypt data that is
-	/// decryptable by a peer. Specifically, encryption will be done using the
-	/// peer's session key specified by `encrypted_data`. This session key along
-	/// with the active contract's key pair is what sets the context at any given
-	/// time.
-	///
-	/// While open, this session key will never change; however, the associated
-	/// contract keys may change at any point to facilitate cross-contract calls in
-	/// a "confidential context switch".
-	///
-	/// Switch functionality is not currently in use but will be useful in the future
-	/// for cross-contract calls in a confidential setting. To switch the confidential
-	/// context to encrypt under a new contract, swap out the `contract_keypair` to a
-	/// new set of keys.
-	fn open(&mut self, contract: Address, encrypted_data: Option<Vec<u8>>) -> Fallible<Vec<u8>>;
-
-	/// Returns true if open has previously been called.
-	fn is_open(&self) -> bool;
-
-	/// Closes the context. If called, subsequent calls to `encrypt` should fail.
-	fn close(&mut self);
-
-	/// Encrypts the given data under the given context, i.e., using the active session
-	/// and contract keys so that the *client* which initiated the transaction to open the
-	/// context can decrypt the data. Returns an error if the confidential context is
-	/// not open.
-	fn encrypt(&mut self, data: Vec<u8>) -> Fallible<Vec<u8>>;
-
-	/// Encrypts the given data to be placed into contract storage	under the context.
-	/// The runtime allows *only a given contract* to encrypt/decrypt this data, as
-	/// opposed to the `encrypt` method, which allows a user's client to decrypt.
-	fn encrypt_storage(&self, data: Vec<u8>) -> Fallible<Vec<u8>>;
-
-	/// Analog to `encrypt_storage` for decyrpting data.
-	fn decrypt_storage(&self, data: Vec<u8>) -> Fallible<Vec<u8>>;
-
-	/// Creates the long term public key for the given contract. If it already
-	/// exists, returns the existing key. The first item is the key, the second
-    /// is a signature over the key by the KeyManager.
-	fn create_long_term_public_key(&mut self, contract: Address) -> Fallible<(Vec<u8>, Vec<u8>)>;
-
-	/// Returns the public key of the peer connecting through a secure channel to the runtime.
-	/// Returns None if no such key exists, e.g., if a confidential contract is being created.
-	fn peer(&self) -> Option<Vec<u8>>;
+	// * Option to disable confidentiality entirely (if None).
+	// * Box to allow dependency inversion from Parity to the using crate, e.g., Runtime.
+	// * Rc to allow two references: `vm::OasisVm` and `State`.
+	// * RefCell so that we can allow `vm::OasisVm` to control the ctx (e.g., what
+	//	 contract should I be encrypting under?) while the `State` observes control
+	//	 updates and encrypts/decrypts storage/logs, as a reult.
+	//
+	// One alternative to the Rc<RefCell<>> is to only allow `State` to own the ConfidentialCtx,
+	// and `OasisVm` routes all control updates to the ConfidentialCtx owned by `State` through
+	// Externalities.
+	pub confidential_ctx: Option<Rc<RefCell<Box<ConfidentialCtx>>>>,
 }
 
 #[derive(Copy, Clone)]
@@ -453,7 +398,7 @@ impl<B: Backend> State<B> {
 			checkpoints: RefCell::new(Vec::new()),
 			account_start_nonce: account_start_nonce,
 			factories: factories,
-			confidential_ctx: None
+			confidential_ctx: None,
 		}
 	}
 
@@ -470,7 +415,7 @@ impl<B: Backend> State<B> {
 			checkpoints: RefCell::new(Vec::new()),
 			account_start_nonce: account_start_nonce,
 			factories: factories,
-			confidential_ctx: confidential_ctx,
+			confidential_ctx: confidential_ctx.map(|ctx| Rc::new(RefCell::new(ctx))),
 		};
 
 		Ok(state)
@@ -1206,10 +1151,26 @@ impl<B: Backend> State<B> {
 		code.as_ref().map_or(Ok(None), |c| OasisContract::from_code(c.as_slice()))
 	}
 
-	/// Returns true if in a confidential context, i.e., all contract state is encrypted/decrypted
-	/// and all logs are encrypted during execution.
-	pub fn is_confidential_ctx_open(&self) -> bool {
-		self.confidential_ctx.is_some() && self.confidential_ctx.as_ref().unwrap().is_open()
+	pub fn is_confidential_contract(&self, address: &Address) -> Result<bool, String> {
+		let code = self.code(address).map_err(|err| err.to_string())?;
+		let contract = {
+			if let Some(ref code) = code.clone() {
+				OasisContract::from_code(code)?
+			} else {
+				None
+			}
+		};
+
+		Ok(
+			contract
+				.as_ref()
+				.map_or(false, |c| c.confidential)
+		)
+	}
+
+	pub fn is_encrypting(&self) -> bool {
+		self.confidential_ctx.is_some()
+			&& self.confidential_ctx.as_ref().unwrap().borrow().is_encrypting()
 	}
 
 	/// Returns the code that will be executed as a result of this transaction. For a create this
@@ -1237,10 +1198,11 @@ impl<B: Backend> State<B> {
 	/// If a confidential context is open, then encrypts the key and hashes it.
 	/// Otherwise returns the key as given.
 	pub fn to_storage_key(&self, key: &H256) -> H256 {
-		if self.is_confidential_ctx_open() {
+		if self.is_encrypting() {
 			let enc_key = self.confidential_ctx
 				.as_ref()
-				.unwrap()
+				.expect("Cannot encrypt without a confidential context")
+				.borrow()
 				.encrypt_storage(key.to_vec())
 				.expect("Should be able to encrypt storage keys");
 			keccak(&enc_key)
@@ -1253,10 +1215,11 @@ impl<B: Backend> State<B> {
 	/// If a confidential context is open, then encrypts the value. Otherwise
 	/// returns the given value as a Vec.
 	fn to_storage_value(&self, value: Vec<u8>) -> Vec<u8> {
-		if self.is_confidential_ctx_open() {
+		if self.is_encrypting() {
 			self.confidential_ctx
 				.as_ref()
-				.unwrap()
+				.expect("Cannot encrypt without a confidential context")
+				.borrow()
 				.encrypt_storage(value)
 				.expect("Should be able to encrypt storage")
 		} else {
@@ -1272,10 +1235,11 @@ impl<B: Backend> State<B> {
 			return vec![];
 		}
 		let value = value.unwrap();
-		if self.is_confidential_ctx_open() {
+		if self.is_encrypting() {
 			self.confidential_ctx
 				.as_ref()
-				.unwrap()
+				.expect("Cannot decrypt without a confidential context")
+				.borrow()
 				.decrypt_storage(value)
 				.expect("Corrupted state")
 		} else {

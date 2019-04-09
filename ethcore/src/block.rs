@@ -27,14 +27,14 @@ use ethereum_types::{H256, U256, Address, Bloom};
 use bytes::Bytes;
 use unexpected::{Mismatch, OutOfBounds};
 
-use vm::{EnvInfo, LastHashes};
+use vm::{ConfidentialCtx, EnvInfo, LastHashes};
 use engines::EthEngine;
 use error::{Error, BlockError};
 use factory::Factories;
 use header::{Header, ExtendedHeader};
 use journaldb::overlaydb::OverlayDB;
 use receipt::{Receipt, TransactionOutcome};
-use state::{State, ConfidentialCtx, ApplyResult};
+use state::{State, ApplyResult};
 use state::backend::{Wrapped as WrappedBackend};
 // use state_db::StateDB;
 use trace::{Tracing, FlatTrace, VMTrace};

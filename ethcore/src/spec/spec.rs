@@ -634,8 +634,6 @@ impl Spec {
 					data: None,
 					call_type: CallType::None,
 					params_type: ParamsType::Embedded,
-					// cannot run confidential contracts pre-defined in genesis/SPEC for now
-					confidential: false,
 					oasis_contract: None,
 				};
 

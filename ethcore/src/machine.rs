@@ -156,7 +156,6 @@ impl EthereumMachine {
 			data: data,
 			call_type: CallType::Call,
 			params_type: ParamsType::Separate,
-			confidential: false,
 			oasis_contract: oasis_contract,
 		};
 		let mut ex = Executive::new(&mut state, &env_info, self);
