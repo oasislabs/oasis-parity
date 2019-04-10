@@ -479,7 +479,7 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 
     fn is_confidential_contract(&self, contract: &Address) -> vm::Result<bool> {
         self.state.is_confidential_contract(contract)
-            .map_err(|err| vm::Error::Internal(err))
+            .map_err(|err| vm::Error::Confidential(err))
     }
 
 }

@@ -156,7 +156,7 @@ impl ConfidentialVm {
 	/// encrypted calldata.
 	fn tx_call(&mut self, mut no_prefix_params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
 		if no_prefix_params.data.is_none() {
-			return Err(Error::Internal(
+			return Err(Error::Confidential(
 				"Cannot execute a confidential call without a data field".to_string()
 			));
 		}
@@ -240,12 +240,12 @@ impl ConfidentialVm {
 
 	fn cross_contract_call_preconditions(&self, no_prefix_params: &ActionParams, ext: &mut Ext) -> Result<()> {
 		if no_prefix_params.call_type == CallType::None {
-			return Err(Error::Internal(
+			return Err(Error::Confidential(
 				"Cannot create a contract after executing a confidential contract".to_string()
 			));
 		}
 		if no_prefix_params.data.is_none() {
-			return Err(Error::Internal(
+			return Err(Error::Confidential(
 				"Cannot execute a confidential call without a data field".to_string()
 			));
 		}
@@ -254,11 +254,11 @@ impl ConfidentialVm {
 
 		// Assert confidential contracts can only call confidential contracts.
 		if self.ctx.borrow().activated() && !ext.is_confidential_contract(&no_prefix_params.address)? {
-			return Err(Error::Internal("cannot make calls accross confidential domains".to_string()));
+			return Err(Error::Confidential("cannot call a non-confidential contract from confidential".to_string()));
 		}
 		// Assert non-confidnetial contracts can only call non-confidential contracts.
 		if !self.ctx.borrow().activated() && ext.is_confidential_contract(&no_prefix_params.address)? {
-			return Err(Error::Internal("cannot make calls accross confidential domains".to_string()));
+			return Err(Error::Confidential("cannot call a confidential contract from non-confidential".to_string()));
 		}
 		Ok(())
 	}

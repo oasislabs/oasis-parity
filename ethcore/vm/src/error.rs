@@ -71,6 +71,8 @@ pub enum Error {
 	Reverted,
 	/// Execution cannot be run because contract has expired
 	ContractExpired,
+	/// Confidentiality related error.
+	Confidential(String),
 }
 
 impl From<Box<trie::TrieError>> for Error {
@@ -101,6 +103,7 @@ impl fmt::Display for Error {
 			OutOfBounds => write!(f, "Out of bounds"),
 			Reverted => write!(f, "Reverted"),
 			ContractExpired => write!(f, "Contract Expired"),
+			Confidential(ref msg) => write!(f, "Confidential error: {}", msg),
 		}
 	}
 }

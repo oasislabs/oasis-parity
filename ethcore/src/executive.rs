@@ -735,6 +735,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 				| Err(vm::Error::OutOfBounds)
 				| Err(vm::Error::Reverted)
 				| Err(vm::Error::ContractExpired)
+				| Err(vm::Error::Confidential {..})
 				| Ok(FinalizationResult { apply_state: false, .. }) => {
 					self.state.revert_to_checkpoint();
 			},
