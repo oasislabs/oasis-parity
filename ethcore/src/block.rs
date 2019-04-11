@@ -361,6 +361,8 @@ impl<'x> OpenBlock<'x> {
 			return Err(TransactionError::AlreadyImported.into());
 		}
 
+      println!("Push transaction with outcome!");
+      info!("Push transaction with outcome!");
 		let env_info = self.env_info();
 		let outcome = self.block.state.apply(&env_info, self.engine.machine(), &t, self.block.traces.is_enabled(), should_return_value)?;
 
