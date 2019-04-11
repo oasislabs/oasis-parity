@@ -125,9 +125,9 @@ impl ConfidentialVm {
 	}
 
 	/// Deploys a confidential contract.
-	fn tx_create(&mut self, no_prefix_params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
+	fn tx_create(&mut self, params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
 		let (public_key, mut signature)
-			= self.ctx.borrow_mut().create_long_term_public_key(no_prefix_params.code_address.clone())?;
+			= self.ctx.borrow_mut().create_long_term_public_key(params.code_address.clone())?;
 
 		let mut log_data = public_key;
 		log_data.append(&mut signature);
@@ -138,10 +138,10 @@ impl ConfidentialVm {
 		)?;
 
 		// Activate the confidential context so that we can transparently encrypt/decrypt.
-		self.ctx.borrow_mut().activate(Some(no_prefix_params.address))?;
+		self.ctx.borrow_mut().activate(Some(params.address))?;
 
 		// Execute the init code with the underlying vm.
-		let result = self.vm.exec(no_prefix_params, ext);
+		let result = self.vm.exec(params, ext);
 
 		// Shut down the confidential ctx so we stop encrypting.
 		self.ctx.borrow_mut().deactivate();
@@ -154,25 +154,25 @@ impl ConfidentialVm {
 	///
 	/// Returns the result of executing the contract call, encrypted with key given in the
 	/// encrypted calldata.
-	fn tx_call(&mut self, mut no_prefix_params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
-		if no_prefix_params.data.is_none() {
+	fn tx_call(&mut self, mut params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
+		if params.data.is_none() {
 			return Err(Error::Confidential(
 				"Cannot execute a confidential call without a data field".to_string()
 			));
 		}
 
 		// Activate the confidential context so that we can transparently encrypt/decrypt.
-		let _ = self.ctx.borrow_mut().activate(Some(no_prefix_params.address));
+		let _ = self.ctx.borrow_mut().activate(Some(params.address));
 
 		// Replace the Action's data payload with the unencrypted version.
 		let unencrypted_tx_data = self.ctx.borrow_mut().decrypt_session(
-			no_prefix_params.data.as_ref().unwrap().to_vec()
+			params.data.as_ref().unwrap().to_vec()
 		)?;
-		no_prefix_params.data = Some(unencrypted_tx_data);
+		params.data = Some(unencrypted_tx_data);
 
 		// Execute the code and encrypt the result.
 		let encrypted_result = {
-			let result = self.vm.exec(no_prefix_params, ext)?;
+			let result = self.vm.exec(params, ext)?;
 			self.encrypt_vm_result(result, ext)
 		};
 
@@ -210,12 +210,12 @@ impl ConfidentialVm {
 	/// However, we could do such additional encryption/decryption *here*. This would be
 	/// useful if we wanted to exit out of the enclave with encrypted data and enter into
 	/// a new enclave in the future.
-	fn cross_contract_call(&mut self, mut no_prefix_params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
-		self.cross_contract_call_preconditions(&no_prefix_params, ext)?;
+	fn cross_contract_call(&mut self, mut params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
+		self.check_cross_contract_call(&params, ext)?;
 
 		let address = {
-			if ext.is_confidential_contract(&no_prefix_params.address)? {
-				Some(no_prefix_params.address)
+			if ext.is_confidential_contract(&params.address)? {
+				Some(params.address)
 			} else {
 				None
 			}
@@ -224,13 +224,13 @@ impl ConfidentialVm {
 		// Swap the confidential context to the new contract we're calling. If it's a
 		// delegatecall/callcode, then this switch is a no-op.
 		//
-		// Note: no_prefix_params.address is *not* necessarily the address of the target
+		// Note: params.address is *not* necessarily the address of the target
 		// contract we're executing. If executing a delegatecall or callcode, then it is
 		// the address whose storage context we're executing in.
 		let old_contract = self.ctx.borrow_mut().activate(address)?;
 
 		// Run the contract execution.
-		let result = self.vm.exec(no_prefix_params, ext);
+		let result = self.vm.exec(params, ext);
 
 		// Swap back the confidential ctx to use the keys prior to the cross contract call.
 		let _ = self.ctx.borrow_mut().activate(old_contract)?;
@@ -238,13 +238,13 @@ impl ConfidentialVm {
 		result
 	}
 
-	fn cross_contract_call_preconditions(&self, no_prefix_params: &ActionParams, ext: &mut Ext) -> Result<()> {
-		if no_prefix_params.call_type == CallType::None {
+	fn check_cross_contract_call(&self, params: &ActionParams, ext: &mut Ext) -> Result<()> {
+		if params.call_type == CallType::None {
 			return Err(Error::Confidential(
 				"Cannot create a contract after executing a confidential contract".to_string()
 			));
 		}
-		if no_prefix_params.data.is_none() {
+		if params.data.is_none() {
 			return Err(Error::Confidential(
 				"Cannot execute a confidential call without a data field".to_string()
 			));
@@ -253,11 +253,11 @@ impl ConfidentialVm {
 		// To enable cross contract calls across confidential domains, remove the following checks.
 
 		// Assert confidential contracts can only call confidential contracts.
-		if self.ctx.borrow().activated() && !ext.is_confidential_contract(&no_prefix_params.address)? {
+		if self.ctx.borrow().activated() && !ext.is_confidential_contract(&params.address)? {
 			return Err(Error::Confidential("cannot call a non-confidential contract from confidential".to_string()));
 		}
 		// Assert non-confidnetial contracts can only call non-confidential contracts.
-		if !self.ctx.borrow().activated() && ext.is_confidential_contract(&no_prefix_params.address)? {
+		if !self.ctx.borrow().activated() && ext.is_confidential_contract(&params.address)? {
 			return Err(Error::Confidential("cannot call a confidential contract from non-confidential".to_string()));
 		}
 		Ok(())

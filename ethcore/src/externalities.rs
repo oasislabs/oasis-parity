@@ -383,10 +383,6 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 
 		let address = self.origin_info.address.clone();
 
-		// Only encrypt the log if the the confidential context has a peer.
-		// Otherwise, the log will be in plaintext, i.e., when creating a
-		// confidential contract *or* when the top level contract execution
-		// is not confidential.
 		let data = {
 			if self.state.is_encrypting()
 				&& self.state

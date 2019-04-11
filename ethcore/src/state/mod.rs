@@ -324,7 +324,7 @@ pub struct State<B: Backend> {
 	//	 contract should I be encrypting under?) while the `State` observes control
 	//	 updates and encrypts/decrypts storage/logs, as a reult.
 	//
-	// One alternative to the Rc<RefCell<>> is to only allow `State` to own the ConfidentialCtx,
+	// One alternative to the Rc<RefCell<>> would be to only allow `State` to own the ConfidentialCtx,
 	// and `OasisVm` routes all control updates to the ConfidentialCtx owned by `State` through
 	// Externalities.
 	pub confidential_ctx: Option<Rc<RefCell<Box<ConfidentialCtx>>>>,
