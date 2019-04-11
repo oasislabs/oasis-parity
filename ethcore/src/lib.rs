@@ -148,9 +148,7 @@ pub mod views;
 // #[cfg(test)]
 // extern crate kvdb_rocksdb;
 
-// pub mod account_provider;
 pub mod block;
-// pub mod client;
 pub mod db;
 pub mod encoded;
 pub mod engines;
@@ -161,16 +159,13 @@ pub mod executed;
 pub mod executive;
 pub mod header;
 pub mod machine;
-// pub mod miner;
 pub mod pod_state;
-// pub mod snapshot;
 pub mod spec;
 pub mod state;
 pub mod state_db;
 pub mod trace;
 /// Ext (Externalities) tracing
 pub mod trace_ext;
-// pub mod verification;
 
 mod cache_manager;
 mod blooms;
@@ -180,17 +175,12 @@ mod builtin;
 mod externalities;
 pub mod blockchain;
 pub mod factory;
-// mod tx_filter;
 
-// #[cfg(test)]
-// mod tests;
 #[cfg(test)]
 #[cfg(feature = "json-tests")]
 mod json_tests;
 #[cfg(any(test, feature = "test-helpers"))]
 pub mod test_helpers;
-// #[cfg(test)]
-// mod test_helpers_internal;
 
 pub use types::*;
 pub use executive::contract_address;
