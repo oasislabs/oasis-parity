@@ -33,7 +33,6 @@ use trace::{self, Tracer, VMTracer};
 use trace_ext::{CountingTracer, ExtTracer, FullExtTracer, FullTracerCallTrace, FullTracerRecord, NoopExtTracer};
 use transaction::{Action, SignedTransaction};
 pub use executed::{Executed, ExecutionResult};
-use confidential_vm::ConfidentialVm;
 
 #[cfg(debug_assertions)]
 /// Roughly estimate what stack size each level of evm depth will use. (Debug build)
@@ -332,7 +331,6 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					data: None,
 					call_type: CallType::None,
 					params_type: vm::ParamsType::Embedded,
-					confidential: confidential,
 					oasis_contract: oasis_contract,
 				};
 				let mut out = if output_from_create { Some(vec![]) } else { None };
@@ -353,7 +351,6 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					data: Some(t.data.clone()),
 					call_type: CallType::Call,
 					params_type: vm::ParamsType::Separate,
-					confidential: confidential,
 					oasis_contract: oasis_contract,
 				};
 				let mut out = vec![];
@@ -379,33 +376,12 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		let depth_threshold = local_stack_size.saturating_sub(STACK_SIZE_ENTRY_OVERHEAD) / STACK_SIZE_PER_DEPTH;
 		let static_call = params.call_type == CallType::StaticCall;
 
-		// If this is a create with a header, copy the raw header bytes to prepend to the bytecode.
-		let header = if params.call_type == CallType::None {
-			params.oasis_contract.as_ref().map(|c| c.header.clone())
-		}
-		else {
-			None
-		};
-
+		let ctx = self.state.confidential_ctx.clone();
 		let vm_factory = self.state.vm_factory();
 		let mut ext = self.as_externalities(OriginInfo::from(&params), unconfirmed_substate, output_policy, tracer, vm_tracer, ext_tracer, static_call);
 		trace!(target: "executive", "ext.schedule.have_delegate_call: {}", ext.schedule().have_delegate_call);
-		let mut vm = vm_factory.create(&params, &schedule);
+		let mut vm = vm_factory.create(ctx, &params, &schedule);
 		let ret = vm.exec(params, &mut ext);
-
-		// Prepend the header to the bytecode that is stored in the account.
-		if let Some(bytes) = header {
-			if let Ok(GasLeft::NeedsReturn { gas_left, data, apply_state }) = ret {
-				let mut bytecode = bytes;
-				bytecode.append(&mut data.to_vec());
-				let size = bytecode.len();
-				return Ok(GasLeft::NeedsReturn {
-					gas_left,
-					data: ReturnData::new(bytecode, 0, size),
-					apply_state
-				}).finalize(ext);
-			}
-		}
 
 		ret.finalize(ext)
 	}
@@ -759,6 +735,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 				| Err(vm::Error::OutOfBounds)
 				| Err(vm::Error::Reverted)
 				| Err(vm::Error::ContractExpired)
+				| Err(vm::Error::Confidential {..})
 				| Ok(FinalizationResult { apply_state: false, .. }) => {
 					self.state.revert_to_checkpoint();
 			},

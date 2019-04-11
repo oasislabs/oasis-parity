@@ -39,6 +39,7 @@ mod ext;
 mod return_data;
 mod error;
 mod oasis_contract;
+mod oasis_vm;
 
 pub mod tests;
 
@@ -50,6 +51,7 @@ pub use ext::{Ext, MessageCallResult, ContractCreateResult, CreateContractAddres
 pub use return_data::{ReturnData, GasLeft};
 pub use error::{Error, Result};
 pub use oasis_contract::{OasisContract, OASIS_HEADER_PREFIX};
+pub use oasis_vm::{OasisVm, ConfidentialCtx};
 
 /// Virtual Machine interface
 pub trait Vm {

@@ -92,22 +92,8 @@ pub struct ActionParams {
 	pub call_type: CallType,
 	/// Param types encoding
 	pub params_type: ParamsType,
-	/// Confidential action flag. Note: we only allow confidential actions to
-	/// occur at the top-most transaction level (see transact_with_tracer in
-	/// executive.rs). In other words, we do not allow confidential calls or
-	/// confidential creates to be triggered from inside the vm, e.g., CREATE
-	/// or CALL in the EVM.
-	pub confidential: bool,
 	/// The Oasis contract extracted from the code (if header is present).
 	pub oasis_contract: Option<OasisContract>,
-}
-
-impl ActionParams {
-	/// Returns true if the action params is a confidential message call, requiring the
-	/// return value to be encrypted before returning it.
-	pub fn is_confidential_call(&self) -> bool {
-		self.confidential && self.call_type == CallType::Call
-	}
 }
 
 impl Default for ActionParams {
@@ -126,7 +112,6 @@ impl Default for ActionParams {
 			data: None,
 			call_type: CallType::None,
 			params_type: ParamsType::Separate,
-			confidential: false,
 			oasis_contract: None,
 		}
 	}
@@ -148,8 +133,6 @@ impl From<ethjson::vm::Transaction> for ActionParams {
 			value: ActionValue::Transfer(t.value.into()),
 			call_type: match address.is_zero() { true => CallType::None, false => CallType::Call },	// TODO @debris is this correct?
 			params_type: ParamsType::Separate,
-			// don't allow confidential transaction deserialization for now
-			confidential: false,
 			oasis_contract: None,
 		}
 	}

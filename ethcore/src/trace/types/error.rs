@@ -49,6 +49,8 @@ pub enum Error {
 	Reverted,
 	/// Execution could not be performed because contract expired
 	ContractExpired,
+	/// Execution could not be performed because of a confidentiality error.
+	Confidential,
 }
 
 impl<'a> From<&'a VmError> for Error {
@@ -65,7 +67,8 @@ impl<'a> From<&'a VmError> for Error {
 			VmError::MutableCallInStaticContext => Error::MutableCallInStaticContext,
 			VmError::OutOfBounds => Error::OutOfBounds,
 			VmError::Reverted => Error::Reverted,
-			VmError::ContractExpired => Error::ContractExpired
+			VmError::ContractExpired => Error::ContractExpired,
+			VmError::Confidential { .. } => Error::Confidential,
 		}
 	}
 }
@@ -92,6 +95,7 @@ impl fmt::Display for Error {
 			OutOfBounds => "Out of bounds",
 			Reverted => "Reverted",
 			ContractExpired => "Contract expired",
+			Confidential => "Confidential",
 		};
 		message.fmt(f)
 	}
@@ -113,6 +117,7 @@ impl Encodable for Error {
 			OutOfBounds => 9,
 			Reverted => 10,
 			ContractExpired => 11,
+			Confidential => 12,
 		};
 
 		s.append_internal(&value);
@@ -136,6 +141,7 @@ impl Decodable for Error {
 			9 => Ok(OutOfBounds),
 			10 => Ok(Reverted),
 			11 => Ok(ContractExpired),
+			12 => Ok(Confidential),
 			_ => Err(DecoderError::Custom("Invalid error type")),
 		}
 	}

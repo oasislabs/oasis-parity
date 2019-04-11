@@ -173,7 +173,6 @@ pub mod trace_ext;
 // pub mod verification;
 
 mod cache_manager;
-mod confidential_vm;
 mod blooms;
 mod pod_account;
 pub mod account_db;
