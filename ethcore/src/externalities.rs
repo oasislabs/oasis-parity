@@ -161,7 +161,7 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 		let current_timestamp = self.env_info.timestamp;
 		let expiry_timestamp = self.storage_expiry()?;
 		if current_timestamp > expiry_timestamp {
-			return Err(vm::Error::Internal("Contract is expired".to_string()));
+			return Err(vm::Error::ContractExpired);
 		}
 		Ok(expiry_timestamp - current_timestamp)
 	}
