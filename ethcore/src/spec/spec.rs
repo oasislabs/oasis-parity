@@ -47,6 +47,8 @@ use state::{Backend, State, Substate};
 use trace::{NoopTracer, NoopVMTracer};
 use trace_ext::NoopExtTracer;
 
+use crate::mkvs::{MKVS, PrefixedMKVS, MemoryMKVS};
+
 // pub use ethash::OptimizeFor;
 type OptimizeFor = u64;
 
@@ -513,6 +515,7 @@ fn load_from(spec_params: SpecParams, s: ethjson::spec::Spec) -> Result<Spec, Er
 		None => {
 			let _ = s.run_constructors(
 				&Default::default(),
+				Box::new(MemoryMKVS::new()),
 				BasicBackend(MemoryDB::new()),
 			)?;
 		}
@@ -578,33 +581,25 @@ impl Spec {
 
 	// given a pre-constructor state, run all the given constructors and produce a new state and
 	// state root.
-	fn run_constructors<T: Backend>(&self, factories: &Factories, mut db: T) -> Result<T, Error> {
-		let mut root = KECCAK_NULL_RLP;
-
+	fn run_constructors<T: Backend>(&self, factories: &Factories, mut mkvs: Box<MKVS>, mut db: T) -> Result<(T, Box<MKVS>), Error> {
 		// basic accounts in spec.
 		{
-			let mut t = factories.trie.create(db.as_hashdb_mut(), &mut root);
-
 			for (address, account) in self.genesis_state.get().iter() {
-				t.insert(&**address, &account.rlp())?;
+				mkvs.insert(&**address, &account.rlp());
 			}
 		}
 
 		for (address, account) in self.genesis_state.get().iter() {
 			db.note_non_null_account(address);
-			account.insert_additional(
-				&mut *factories.accountdb.create(
-					db.as_hashdb_mut(),
-					keccak(address),
-				),
-				&factories.trie,
-			);
+			let address_hash = &keccak(address);
+			let mut account_mkvs = PrefixedMKVS::new(&mut mkvs, address_hash);
+			account.insert_additional(&mut account_mkvs);
 		}
 
 		let start_nonce = self.engine.account_start_nonce(0);
 
-		let (root, db) = {
-			let mut state = State::from_existing(db, root, start_nonce, factories.clone(), None)?;
+		let (db, mkvs) = {
+			let mut state = State::from_existing(mkvs, db, start_nonce, factories.clone(), None)?;
 
 			// Execute contract constructors.
 			let env_info = EnvInfo {
@@ -620,7 +615,6 @@ impl Spec {
 			let from = Address::default();
 			for &(ref address, ref constructor) in self.constructors.iter() {
 				trace!(target: "spec", "run_constructors: Creating a contract at {}.", address);
-				trace!(target: "spec", "  .. root before = {}", state.root());
 				let params = ActionParams {
 					code_address: address.clone(),
 					code_hash: Some(keccak(constructor)),
@@ -650,15 +644,12 @@ impl Spec {
 				if let Err(e) = state.commit() {
 					warn!(target: "spec", "Genesis constructor trie commit at {} failed: {}.", address, e);
 				}
-
-				trace!(target: "spec", "  .. root after = {}", state.root());
 			}
 
 			state.drop()
 		};
 
-		*self.state_root_memo.write().unwrap() = root;
-		Ok(db)
+		Ok((db, mkvs))
 	}
 
 	/// Return the state root for the genesis state, memoising accordingly.
@@ -751,6 +742,7 @@ impl Spec {
 		self.genesis_state = s;
 		let _ = self.run_constructors(
 			&Default::default(),
+			Box::new(MemoryMKVS::new()),
 			BasicBackend(MemoryDB::new()),
 		)?;
 
@@ -766,14 +758,16 @@ impl Spec {
 	}
 
 	// /// Ensure that the given state DB has the trie nodes in for the genesis state.
-	pub fn ensure_db_good<T: Backend>(&self, db: T, factories: &Factories) -> Result<T, Error> {
-		if db.as_hashdb().contains(&self.state_root()) {
+	pub fn ensure_db_good<T: Backend>(&self, mkvs: Box<MKVS>, db: T, factories: &Factories) -> Result<T, Error> {
+		const GENESIS_INITIALIZED: &'static [u8] = b"genesis_initialized";
+		if mkvs.get(GENESIS_INITIALIZED).is_some() {
 			return Ok(db);
 		}
 
 		// TODO: could optimize so we don't re-run, but `ensure_db_good` is barely ever
 		// called anyway.
-		let db = self.run_constructors(factories, db)?;
+		let (db, mut mkvs) = self.run_constructors(factories, mkvs, db)?;
+		mkvs.insert(GENESIS_INITIALIZED, b"\x01");
 		Ok(db)
 	}
 

@@ -42,6 +42,8 @@ use transaction::{UnverifiedTransaction, SignedTransaction, Error as Transaction
 // use verification::PreverifiedBlock;
 use views::BlockView;
 
+use crate::mkvs::MKVS;
+
 type StateDB = WrappedBackend;
 
 /// A block, encoded as it is on the block chain.
@@ -279,6 +281,7 @@ impl<'x> OpenBlock<'x> {
 		engine: &'x EthEngine,
 		factories: Factories,
 		tracing: bool,
+		mkvs: Box<MKVS>,
 		db: StateDB,
 		parent: &Header,
 		last_hashes: Arc<LastHashes>,
@@ -290,7 +293,7 @@ impl<'x> OpenBlock<'x> {
 		confidential_ctx: Option<Box<ConfidentialCtx>>
 	) -> Result<Self, Error> {
 		let number = parent.number() + 1;
-		let state = State::from_existing(db, parent.state_root().clone(), engine.account_start_nonce(number), factories, confidential_ctx)?;
+		let state = State::from_existing(mkvs, db, engine.account_start_nonce(number), factories, confidential_ctx)?;
 		let mut r = OpenBlock {
 			block: ExecutedBlock::new(state, last_hashes, tracing),
 			engine: engine,
@@ -457,7 +460,6 @@ impl<'x> OpenBlock<'x> {
 		s.block.header.set_transactions_root(ordered_trie_root(s.block.transactions.iter().map(|e| e.rlp_bytes())));
 		let uncle_bytes = encode_list(&s.block.uncles).into_vec();
 		s.block.header.set_uncles_hash(keccak(&uncle_bytes));
-		s.block.header.set_state_root(s.block.state.root().clone());
 		s.block.header.set_receipts_root(ordered_trie_root(s.block.receipts.iter().map(|r| r.rlp_bytes())));
 		s.block.header.set_log_bloom(s.block.receipts.iter().fold(Bloom::zero(), |mut b, r| {
 			b.accrue_bloom(&r.log_bloom);
@@ -497,7 +499,6 @@ impl<'x> OpenBlock<'x> {
 			s.block.header.set_receipts_root(ordered_trie_root(s.block.receipts.iter().map(|r| r.rlp_bytes())));
 		}
 
-		s.block.header.set_state_root(s.block.state.root().clone());
 		s.block.header.set_log_bloom(s.block.receipts.iter().fold(Bloom::zero(), |mut b, r| {
 			b.accrue_bloom(&r.log_bloom);
 			b
@@ -612,7 +613,7 @@ impl LockedBlock {
 impl Drain for LockedBlock {
 	/// Drop this object and return the underlieing database.
 	fn drain(self) -> StateDB {
-		self.block.state.drop().1
+		self.block.state.drop().0
 	}
 }
 
@@ -630,7 +631,7 @@ impl SealedBlock {
 impl Drain for SealedBlock {
 	/// Drop this object and return the underlieing database.
 	fn drain(self) -> StateDB {
-		self.block.state.drop().1
+		self.block.state.drop().0
 	}
 }
 

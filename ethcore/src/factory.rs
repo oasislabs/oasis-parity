@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use trie::TrieFactory;
-use account_db::Factory as AccountFactory;
 use evm::{Factory as EvmFactory, VMType};
 use vm::{Vm, ConfidentialCtx, OasisVm, ActionParams, Schedule};
 use wasm::WasmInterpreter;
@@ -58,8 +56,4 @@ impl From<EvmFactory> for VmFactory {
 pub struct Factories {
 	/// factory for evm.
 	pub vm: VmFactory,
-	/// factory for tries.
-	pub trie: TrieFactory,
-	/// factory for account databases.
-	pub accountdb: AccountFactory,
 }

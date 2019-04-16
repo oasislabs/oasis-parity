@@ -28,6 +28,8 @@ use ethjson;
 use types::account_diff::*;
 use rlp::{self, RlpStream};
 
+use crate::mkvs::MKVS;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// An account, expressed as Plain-Old-Data (hence the name).
 /// Does not have a DB overlay cache, code hash or anything like that.
@@ -68,18 +70,13 @@ impl PodAccount {
 		stream.out()
 	}
 
-	/// Place additional data into given hash DB.
-	pub fn insert_additional(&self, db: &mut HashDB, factory: &TrieFactory) {
+	pub fn insert_additional(&self, mkvs: &mut MKVS) {
 		match self.code {
-			Some(ref c) if !c.is_empty() => { db.insert(c); }
+			Some(ref c) if !c.is_empty() => { mkvs.insert(&keccak(c), c); }
 			_ => {}
 		}
-		let mut r = H256::new();
-		let mut t = factory.create(db, &mut r);
 		for (k, v) in &self.storage {
-			if let Err(e) = t.insert(k, &rlp::encode(v)) {
-				warn!("Encountered potential DB corruption: {}", e);
-			}
+			mkvs.insert(k.as_ref(), &rlp::encode(v));
 		}
 	}
 }

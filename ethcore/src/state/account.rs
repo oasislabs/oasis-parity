@@ -34,6 +34,8 @@ use basic_account::BasicAccount;
 
 use std::cell::{RefCell, Cell};
 
+use crate::mkvs::MKVS;
+
 const STORAGE_CACHE_ITEMS: usize = 8192;
 
 /// Boolean type for clean/dirty status.
@@ -207,17 +209,16 @@ impl Account {
 	/// Get (and cache) the contents of the trie's storage at `key`.
 	/// Takes modified storage into account.
 	/// Returns None in the result if the key doesn't exist in storage.
-	pub fn storage_at(&self, db: &HashDB, key: &H256) -> trie::Result<Option<Vec<u8>>> {
+	pub fn storage_at(&self, mkvs: &MKVS, key: &H256) -> Option<Vec<u8>> {
 		if let Some(value) = self.cached_storage_at(key) {
-			return Ok(Some(value));
+			return Some(value);
 		}
-		let db = SecTrieDB::new(db, &self.storage_root)?;
 		let panicky_decoder = |bytes:&[u8]| ::rlp::decode(&bytes).expect("decoding db value failed");
-		let item: Option<Vec<u8>> = db.get_with(key, panicky_decoder)?;
-		Ok(item.map(|value| {
+		let item = mkvs.get(&key).map(|value| panicky_decoder(&value));
+		item.map(|value: Vec<u8>| {
 			self.storage_cache.borrow_mut().insert(key.clone(), value.clone());
 			value
-		}))
+		})
 	}
 
 	/// Get cached storage value if any. Returns `None` if the
@@ -287,16 +288,16 @@ impl Account {
 	}
 
 	/// Provide a database to get `code_hash`. Should not be called if it is a contract without code.
-	pub fn cache_code(&mut self, db: &HashDB) -> Option<Arc<Bytes>> {
+	pub fn cache_code(&mut self, mkvs: &MKVS) -> Option<Arc<Bytes>> {
 		// TODO: fill out self.code_cache;
 		trace!("Account::cache_code: ic={}; self.code_hash={:?}, self.code_cache={}", self.is_cached(), self.code_hash, self.code_cache.pretty());
 
 		if self.is_cached() { return Some(self.code_cache.clone()) }
 
-		match db.get(&self.code_hash) {
+		match mkvs.get(&self.code_hash) {
 			Some(x) => {
 				self.code_size = Some(x.len());
-				self.code_cache = Arc::new(x.into_vec());
+				self.code_cache = Arc::new(x);
 				Some(self.code_cache.clone())
 			},
 			_ => {
@@ -316,12 +317,12 @@ impl Account {
 	}
 
 	/// Provide a database to get `code_size`. Should not be called if it is a contract without code.
-	pub fn cache_code_size(&mut self, db: &HashDB) -> bool {
+	pub fn cache_code_size(&mut self, mkvs: &MKVS) -> bool {
 		// TODO: fill out self.code_cache;
 		trace!("Account::cache_code_size: ic={}; self.code_hash={:?}, self.code_cache={}", self.is_cached(), self.code_hash, self.code_cache.pretty());
 		self.code_size.is_some() ||
 			if self.code_hash != KECCAK_EMPTY {
-				match db.get(&self.code_hash) {
+				match mkvs.get(&self.code_hash) {
 					Some(x) => {
 						self.code_size = Some(x.len());
 						true
@@ -386,9 +387,7 @@ impl Account {
 		self.balance = self.balance - *x;
 	}
 
-	/// Commit the `storage_changes` to the backing DB and update `storage_root`.
-	pub fn commit_storage(&mut self, trie_factory: &TrieFactory, db: &mut HashDB) -> trie::Result<()> {
-		let mut t = trie_factory.from_existing(db, &mut self.storage_root)?;
+	pub fn commit_storage(&mut self, account_mkvs: &mut MKVS) {
 		for (k, v) in self.storage_changes.drain() {
 			// cast key and value to trait type,
 			// so we can call overloaded `to_bytes` method
@@ -397,17 +396,15 @@ impl Account {
             //       zeroed out. This is guaranteed since the length will always be > 32 when
             //       encrypted.
 			match v.len() == 32 && H256::from_slice(&v).is_zero() {
-				true => t.remove(&k)?,
-				false => t.insert(&k, &encode(&v))?,
+				true => account_mkvs.remove(&k),
+				false => account_mkvs.insert(&k, &encode(&v)),
 			};
 
 			self.storage_cache.borrow_mut().insert(k, v);
 		}
-		Ok(())
 	}
 
-	/// Commit any unsaved code. `code_hash` will always return the hash of the `code_cache` after this.
-	pub fn commit_code(&mut self, db: &mut HashDB) {
+	pub fn commit_code(&mut self, account_mkvs: &mut MKVS) {
 		trace!("Commiting code of {:?} - {:?}, {:?}", self, self.code_filth == Filth::Dirty, self.code_cache.is_empty());
 		match (self.code_filth == Filth::Dirty, self.code_cache.is_empty()) {
 			(true, true) => {
@@ -415,7 +412,7 @@ impl Account {
 				self.code_filth = Filth::Clean;
 			},
 			(true, false) => {
-				db.emplace(self.code_hash.clone(), DBValue::from_slice(&*self.code_cache));
+				account_mkvs.insert(self.code_hash.as_ref(), self.code_cache.as_ref());
 				self.code_size = Some(self.code_cache.len());
 				self.code_filth = Filth::Clean;
 			},
@@ -483,29 +480,6 @@ impl Account {
 			cache.insert(k, v);
 		}
 		self.storage_changes = other.storage_changes;
-	}
-}
-
-// light client storage proof.
-impl Account {
-	/// Prove a storage key's existence or nonexistence in the account's storage
-	/// trie.
-	/// `storage_key` is the hash of the desired storage key, meaning
-	/// this will only work correctly under a secure trie.
-	pub fn prove_storage(&self, db: &HashDB, storage_key: H256) -> Result<(Vec<Bytes>, Vec<u8>), Box<TrieError>> {
-		use trie::{Trie, TrieDB};
-		use trie::recorder::Recorder;
-
-		let mut recorder = Recorder::new();
-
-		let trie = TrieDB::new(db, &self.storage_root)?;
-		let item: Vec<u8> = {
-			let panicky_decoder = |bytes:&[u8]| ::rlp::decode(bytes).expect("decoding db value failed");
-			let query = (&mut recorder, panicky_decoder);
-			trie.get_with(&storage_key, query)?.unwrap_or(H256::zero().to_vec())
-		};
-
-		Ok((recorder.drain().into_iter().map(|r| r.data).collect(), item.into()))
 	}
 }
 

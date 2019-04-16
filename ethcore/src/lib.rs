@@ -166,6 +166,7 @@ pub mod state_db;
 pub mod trace;
 /// Ext (Externalities) tracing
 pub mod trace_ext;
+pub mod mkvs;
 
 mod cache_manager;
 mod blooms;
