@@ -3096,7 +3096,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "secp256k1-plus"
 version = "0.5.7"
-source = "git+https://github.com/oasislabs/rust-secp256k1?branch=feature/rand_optional#3703de1de5d0de84499b893cbfaaf407d6688dba"
+source = "git+https://github.com/oasislabs/rust-secp256k1?branch=feature/rand_optional#2a91b5b727a083475d4c2755c59b0cc408cc3d54"
 dependencies = [
  "arrayvec 0.3.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "gcc 0.3.54 (registry+https://github.com/rust-lang/crates.io-index)",
