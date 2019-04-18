@@ -16,6 +16,8 @@
 
 //! Virtual machines support library
 
+#[macro_use]
+extern crate log;
 extern crate ethereum_types;
 extern crate ethcore_bytes as bytes;
 extern crate common_types as types;

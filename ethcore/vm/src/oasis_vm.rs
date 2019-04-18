@@ -64,10 +64,12 @@ impl Vm for ConfidentialVm {
 	fn exec(&mut self, params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
 		// Executes confidentially.
 		if self.is_confidential(&params, ext)? {
+			info!("confidential_vm::exec confidential");
 			self.exec_confidential(params, ext)
 		}
 		// Excutes non-confidentially.
 		else {
+			info!("confidential_vm::exec non-confidential");
 			self.vm.exec(params, ext)
 		}
 	}
@@ -81,11 +83,13 @@ impl ConfidentialVm {
 		// then keep treating as confidential, so that we can switch into and out of
 		// confidentiality.
 		if self.ctx.borrow().activated() {
+			info!("confidential_vm::is_confidential activated");
 			Ok(true)
 		}
 		// If we're creating a confidential contract, then check the params' code, since
 		// it's not yet part of the state.
 		else if ext.depth() == 0 && params.call_type == CallType::None {
+			info!("confidential_vm::is_confidential depth 0 create");
 			Ok(params.oasis_contract.as_ref().map_or(false, |c| c.confidential))
 		}
 		// If we haven't executed a confidential contract in this transaction yet, check
@@ -94,6 +98,7 @@ impl ConfidentialVm {
 		// calls, we need to check the code of the storage context with which we are in,
 		// E.g., in a delgatecall, this is *not* the same as the code being executed.
 		else {
+			info!("confidential_vm::is_confidnetial check the code in the state");
 			ext.is_confidential_contract(&params.address)
 		}
 	}
@@ -101,14 +106,19 @@ impl ConfidentialVm {
 	fn exec_confidential(&mut self, params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
 		let result = {
 			if ext.depth() == 0 {
+				info!("confidential_vm::exec_confidential depth 0 tx");
 				self.tx(params, ext)
 			} else {
+				info!("confidential_vm::exec_confidential cross contract call");
 				self.cross_contract_call(params, ext)
 			}
 		};
 
 		if result.is_err() {
+			info!("confidential_vm::exec_confidential error = {:?}", result);
 			self.ctx.borrow_mut().deactivate();
+		} else {
+			info!("confidential_vm::exec_confidential success")
 		}
 
 		result
@@ -126,6 +136,7 @@ impl ConfidentialVm {
 
 	/// Deploys a confidential contract.
 	fn tx_create(&mut self, params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
+		info!("confidential_vm::tx_create");
 		let (public_key, mut signature)
 			= self.ctx.borrow_mut().create_long_term_public_key(params.code_address.clone())?;
 
@@ -155,6 +166,7 @@ impl ConfidentialVm {
 	/// Returns the result of executing the contract call, encrypted with key given in the
 	/// encrypted calldata.
 	fn tx_call(&mut self, mut params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
+		info!("confidential_vm::tx_call");
 		if params.data.is_none() {
 			return Err(Error::Confidential(
 				"Cannot execute a confidential call without a data field".to_string()
@@ -211,7 +223,9 @@ impl ConfidentialVm {
 	/// useful if we wanted to exit out of the enclave with encrypted data and enter into
 	/// a new enclave in the future.
 	fn cross_contract_call(&mut self, mut params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
+		info!("confidential_vm::cross_contract_call");
 		self.check_cross_contract_call(&params, ext)?;
+		info!("confidential_vm::cross_contract_call executing");
 
 		let address = {
 			if ext.is_confidential_contract(&params.address)? {
@@ -220,6 +234,7 @@ impl ConfidentialVm {
 				None
 			}
 		};
+		info!("confidential_vm::cross_contract_call activating {:?}", address);
 
 		// Swap the confidential context to the new contract we're calling. If it's a
 		// delegatecall/callcode, then this switch is a no-op.
@@ -228,23 +243,25 @@ impl ConfidentialVm {
 		// contract we're executing. If executing a delegatecall or callcode, then it is
 		// the address whose storage context we're executing in.
 		let old_contract = self.ctx.borrow_mut().activate(address)?;
-
+		info!("confidential_vm::cross_contract_call deactivated {:?}", old_contract);
 		// Run the contract execution.
 		let result = self.vm.exec(params, ext);
-
+		info!("confidential_vm::cross_contract_call result = {:?}", result);
 		// Swap back the confidential ctx to use the keys prior to the cross contract call.
-		let _ = self.ctx.borrow_mut().activate(old_contract)?;
-
+		let old_contract = self.ctx.borrow_mut().activate(old_contract)?;
+		info!("confidential_vm::cross_contract_call deactivated {:?}", old_contract);
 		result
 	}
 
 	fn check_cross_contract_call(&self, params: &ActionParams, ext: &mut Ext) -> Result<()> {
 		if params.call_type == CallType::None {
+			info!("confidential_vm::cross_contract_call create");
 			return Err(Error::Confidential(
 				"Cannot create a contract after executing a confidential contract".to_string()
 			));
 		}
 		if params.data.is_none() {
+			info!("confidential_vm::cross_contract_call no data");
 			return Err(Error::Confidential(
 				"Cannot execute a confidential call without a data field".to_string()
 			));
@@ -254,10 +271,12 @@ impl ConfidentialVm {
 
 		// Assert confidential contracts can only call confidential contracts.
 		if self.ctx.borrow().activated() && !ext.is_confidential_contract(&params.address)? {
+			info!("confidential_vm::cross_contract_call confidential -> non-confidential");
 			return Err(Error::Confidential("cannot call a non-confidential contract from confidential".to_string()));
 		}
 		// Assert non-confidnetial contracts can only call non-confidential contracts.
 		if !self.ctx.borrow().activated() && ext.is_confidential_contract(&params.address)? {
+			info!("confidential_vm::cross_contract_call non-confidential -> confidential");
 			return Err(Error::Confidential("cannot call a confidential contract from non-confidential".to_string()));
 		}
 		Ok(())
@@ -271,7 +290,7 @@ impl ConfidentialVm {
 /// contract, at which point any of the other methods can be called, e.g.,
 /// to encrypt/decrypt storage or logs.
 ///
-/// When encrypting to a `peer()` with `encrypt_session`, `decrypt_session`  must first be
+/// When encrypting to a `peer()` with `encrypt_session`, `decrypt_session`	 must first be
 /// called to set the peer receiving such encrypted payloads.
 ///
 /// When accessing storage or logs, the ethcore State observes the shared OasisVm confidential ctx,
