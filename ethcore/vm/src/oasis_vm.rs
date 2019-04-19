@@ -104,6 +104,7 @@ impl ConfidentialVm {
 	}
 
 	fn exec_confidential(&mut self, params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
+		info!(target: "ConfidentialVm", "exec_confidential({:?})", params);
 		let result = {
 			if ext.depth() == 0 {
 				info!("confidential_vm::exec_confidential depth 0 tx");
@@ -225,8 +226,6 @@ impl ConfidentialVm {
 	fn cross_contract_call(&mut self, mut params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
 		info!("confidential_vm::cross_contract_call");
 		self.check_cross_contract_call(&params, ext)?;
-		info!("confidential_vm::cross_contract_call executing");
-
 		let address = {
 			if ext.is_confidential_contract(&params.address)? {
 				Some(params.address)
@@ -266,6 +265,13 @@ impl ConfidentialVm {
 				"Cannot execute a confidential call without a data field".to_string()
 			));
 		}
+
+		info!(
+			"params.address = {:?}, activated = {:?}, is_confidential = {:?}",
+			params.address,
+			self.ctx.borrow().activated(),
+			ext.is_confidential_contract(&params.address)?
+		);
 
 		// To enable cross contract calls across confidential domains, remove the following checks.
 
