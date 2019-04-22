@@ -243,6 +243,8 @@ impl ConfidentialVm {
 		result
 	}
 
+	/// Checks the cross contract call preconditions, returning an error if any invariant is
+	/// violated.
 	fn check_cross_contract_call(&self, params: &ActionParams, ext: &mut Ext) -> Result<()> {
 		trace!(
 			"ConfidentialVm::check_cross_contract_call(..), activated={:?}, ext.is_confidential({:?))={:?}",
