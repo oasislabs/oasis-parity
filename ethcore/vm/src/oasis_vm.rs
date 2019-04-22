@@ -3,7 +3,10 @@ use std::{cell::RefCell, rc::Rc};
 use crate::{ActionParams, OasisContract, Vm, Ext, GasLeft, Result, Error, ReturnData, CallType};
 
 /// The H256 topic that the long term public key is logged under for a confidential deploy.
-const CONFIDENTIAL_LOG_TOPIC: &'static str = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+const CONFIDENTIAL_LOG_TOPIC: [u8; 32] = [
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255
+];
 
 /// OasisVm is a wrapper for a WASM or EVM vm for executing all contracts on Oasis.
 pub struct OasisVm {
@@ -102,7 +105,7 @@ impl ConfidentialVm {
 	}
 
 	fn exec_confidential(&mut self, params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
-		trace!("ConfidentialVm::exec_confidential(params={:?}, ext={:?}", params, ext);
+		trace!("ConfidentialVm::exec_confidential(params={:?}, ext=...", params);
 		let result = {
 			if ext.depth() == 0 {
 				self.tx(params, ext)
@@ -136,6 +139,7 @@ impl ConfidentialVm {
 
 		let mut log_data = public_key;
 		log_data.append(&mut signature);
+
 		// Store public key in log for retrieval.
 		ext.log(
 			vec![H256::from(CONFIDENTIAL_LOG_TOPIC)],
@@ -247,7 +251,7 @@ impl ConfidentialVm {
 	/// violated.
 	fn check_cross_contract_call(&self, params: &ActionParams, ext: &mut Ext) -> Result<()> {
 		trace!(
-			"ConfidentialVm::check_cross_contract_call(..), activated={:?}, ext.is_confidential({:?))={:?}",
+			"ConfidentialVm::check_cross_contract_call(..), activated={:?}, ext.is_confidential({:?})={:?}",
 			self.ctx.borrow().activated(),
 			params.address,
 			ext.is_confidential_contract(&params.address)?
