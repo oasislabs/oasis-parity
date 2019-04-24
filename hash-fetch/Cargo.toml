@@ -16,7 +16,7 @@ rand = "0.6.5"
 rustc-hex = "1.0"
 fetch = { path = "../util/fetch" }
 ethcore-bytes = { path = "../util/bytes" }
-ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
+ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
 parity-reactor = { path = "../util/reactor" }
 keccak-hash = { path = "../util/hash" }
 registrar = { path = "../registrar" }

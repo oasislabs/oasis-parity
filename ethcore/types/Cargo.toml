@@ -8,7 +8,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 rlp = { path = "../../util/rlp" }
 rlp_derive = { path = "../../util/rlp_derive" }
 ethcore-bytes = { path = "../../util/bytes" }
-ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
+ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
 ethjson = { path = "../../json" }
 keccak-hash = { path = "../../util/hash" }
 heapsize = "0.4"

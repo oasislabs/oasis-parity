@@ -7,7 +7,7 @@ description = "Whisper Protocol implementation for Parity"
 [dependencies]
 bitflags = "0.9"
 byteorder = "1.0.0"
-ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
+ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
 ethcore-network = { path = "../util/network" }
 ethcore-crypto = { path = "../ethcore/crypto" }
 ethkey = { path = "../ethkey" }

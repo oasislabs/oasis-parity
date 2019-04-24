@@ -134,7 +134,8 @@ impl MemoryDB {
 
 	/// Returns the size of allocated heap memory
 	pub fn mem_used(&self) -> usize {
-		self.data.heap_size_of_children()
+		unimplemented!()
+		// self.data.heap_size_of_children()
 	}
 
 	/// Remove an element and delete it from storage if reference count reaches zero.

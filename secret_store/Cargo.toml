@@ -29,7 +29,7 @@ ethcore-crypto = { path = "../ethcore/crypto" }
 ethcore-logger = { path = "../logger" }
 ethcore-sync = { path = "../ethcore/sync" }
 ethcore-transaction = { path = "../ethcore/transaction" }
-ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
+ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
 kvdb = { path = "../util/kvdb" }
 keccak-hash = { path = "../util/hash" }
 ethkey = { path = "../ethkey" }
