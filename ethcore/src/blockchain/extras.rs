@@ -233,8 +233,7 @@ impl rlp::Decodable for BlockDetails {
 
 impl HeapSizeOf for BlockDetails {
 	fn heap_size_of_children(&self) -> usize {
-		unimplemented!("heapsizeof")
-		// self.children.heap_size_of_children()
+		self.children.heap_size_of_children()
 	}
 }
 

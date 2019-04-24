@@ -1426,14 +1426,13 @@ impl BlockChain {
 
 	/// Get current cache size.
 	pub fn cache_size(&self) -> CacheSize {
-	    unimplemented!("heapsizeof")
-		// CacheSize {
-		// 	blocks: self.block_headers.read().unwrap().heap_size_of_children() + self.block_bodies.read().unwrap().heap_size_of_children(),
-		// 	block_details: self.block_details.read().unwrap().heap_size_of_children(),
-		// 	transaction_addresses: self.transaction_addresses.read().unwrap().heap_size_of_children(),
-		// 	blocks_blooms: self.blocks_blooms.read().unwrap().heap_size_of_children(),
-		// 	block_receipts: self.block_receipts.read().unwrap().heap_size_of_children(),
-		// }
+		CacheSize {
+			blocks: self.block_headers.read().unwrap().heap_size_of_children() + self.block_bodies.read().unwrap().heap_size_of_children(),
+			block_details: self.block_details.read().unwrap().heap_size_of_children(),
+			transaction_addresses: self.transaction_addresses.read().unwrap().heap_size_of_children(),
+			blocks_blooms: self.blocks_blooms.read().unwrap().heap_size_of_children(),
+			block_receipts: self.block_receipts.read().unwrap().heap_size_of_children(),
+		}
 	}
 
 	/// Ticks our cache system and throws out any old data.
@@ -1470,14 +1469,13 @@ impl BlockChain {
 			blocks_blooms.shrink_to_fit();
 			block_receipts.shrink_to_fit();
 
-			unimplemented!("heapsizeof")
-			// block_headers.heap_size_of_children() +
-			// block_bodies.heap_size_of_children() +
-			// block_details.heap_size_of_children() +
-			// block_hashes.heap_size_of_children() +
-			// transaction_addresses.heap_size_of_children() +
-			// blocks_blooms.heap_size_of_children() +
-			// block_receipts.heap_size_of_children()
+			block_headers.heap_size_of_children() +
+			block_bodies.heap_size_of_children() +
+			block_details.heap_size_of_children() +
+			block_hashes.heap_size_of_children() +
+			transaction_addresses.heap_size_of_children() +
+			blocks_blooms.heap_size_of_children() +
+			block_receipts.heap_size_of_children()
 		});
 	}
 

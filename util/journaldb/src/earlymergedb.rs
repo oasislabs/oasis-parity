@@ -350,11 +350,10 @@ impl JournalDB for EarlyMergeDB {
 	fn latest_era(&self) -> Option<u64> { self.latest_era }
 
 	fn mem_used(&self) -> usize {
-		unimplemented!("heapsizeof")
-		// self.overlay.mem_used() + match self.refs {
-		// 	Some(ref c) => c.read().unwrap().heap_size_of_children(),
-		// 	None => 0
-		// }
+		self.overlay.mem_used() + match self.refs {
+			Some(ref c) => c.read().unwrap().heap_size_of_children(),
+			None => 0
+		}
  	}
 
 	fn state(&self, id: &H256) -> Option<Bytes> {
