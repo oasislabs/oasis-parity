@@ -29,9 +29,9 @@ error-chain = { version = "0.10", default-features = false }
 ethcore-transaction = { path = "./transaction" }
 ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
 memory-cache = { path = "../util/memory_cache" }
-ethabi = "7.0"
-ethabi-derive = "7.0"
-ethabi-contract = "7.0"
+ethabi = "5.1"
+ethabi-derive = "5.1"
+ethabi-contract = "5.1"
 ethjson = { path = "../json" }
 ethkey = { path = "../ethkey" }
 # ethstore = { path = "../ethstore" }
