@@ -100,7 +100,8 @@ impl JournalDB for RefCountedDB {
 	}
 
 	fn mem_used(&self) -> usize {
-		self.inserts.heap_size_of_children() + self.removes.heap_size_of_children()
+		unimplemented!("heapsizeof")
+		// self.inserts.heap_size_of_children() + self.removes.heap_size_of_children()
  	}
 
 	fn is_empty(&self) -> bool {
