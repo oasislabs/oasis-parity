@@ -136,7 +136,8 @@ struct JournalEntry {
 
 impl HeapSizeOf for JournalEntry {
 	fn heap_size_of_children(&self) -> usize {
-		self.insertions.heap_size_of_children() + self.deletions.heap_size_of_children()
+		unimplemented!("heapsizeof")
+		// self.insertions.heap_size_of_children() + self.deletions.heap_size_of_children()
 	}
 }
 
@@ -247,14 +248,15 @@ impl JournalDB for OverlayRecentDB {
 	}
 
 	fn mem_used(&self) -> usize {
-		let mut mem = self.transaction_overlay.mem_used();
-		let overlay = self.journal_overlay.read().unwrap();
-
-		mem += overlay.backing_overlay.mem_used();
-		mem += overlay.pending_overlay.heap_size_of_children();
-		mem += overlay.journal.heap_size_of_children();
-
-		mem
+		unimplemented!("heapsizeof")
+		// let mut mem = self.transaction_overlay.mem_used();
+		// let overlay = self.journal_overlay.read().unwrap();
+                //
+		// mem += overlay.backing_overlay.mem_used();
+		// mem += overlay.pending_overlay.heap_size_of_children();
+		// mem += overlay.journal.heap_size_of_children();
+                //
+		// mem
 	}
 
 	fn journal_size(&self) -> usize {

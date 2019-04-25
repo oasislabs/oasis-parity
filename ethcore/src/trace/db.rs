@@ -153,9 +153,10 @@ impl<T> TraceDB<T> where T: DatabaseExtras {
 	}
 
 	fn cache_size(&self) -> usize {
-		let traces = self.traces.read().unwrap().heap_size_of_children();
-		let blooms = self.blooms.read().unwrap().heap_size_of_children();
-		traces + blooms
+		unimplemented!("heapsizeof")
+		// let traces = self.traces.read().unwrap().heap_size_of_children();
+		// let blooms = self.blooms.read().unwrap().heap_size_of_children();
+		// traces + blooms
 	}
 
 	/// Let the cache system know that a cacheable item has been used.
@@ -182,7 +183,8 @@ impl<T> TraceDB<T> where T: DatabaseExtras {
 			traces.shrink_to_fit();
 			blooms.shrink_to_fit();
 
-			traces.heap_size_of_children() + blooms.heap_size_of_children()
+			unimplemented!("heapsizeof")
+			// traces.heap_size_of_children() + blooms.heap_size_of_children()
 		});
 	}
 

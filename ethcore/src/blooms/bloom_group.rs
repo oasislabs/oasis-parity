@@ -50,6 +50,7 @@ impl Into<bc::BloomGroup> for BloomGroup {
 
 impl HeapSizeOf for BloomGroup {
 	fn heap_size_of_children(&self) -> usize {
-		self.blooms.heap_size_of_children()
+		unimplemented!("heapsizeof")
+		// self.blooms.heap_size_of_children()
 	}
 }
