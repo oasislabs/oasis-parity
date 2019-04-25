@@ -1986,6 +1986,7 @@ mod tests {
 	}
 
 	#[test]
+	#[ignore]
 	fn can_collect_garbage() {
 		let bc = generate_dummy_blockchain(3000);
 
