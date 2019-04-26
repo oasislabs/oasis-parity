@@ -18,7 +18,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use heapsize::HeapSizeOf;
+// use heapsize::HeapSizeOf;
 use rlp::{encode, decode};
 use hashdb::*;
 use overlaydb::OverlayDB;

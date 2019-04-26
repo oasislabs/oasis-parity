@@ -17,7 +17,7 @@
 //! Receipt
 
 use ethereum_types::{H256, U256, Address, Bloom};
-use heapsize::HeapSizeOf;
+// use heapsize::HeapSizeOf;
 use rlp::{Rlp, RlpStream, Encodable, Decodable, DecoderError};
 
 use {BlockNumber};
@@ -107,11 +107,11 @@ impl Decodable for Receipt {
 	}
 }
 
-impl HeapSizeOf for Receipt {
-	fn heap_size_of_children(&self) -> usize {
-		self.logs.heap_size_of_children()
-	}
-}
+// impl HeapSizeOf for Receipt {
+// 	fn heap_size_of_children(&self) -> usize {
+// 		self.logs.heap_size_of_children()
+// 	}
+// }
 
 /// Receipt with additional info.
 #[derive(Debug, Clone, PartialEq)]

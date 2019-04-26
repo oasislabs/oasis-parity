@@ -15,7 +15,7 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 use bloomchain::group as bc;
-use heapsize::HeapSizeOf;
+// use heapsize::HeapSizeOf;
 use ethereum_types::Bloom;
 
 /// Represents group of X consecutive blooms.
@@ -48,9 +48,8 @@ impl Into<bc::BloomGroup> for BloomGroup {
 	}
 }
 
-impl HeapSizeOf for BloomGroup {
-	fn heap_size_of_children(&self) -> usize {
-		unimplemented!("heapsizeof")
-		// self.blooms.heap_size_of_children()
-	}
-}
+// impl HeapSizeOf for BloomGroup {
+// 	fn heap_size_of_children(&self) -> usize {
+// 		self.blooms.heap_size_of_children()
+// 	}
+// }

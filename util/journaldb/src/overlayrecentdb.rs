@@ -20,7 +20,7 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::sync::RwLock;
-use heapsize::HeapSizeOf;
+// use heapsize::HeapSizeOf;
 use rlp::{Rlp, RlpStream, encode, decode, DecoderError, Decodable, Encodable};
 use hashdb::*;
 use memorydb::*;
@@ -134,12 +134,11 @@ struct JournalEntry {
 	deletions: Vec<H256>,
 }
 
-impl HeapSizeOf for JournalEntry {
-	fn heap_size_of_children(&self) -> usize {
-		unimplemented!("heapsizeof")
-		// self.insertions.heap_size_of_children() + self.deletions.heap_size_of_children()
-	}
-}
+// impl HeapSizeOf for JournalEntry {
+// 	fn heap_size_of_children(&self) -> usize {
+// 		self.insertions.heap_size_of_children() + self.deletions.heap_size_of_children()
+// 	}
+// }
 
 impl Clone for OverlayRecentDB {
 	fn clone(&self) -> OverlayRecentDB {
