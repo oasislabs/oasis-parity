@@ -18,7 +18,7 @@ url = "1"
 ansi_term = "0.10"
 error-chain = { version = "0.10", default-features = false }
 ethcore-transaction = { path = "../ethcore/transaction" }
-ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
+ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
 futures = "0.1"
 futures-cpupool = "0.1"
 heapsize = "0.4"

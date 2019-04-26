@@ -8,7 +8,7 @@ license = "MIT"
 keywords = ["ethereum", "ethcore", "bloom", "chain", "filter"]
 
 [dependencies]
-ethbloom = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
+ethbloom = { version = "0.5", default-features = false }
 
 [dev-dependencies]
 rustc-hex = "1.0"

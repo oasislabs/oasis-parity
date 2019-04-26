@@ -25,7 +25,7 @@ use header::BlockNumber;
 use receipt::Receipt;
 use rlp;
 
-use heapsize::HeapSizeOf;
+// use heapsize::HeapSizeOf;
 use ethereum_types::{H256, H264, U256};
 use kvdb::PREFIX_LEN as DB_PREFIX_LEN;
 
@@ -231,11 +231,11 @@ impl rlp::Decodable for BlockDetails {
 	}
 }
 
-impl HeapSizeOf for BlockDetails {
-	fn heap_size_of_children(&self) -> usize {
-		self.children.heap_size_of_children()
-	}
-}
+// impl HeapSizeOf for BlockDetails {
+// 	fn heap_size_of_children(&self) -> usize {
+// 		self.children.heap_size_of_children()
+// 	}
+// }
 
 /// Represents address of certain transaction within block
 #[derive(Debug, PartialEq, Clone, RlpEncodable, RlpDecodable)]
@@ -246,9 +246,9 @@ pub struct TransactionAddress {
 	pub index: usize
 }
 
-impl HeapSizeOf for TransactionAddress {
-	fn heap_size_of_children(&self) -> usize { 0 }
-}
+// impl HeapSizeOf for TransactionAddress {
+// 	fn heap_size_of_children(&self) -> usize { 0 }
+// }
 
 /// Contains all block receipts.
 #[derive(Clone, RlpEncodableWrapper, RlpDecodableWrapper)]
@@ -264,11 +264,11 @@ impl BlockReceipts {
 	}
 }
 
-impl HeapSizeOf for BlockReceipts {
-	fn heap_size_of_children(&self) -> usize {
-		self.receipts.heap_size_of_children()
-	}
-}
+// impl HeapSizeOf for BlockReceipts {
+// 	fn heap_size_of_children(&self) -> usize {
+// 		self.receipts.heap_size_of_children()
+// 	}
+// }
 
 /// Candidate transitions to an epoch with specific number.
 // #[derive(Clone, RlpEncodable, RlpDecodable)]

@@ -365,10 +365,10 @@ impl Schedule {
 		let default_storage_duration = U256::from(default_storage_duration);
 		// prorated gas cost <- duration * default_gas * bytes_len / (default_storage_duration / 32)
 		// cannot overflow as duration and default_gas are converted from u64s
-		let mut gas = default_gas * duration * bytes_len / (default_storage_duration * U256::from(32));
+		let mut gas = default_gas * duration * U256::from(bytes_len) / (default_storage_duration * U256::from(32));
 
 		// if this is a charge (not a refund), round up
-		if !refund && duration * default_gas * bytes_len % (default_storage_duration * U256::from(32)) != U256::from(0) {
+		if !refund && duration * default_gas * U256::from(bytes_len) % (default_storage_duration * U256::from(32)) != U256::from(0) {
 			gas = gas + U256::from(1)
 		}
 

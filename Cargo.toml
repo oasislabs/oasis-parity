@@ -42,7 +42,7 @@ ethcore-private-tx = { path = "ethcore/private-tx" }
 ethcore-service = { path = "ethcore/service" }
 ethcore-sync = { path = "ethcore/sync" }
 ethcore-transaction = { path = "ethcore/transaction" }
-ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
+ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
 node-filter = { path = "ethcore/node_filter" }
 ethkey = { path = "ethkey" }
 node-health = { path = "dapps/node-health" }

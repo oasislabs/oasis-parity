@@ -6,6 +6,6 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 rlp = { path = "../rlp" }
 kvdb = { path = "../kvdb" }
-ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
+ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
 error-chain = { version = "0.10", default-features = false }
 rustc-hex = "1.0"

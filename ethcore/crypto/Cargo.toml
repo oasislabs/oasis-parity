@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
+ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
 quick-error = "1.2"
 # TODO: Remove when merged upstream (briansmith/ring#738).
 ring = { git = "https://github.com/akash-fortanix/ring", branch = "sgx-target" }

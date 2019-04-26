@@ -11,7 +11,7 @@ log = "0.3"
 ethcore = { path = ".."}
 ethcore-bytes = { path = "../../util/bytes" }
 ethcore-transaction = { path = "../transaction" }
-ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
+ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
 memorydb = { path = "../../util/memorydb" }
 patricia-trie = { path = "../../util/patricia_trie" }
 ethcore-network = { path = "../../util/network" }

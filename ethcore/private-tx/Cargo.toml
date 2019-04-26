@@ -17,7 +17,7 @@ ethcore-io = { path = "../../util/io" }
 ethcore-logger = { path = "../../logger" }
 ethcore-miner = { path = "../../miner" }
 ethcore-transaction = { path = "../transaction" }
-ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
+ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
 ethjson = { path = "../../json" }
 ethkey = { path = "../../ethkey" }
 fetch = { path = "../../util/fetch" }

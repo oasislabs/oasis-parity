@@ -152,11 +152,11 @@ impl<T> TraceDB<T> where T: DatabaseExtras {
 		}
 	}
 
-	fn cache_size(&self) -> usize {
-		let traces = self.traces.read().unwrap().heap_size_of_children();
-		let blooms = self.blooms.read().unwrap().heap_size_of_children();
-		traces + blooms
-	}
+	// fn cache_size(&self) -> usize {
+	// 	let traces = self.traces.read().unwrap().heap_size_of_children();
+	// 	let blooms = self.blooms.read().unwrap().heap_size_of_children();
+	// 	traces + blooms
+	// }
 
 	/// Let the cache system know that a cacheable item has been used.
 	fn note_used(&self, id: CacheId) {
@@ -165,26 +165,26 @@ impl<T> TraceDB<T> where T: DatabaseExtras {
 	}
 
 	/// Ticks our cache system and throws out any old data.
-	pub fn collect_garbage(&self) {
-		let current_size = self.cache_size();
-
-		let mut traces = self.traces.write().unwrap();
-		let mut blooms = self.blooms.write().unwrap();
-		let mut cache_manager = self.cache_manager.write().unwrap();
-
-		cache_manager.collect_garbage(current_size, | ids | {
-			for id in &ids {
-				match *id {
-					CacheId::Trace(ref h) => { traces.remove(h); },
-					CacheId::Bloom(ref h) => { blooms.remove(h); },
-				}
-			}
-			traces.shrink_to_fit();
-			blooms.shrink_to_fit();
-
-			traces.heap_size_of_children() + blooms.heap_size_of_children()
-		});
-	}
+	// pub fn collect_garbage(&self) {
+	// 	let current_size = self.cache_size();
+	//
+	// 	let mut traces = self.traces.write().unwrap();
+	// 	let mut blooms = self.blooms.write().unwrap();
+	// 	let mut cache_manager = self.cache_manager.write().unwrap();
+	//
+	// 	cache_manager.collect_garbage(current_size, | ids | {
+	// 		for id in &ids {
+	// 			match *id {
+	// 				CacheId::Trace(ref h) => { traces.remove(h); },
+	// 				CacheId::Bloom(ref h) => { blooms.remove(h); },
+	// 			}
+	// 		}
+	// 		traces.shrink_to_fit();
+	// 		blooms.shrink_to_fit();
+	//
+	// 		traces.heap_size_of_children() + blooms.heap_size_of_children()
+	// 	});
+	// }
 
 	/// Returns traces for block with hash.
 	fn traces(&self, block_hash: &H256) -> Option<FlatBlockTraces> {

@@ -14,7 +14,7 @@ ethcore = { path = "../ethcore", features = ["test-helpers"] }
 ethjson = { path = "../json" }
 ethcore-bytes = { path = "../util/bytes" }
 ethcore-transaction = { path = "../ethcore/transaction" }
-ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
+ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
 evm = { path = "../ethcore/evm" }
 panic_hook = { path = "../util/panic_hook" }
 rustc-hex = "1.0"

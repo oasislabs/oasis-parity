@@ -12,7 +12,7 @@ heapsize = "0.4"
 keccak-hash = { path = "../../util/hash" }
 rlp = { path = "../../util/rlp" }
 unexpected = { path = "../../util/unexpected" }
-ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
+ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
 
 [dev-dependencies]
 rustc-hex= "1.0"

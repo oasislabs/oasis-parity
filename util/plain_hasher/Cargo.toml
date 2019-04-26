@@ -9,4 +9,4 @@ homepage = "https://github.com/paritytech/plain_hasher"
 
 [dependencies]
 crunchy = "0.1.6"
-ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
+ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }

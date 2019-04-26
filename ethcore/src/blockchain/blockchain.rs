@@ -1425,59 +1425,59 @@ impl BlockChain {
 	}
 
 	/// Get current cache size.
-	pub fn cache_size(&self) -> CacheSize {
-		CacheSize {
-			blocks: self.block_headers.read().unwrap().heap_size_of_children() + self.block_bodies.read().unwrap().heap_size_of_children(),
-			block_details: self.block_details.read().unwrap().heap_size_of_children(),
-			transaction_addresses: self.transaction_addresses.read().unwrap().heap_size_of_children(),
-			blocks_blooms: self.blocks_blooms.read().unwrap().heap_size_of_children(),
-			block_receipts: self.block_receipts.read().unwrap().heap_size_of_children(),
-		}
-	}
+	// pub fn cache_size(&self) -> CacheSize {
+	// 	CacheSize {
+	// 		blocks: self.block_headers.read().unwrap().heap_size_of_children() + self.block_bodies.read().unwrap().heap_size_of_children(),
+	// 		block_details: self.block_details.read().unwrap().heap_size_of_children(),
+	// 		transaction_addresses: self.transaction_addresses.read().unwrap().heap_size_of_children(),
+	// 		blocks_blooms: self.blocks_blooms.read().unwrap().heap_size_of_children(),
+	// 		block_receipts: self.block_receipts.read().unwrap().heap_size_of_children(),
+	// 	}
+	// }
 
 	/// Ticks our cache system and throws out any old data.
-	pub fn collect_garbage(&self) {
-		let current_size = self.cache_size().total();
-
-		let mut block_headers = self.block_headers.write().unwrap();
-		let mut block_bodies = self.block_bodies.write().unwrap();
-		let mut block_details = self.block_details.write().unwrap();
-		let mut block_hashes = self.block_hashes.write().unwrap();
-		let mut transaction_addresses = self.transaction_addresses.write().unwrap();
-		let mut blocks_blooms = self.blocks_blooms.write().unwrap();
-		let mut block_receipts = self.block_receipts.write().unwrap();
-
-		let mut cache_man = self.cache_man.lock().unwrap();
-		cache_man.collect_garbage(current_size, | ids | {
-			for id in &ids {
-				match *id {
-					CacheId::BlockHeader(ref h) => { block_headers.remove(h); },
-					CacheId::BlockBody(ref h) => { block_bodies.remove(h); },
-					CacheId::BlockDetails(ref h) => { block_details.remove(h); }
-					CacheId::BlockHashes(ref h) => { block_hashes.remove(h); }
-					CacheId::TransactionAddresses(ref h) => { transaction_addresses.remove(h); }
-					CacheId::BlocksBlooms(ref h) => { blocks_blooms.remove(h); }
-					CacheId::BlockReceipts(ref h) => { block_receipts.remove(h); }
-				}
-			}
-
-			block_headers.shrink_to_fit();
-			block_bodies.shrink_to_fit();
-			block_details.shrink_to_fit();
-			block_hashes.shrink_to_fit();
-			transaction_addresses.shrink_to_fit();
-			blocks_blooms.shrink_to_fit();
-			block_receipts.shrink_to_fit();
-
-			block_headers.heap_size_of_children() +
-			block_bodies.heap_size_of_children() +
-			block_details.heap_size_of_children() +
-			block_hashes.heap_size_of_children() +
-			transaction_addresses.heap_size_of_children() +
-			blocks_blooms.heap_size_of_children() +
-			block_receipts.heap_size_of_children()
-		});
-	}
+	// pub fn collect_garbage(&self) {
+	// 	let current_size = self.cache_size().total();
+	//
+	// 	let mut block_headers = self.block_headers.write().unwrap();
+	// 	let mut block_bodies = self.block_bodies.write().unwrap();
+	// 	let mut block_details = self.block_details.write().unwrap();
+	// 	let mut block_hashes = self.block_hashes.write().unwrap();
+	// 	let mut transaction_addresses = self.transaction_addresses.write().unwrap();
+	// 	let mut blocks_blooms = self.blocks_blooms.write().unwrap();
+	// 	let mut block_receipts = self.block_receipts.write().unwrap();
+	//
+	// 	let mut cache_man = self.cache_man.lock().unwrap();
+	// 	cache_man.collect_garbage(current_size, | ids | {
+	// 		for id in &ids {
+	// 			match *id {
+	// 				CacheId::BlockHeader(ref h) => { block_headers.remove(h); },
+	// 				CacheId::BlockBody(ref h) => { block_bodies.remove(h); },
+	// 				CacheId::BlockDetails(ref h) => { block_details.remove(h); }
+	// 				CacheId::BlockHashes(ref h) => { block_hashes.remove(h); }
+	// 				CacheId::TransactionAddresses(ref h) => { transaction_addresses.remove(h); }
+	// 				CacheId::BlocksBlooms(ref h) => { blocks_blooms.remove(h); }
+	// 				CacheId::BlockReceipts(ref h) => { block_receipts.remove(h); }
+	// 			}
+	// 		}
+	//
+	// 		block_headers.shrink_to_fit();
+	// 		block_bodies.shrink_to_fit();
+	// 		block_details.shrink_to_fit();
+	// 		block_hashes.shrink_to_fit();
+	// 		transaction_addresses.shrink_to_fit();
+	// 		blocks_blooms.shrink_to_fit();
+	// 		block_receipts.shrink_to_fit();
+	//
+	// 		block_headers.heap_size_of_children() +
+	// 		block_bodies.heap_size_of_children() +
+	// 		block_details.heap_size_of_children() +
+	// 		block_hashes.heap_size_of_children() +
+	// 		transaction_addresses.heap_size_of_children() +
+	// 		blocks_blooms.heap_size_of_children() +
+	// 		block_receipts.heap_size_of_children()
+	// 	});
+	// }
 
 	/// Create a block body from a block.
 	pub fn block_to_body(block: &[u8]) -> Bytes {
@@ -1983,6 +1983,7 @@ mod tests {
 		assert_eq!(bc.best_block_number(), 49);
 	}
 
+	/*
 	#[test]
 	fn can_collect_garbage() {
 		let bc = generate_dummy_blockchain(3000);
@@ -2001,6 +2002,7 @@ mod tests {
 		}
 		assert!(bc.cache_size().blocks < 1024 * 1024);
 	}
+	*/
 
 	#[test]
 	fn can_contain_arbitrary_block_sequence_with_extra() {

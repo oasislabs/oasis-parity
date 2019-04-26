@@ -10,7 +10,7 @@ elastic-array = "0.10"
 log = "0.3"
 # rand = "0.6.5"
 ethcore-bytes = { version = "0.1.0", path = "../bytes" }
-ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
+ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
 keccak-hash = { version = "0.1.0", path = "../hash" }
 hashdb = { version = "0.1.1", path = "../hashdb" }
 rlp = { version = "0.2.1", path = "../rlp" }

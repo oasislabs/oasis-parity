@@ -7,7 +7,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 byteorder = "1.0"
 edit-distance = "2.0"
 secp256k1-plus = { git = "https://github.com/oasislabs/rust-secp256k1", branch = "feature/rand_optional" }
-ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
+ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
 lazy_static = "1.0"
 log = "0.3"
 mem = { path = "../util/mem" }

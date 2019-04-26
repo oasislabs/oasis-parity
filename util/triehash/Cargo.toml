@@ -8,7 +8,7 @@ license = "GPL-3.0"
 [dependencies]
 elastic-array = "0.10"
 rlp = { version = "0.2.1", path = "../rlp" }
-ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
+ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
 keccak-hash = { version = "0.1", path = "../hash" }
 
 [dev-dependencies]

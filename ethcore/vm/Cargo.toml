@@ -6,7 +6,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 byteorder = "1.0"
 ethcore-bytes = { path = "../../util/bytes" }
-ethereum-types = { git = "https://github.com/oasislabs/primitives", branch = "ekiden" }
+ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
 patricia-trie = { path = "../../util/patricia_trie" }
 log = "0.3"
 common-types = { path = "../types" }
