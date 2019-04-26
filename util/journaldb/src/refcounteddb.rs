@@ -99,10 +99,9 @@ impl JournalDB for RefCountedDB {
 		})
 	}
 
-	fn mem_used(&self) -> usize {
-		unimplemented!("heapsizeof")
-		// self.inserts.heap_size_of_children() + self.removes.heap_size_of_children()
- 	}
+	// fn mem_used(&self) -> usize {
+	// 	self.inserts.heap_size_of_children() + self.removes.heap_size_of_children()
+	// }
 
 	fn is_empty(&self) -> bool {
 		self.latest_era.is_none()

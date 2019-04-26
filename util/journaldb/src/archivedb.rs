@@ -117,9 +117,9 @@ impl JournalDB for ArchiveDB {
 		})
 	}
 
-	fn mem_used(&self) -> usize {
-		self.overlay.mem_used()
- 	}
+	// fn mem_used(&self) -> usize {
+	// 	self.overlay.mem_used()
+	// }
 
 	fn is_empty(&self) -> bool {
 		self.latest_era.is_none()

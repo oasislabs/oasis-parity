@@ -247,17 +247,16 @@ impl JournalDB for OverlayRecentDB {
 		Box::new(self.clone())
 	}
 
-	fn mem_used(&self) -> usize {
-		unimplemented!("heapsizeof")
-		// let mut mem = self.transaction_overlay.mem_used();
-		// let overlay = self.journal_overlay.read().unwrap();
-                //
-		// mem += overlay.backing_overlay.mem_used();
-		// mem += overlay.pending_overlay.heap_size_of_children();
-		// mem += overlay.journal.heap_size_of_children();
-                //
-		// mem
-	}
+	// fn mem_used(&self) -> usize {
+	// 	let mut mem = self.transaction_overlay.mem_used();
+	// 	let overlay = self.journal_overlay.read().unwrap();
+	//
+	// 	mem += overlay.backing_overlay.mem_used();
+	// 	mem += overlay.pending_overlay.heap_size_of_children();
+	// 	mem += overlay.journal.heap_size_of_children();
+	//
+	// 	mem
+	// }
 
 	fn journal_size(&self) -> usize {
 		self.journal_overlay.read().unwrap().cumulative_size

@@ -355,14 +355,14 @@ impl StateDB {
 	}
 
 	/// Heap size used.
-	pub fn mem_used(&self) -> usize {
-		// TODO: account for LRU-cache overhead; this is a close approximation.
-		self.db.mem_used() + {
-			let accounts = self.account_cache.lock().unwrap().accounts.len();
-			let code_size = self.code_cache.lock().unwrap().current_size();
-			code_size + accounts * ::std::mem::size_of::<Option<Account>>()
-		}
-	}
+	// pub fn mem_used(&self) -> usize {
+	// 	// TODO: account for LRU-cache overhead; this is a close approximation.
+	// 	self.db.mem_used() + {
+	// 		let accounts = self.account_cache.lock().unwrap().accounts.len();
+	// 		let code_size = self.code_cache.lock().unwrap().current_size();
+	// 		code_size + accounts * ::std::mem::size_of::<Option<Account>>()
+	// 	}
+	// }
 
 	/// Returns underlying `JournalDB`.
 	pub fn journal_db(&self) -> &JournalDB {
