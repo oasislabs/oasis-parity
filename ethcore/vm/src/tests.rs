@@ -51,7 +51,7 @@ pub struct FakeCall {
 /// Can't do recursive calls.
 #[derive(Default)]
 pub struct FakeExt {
-	pub store: HashMap<H256, H256>,
+	pub store: HashMap<Vec<u8>, Vec<u8>>,
 	pub suicides: HashSet<Address>,
 	pub calls: HashSet<FakeCall>,
 	pub sstore_clears: usize,
@@ -100,15 +100,28 @@ impl FakeExt {
 		self.schedule.wasm = Some(Default::default());
 		self
 	}
+
+	fn bytes2hash<B: AsRef<[u8]>>(bytes: B) -> H256 {
+		let bytes = bytes.as_ref();
+		let mut h = [0u8; 32];
+		let len = std::cmp::min(h.len(), bytes.len());
+		h[..len].copy_from_slice(&bytes[..len]);
+		H256::from(h)
+	}
 }
 
 impl Ext for FakeExt {
 	fn storage_at(&self, key: &H256) -> Result<H256> {
-		Ok(self.store.get(key).unwrap_or(&H256::new()).clone())
+		let key: &[u8] = key.as_ref();
+		Ok(self
+			.store
+			.get(key)
+			.map(Self::bytes2hash)
+			.unwrap_or_default())
 	}
 
 	fn set_storage(&mut self, key: H256, value: H256) -> Result<()> {
-		self.store.insert(key, value);
+		self.store.insert(key.to_vec(), value.to_vec());
 		Ok(())
 	}
 
@@ -123,13 +136,12 @@ impl Ext for FakeExt {
 	fn set_storage_bytes(&mut self, key: H256, value: Vec<u8>) -> Result<()> {
 		Ok(())
 	}
-	fn storage_expiry(&self) -> Result<u64> {
-		// TODO: implement?
-		unimplemented!()
+
+	fn storage_expiry(&self, address: &Address) -> Result<u64> {
+		Ok(u64::max_value())
 	}
 
 	fn seconds_until_expiry(&self) -> Result<u64> {
-		// unimplemented!() // return value needed to allow wasm tests to run
 		Ok(42)
 	}
 
@@ -180,8 +192,6 @@ impl Ext for FakeExt {
 		value: Option<U256>,
 		data: &[u8],
 		code_address: &Address,
-		_output: &mut [u8],
-		_call_type: CallType,
 	) -> MessageCallResult {
 		self.calls.insert(FakeCall {
 			call_type: FakeCallType::Call,
@@ -251,5 +261,33 @@ impl Ext for FakeExt {
 
 	fn is_confidential_contract(&self, contract: &Address) -> Result<bool> {
 		Ok(false)
+	}
+
+	fn as_kvstore(&self) -> &dyn blockchain_traits::KVStore {
+		self
+	}
+
+	fn as_kvstore_mut(&mut self) -> &mut dyn blockchain_traits::KVStoreMut {
+		self
+	}
+}
+
+impl blockchain_traits::KVStore for FakeExt {
+	fn contains(&self, key: &[u8]) -> bool {
+		self.store.contains_key(key)
+	}
+
+	fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
+		self.store.get(key).map(Vec::to_owned)
+	}
+}
+
+impl blockchain_traits::KVStoreMut for FakeExt {
+	fn set(&mut self, key: &[u8], value: &[u8]) {
+		self.store.insert(key.to_vec(), value.to_vec());
+	}
+
+	fn remove(&mut self, key: &[u8]) {
+		self.store.remove(key);
 	}
 }

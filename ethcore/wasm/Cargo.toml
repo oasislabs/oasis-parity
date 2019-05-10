@@ -2,18 +2,26 @@
 name = "wasm"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
 
 [dependencies]
+bcfs = "0.2"
+blockchain-traits = "0.2"
 byteorder = "1.0"
+common-types = { path = "../types" }
 ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
 log = "0.3"
+mantle-types = "0.2"
 parity-wasm = "0.31"
 # libc = "0.2"
 pwasm-utils = "0.2"
 vm = { path = "../vm" }
 # ethcore-logger = { path = "../../logger" }
-wasmi = "0.4"
+# wasmi = "0.4"
+wasmi = { git = "https://github.com/oasislabs/wasmi" }
+wasi-types = "0.1"
 keccak-hash = { path = "../../util/hash" }
+wasm-macros = { path = "macros" }
 
 [dev-dependencies]
 ethcore-logger = { path = "../../logger" }

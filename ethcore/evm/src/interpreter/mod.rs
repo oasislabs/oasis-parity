@@ -495,7 +495,6 @@ impl<Cost: CostType> Interpreter<Cost> {
 					// and we don't want to copy
 					let input =
 						unsafe { ::std::mem::transmute(self.mem.read_slice(in_off, in_size)) };
-					let output = self.mem.writeable_slice(out_off, out_size);
 					ext.call(
 						&call_gas.as_u256(),
 						sender_address,
@@ -503,8 +502,6 @@ impl<Cost: CostType> Interpreter<Cost> {
 						value,
 						input,
 						&code_address,
-						output,
-						call_type,
 					)
 				};
 
