@@ -1,4 +1,5 @@
 //! MKVS trait.
+use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 
 /// Merklized key-value store.
@@ -143,25 +144,25 @@ impl<'a> MKVS for ReadOnlyPrefixedMKVS<'a> {
 }
 
 #[derive(Clone)]
-pub struct MemoryMKVS(HashMap<Vec<u8>, Vec<u8>>);
+pub struct MemoryMKVS(Arc<Mutex<HashMap<Vec<u8>, Vec<u8>>>>);
 
 impl MemoryMKVS {
     pub fn new() -> Self {
-        MemoryMKVS(HashMap::new())
+        MemoryMKVS(Arc::new(Mutex::new(HashMap::new())))
     }
 }
 
 impl MKVS for MemoryMKVS {
     fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
-        self.0.get(key).map(|v| v.clone())
+        self.0.lock().unwrap().get(key).map(|v| v.clone())
     }
 
     fn insert(&mut self, key: &[u8], value: &[u8]) -> Option<Vec<u8>> {
-        self.0.insert(key.to_vec(), value.to_vec()).map(|v| v.clone())
+        self.0.lock().unwrap().insert(key.to_vec(), value.to_vec()).map(|v| v.clone())
     }
 
     fn remove(&mut self, key: &[u8]) -> Option<Vec<u8>> {
-        self.0.remove(key).map(|v| v.clone())
+        self.0.lock().unwrap().remove(key).map(|v| v.clone())
     }
 
     fn boxed_clone(&self) -> Box<MKVS> {

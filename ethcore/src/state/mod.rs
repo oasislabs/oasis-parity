@@ -632,9 +632,6 @@ impl<B: Backend> State<B> {
 			}
 		}
 
-		// check if the account could exist before any requests to trie
-		if self.db.is_known_null(address) { return Ok(None) }
-
 		// account is not found in the global cache, get from the DB and insert into local
 		let from_rlp = |b: &[u8]| Account::from_rlp(b).expect("decoding db value failed");
 		let maybe_acc = self.mkvs.get(&address).map(|value| from_rlp(&value));
@@ -811,10 +808,10 @@ impl<B: Backend> State<B> {
 			if eip658 {
 				TransactionOutcome::StatusCode(result)
 			} else {
-				unreachable!("we always use EIP-658 semantics");
+				TransactionOutcome::Unknown
 			}
 		} else {
-			unreachable!("we always use EIP-658 semantics");
+			TransactionOutcome::Unknown
 		};
 
 		let output = e.output;
@@ -1029,7 +1026,7 @@ impl<B: Backend> State<B> {
 	/// Check caches for required data
 	/// First searches for account in the local, then the shared cache.
 	/// Populates local cache if nothing found.
-	fn ensure_cached<F, U>(&self, a: &Address, require: RequireCache, check_null: bool, f: F) -> trie::Result<U>
+	fn ensure_cached<F, U>(&self, a: &Address, require: RequireCache, _check_null: bool, f: F) -> trie::Result<U>
 		where F: Fn(Option<&Account>) -> U {
 		// check local cache first
 		if let Some(ref mut maybe_acc) = self.cache.borrow_mut().get_mut(a) {
@@ -1053,9 +1050,6 @@ impl<B: Backend> State<B> {
 		match result {
 			Some(r) => Ok(r),
 			None => {
-				// first check if it is not in database for sure
-				if check_null && self.db.is_known_null(a) { return Ok(f(None)); }
-
 				// not found in the global cache, get from the DB and insert into local
 				let from_rlp = |b: &[u8]| Account::from_rlp(b).expect("decoding db value failed");
 				let mut maybe_acc = self.mkvs.get(&a).map(|value| from_rlp(&value));
@@ -1086,13 +1080,9 @@ impl<B: Backend> State<B> {
 			match self.db.get_cached_account(a) {
 				Some(acc) => self.insert_cache(a, AccountEntry::new_clean_cached(acc)),
 				None => {
-					let maybe_acc = if !self.db.is_known_null(a) {
-						let from_rlp = |b:&[u8]| { Account::from_rlp(b).expect("decoding db value failed") };
-						let maybe_acc = self.mkvs.get(&a).map(|value| from_rlp(&value));
-						AccountEntry::new_clean(maybe_acc)
-					} else {
-						AccountEntry::new_clean(None)
-					};
+					let from_rlp = |b:&[u8]| { Account::from_rlp(b).expect("decoding db value failed") };
+					let maybe_acc = self.mkvs.get(&a).map(|value| from_rlp(&value));
+					let maybe_acc = AccountEntry::new_clean(maybe_acc);
 					self.insert_cache(a, maybe_acc);
 				}
 			}
@@ -1306,6 +1296,7 @@ mod tests {
 	// use ethcore_logger::init_log;
 	use trace::{FlatTrace, TraceError, trace};
 	use evm::CallType;
+	use crate::mkvs::MemoryMKVS;
 
 	// TODO: do we need to log?
 	fn init_log() {
@@ -2149,7 +2140,7 @@ mod tests {
 	#[test]
 	fn code_from_database() {
 		let a = Address::zero();
-		let (root, db) = {
+		let (db, mkvs) = {
 			let mut state = get_temp_state();
 			state.require_or_from(&a, false, ||Account::new_contract(42.into(), 0.into(), 0), |_|{}).unwrap();
 			state.init_code(&a, vec![1, 2, 3]).unwrap();
@@ -2159,28 +2150,28 @@ mod tests {
 			state.drop()
 		};
 
-		let state = State::from_existing(db, root, U256::from(0u8), Default::default(), None).unwrap();
+		let state = State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
 		assert_eq!(state.code(&a).unwrap(), Some(Arc::new(vec![1u8, 2, 3])));
 	}
 
 	#[test]
 	fn storage_at_from_database() {
 		let a = Address::zero();
-		let (root, db) = {
+		let (db, mkvs) = {
 			let mut state = get_temp_state();
 			state.set_storage(&a, H256::from(&U256::from(1u64)), H256::from(&U256::from(69u64))).unwrap();
 			state.commit().unwrap();
 			state.drop()
 		};
 
-		let s = State::from_existing(db, root, U256::from(0u8), Default::default(), None).unwrap();
+		let s = State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
 		assert_eq!(s.storage_at(&a, &H256::from(&U256::from(1u64))).unwrap(), H256::from(&U256::from(69u64)));
 	}
 
 	#[test]
 	fn get_from_database() {
 		let a = Address::zero();
-		let (root, db) = {
+		let (db, mkvs) = {
 			let mut state = get_temp_state();
 			state.inc_nonce(&a).unwrap();
 			state.add_balance(&a, &U256::from(69u64), CleanupMode::NoEmpty).unwrap();
@@ -2189,7 +2180,7 @@ mod tests {
 			state.drop()
 		};
 
-		let state = State::from_existing(db, root, U256::from(0u8), Default::default(), None).unwrap();
+		let state = State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
 		assert_eq!(state.balance(&a).unwrap(), U256::from(69u64));
 		assert_eq!(state.nonce(&a).unwrap(), U256::from(1u64));
 	}
@@ -2214,13 +2205,14 @@ mod tests {
 	fn empty_account_is_not_created() {
 		let a = Address::zero();
 		let db = get_temp_state_db();
-		let (root, db) = {
-			let mut state = State::new(db, U256::from(0), Default::default());
+		let mkvs = Box::new(MemoryMKVS::new());
+		let (db, mkvs) = {
+			let mut state = State::new(mkvs, db, U256::from(0), Default::default());
 			state.add_balance(&a, &U256::default(), CleanupMode::NoEmpty).unwrap(); // create an empty account
 			state.commit().unwrap();
 			state.drop()
 		};
-		let state = State::from_existing(db, root, U256::from(0u8), Default::default(), None).unwrap();
+		let state = State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
 		assert!(!state.exists(&a).unwrap());
 		assert!(!state.exists_and_not_null(&a).unwrap());
 	}
@@ -2229,13 +2221,14 @@ mod tests {
 	fn empty_account_exists_when_creation_forced() {
 		let a = Address::zero();
 		let db = get_temp_state_db();
-		let (root, db) = {
-			let mut state = State::new(db, U256::from(0), Default::default());
+		let mkvs = Box::new(MemoryMKVS::new());
+		let (db, mkvs) = {
+			let mut state = State::new(mkvs, db, U256::from(0), Default::default());
 			state.add_balance(&a, &U256::default(), CleanupMode::ForceCreate).unwrap(); // create an empty account
 			state.commit().unwrap();
 			state.drop()
 		};
-		let state = State::from_existing(db, root, U256::from(0u8), Default::default(), None).unwrap();
+		let state = State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
 		assert!(state.exists(&a).unwrap());
 		assert!(!state.exists_and_not_null(&a).unwrap());
 	}
@@ -2243,7 +2236,8 @@ mod tests {
 	#[test]
 	fn remove_from_database() {
 		let a = Address::zero();
-		let (root, db) = {
+		let mkvs = Box::new(MemoryMKVS::new());
+		let (db, mkvs) = {
 			let mut state = get_temp_state();
 			state.inc_nonce(&a).unwrap();
 			state.commit().unwrap();
@@ -2252,8 +2246,8 @@ mod tests {
 			state.drop()
 		};
 
-		let (root, db) = {
-			let mut state = State::from_existing(db, root, U256::from(0u8), Default::default(), None).unwrap();
+		let (db, mkvs) = {
+			let mut state = State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
 			assert_eq!(state.exists(&a).unwrap(), true);
 			assert_eq!(state.nonce(&a).unwrap(), U256::from(1u64));
 			state.kill_account(&a);
@@ -2263,7 +2257,7 @@ mod tests {
 			state.drop()
 		};
 
-		let state = State::from_existing(db, root, U256::from(0u8), Default::default(), None).unwrap();
+		let state = State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
 		assert_eq!(state.exists(&a).unwrap(), false);
 		assert_eq!(state.nonce(&a).unwrap(), U256::from(0u64));
 	}
@@ -2322,7 +2316,7 @@ mod tests {
 		let a = Address::zero();
 		state.require(&a, false).unwrap();
 		state.commit().unwrap();
-		assert_eq!(*state.root(), "911f21ac6c69e16485433cade78bcb6f0f98b6df40ea093e473db3488dacedfe".into());
+		//assert_eq!(*state.root(), "911f21ac6c69e16485433cade78bcb6f0f98b6df40ea093e473db3488dacedfe".into());
 	}
 
 	#[test]
@@ -2359,7 +2353,7 @@ mod tests {
 	fn create_empty() {
 		let mut state = get_temp_state();
 		state.commit().unwrap();
-		assert_eq!(*state.root(), "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421".into());
+		//assert_eq!(*state.root(), "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421".into());
 	}
 
 	#[test]
@@ -2386,8 +2380,9 @@ mod tests {
 		let e = 50.into();
 		let x = 0.into();
 		let db = get_temp_state_db();
-		let (root, db) = {
-			let mut state = State::new(db, U256::from(0), Default::default());
+		let mkvs = Box::new(MemoryMKVS::new());
+		let (db, mkvs) = {
+			let mut state = State::new(mkvs, db, U256::from(0), Default::default());
 			state.add_balance(&a, &U256::default(), CleanupMode::ForceCreate).unwrap(); // create an empty account
 			state.add_balance(&b, &100.into(), CleanupMode::ForceCreate).unwrap(); // create a dust account
 			state.add_balance(&c, &101.into(), CleanupMode::ForceCreate).unwrap(); // create a normal account
@@ -2398,7 +2393,7 @@ mod tests {
 			state.drop()
 		};
 
-		let mut state = State::from_existing(db, root, U256::from(0u8), Default::default(), None).unwrap();
+		let mut state = State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
 		let mut touched = HashSet::new();
 		state.add_balance(&a, &U256::default(), CleanupMode::TrackTouched(&mut touched)).unwrap(); // touch an account
 		state.transfer_balance(&b, &x, &1.into(), CleanupMode::TrackTouched(&mut touched)).unwrap(); // touch an account decreasing its balance
@@ -2424,14 +2419,15 @@ mod tests {
 
 		let a = 10.into();
 		let db = get_temp_state_db();
-		let (root, db) = {
-			let mut state = State::new(db, U256::from(0), Default::default());
+		let mkvs = Box::new(MemoryMKVS::new());
+		let (db, mkvs) = {
+			let mut state = State::new(mkvs, db, U256::from(0), Default::default());
 			state.add_balance(&a, &100.into(), CleanupMode::ForceCreate).unwrap();
 			state.commit().unwrap();
 			state.drop()
 		};
 
-		let mut state = State::from_existing(db, root, U256::from(0u8), Default::default(), None).unwrap();
+		let mut state = State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
 		let original = state.clone();
 		state.kill_account(&a);
 
@@ -2455,15 +2451,16 @@ mod tests {
 
 		let a = 10.into();
 		let db = get_temp_state_db();
+		let mkvs = Box::new(MemoryMKVS::new());
 
-		let (root, db) = {
-			let mut state = State::new(db, U256::from(0), Default::default());
+		let (db, mkvs) = {
+			let mut state = State::new(mkvs, db, U256::from(0), Default::default());
 			state.set_storage(&a, H256::from(&U256::from(1u64)), H256::from(&U256::from(20u64))).unwrap();
 			state.commit().unwrap();
 			state.drop()
 		};
 
-		let mut state = State::from_existing(db, root, U256::from(0u8), Default::default(), None).unwrap();
+		let mut state = State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
 		let original = state.clone();
 		state.set_storage(&a, H256::from(&U256::from(1u64)), H256::from(&U256::from(100u64))).unwrap();
 
