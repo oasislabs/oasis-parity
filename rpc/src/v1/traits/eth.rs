@@ -57,7 +57,7 @@ build_rpc_trait! {
 
 		/// Returns highest block number.
 		#[rpc(name = "eth_blockNumber")]
-		fn block_number(&self) -> Result<U256>;
+		fn block_number(&self) -> BoxFuture<U256>;
 
 		/// Returns balance of the given account.
 		#[rpc(name = "eth_getBalance")]
@@ -183,11 +183,11 @@ build_rpc_trait! {
 	pub trait EthFilter {
 		/// Returns id of new filter.
 		#[rpc(name = "eth_newFilter")]
-		fn new_filter(&self, Filter) -> Result<U256>;
+		fn new_filter(&self, Filter) -> BoxFuture<U256>;
 
 		/// Returns id of new block filter.
 		#[rpc(name = "eth_newBlockFilter")]
-		fn new_block_filter(&self) -> Result<U256>;
+		fn new_block_filter(&self) -> BoxFuture<U256>;
 
 		/// Returns id of new block filter.
 		#[rpc(name = "eth_newPendingTransactionFilter")]
