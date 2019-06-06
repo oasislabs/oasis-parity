@@ -65,6 +65,7 @@ rustc-hex = "1.0"
 # using_queue = { path = "../util/using_queue" }
 vm = { path = "vm" }
 wasm = { path = "wasm" }
+wasmer = { path = "wasmer" }
 keccak-hash = { path = "../util/hash" }
 triehash = { path = "../util/triehash" }
 unexpected = { path = "../util/unexpected" }
