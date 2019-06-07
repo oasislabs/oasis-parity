@@ -24,7 +24,8 @@ use wasmi::{self, MemoryRef, RuntimeArgs, RuntimeValue, Error as InterpreterErro
 use wasmer_runtime::{
 	func,
 	Ctx,
-	memory::Memory
+	memory::Memory,
+	Value,
 };
 
 use super::panic_payload;
@@ -172,6 +173,15 @@ impl<'a> Runtime<'a> {
 		}
 	}
 
+	fn memory_get_into_ctx(&self, ctx: &mut Ctx, offset: u32, mut buf: &mut [u8]) -> Result<()> {
+		let mem_vec: Vec<u8> = ctx.memory(0).view()[offset as usize..(offset as usize + buf.len())]
+			.iter()
+			.map(|cell| cell.get())
+			.collect();
+		buf.write(mem_vec.as_slice());
+		Ok(())
+    }
+
 	fn memory_get_into(&self, offset: u32, mut buf: &mut [u8]) -> Result<()> {
 		let mem_vec: Vec<u8> = self.memory.view()[offset as usize..(offset as usize + buf.len())]
 			.iter()
@@ -233,17 +243,17 @@ impl<'a> Runtime<'a> {
 	}
 
 	/// Loads 160-bit hash (Ethereum address) from the specified sandboxed memory pointer
-	fn address_at(&self, ptr: u32) -> Result<Address> {
+	fn address_at(&self, ctx: &mut Ctx, ptr: u32) -> Result<Address> {
 		let mut buf = [0u8; 20];
-		self.memory_get_into(ptr, &mut buf[..])?;
+		self.memory_get_into_ctx(ctx, ptr, &mut buf[..])?;
 
 		Ok(Address::from(&buf[..]))
 	}
 
 	/// Loads 256-bit integer represented with bigendian from the specified sandboxed memory pointer
-	fn u256_at(&self, ptr: u32) -> Result<U256> {
+	fn u256_at(&self, ctx: &mut Ctx, ptr: u32) -> Result<U256> {
 		let mut buf = [0u8; 32];
-		self.memory_get_into(ptr, &mut buf[..])?;
+		self.memory_get_into_ctx(ctx, ptr, &mut buf[..])?;
 
 		Ok(U256::from_big_endian(&buf[..]))
 	}
@@ -409,37 +419,35 @@ impl<'a> Runtime<'a> {
 		}
 	}
 
-/* 	/// Query the length of the input bytes
-	fn input_length(&mut self) -> RuntimeValue {
-		RuntimeValue::I32(self.args.len() as i32)
+    /// Query the length of the input bytes
+	fn input_length(&mut self, ctx: &mut Ctx) -> i32 {
+		self.args.len() as i32
 	}
 
 	/// Write input bytes to the memory location using the passed pointer
-	fn fetch_input(&mut self, args: RuntimeArgs) -> Result<()> {
-		let ptr: u32 = args.nth_checked(0)?;
+	fn fetch_input(&mut self, ctx: &mut Ctx, ptr: u32) -> Result<()> {
 
 		let args_len = self.args.len() as u64;
 		self.charge(|s| args_len * s.wasm().memcpy as u64)?;
 
-		self.memory_set(ptr, &self.args[..])?;
+		self.memory_set_ctx(ctx, ptr, &self.args.clone()[..])?;
 		Ok(())
 	}
 
 	/// Query the length of the return bytes
-	fn return_length(&mut self) -> RuntimeValue {
-		RuntimeValue::I32(self.result.len() as i32)
+	fn return_length(&mut self, ctx: &mut Ctx) -> i32 {
+		self.result.len() as i32
 	}
 
 	/// Write return bytes to the memory location using the passed pointer
-	fn fetch_return(&mut self, args: RuntimeArgs) -> Result<()> {
-		let ptr: u32 = args.nth_checked(0)?;
+	fn fetch_return(&mut self, ctx: &mut Ctx, ptr: u32) -> Result<()> {
 
 		let return_length = self.result.len() as u64;
 		self.charge(|s| return_length * s.wasm().memcpy as u64)?;
 
-		self.memory_set(ptr, &self.result[..])?;
+		self.memory_set_ctx(ctx, ptr, &self.result.clone()[..])?;
 		Ok(())
-	} */
+	}
 
 	/// User panic
 	///
@@ -536,36 +544,34 @@ impl<'a> Runtime<'a> {
 		Ok(RuntimeValue::F32(wasmi::nan_preserving_float::F32::from_float(x.to_float().exp())))
 	}
 
-	fn do_call(
+ 	fn do_call(
 		&mut self,
+		ctx: &mut Ctx,
 		use_val: bool,
 		call_type: CallType,
-		args: RuntimeArgs,
-	)
-		-> Result<RuntimeValue>
+		gas: u64,
+		address_ptr: u32,
+		val_ptr: u32,
+		input_ptr: u32,
+		input_len: u32,
+		result_ptr: u32,
+		result_alloc_len: u32
+	) -> Result<i32>
 	{
 		trace!(target: "wasm", "runtime: CALL({:?})", call_type);
 
-		let gas: u64 = args.nth_checked(0)?;
 		trace!(target: "wasm", "           gas: {:?}", gas);
 
-		let address = self.address_at(args.nth_checked(1)?)?;
+		let address = self.address_at(ctx, address_ptr)?;
 		trace!(target: "wasm", "       address: {:?}", address);
 
 		let vofs = if use_val { 1 } else { 0 };
-		let val = if use_val { Some(self.u256_at(args.nth_checked(2)?)?) } else { None };
+		let val = if use_val { Some(self.u256_at(ctx, val_ptr)?) } else { None };
 		trace!(target: "wasm", "           val: {:?}", val);
 
-		let input_ptr: u32 = args.nth_checked(2 + vofs)?;
 		trace!(target: "wasm", "     input_ptr: {:?}", input_ptr);
-
-		let input_len: u32 = args.nth_checked(3 + vofs)?;
 		trace!(target: "wasm", "     input_len: {:?}", input_len);
-
-		let result_ptr: u32 = args.nth_checked(4 + vofs)?;
 		trace!(target: "wasm", "    result_ptr: {:?}", result_ptr);
-
-		let result_alloc_len: u32 = args.nth_checked(5 + vofs)?;
 		trace!(target: "wasm", "    result_len: {:?}", result_alloc_len);
 
 		if let Some(ref val) = val {
@@ -584,7 +590,7 @@ impl<'a> Runtime<'a> {
 		result.resize(result_alloc_len as usize, 0);
 
 		// todo: optimize to use memory views once it's in
-		let payload = self.memory_get(input_ptr, input_len as usize)?;
+		let payload = self.memory_get_ctx(ctx, input_ptr, input_len as usize)?;
 
 		let adjusted_gas = match gas.checked_mul(self.ext.schedule().wasm().opcodes_div as u64)
 			.map(|x| x / self.ext.schedule().wasm().opcodes_mul as u64)
@@ -592,7 +598,7 @@ impl<'a> Runtime<'a> {
 			Some(x) => x,
 			None => {
 				trace!("CALL overflowed gas, call aborted with error returned");
-				return Ok(RuntimeValue::I32(-1))
+				return Ok(-1)
 			},
 		};
 
@@ -616,9 +622,9 @@ impl<'a> Runtime<'a> {
 					gas_left.low_u64() * self.ext.schedule().wasm().opcodes_div as u64
 						/ self.ext.schedule().wasm().opcodes_mul as u64;
 
-				self.memory_set(result_ptr, &result)?;
+				self.memory_set_ctx(ctx, result_ptr, &result)?;
 				self.result = result;
-				Ok(0i32.into())
+				Ok(0)
 			},
 			vm::MessageCallResult::Reverted(gas_left, _) => {
 				// cannot overflow, before making call gas_counter was incremented with gas, and gas_left < gas
@@ -626,28 +632,53 @@ impl<'a> Runtime<'a> {
 					gas_left.low_u64() * self.ext.schedule().wasm().opcodes_div as u64
 						/ self.ext.schedule().wasm().opcodes_mul as u64;
 
-				self.memory_set(result_ptr, &result)?;
-				Ok((-1i32).into())
+				self.memory_set_ctx(ctx, result_ptr, &result)?;
+				Ok(-1)
 			},
 			vm::MessageCallResult::Failed  => {
-				Ok((-1i32).into())
+				Ok(-1)
 			}
 		}
 	}
 
 	/// Message call
-	fn ccall(&mut self, args: RuntimeArgs) -> Result<RuntimeValue> {
-		self.do_call(true, CallType::Call, args)
+	pub fn ccall(&mut self, 
+		ctx: &mut Ctx,
+		gas: u64,
+		address_ptr: u32,
+		val_ptr: u32,
+		input_ptr: u32,
+		input_len: u32,
+		result_ptr: u32,
+		result_alloc_len: u32
+	) -> Result<i32> {
+		self.do_call(ctx, true, CallType::Call, gas, address_ptr, val_ptr, input_ptr, input_len, result_ptr, result_alloc_len)
 	}
 
 	/// Delegate call
-	fn dcall(&mut self, args: RuntimeArgs) -> Result<RuntimeValue> {
-		self.do_call(false, CallType::DelegateCall, args)
+	pub fn dcall(&mut self, 
+		ctx: &mut Ctx,
+		gas: u64,
+		address_ptr: u32,
+		input_ptr: u32,
+		input_len: u32,
+		result_ptr: u32,
+		result_alloc_len: u32
+	) -> Result<i32> {
+		self.do_call(ctx, false, CallType::DelegateCall, gas, address_ptr, 0, input_ptr, input_len, result_ptr, result_alloc_len)
 	}
 
 	/// Static call
-	fn scall(&mut self, args: RuntimeArgs) -> Result<RuntimeValue> {
-		self.do_call(false, CallType::StaticCall, args)
+	pub fn scall(&mut self, 
+		ctx: &mut Ctx,
+		gas: u64,
+		address_ptr: u32,
+		input_ptr: u32,
+		input_len: u32,
+		result_ptr: u32,
+		result_alloc_len: u32
+	) -> Result<i32> {
+		self.do_call(ctx, false, CallType::StaticCall, gas, address_ptr, 0, input_ptr, input_len, result_ptr, result_alloc_len)
 	}
 
 	fn return_address_ptr(&mut self, ctx: &mut Ctx, ptr: u32, val: Address) -> Result<()>
@@ -664,10 +695,17 @@ impl<'a> Runtime<'a> {
 		Ok(())
 	}
 
+	fn return_u256_ptr_ctx(&mut self, ctx: &mut Ctx, ptr: u32, val: U256) -> Result<()> {
+		let value: H256 = val.into();
+		self.charge(|schedule| schedule.wasm().static_u256 as u64)?;
+		self.memory_set_ctx(ctx, ptr, &*value)?;
+		Ok(())
+	}
+
 	/// Returns value (in Wei) passed to contract
-	pub fn value(&mut self, args: RuntimeArgs) -> Result<()> {
+	pub fn value(&mut self, ctx: &mut Ctx, ptr: u32) -> Result<()> {
 		let val = self.context.value;
-		self.return_u256_ptr(args.nth_checked(0)?, val)
+		self.return_u256_ptr_ctx(ctx, ptr, val)
 	}
 
 	/// Creates a new contract
@@ -677,23 +715,29 @@ impl<'a> Runtime<'a> {
 	/// * code_ptr - pointer to the code data
 	/// * code_len - lenght of the code data
 	/// * result_ptr - pointer to write an address of the newly created contract
-	pub fn create(&mut self, args: RuntimeArgs) -> Result<RuntimeValue>
+	pub fn create(&mut self, 
+			ctx: &mut Ctx, 
+			endowment_ptr: u32, 
+			code_ptr: u32, 
+			code_len: u32, 
+			result_ptr: u32
+		) -> Result<i32> 
 	{
 		//
 		// method signature:
 		//   fn create(endowment: *const u8, code_ptr: *const u8, code_len: u32, result_ptr: *mut u8) -> i32;
 		//
-		trace!(target: "wasm", "runtime: CREATE");
-		let endowment = self.u256_at(args.nth_checked(0)?)?;
-		trace!(target: "wasm", "       val: {:?}", endowment);
+ 		trace!(target: "wasm", "runtime: CREATE");
+		let endowment = self.u256_at(ctx, endowment_ptr)?;
+/*		trace!(target: "wasm", "       val: {:?}", endowment);
 		let code_ptr: u32 = args.nth_checked(1)?;
 		trace!(target: "wasm", "  code_ptr: {:?}", code_ptr);
 		let code_len: u32 = args.nth_checked(2)?;
 		trace!(target: "wasm", "  code_len: {:?}", code_len);
 		let result_ptr: u32 = args.nth_checked(3)?;
 		trace!(target: "wasm", "result_ptr: {:?}", result_ptr);
-
-		let code = self.memory_get(code_ptr, code_len as usize)?;
+ */
+		let code = self.memory_get_ctx(ctx, code_ptr, code_len as usize)?;
 
 		self.adjusted_charge(|schedule| schedule.create_gas as u64)?;
 		self.adjusted_charge(|schedule| schedule.create_data_gas as u64 * code.len() as u64)?;
@@ -704,7 +748,7 @@ impl<'a> Runtime<'a> {
 
 		match self.ext.create(&gas_left, &endowment, &code, vm::CreateContractAddress::FromSenderAndCodeHash) {
 			vm::ContractCreateResult::Created(address, gas_left) => {
-				self.memory_set(result_ptr, &*address)?;
+				self.memory_set_ctx(ctx, result_ptr, &*address)?;
 				self.gas_counter = self.gas_limit -
 					// this cannot overflow, since initial gas is in [0..u64::max) range,
 					// and gas_left cannot be bigger
@@ -741,9 +785,9 @@ impl<'a> Runtime<'a> {
 	}
 
 	/// Pass suicide to state runtime
-	pub fn suicide(&mut self, args: RuntimeArgs) -> Result<()>
+	pub fn suicide(&mut self, ctx: &mut Ctx, ptr: u32) -> Result<()>
 	{
-		let refund_address = self.address_at(args.nth_checked(0)?)?;
+		let refund_address = self.address_at(ctx, ptr)?;
 
 		if self.ext.exists(&refund_address).map_err(|_| Error::SuicideAbort)? {
 			trace!(target: "wasm", "Suicide: refund to existing address {}", refund_address);
@@ -792,9 +836,9 @@ impl<'a> Runtime<'a> {
 	}
 
 	///	Signature: `fn address(dest: *mut u8)`
-	pub fn address(&mut self, ctx: &mut Ctx, args: RuntimeArgs) -> Result<()> {
+	pub fn address(&mut self, ctx: &mut Ctx, addr_ptr: u32) -> Result<()> {
 		let address = self.context.address;
-		self.return_address_ptr(ctx, args.nth_checked(0)?, address)
+		self.return_address_ptr(ctx, addr_ptr, address)
 	}
 
 	///	Signature: `sender(dest: *mut u8)`
@@ -804,9 +848,9 @@ impl<'a> Runtime<'a> {
 	}
 
 	///	Signature: `origin(dest: *mut u8)`
-	pub fn origin(&mut self, ctx: &mut Ctx, args: RuntimeArgs) -> Result<()> {
+	pub fn origin(&mut self, ctx: &mut Ctx, addr_ptr: u32) -> Result<()> {
 		let origin = self.context.origin;
-		self.return_address_ptr(ctx, args.nth_checked(0)?, origin)
+		self.return_address_ptr(ctx, addr_ptr, origin)
 	}
 
 	///	Signature: `timestamp() -> i64`
@@ -923,9 +967,22 @@ impl<'a> Runtime<'a> {
 		wasmer_runtime::imports! {
 			 move || { (raw_ptr, dtor) },
 			"env" => {
+				"create" => func!(create),
+				"address" => func!(address),
 				"debug" => func!(debug),
+				"origin" => func!(origin),
 				"ret" => func!(ret),
 				"sender" => func!(sender),
+				"suicide" => func!(suicide),
+				"value" => func!(value),
+				"storage_write" => func!(storage_write),
+				"input_length" => func!(input_length),
+				"return_length" => func!(return_length),
+				"fetch_input" => func!(fetch_input),
+				"fetch_return" => func!(fetch_return),
+				"ccall" => func!(ccall),
+				"dcall" => func!(dcall),
+				"scall" => func!(scall),
 				"memory" => memory,
 			},
 		}
@@ -933,18 +990,105 @@ impl<'a> Runtime<'a> {
 
 }
 
+// Exposed functions for runtime imports
+fn create(ctx: &mut Ctx, endowment: u32, code_ptr: u32, code_len: u32, result_ptr: u32) -> Result<i32> {
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.create(ctx, endowment, code_ptr, code_len, result_ptr)
+}
+
+fn address(ctx: &mut Ctx, addr_ptr: u32) -> Result<()> {
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.address(ctx, addr_ptr)
+}
+
 fn debug(ctx: &mut Ctx, msg_ptr: u32, msg_len: u32) -> Result<()> {
 	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 	runtime.debug(ctx, msg_ptr, msg_len)
 }
 
+fn origin(ctx: &mut Ctx, addr_ptr: u32) -> Result<()> {
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.origin(ctx, addr_ptr)
+}
+
 fn ret(ctx: &mut Ctx, ptr: u32, len: u32) -> Result<()> {
 	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	let result = runtime.ret(ctx, ptr, len);
-	result
+	runtime.ret(ctx, ptr, len)
 }
 
 fn sender(ctx: &mut Ctx, addr_ptr: u32) -> Result<()> {
 	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 	runtime.sender(ctx, addr_ptr)
+}
+
+fn storage_write(ctx: &mut Ctx, key_ptr: u32, val_ptr: u32) -> Result<()> {
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.storage_write(ctx, key_ptr, val_ptr)
+}
+
+fn value(ctx: &mut Ctx, ptr: u32) -> Result<()> {
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.value(ctx, ptr)
+}
+
+fn input_length(ctx: &mut Ctx) -> i32 {
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.input_length(ctx)
+}
+
+fn return_length(ctx: &mut Ctx) -> i32 {
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.return_length(ctx)
+}
+
+fn fetch_input(ctx: &mut Ctx, ptr: u32) -> Result<()> {
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.fetch_input(ctx, ptr)
+}
+
+fn fetch_return(ctx: &mut Ctx, ptr: u32) -> Result<()> {
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.fetch_return(ctx, ptr)
+}
+
+fn suicide(ctx: &mut Ctx, ptr: u32) -> Result<()> {
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.suicide(ctx, ptr)
+}
+
+fn ccall(ctx: &mut Ctx,
+		gas: u64,
+		address_ptr: u32,
+		val_ptr: u32,
+		input_ptr: u32,
+		input_len: u32,
+		result_ptr: u32,
+		result_alloc_len: u32) -> Result<i32> 
+{
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.ccall(ctx, gas, address_ptr, val_ptr, input_ptr, input_len, result_ptr, result_alloc_len)
+}
+
+fn dcall(ctx: &mut Ctx,
+		gas: u64,
+		address_ptr: u32,
+		input_ptr: u32,
+		input_len: u32,
+		result_ptr: u32,
+		result_alloc_len: u32) -> Result<i32> 
+{
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.dcall(ctx, gas, address_ptr, input_ptr, input_len, result_ptr, result_alloc_len)
+}
+
+fn scall(ctx: &mut Ctx,
+		gas: u64,
+		address_ptr: u32,
+		input_ptr: u32,
+		input_len: u32,
+		result_ptr: u32,
+		result_alloc_len: u32) -> Result<i32> 
+{
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.scall(ctx, gas, address_ptr, input_ptr, input_len, result_ptr, result_alloc_len)
 }

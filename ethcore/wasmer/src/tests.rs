@@ -92,7 +92,7 @@ fn empty() {
 // This test checks if the contract deserializes payload header properly.
 //   Contract is provided with receiver(address), sender, origin and transaction value
 //   logger.wasm writes all these provided fixed header fields to some arbitrary storage keys.
-/* #[test]
+#[test]
 fn logger() {
 	ethcore_logger::init_log();
 
@@ -140,7 +140,7 @@ fn logger() {
 	);
 	// NOTICE: check disabled, as this value will change with gas model
 	// assert_eq!(gas_left, U256::from(17_578));
-} */
+}
 
 // This test checks if the contract can allocate memory and pass pointer to the result stream properly.
 //   1. Contract is being provided with the call descriptor ptr
@@ -178,7 +178,6 @@ fn identity() {
 	// assert_eq!(gas_left, U256::from(98_408));
 }
 
-/*
 // Dispersion test sends byte array and expect the contract to 'disperse' the original elements with
 // their modulo 19 dopant.
 // The result is always twice as long as the input.
@@ -299,11 +298,21 @@ fn create() {
 		}
 	};
 
-	trace!(target: "wasm", "fake_calls: {:?}", &ext.calls);
+	println!("fake_calls: {:?}", &ext.calls);
+	println!("expected: {:?}", &FakeCall {
+			call_type: FakeCallType::Create,
+			gas: U256::from(67920),
+			sender_address: None,
+			receive_address: None,
+			value: Some(500_000_000.into()),
+			data: vec![0u8, 2, 4, 8, 16, 32, 64, 128],
+			code_address: None,
+		});
+
 	assert!(ext.calls.contains(
 		&FakeCall {
 			call_type: FakeCallType::Create,
-			gas: U256::from(55144),
+			gas: U256::from(67920),
 			sender_address: None,
 			receive_address: None,
 			value: Some(500_000_000.into()),
@@ -455,6 +464,7 @@ fn call_static() {
 	// assert_eq!(gas_left, U256::from(92_381));
 }
 
+/*
 // Realloc test
 #[test]
 fn realloc() {
