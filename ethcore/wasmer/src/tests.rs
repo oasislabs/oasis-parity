@@ -69,6 +69,11 @@ fn wasm_runtime() -> WasmRuntime {
 	WasmRuntime
 }
 
+/*
+ TODO: The following exported runtime functions were not used in tests: 
+ 	gas, panic, expf, get_bytes, get_bytes_len, set_bytes  
+*/
+
 /// Empty contract does almost nothing except producing 1 (one) local node debug log message
 #[test]
 fn empty() {
@@ -464,7 +469,6 @@ fn call_static() {
 	// assert_eq!(gas_left, U256::from(92_381));
 }
 
-/*
 // Realloc test
 #[test]
 fn realloc() {
@@ -658,6 +662,8 @@ fn math_sub_with_overflow() {
 			args.to_vec()
 		}
 	);
+
+	println!("{:?}", result);
 
 	match result {
 		Err(vm::Error::Wasm(_)) => {},
@@ -1009,6 +1015,7 @@ fn syscall() {
 		}).expect_err("invalid index");
 	}
 }
+
 #[test]
 fn fetch_return() {
 	ethcore_logger::init_log();
@@ -1016,4 +1023,3 @@ fn fetch_return() {
 	let (_gas_left, result) = reqrep_test!("fetch_return.wasm", Vec::new()).expect("fetch_return failed");
 	assert_eq!(result.as_slice(), vec![1u8; 257].as_slice());
 }
-*/

@@ -20,7 +20,7 @@ use std::ffi::c_void;
 use ethereum_types::{U256, H256, Address};
 use hash;
 use vm::{self, CallType};
-use wasmi::{self, MemoryRef, RuntimeArgs, RuntimeValue, Error as InterpreterError, Trap, TrapKind};
+
 use wasmer_runtime::{
 	func,
 	Ctx,
@@ -95,33 +95,6 @@ pub enum Error {
 	Panic(String),
 }
 	
-impl wasmi::HostError for Error { }
-
-impl From<Trap> for Error {
-	fn from(trap: Trap) -> Self {
-		match *trap.kind() {
-			TrapKind::Unreachable => Error::Unreachable,
-			TrapKind::MemoryAccessOutOfBounds => Error::MemoryAccessViolation,
-			TrapKind::TableAccessOutOfBounds | TrapKind::ElemUninitialized => Error::InvalidVirtualCall,
-			TrapKind::DivisionByZero => Error::DivisionByZero,
-			TrapKind::InvalidConversionToInt => Error::InvalidConversionToInt,
-			TrapKind::UnexpectedSignature => Error::InvalidVirtualCall,
-			TrapKind::StackOverflow => Error::StackOverflow,
-			TrapKind::Host(_) => Error::Other,
-		}
-	}
-}
-
-impl From<InterpreterError> for Error {
-	fn from(err: InterpreterError) -> Self {
-		match err {
-			InterpreterError::Value(_) => Error::InvalidSyscall,
-			InterpreterError::Memory(_) => Error::MemoryAccessViolation,
-			_ => Error::Other,
-		}
-	}
-}
-
 impl ::std::fmt::Display for Error {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
 		match *self {
@@ -173,7 +146,7 @@ impl<'a> Runtime<'a> {
 		}
 	}
 
-	fn memory_get_into_ctx(&self, ctx: &mut Ctx, offset: u32, mut buf: &mut [u8]) -> Result<()> {
+	fn memory_get_into(&self, ctx: &mut Ctx, offset: u32, mut buf: &mut [u8]) -> Result<()> {
 		let mem_vec: Vec<u8> = ctx.memory(0).view()[offset as usize..(offset as usize + buf.len())]
 			.iter()
 			.map(|cell| cell.get())
@@ -182,25 +155,7 @@ impl<'a> Runtime<'a> {
 		Ok(())
     }
 
-	fn memory_get_into(&self, offset: u32, mut buf: &mut [u8]) -> Result<()> {
-		let mem_vec: Vec<u8> = self.memory.view()[offset as usize..(offset as usize + buf.len())]
-			.iter()
-			.map(|cell| cell.get())
-			.collect();
-		buf.write(mem_vec.as_slice());
-		Ok(())
-    }
-
-	fn memory_get(&self, offset: u32, len: usize) -> Result<Vec<u8>> {
-		Ok(
-			self.memory.view()[offset as usize..(offset as usize + len)]
-			.iter()
-			.map(|cell| cell.get())
-			.collect()
-		)
-    }
-
-	fn memory_get_ctx(&self, ctx: &mut Ctx, offset: u32, len: usize) -> Result<Vec<u8>> {
+	fn memory_get(&self, ctx: &mut Ctx, offset: u32, len: usize) -> Result<Vec<u8>> {
 		println!("Getting at offset {} len {}", offset, len);
 		let mem_get = ctx.memory(0).view()[offset as usize..(offset as usize + len)]
 			.iter()
@@ -210,15 +165,7 @@ impl<'a> Runtime<'a> {
 		Ok(mem_get)
     }
 
-    fn memory_set(&mut self, offset: u32, buf: &[u8]) -> Result<()> {
-		self.memory.view()[offset as usize..(offset as usize + buf.len())]
-			.iter()
-			.zip(buf.iter())
-			.for_each(|(cell, v)| cell.set(*v));
-		Ok(())
-    }
-
-	fn memory_set_ctx(&mut self, ctx: &mut Ctx, offset: u32, buf: &[u8]) -> Result<()> {
+	fn memory_set(&mut self, ctx: &mut Ctx, offset: u32, buf: &[u8]) -> Result<()> {
 		println!("Setting at offset {}, buf {:?}, len {}", offset, buf, buf.len());
 		ctx.memory(0).view()[offset as usize..(offset as usize + buf.len())]
 			.iter()
@@ -227,17 +174,17 @@ impl<'a> Runtime<'a> {
 		Ok(())
     }
 
-	fn memory_zero(&mut self, offset: usize, len: usize) -> Result<()> {
-		self.memory.view()[offset as usize..(offset as usize + len)]
+	fn memory_zero(&mut self, ctx: &mut Ctx, offset: usize, len: usize) -> Result<()> {
+		ctx.memory(0).view()[offset as usize..(offset as usize + len)]
 			.iter()
 			.for_each(|(cell)| cell.set(0));
 		Ok(())
 	}
 
 	/// Loads 256-bit hash from the specifed sandboxed memory pointer
-	fn h256_at(&self, ptr: u32) -> Result<H256> {
+	fn h256_at(&self, ctx: &mut Ctx, ptr: u32) -> Result<H256> {
 		let mut buf = [0u8; 32];
-		self.memory_get_into(ptr, &mut buf[..])?;
+		self.memory_get_into(ctx, ptr, &mut buf[..])?;
 
 		Ok(H256::from(&buf[..]))
 	}
@@ -245,7 +192,7 @@ impl<'a> Runtime<'a> {
 	/// Loads 160-bit hash (Ethereum address) from the specified sandboxed memory pointer
 	fn address_at(&self, ctx: &mut Ctx, ptr: u32) -> Result<Address> {
 		let mut buf = [0u8; 20];
-		self.memory_get_into_ctx(ctx, ptr, &mut buf[..])?;
+		self.memory_get_into(ctx, ptr, &mut buf[..])?;
 
 		Ok(Address::from(&buf[..]))
 	}
@@ -253,7 +200,7 @@ impl<'a> Runtime<'a> {
 	/// Loads 256-bit integer represented with bigendian from the specified sandboxed memory pointer
 	fn u256_at(&self, ctx: &mut Ctx, ptr: u32) -> Result<U256> {
 		let mut buf = [0u8; 32];
-		self.memory_get_into_ctx(ctx, ptr, &mut buf[..])?;
+		self.memory_get_into(ctx, ptr, &mut buf[..])?;
 
 		Ok(U256::from_big_endian(&buf[..]))
 	}
@@ -325,16 +272,14 @@ impl<'a> Runtime<'a> {
 	
 		/// Read from the storage to wasm memory
 	/// All storage read through here *must* be an H256.
-	pub fn storage_read(&mut self, args: RuntimeArgs) -> Result<()>
+	pub fn storage_read(&mut self, ctx: &mut Ctx, key_ptr: u32, val_ptr: u32) -> Result<()>
 	{
-		let key = self.h256_at(args.nth_checked(0)?)?;
-		let val_ptr: u32 = args.nth_checked(1)?;
-
+		let key = self.h256_at(ctx, key_ptr)?;
 		let val = self.ext.storage_at(&key).map_err(|_| Error::StorageReadError)?;
 
 		self.adjusted_charge(|schedule| schedule.sload_gas as u64)?;
 
-		self.memory_set(val_ptr as u32, &*val)?;
+		self.memory_set(ctx, val_ptr as u32, &*val)?;
 
 		Ok(())
 	}
@@ -343,8 +288,8 @@ impl<'a> Runtime<'a> {
 	/// All storage written through here *must* be an H256.
 	pub fn storage_write(&mut self, ctx: &mut Ctx, key_ptr: u32, val_ptr: u32) -> Result<()>
 	{
-		let key = self.h256_at(key_ptr)?;
-		let val = self.h256_at(val_ptr)?;
+		let key = self.h256_at(ctx, key_ptr)?;
+		let val = self.h256_at(ctx, val_ptr)?;
 
 		let former_val = self.ext.storage_at(&key).map_err(|_| Error::StorageUpdateError)?;
 		let reset = !(former_val == H256::zero() && val != H256::zero());
@@ -393,7 +338,9 @@ impl<'a> Runtime<'a> {
 
 		trace!(target: "wasm", "Contract ret: {} bytes @ {}", len, ptr);
 
-		self.result = self.memory_get_ctx(ctx, ptr, len as usize)?;
+		self.result = self.memory_get(ctx, ptr, len as usize)?;
+
+		println!("Returning {:?}", self.result);
 
 		Err(Error::Return)
 	}
@@ -410,8 +357,7 @@ impl<'a> Runtime<'a> {
 	}
 
 	/// General gas charging extern.
-	fn gas(&mut self, args: RuntimeArgs) -> Result<()> {
-		let amount: u32 = args.nth_checked(0)?;
+	fn gas(&mut self, amount: u32) -> Result<()> {
 		if self.charge_gas(amount as u64) {
 			Ok(())
 		} else {
@@ -430,7 +376,7 @@ impl<'a> Runtime<'a> {
 		let args_len = self.args.len() as u64;
 		self.charge(|s| args_len * s.wasm().memcpy as u64)?;
 
-		self.memory_set_ctx(ctx, ptr, &self.args.clone()[..])?;
+		self.memory_set(ctx, ptr, &self.args.clone()[..])?;
 		Ok(())
 	}
 
@@ -445,19 +391,17 @@ impl<'a> Runtime<'a> {
 		let return_length = self.result.len() as u64;
 		self.charge(|s| return_length * s.wasm().memcpy as u64)?;
 
-		self.memory_set_ctx(ctx, ptr, &self.result.clone()[..])?;
+		self.memory_set(ctx, ptr, &self.result.clone()[..])?;
 		Ok(())
 	}
 
 	/// User panic
 	///
 	/// Contract can invoke this when he encounters unrecoverable error.
-	fn panic(&mut self, args: RuntimeArgs) -> Result<()>
+	fn panic(&mut self, ctx: &mut Ctx, payload_ptr: u32, payload_len: u32) -> Result<()>
 	{
-		let payload_ptr: u32 = args.nth_checked(0)?;
-		let payload_len: u32 = args.nth_checked(1)?;
 
-		let raw_payload = self.memory_get(payload_ptr, payload_len as usize)?;
+		let raw_payload = self.memory_get(ctx, payload_ptr, payload_len as usize)?;
 		let payload = panic_payload::decode(&raw_payload);
 		let msg = format!(
 			"{msg}, {file}:{line}:{col}",
@@ -480,17 +424,16 @@ impl<'a> Runtime<'a> {
 	}
 
 	/// Rust syscall
-	fn syscall(&mut self, args: RuntimeArgs) -> Result<RuntimeValue>
+	fn syscall(&mut self, ctx: &mut Ctx, syscall_id: u32, data_ptr: u32) -> Result<i32>
 	{
-		let syscall_id: u32 = args.nth_checked(0)?;
-		let data_ptr: u32 = args.nth_checked(1)?;
+		
 		Ok(match syscall_id {
 			// https://github.com/rust-lang/rust/blob/master/src/etc/wasm32-shim.js
 			1 => {
-				let mem_bytes = self.memory_get(data_ptr, 4 * 3)?; // 3 words
+				let mem_bytes = self.memory_get(ctx, data_ptr, 4 * 3)?; // 3 words
 				let payload = unsafe { mem::transmute::<Vec<u8>, Vec<u32>>(mem_bytes) };
 				let out_str =
-					String::from_utf8(self.memory_get(payload[1] as u32, payload[2] as usize)?)
+					String::from_utf8(self.memory_get(ctx, payload[1] as u32, payload[2] as usize)?)
 						.map_err(|_| Error::BadUtf8)?;
 				match payload.get(0) {
 					Some(1) | Some(2) => {
@@ -504,7 +447,7 @@ impl<'a> Runtime<'a> {
 				}
 			}
 			2 => {
-				let mem_bytes = self.memory_get(data_ptr, 4)?; // 1 word
+				let mem_bytes = self.memory_get(ctx, data_ptr, 4)?; // 1 word
 				let payload = unsafe { mem::transmute::<Vec<u8>, Vec<u32>>(mem_bytes) };
 				Err(Error::Panic(format!(
 					"contract requested exit with code {}",
@@ -514,21 +457,21 @@ impl<'a> Runtime<'a> {
 			3 => {
 				// getargs(ret_buf_ptr: &mut u8, ret_buf_len: u32, args_len: &mut u32);
 				// set the return buffer length to zero = no args
-				self.memory_zero(data_ptr as usize + 4 * 2, 4)?;
+				self.memory_zero(ctx, data_ptr as usize + 4 * 2, 4)?;
 				Ok(1)
 			}
 			4 => {
 				// getenv(key_ptr: *const char, key_len: u32, val_ptr: &mut u8, ret_buf_len: mut u32, val_len: mut u32)
 				// set val length to zero = no val
-				self.memory_zero(data_ptr as usize + 4 * 4, 4)?;
+				self.memory_zero(ctx, data_ptr as usize + 4 * 4, 4)?;
 				Ok(1)
 			}
 			6 => {
 				// time(_: u32, high_s: mut u32, low_s: mut u32, subsec_nanos: mut u32);
 				let ts_bytes = self.ext.env_info().timestamp.to_le_bytes();
-				self.memory_set(data_ptr + 4 * 1, &ts_bytes[0..4])?;
-				self.memory_set(data_ptr + 4 * 2, &ts_bytes[4..8])?;
-				self.memory_zero(data_ptr as usize + 4 * 3, 4)?;
+				self.memory_set(ctx, data_ptr + 4 * 1, &ts_bytes[0..4])?;
+				self.memory_set(ctx, data_ptr + 4 * 2, &ts_bytes[4..8])?;
+				self.memory_zero(ctx, data_ptr as usize + 4 * 3, 4)?;
 				Ok(1)
 			}
 			_ => Err(Error::Panic(format!(
@@ -539,9 +482,8 @@ impl<'a> Runtime<'a> {
 		.into())
 	}
 
-	fn expf(&mut self, args: RuntimeArgs) -> Result<RuntimeValue> {
-		let x: wasmi::nan_preserving_float::F32 = args.nth_checked(0)?;
-		Ok(RuntimeValue::F32(wasmi::nan_preserving_float::F32::from_float(x.to_float().exp())))
+	fn expf(&mut self, x: f32) -> Result<f32> {
+		Ok(x.exp())
 	}
 
  	fn do_call(
@@ -590,7 +532,7 @@ impl<'a> Runtime<'a> {
 		result.resize(result_alloc_len as usize, 0);
 
 		// todo: optimize to use memory views once it's in
-		let payload = self.memory_get_ctx(ctx, input_ptr, input_len as usize)?;
+		let payload = self.memory_get(ctx, input_ptr, input_len as usize)?;
 
 		let adjusted_gas = match gas.checked_mul(self.ext.schedule().wasm().opcodes_div as u64)
 			.map(|x| x / self.ext.schedule().wasm().opcodes_mul as u64)
@@ -622,7 +564,7 @@ impl<'a> Runtime<'a> {
 					gas_left.low_u64() * self.ext.schedule().wasm().opcodes_div as u64
 						/ self.ext.schedule().wasm().opcodes_mul as u64;
 
-				self.memory_set_ctx(ctx, result_ptr, &result)?;
+				self.memory_set(ctx, result_ptr, &result)?;
 				self.result = result;
 				Ok(0)
 			},
@@ -632,7 +574,7 @@ impl<'a> Runtime<'a> {
 					gas_left.low_u64() * self.ext.schedule().wasm().opcodes_div as u64
 						/ self.ext.schedule().wasm().opcodes_mul as u64;
 
-				self.memory_set_ctx(ctx, result_ptr, &result)?;
+				self.memory_set(ctx, result_ptr, &result)?;
 				Ok(-1)
 			},
 			vm::MessageCallResult::Failed  => {
@@ -684,28 +626,21 @@ impl<'a> Runtime<'a> {
 	fn return_address_ptr(&mut self, ctx: &mut Ctx, ptr: u32, val: Address) -> Result<()>
 	{
 		self.charge(|schedule| schedule.wasm().static_address as u64)?;
-		self.memory_set_ctx(ctx, ptr, &*val)?;
+		self.memory_set(ctx, ptr, &*val)?;
 		Ok(())
 	}
 
-	fn return_u256_ptr(&mut self, ptr: u32, val: U256) -> Result<()> {
+	fn return_u256_ptr(&mut self, ctx: &mut Ctx, ptr: u32, val: U256) -> Result<()> {
 		let value: H256 = val.into();
 		self.charge(|schedule| schedule.wasm().static_u256 as u64)?;
-		self.memory_set(ptr, &*value)?;
-		Ok(())
-	}
-
-	fn return_u256_ptr_ctx(&mut self, ctx: &mut Ctx, ptr: u32, val: U256) -> Result<()> {
-		let value: H256 = val.into();
-		self.charge(|schedule| schedule.wasm().static_u256 as u64)?;
-		self.memory_set_ctx(ctx, ptr, &*value)?;
+		self.memory_set(ctx, ptr, &*value)?;
 		Ok(())
 	}
 
 	/// Returns value (in Wei) passed to contract
 	pub fn value(&mut self, ctx: &mut Ctx, ptr: u32) -> Result<()> {
 		let val = self.context.value;
-		self.return_u256_ptr_ctx(ctx, ptr, val)
+		self.return_u256_ptr(ctx, ptr, val)
 	}
 
 	/// Creates a new contract
@@ -737,7 +672,7 @@ impl<'a> Runtime<'a> {
 		let result_ptr: u32 = args.nth_checked(3)?;
 		trace!(target: "wasm", "result_ptr: {:?}", result_ptr);
  */
-		let code = self.memory_get_ctx(ctx, code_ptr, code_len as usize)?;
+		let code = self.memory_get(ctx, code_ptr, code_len as usize)?;
 
 		self.adjusted_charge(|schedule| schedule.create_gas as u64)?;
 		self.adjusted_charge(|schedule| schedule.create_data_gas as u64 * code.len() as u64)?;
@@ -748,7 +683,7 @@ impl<'a> Runtime<'a> {
 
 		match self.ext.create(&gas_left, &endowment, &code, vm::CreateContractAddress::FromSenderAndCodeHash) {
 			vm::ContractCreateResult::Created(address, gas_left) => {
-				self.memory_set_ctx(ctx, result_ptr, &*address)?;
+				self.memory_set(ctx, result_ptr, &*address)?;
 				self.gas_counter = self.gas_limit -
 					// this cannot overflow, since initial gas is in [0..u64::max) range,
 					// and gas_left cannot be bigger
@@ -804,35 +739,35 @@ impl<'a> Runtime<'a> {
 	}
 
 	///	Signature: `fn blockhash(number: i64, dest: *mut u8)`
-	pub fn blockhash(&mut self, args: RuntimeArgs) -> Result<()> {
+	pub fn blockhash(&mut self, ctx: &mut Ctx, number: i64, dest_ptr: u32) -> Result<()> {
 		self.adjusted_charge(|schedule| schedule.blockhash_gas as u64)?;
-		let hash = self.ext.blockhash(&U256::from(args.nth_checked::<u64>(0)?));
-		self.memory_set(args.nth_checked(1)?, &*hash)?;
+		let hash = self.ext.blockhash(&U256::from(number));
+		self.memory_set(ctx, dest_ptr, &*hash)?;
 
 		Ok(())
 	}
 
 	///	Signature: `fn blocknumber() -> i64`
-	pub fn blocknumber(&mut self) -> Result<RuntimeValue> {
-		Ok(RuntimeValue::from(self.ext.env_info().number))
+	pub fn blocknumber(&mut self) -> Result<u64> {
+		Ok(self.ext.env_info().number)
 	}
 
 	///	Signature: `fn coinbase(dest: *mut u8)`
-	pub fn coinbase(&mut self, ctx: &mut Ctx, args: RuntimeArgs) -> Result<()> {
+	pub fn coinbase(&mut self, ctx: &mut Ctx, dest_ptr: u32) -> Result<()> {
 		let coinbase = self.ext.env_info().author;
-		self.return_address_ptr(ctx, args.nth_checked(0)?, coinbase)
+		self.return_address_ptr(ctx, dest_ptr, coinbase)
 	}
 
 	///	Signature: `fn difficulty(dest: *mut u8)`
-	pub fn difficulty(&mut self, args: RuntimeArgs) -> Result<()> {
+	pub fn difficulty(&mut self, ctx: &mut Ctx, dest_ptr: u32) -> Result<()> {
 		let difficulty = self.ext.env_info().difficulty;
-		self.return_u256_ptr(args.nth_checked(0)?, difficulty)
+		self.return_u256_ptr(ctx, dest_ptr, difficulty)
 	}
 
 	///	Signature: `fn gaslimit(dest: *mut u8)`
-	pub fn gaslimit(&mut self, args: RuntimeArgs) -> Result<()> {
+	pub fn gaslimit(&mut self, ctx: &mut Ctx, dest_ptr: u32) -> Result<()> {
 		let gas_limit = self.ext.env_info().gas_limit;
-		self.return_u256_ptr(args.nth_checked(0)?, gas_limit)
+		self.return_u256_ptr(ctx, dest_ptr, gas_limit)
 	}
 
 	///	Signature: `fn address(dest: *mut u8)`
@@ -854,19 +789,15 @@ impl<'a> Runtime<'a> {
 	}
 
 	///	Signature: `timestamp() -> i64`
-	pub fn timestamp(&mut self) -> Result<RuntimeValue> {
+	pub fn timestamp(&mut self) -> Result<u64> {
 		let timestamp = self.ext.env_info().timestamp;
-		Ok(RuntimeValue::from(timestamp))
+		Ok(timestamp)
 	}
 
 	///	Signature: `fn elog(topic_ptr: *const u8, topic_count: u32, data_ptr: *const u8, data_len: u32)`
-	pub fn elog(&mut self, args: RuntimeArgs) -> Result<()>
+	pub fn elog(&mut self, ctx: &mut Ctx, topic_ptr: u32, topic_count: u32, data_ptr: u32, data_len: u32) -> Result<()>
 	{
-		let topic_ptr: u32 = args.nth_checked(0)?;
-		let topic_count: u32 = args.nth_checked(1)?;
-		let data_ptr: u32 = args.nth_checked(2)?;
-		let data_len: u32 = args.nth_checked(3)?;
-
+		
 		if topic_count > 4 {
 			return Err(Error::Log.into());
 		}
@@ -888,16 +819,16 @@ impl<'a> Runtime<'a> {
 
 			*topics.get_mut(i as usize)
 				.expect("topics is resized to `topic_count`, i is in 0..topic count iterator, get_mut uses i as an indexer, get_mut cannot fail; qed")
-				= H256::from(&self.memory_get(offset, 32)?[..]);
+				= H256::from(&self.memory_get(ctx, offset, 32)?[..]);
 		}
-		self.ext.log(topics, &self.memory_get(data_ptr, data_len as usize)?).map_err(|_| Error::Log)?;
+		self.ext.log(topics, &self.memory_get(ctx, data_ptr, data_len as usize)?).map_err(|_| Error::Log)?;
 
 		Ok(())
 	}
 
 	/// Signature: `fn get_bytes(key: *const u8, result: *mut u8)`
-	pub fn get_bytes(&mut self, args: RuntimeArgs) -> Result<()> {
-		let key = self.storage_bytes_key(self.h256_at(args.nth_checked(0)?)?);
+	pub fn get_bytes(&mut self, ctx: &mut Ctx, key_ptr: u32, result_ptr: u32) -> Result<()> {
+		let key = self.storage_bytes_key(self.h256_at(ctx, key_ptr)?);
 		let bytes = self.ext.storage_bytes_at(&key).map_err(|_| Error::StorageReadError)?;
 
 		// Charge sload gas, scaled by number of bytes.
@@ -918,26 +849,24 @@ impl<'a> Runtime<'a> {
 			self.adjusted_charge(|_| gas.as_u64())?;
 		}
 
-		self.memory_set(args.nth_checked(1)?, &bytes)?;
+		self.memory_set(ctx, result_ptr, &bytes)?;
 		Ok(())
 	}
 
 	/// Signature: `fn get_bytes_len(key: *const u8) -> u64`
-	pub fn get_bytes_len(&mut self, args: RuntimeArgs) -> Result<RuntimeValue> {
-		let key = self.storage_bytes_key(self.h256_at(args.nth_checked(0)?)?);
+	pub fn get_bytes_len(&mut self, ctx: &mut Ctx, key_ptr: u32) -> Result<i64> {
+		let key = self.storage_bytes_key(self.h256_at(ctx, key_ptr)?);
 		let len = self.ext.storage_bytes_len(&key).map_err(|_| Error::StorageReadError)?;
-		Ok(RuntimeValue::I64(len as i64))
+		Ok(len as i64)
 	}
 
 	/// Signature: `fn set_bytes(key: *const u8, bytes: *mut u8, len: u64)`
-	pub fn set_bytes(&mut self, args: RuntimeArgs) -> Result<()> {
-		let key = self.storage_bytes_key(self.h256_at(args.nth_checked(0)?)?);
+	pub fn set_bytes(&mut self, ctx: &mut Ctx, key_ptr: u32, bytes_ptr: u32, len: u64) -> Result<()> {
+		let key = self.storage_bytes_key(self.h256_at(ctx, key_ptr)?);
 
 		let former_bytes = self.ext.storage_bytes_at(&key).map_err(|_| Error::StorageUpdateError)?;
 
-		let bytes_ptr: u32 = args.nth_checked(1)?;
-		let len: u64 = args.nth_checked(2)?;
-		let bytes = self.memory_get(bytes_ptr, len as usize)?;
+		let bytes = self.memory_get(ctx, bytes_ptr, len as usize)?;
 		let is_bytes_empty = bytes.is_empty();
 
 		let reset = !(former_bytes.is_empty() && !is_bytes_empty);
@@ -975,7 +904,21 @@ impl<'a> Runtime<'a> {
 				"sender" => func!(sender),
 				"suicide" => func!(suicide),
 				"value" => func!(value),
+				"blockhash" => func!(blockhash),
+				"blocknumber" => func!(blocknumber),
+				"coinbase" => func!(coinbase),
+				"difficulty" => func!(difficulty),
+				"gaslimit" => func!(gaslimit),
+				"gas" => func!(gas),
+				"timestamp" => func!(timestamp),	
+				"elog" => func!(elog),	
+				"panic" => func!(panic),
+				"rust_wasm_syscall" => func!(syscall),		
 				"storage_write" => func!(storage_write),
+				"storage_read" => func!(storage_read),
+				"get_bytes" => func!(get_bytes),
+				"get_bytes_len" => func!(get_bytes_len),
+				"set_bytes" => func!(set_bytes),
 				"input_length" => func!(input_length),
 				"return_length" => func!(return_length),
 				"fetch_input" => func!(fetch_input),
@@ -1021,15 +964,46 @@ fn sender(ctx: &mut Ctx, addr_ptr: u32) -> Result<()> {
 	runtime.sender(ctx, addr_ptr)
 }
 
+fn storage_read(ctx: &mut Ctx, key_ptr: u32, val_ptr: u32) -> Result<()> {
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.storage_read(ctx, key_ptr, val_ptr)
+}
+
 fn storage_write(ctx: &mut Ctx, key_ptr: u32, val_ptr: u32) -> Result<()> {
 	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 	runtime.storage_write(ctx, key_ptr, val_ptr)
+}
+
+fn get_bytes(ctx: &mut Ctx, key_ptr: u32, result_ptr: u32) -> Result<()> {
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.get_bytes(ctx, key_ptr, result_ptr)
+}
+
+fn get_bytes_len(ctx: &mut Ctx, key_ptr: u32) -> Result<i64> {
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.get_bytes_len(ctx, key_ptr)
+}
+
+fn set_bytes(ctx: &mut Ctx, key_ptr: u32, bytes_ptr: u32, len: u64) -> Result<()> {
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.set_bytes(ctx, key_ptr, bytes_ptr, len)
 }
 
 fn value(ctx: &mut Ctx, ptr: u32) -> Result<()> {
 	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 	runtime.value(ctx, ptr)
 }
+
+fn elog(ctx: &mut Ctx, topic_ptr: u32, topic_count: u32, data_ptr: u32, data_len: u32) -> Result<()> {
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.elog(ctx, topic_ptr, topic_count, data_ptr, data_len)
+}
+	
+fn syscall(ctx: &mut Ctx, syscall_id: u32, data_ptr: u32) -> Result<i32> {
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.syscall(ctx, syscall_id, data_ptr)
+}
+	
 
 fn input_length(ctx: &mut Ctx) -> i32 {
 	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
@@ -1054,6 +1028,52 @@ fn fetch_return(ctx: &mut Ctx, ptr: u32) -> Result<()> {
 fn suicide(ctx: &mut Ctx, ptr: u32) -> Result<()> {
 	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 	runtime.suicide(ctx, ptr)
+}
+
+fn blockhash(ctx: &mut Ctx, number: i64, dest_ptr: u32) -> Result<()> {
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.blockhash(ctx, number, dest_ptr)
+}
+
+// TODO switch to i64
+fn blocknumber(ctx: &mut Ctx) -> Result<u64> {
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.blocknumber()
+}
+
+fn coinbase(ctx: &mut Ctx, dest_ptr: u32) -> Result<()> {
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.coinbase(ctx, dest_ptr)
+}
+
+fn difficulty(ctx: &mut Ctx, dest_ptr: u32) -> Result<()> {
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.difficulty(ctx, dest_ptr)
+}
+
+fn gaslimit(ctx: &mut Ctx, dest_ptr: u32) -> Result<()> {
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.gaslimit(ctx, dest_ptr)
+}
+
+fn gas(ctx: &mut Ctx, amount: u32) -> Result<()> {
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.gas(amount)
+}
+
+fn timestamp(ctx: &mut Ctx) -> Result<u64> {
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.timestamp()
+}
+
+fn panic(ctx: &mut Ctx, payload_ptr: u32, payload_len: u32) -> Result<()> {
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.panic(ctx, payload_ptr, payload_len)
+}
+
+fn expf(ctx: &mut Ctx, x: f32) -> Result<f32> {
+	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+	runtime.expf(x)
 }
 
 fn ccall(ctx: &mut Ctx,

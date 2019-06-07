@@ -106,7 +106,7 @@ impl vm::Vm for WasmRuntime {
 			// runtime.charge(|s| initial_memory as u64 * s.wasm().initial_mem_cost as u64)?;
 
 			let invoke_result = instance.call("call", &[]);
-			println!("{:?}", invoke_result);
+			println!("Invoked: {:?}", invoke_result);
 
 			// TODO: Error handling
 			(
