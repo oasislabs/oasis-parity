@@ -34,7 +34,6 @@ pub struct RuntimeContext {
 	pub address: Address,
 	pub sender: Address,
 	pub origin: Address,
-	pub code_address: Address,
 	pub value: U256,
 }
 
@@ -94,7 +93,7 @@ pub enum Error {
 	/// Panic with message
 	Panic(String),
 }
-	
+
 impl ::std::fmt::Display for Error {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
 		match *self {
@@ -153,31 +152,28 @@ impl<'a> Runtime<'a> {
 			.collect();
 		buf.write(mem_vec.as_slice());
 		Ok(())
-    }
+  }
 
 	fn memory_get(&self, ctx: &mut Ctx, offset: u32, len: usize) -> Result<Vec<u8>> {
-		println!("Getting at offset {} len {}", offset, len);
 		let mem_get = ctx.memory(0).view()[offset as usize..(offset as usize + len)]
 			.iter()
 			.map(|cell| cell.get())
 			.collect();
-		println!("Found: {:?}", mem_get);
 		Ok(mem_get)
-    }
+  }
 
 	fn memory_set(&mut self, ctx: &mut Ctx, offset: u32, buf: &[u8]) -> Result<()> {
-		println!("Setting at offset {}, buf {:?}, len {}", offset, buf, buf.len());
 		ctx.memory(0).view()[offset as usize..(offset as usize + buf.len())]
 			.iter()
 			.zip(buf.iter())
 			.for_each(|(cell, v)| cell.set(*v));
 		Ok(())
-    }
+  }
 
 	fn memory_zero(&mut self, ctx: &mut Ctx, offset: usize, len: usize) -> Result<()> {
 		ctx.memory(0).view()[offset as usize..(offset as usize + len)]
 			.iter()
-			.for_each(|(cell)| cell.set(0));
+			.for_each(|(cell)| cell.set(0u8));
 		Ok(())
 	}
 
@@ -335,12 +331,10 @@ impl<'a> Runtime<'a> {
 	/// * pointer in sandboxed memory where result is
 	/// * the length of the result
 	pub fn ret(&mut self, ctx: &mut Ctx, ptr: u32, len: u32) -> Result<()> {
-
+		
 		trace!(target: "wasm", "Contract ret: {} bytes @ {}", len, ptr);
 
 		self.result = self.memory_get(ctx, ptr, len as usize)?;
-
-		println!("Returning {:?}", self.result);
 
 		Err(Error::Return)
 	}
@@ -368,6 +362,7 @@ impl<'a> Runtime<'a> {
     /// Query the length of the input bytes
 	fn input_length(&mut self, ctx: &mut Ctx) -> i32 {
 		self.args.len() as i32
+		
 	}
 
 	/// Write input bytes to the memory location using the passed pointer
@@ -715,7 +710,6 @@ impl<'a> Runtime<'a> {
 		let debug_str = String::from_utf8(
 			ctx.memory(0).view()[msg_ptr as usize..(msg_ptr + msg_len) as usize].iter().map(|cell| cell.get()).collect()
 		).unwrap();
-		println!("Contract debug message: {}", debug_str);
 		Ok(())
 	}
 

@@ -73,7 +73,7 @@ fn wasm_runtime() -> WasmRuntime {
  TODO: The following exported runtime functions were not used in tests: 
  	gas, panic, expf, get_bytes, get_bytes_len, set_bytes  
 */
-
+ 
 /// Empty contract does almost nothing except producing 1 (one) local node debug log message
 #[test]
 fn empty() {
@@ -663,14 +663,12 @@ fn math_sub_with_overflow() {
 		}
 	);
 
-	println!("{:?}", result);
-
 	match result {
 		Err(vm::Error::Wasm(_)) => {},
 		_ => panic!("Unexpected result {:?}", result),
 	}
 }
-
+ 
 #[test]
 fn math_div() {
 	let (_gas_left, result) = reqrep_test!(
@@ -1022,4 +1020,4 @@ fn fetch_return() {
 
 	let (_gas_left, result) = reqrep_test!("fetch_return.wasm", Vec::new()).expect("fetch_return failed");
 	assert_eq!(result.as_slice(), vec![1u8; 257].as_slice());
-}
+} 

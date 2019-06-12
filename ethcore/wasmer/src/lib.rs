@@ -42,8 +42,8 @@ use runtime::{Runtime, RuntimeContext, Error};
 use ethereum_types::U256;
 
 use wasmer_runtime::{
-    instantiate,
     error,
+	instantiate,
 	memory,
 	Value,
 };
@@ -52,6 +52,12 @@ use wasmer_runtime_core::Func;
 
 /// Wasm interpreter instance
 pub struct WasmRuntime;
+
+enum ExecutionOutcome {
+	Suicide,
+	Return,
+	NotSpecial,
+}
 
 impl vm::Vm for WasmRuntime {
 
@@ -67,7 +73,8 @@ impl vm::Vm for WasmRuntime {
 
 		let (gas_left, result) = {
 
-			let (_module, data) = parser::payload(&params, ext.schedule().wasm())?;
+			// Explicitly split the input into code and data
+			let (_module, code, data) = parser::payload(&params, ext.schedule().wasm())?;
 
 			let descriptor = wasmer_runtime::wasm::MemoryDescriptor {
 				minimum: wasmer_runtime::units::Pages(2),
@@ -85,14 +92,13 @@ impl vm::Vm for WasmRuntime {
 					address: params.address,
 					sender: params.sender,
 					origin: params.origin,
-					code_address: params.code_address,
 					value: params.value.value(),
 				},
 			);
 
 			let raw_ptr = &mut runtime as *mut _ as *mut c_void;
 			let instance = instantiate(
-				&params.code.unwrap(), 
+				&code, 
 				&runtime.get_import_object(mem_obj, raw_ptr)
 			).unwrap();
 
@@ -102,13 +108,31 @@ impl vm::Vm for WasmRuntime {
 			// total_charge ∈ [0..2^64) if static_region ∈ [0..2^16)
 			// qed
 			
-			// assert!(runtime.schedule().wasm().initial_mem_cost < 1 << 16);
-			// runtime.charge(|s| initial_memory as u64 * s.wasm().initial_mem_cost as u64)?;
+			/* assert!(runtime.schedule().wasm().initial_mem_cost < 1 << 16);
+			runtime.charge(|s| initial_memory as u64 * s.wasm().initial_mem_cost as u64);
+ 			*/
 
 			let invoke_result = instance.call("call", &[]);
-			println!("Invoked: {:?}", invoke_result);
+			let mut execution_outcome = ExecutionOutcome::NotSpecial;
+			if let Err(wasmer_runtime::error::CallError::Runtime(ref trap)) = invoke_result {
+				if let error::RuntimeError::Error { data } = trap {
+					if let Some(runtime_err) = data.downcast_ref::<runtime::Error>() {
+						// Expected errors thrown from runtime	
+						match runtime_err {
+							runtime::Error::Suicide => { execution_outcome = ExecutionOutcome::Suicide; },
+							runtime::Error::Return => { execution_outcome = ExecutionOutcome::Return; },
+							_ => {}
+						}
+					}
+				}
+			}
 
-			// TODO: Error handling
+			if let (ExecutionOutcome::NotSpecial, Err(e)) = (execution_outcome, invoke_result) {
+				trace!(target: "wasm", "Error executing contract: {:?}", e);
+				println!("Trapped: {:?}", e);
+				return Err(vm::Error::Wasm(format!("Wasm runtime error: {:?}", e)));
+			}
+
 			(
 				runtime.gas_left().expect("Cannot fail since it was not updated since last charge"),
 				runtime.into_result(),

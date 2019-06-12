@@ -41,7 +41,7 @@ fn gas_rules(wasm_costs: &vm::WasmCosts) -> rules::Set {
 /// loads the module instance from payload and injects gas counter according
 /// to schedule.
 pub fn payload<'a>(params: &'a vm::ActionParams, wasm_costs: &vm::WasmCosts)
-	-> Result<(elements::Module, &'a [u8]), vm::Error>
+	-> Result<(elements::Module, &'a [u8], &'a [u8]), vm::Error>
 {
 	let code = match params.code {
 		Some(ref code) => &code[..],
@@ -83,17 +83,22 @@ pub fn payload<'a>(params: &'a vm::ActionParams, wasm_costs: &vm::WasmCosts)
 		wasm_costs.max_stack_height,
 	).map_err(|_| vm::Error::Wasm(format!("Wasm contract error: stack limiter failure")))?;
 
-	let data = match params.params_type {
+	let (code, data) = match params.params_type {
 		vm::ParamsType::Embedded => {
-			if data_position < code.len() { &code[data_position..] } else { &[] }
+			if data_position < code.len() { 
+				(&code[..data_position], &code[data_position..]) 
+			} else {
+				(&code[..], &[] as &[u8]) 
+			}
 		},
 		vm::ParamsType::Separate => {
-			match params.data {
+			let separate_data = match params.data {
 				Some(ref s) => &s[..],
 				None => &[]
-			}
+			};
+			(&code[..], separate_data)
 		}
 	};
 
-	Ok((contract_module, data))
+	Ok((contract_module, code, data))
 }
