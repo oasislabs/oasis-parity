@@ -99,7 +99,7 @@ impl vm::Vm for WasmRuntime {
 			let raw_ptr = &mut runtime as *mut _ as *mut c_void;
 			let instance = instantiate(
 				&code, 
-				&runtime.get_import_object(mem_obj, raw_ptr)
+				&runtime::imports::get_import_object(mem_obj, raw_ptr)
 			).unwrap();
 
 			// cannot overflow if static_region < 2^16,

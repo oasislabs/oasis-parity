@@ -15,7 +15,6 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 use std::mem;
 use std::io::Write;
-use std::ffi::c_void;
 
 use ethereum_types::{U256, H256, Address};
 use hash;
@@ -351,7 +350,7 @@ impl<'a> Runtime<'a> {
 	}
 
 	/// General gas charging extern.
-	fn gas(&mut self, amount: u32) -> Result<()> {
+	fn gas(&mut self, _ctx: &mut Ctx, amount: u32) -> Result<()> {
 		if self.charge_gas(amount as u64) {
 			Ok(())
 		} else {
@@ -360,9 +359,8 @@ impl<'a> Runtime<'a> {
 	}
 
     /// Query the length of the input bytes
-	fn input_length(&mut self, ctx: &mut Ctx) -> i32 {
-		self.args.len() as i32
-		
+	fn input_length(&mut self, ctx: &mut Ctx) -> Result<i32> {
+		Ok(self.args.len() as i32)
 	}
 
 	/// Write input bytes to the memory location using the passed pointer
@@ -376,8 +374,8 @@ impl<'a> Runtime<'a> {
 	}
 
 	/// Query the length of the return bytes
-	fn return_length(&mut self, ctx: &mut Ctx) -> i32 {
-		self.result.len() as i32
+	fn return_length(&mut self, ctx: &mut Ctx) -> Result<i32> {
+		Ok(self.result.len() as i32)
 	}
 
 	/// Write return bytes to the memory location using the passed pointer
@@ -477,7 +475,7 @@ impl<'a> Runtime<'a> {
 		.into())
 	}
 
-	fn expf(&mut self, x: f32) -> Result<f32> {
+	fn expf(&mut self, _ctx: &mut Ctx, x: f32) -> Result<f32> {
 		Ok(x.exp())
 	}
 
@@ -742,7 +740,7 @@ impl<'a> Runtime<'a> {
 	}
 
 	///	Signature: `fn blocknumber() -> i64`
-	pub fn blocknumber(&mut self) -> Result<u64> {
+	pub fn blocknumber(&mut self, _ctx: &mut Ctx,) -> Result<u64> {
 		Ok(self.ext.env_info().number)
 	}
 
@@ -783,7 +781,7 @@ impl<'a> Runtime<'a> {
 	}
 
 	///	Signature: `timestamp() -> i64`
-	pub fn timestamp(&mut self) -> Result<u64> {
+	pub fn timestamp(&mut self, _ctx: &mut Ctx) -> Result<u64> {
 		let timestamp = self.ext.env_info().timestamp;
 		Ok(timestamp)
 	}
@@ -880,229 +878,69 @@ impl<'a> Runtime<'a> {
 	fn storage_bytes_key(&self, key: H256) -> H256 {
 		hash::keccak(key)
 	}
+}
 
-	/// Import resolver for wasmer
-	/// Maps all functions that runtime support to the corresponding contract import
-	/// entries.
-	/// Also manages initial memory request from the runtime.
-	pub fn get_import_object(&self, memory: Memory, raw_ptr: *mut c_void) -> wasmer_runtime::ImportObject {
-		let dtor = (|_: *mut c_void| {}) as fn(*mut c_void);
-		wasmer_runtime::imports! {
-			 move || { (raw_ptr, dtor) },
-			"env" => {
-				"create" => func!(create),
-				"address" => func!(address),
-				"debug" => func!(debug),
-				"origin" => func!(origin),
-				"ret" => func!(ret),
-				"sender" => func!(sender),
-				"suicide" => func!(suicide),
-				"value" => func!(value),
-				"blockhash" => func!(blockhash),
-				"blocknumber" => func!(blocknumber),
-				"coinbase" => func!(coinbase),
-				"difficulty" => func!(difficulty),
-				"gaslimit" => func!(gaslimit),
-				"gas" => func!(gas),
-				"timestamp" => func!(timestamp),	
-				"elog" => func!(elog),	
-				"panic" => func!(panic),
-				"rust_wasm_syscall" => func!(syscall),		
-				"storage_write" => func!(storage_write),
-				"storage_read" => func!(storage_read),
-				"get_bytes" => func!(get_bytes),
-				"get_bytes_len" => func!(get_bytes_len),
-				"set_bytes" => func!(set_bytes),
-				"input_length" => func!(input_length),
-				"return_length" => func!(return_length),
-				"fetch_input" => func!(fetch_input),
-				"fetch_return" => func!(fetch_return),
-				"ccall" => func!(ccall),
-				"dcall" => func!(dcall),
-				"scall" => func!(scall),
-				"memory" => memory,
-			},
+pub mod imports {
+	
+	use std::ffi::c_void;
+	use wasmer_runtime::{func, imports, Ctx, ImportObject};
+  use super::{Memory, Result, Runtime};
+
+	macro_rules! wrapped_imports {
+		( $( $import_name:expr => $func:ident < [ $( $arg_name:ident : $arg_type:ident ),* ] -> [ $( $returns:ident ),* ] >, )* ) => {
+				$(
+						fn $func( ctx: &mut Ctx, $( $arg_name: $arg_type ),* ) -> Result<($( $returns ),*)> {
+								let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+								runtime.$func(ctx, $( $arg_name, )* )
+						}
+				)*
+
+				pub(crate) fn get_import_object(memory: Memory, raw_ptr: *mut c_void) -> wasmer_runtime::ImportObject {
+						let dtor = (|_: *mut c_void| {}) as fn(*mut c_void);
+						wasmer_runtime::imports! {
+							move || { (raw_ptr, dtor) },
+							"env" => {
+									"memory" => memory,
+									$(
+											$import_name => func!($func),
+									)*
+							},
+						}
+				}
 		}
 	}
 
-}
-
-// Exposed functions for runtime imports
-fn create(ctx: &mut Ctx, endowment: u32, code_ptr: u32, code_len: u32, result_ptr: u32) -> Result<i32> {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.create(ctx, endowment, code_ptr, code_len, result_ptr)
-}
-
-fn address(ctx: &mut Ctx, addr_ptr: u32) -> Result<()> {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.address(ctx, addr_ptr)
-}
-
-fn debug(ctx: &mut Ctx, msg_ptr: u32, msg_len: u32) -> Result<()> {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.debug(ctx, msg_ptr, msg_len)
-}
-
-fn origin(ctx: &mut Ctx, addr_ptr: u32) -> Result<()> {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.origin(ctx, addr_ptr)
-}
-
-fn ret(ctx: &mut Ctx, ptr: u32, len: u32) -> Result<()> {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.ret(ctx, ptr, len)
-}
-
-fn sender(ctx: &mut Ctx, addr_ptr: u32) -> Result<()> {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.sender(ctx, addr_ptr)
-}
-
-fn storage_read(ctx: &mut Ctx, key_ptr: u32, val_ptr: u32) -> Result<()> {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.storage_read(ctx, key_ptr, val_ptr)
-}
-
-fn storage_write(ctx: &mut Ctx, key_ptr: u32, val_ptr: u32) -> Result<()> {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.storage_write(ctx, key_ptr, val_ptr)
-}
-
-fn get_bytes(ctx: &mut Ctx, key_ptr: u32, result_ptr: u32) -> Result<()> {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.get_bytes(ctx, key_ptr, result_ptr)
-}
-
-fn get_bytes_len(ctx: &mut Ctx, key_ptr: u32) -> Result<i64> {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.get_bytes_len(ctx, key_ptr)
-}
-
-fn set_bytes(ctx: &mut Ctx, key_ptr: u32, bytes_ptr: u32, len: u64) -> Result<()> {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.set_bytes(ctx, key_ptr, bytes_ptr, len)
-}
-
-fn value(ctx: &mut Ctx, ptr: u32) -> Result<()> {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.value(ctx, ptr)
-}
-
-fn elog(ctx: &mut Ctx, topic_ptr: u32, topic_count: u32, data_ptr: u32, data_len: u32) -> Result<()> {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.elog(ctx, topic_ptr, topic_count, data_ptr, data_len)
-}
-	
-fn syscall(ctx: &mut Ctx, syscall_id: u32, data_ptr: u32) -> Result<i32> {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.syscall(ctx, syscall_id, data_ptr)
-}
-	
-
-fn input_length(ctx: &mut Ctx) -> i32 {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.input_length(ctx)
-}
-
-fn return_length(ctx: &mut Ctx) -> i32 {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.return_length(ctx)
-}
-
-fn fetch_input(ctx: &mut Ctx, ptr: u32) -> Result<()> {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.fetch_input(ctx, ptr)
-}
-
-fn fetch_return(ctx: &mut Ctx, ptr: u32) -> Result<()> {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.fetch_return(ctx, ptr)
-}
-
-fn suicide(ctx: &mut Ctx, ptr: u32) -> Result<()> {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.suicide(ctx, ptr)
-}
-
-fn blockhash(ctx: &mut Ctx, number: i64, dest_ptr: u32) -> Result<()> {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.blockhash(ctx, number, dest_ptr)
-}
-
-// TODO switch to i64
-fn blocknumber(ctx: &mut Ctx) -> Result<u64> {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.blocknumber()
-}
-
-fn coinbase(ctx: &mut Ctx, dest_ptr: u32) -> Result<()> {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.coinbase(ctx, dest_ptr)
-}
-
-fn difficulty(ctx: &mut Ctx, dest_ptr: u32) -> Result<()> {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.difficulty(ctx, dest_ptr)
-}
-
-fn gaslimit(ctx: &mut Ctx, dest_ptr: u32) -> Result<()> {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.gaslimit(ctx, dest_ptr)
-}
-
-fn gas(ctx: &mut Ctx, amount: u32) -> Result<()> {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.gas(amount)
-}
-
-fn timestamp(ctx: &mut Ctx) -> Result<u64> {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.timestamp()
-}
-
-fn panic(ctx: &mut Ctx, payload_ptr: u32, payload_len: u32) -> Result<()> {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.panic(ctx, payload_ptr, payload_len)
-}
-
-fn expf(ctx: &mut Ctx, x: f32) -> Result<f32> {
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.expf(x)
-}
-
-fn ccall(ctx: &mut Ctx,
-		gas: u64,
-		address_ptr: u32,
-		val_ptr: u32,
-		input_ptr: u32,
-		input_len: u32,
-		result_ptr: u32,
-		result_alloc_len: u32) -> Result<i32> 
-{
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.ccall(ctx, gas, address_ptr, val_ptr, input_ptr, input_len, result_ptr, result_alloc_len)
-}
-
-fn dcall(ctx: &mut Ctx,
-		gas: u64,
-		address_ptr: u32,
-		input_ptr: u32,
-		input_len: u32,
-		result_ptr: u32,
-		result_alloc_len: u32) -> Result<i32> 
-{
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.dcall(ctx, gas, address_ptr, input_ptr, input_len, result_ptr, result_alloc_len)
-}
-
-fn scall(ctx: &mut Ctx,
-		gas: u64,
-		address_ptr: u32,
-		input_ptr: u32,
-		input_len: u32,
-		result_ptr: u32,
-		result_alloc_len: u32) -> Result<i32> 
-{
-	let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-	runtime.scall(ctx, gas, address_ptr, input_ptr, input_len, result_ptr, result_alloc_len)
+	wrapped_imports! {
+		"create" => create<[endowment: u32, code_ptr: u32, code_len: u32, result_ptr: u32] -> [i32]>,
+		"address" => address<[addr_ptr: u32] -> []>,
+		"debug" => debug<[msg_ptr: u32, msg_len: u32] -> []>,
+		"origin" => origin<[addr_ptr: u32] -> []>,
+		"ret" => ret<[ptr: u32, len: u32] -> []>,
+		"sender" => sender<[addr_ptr: u32] -> []>,
+		"storage_read" => storage_read<[key_ptr: u32, val_ptr: u32] -> []>,
+		"storage_write" => storage_write<[key_ptr: u32, val_ptr: u32] -> []>,
+		"get_bytes" => get_bytes<[key_ptr: u32, result_ptr: u32] -> []>,
+		"get_bytes_len" => get_bytes_len<[key_ptr: u32] -> [i64]>,
+		"set_bytes" => set_bytes<[key_ptr: u32, bytes_ptr: u32, len: u64] -> []>,
+		"value" => value<[ptr: u32] -> []>,
+		"elog" => elog<[topic_ptr: u32, topic_count: u32, data_ptr: u32, data_len: u32] -> []>,
+		"rust_wasm_syscall" => syscall<[syscall_id: u32, data_ptr: u32] -> [i32]>,
+		"input_length" => input_length<[] -> [i32]>,
+		"return_length" => return_length<[] -> [i32]>,
+		"fetch_input" => fetch_input<[ptr: u32] -> []>,
+		"fetch_return" => fetch_return<[ptr: u32] -> []>,
+		"suicide" => suicide<[ptr: u32] -> []>,
+		"blockhash" => blockhash<[number: i64, dest_ptr: u32] -> []>,
+		"blocknumber" => blocknumber<[] -> [u64]>,
+		"coinbase" => coinbase<[dest_ptr: u32] -> []>,
+		"difficulty" => difficulty<[dest_ptr: u32] -> []>,
+		"gaslimit" => gaslimit<[dest_ptr: u32] -> []>,
+		"gas" => gas<[amount: u32] -> []>,
+		"timestamp" => timestamp<[] -> [u64]>,
+		"panic" => panic<[payload_ptr: u32, payload_len: u32] -> []>,
+		"expf" => expf<[x: f32] -> [f32]>,
+		"ccall" => ccall<[gas: u64, addr_ptr: u32, val_ptr: u32, input_ptr: u32, input_len: u32, result_ptr: u32, result_alloc_len: u32] -> [i32]>,
+		"dcall" => dcall<[gas: u64, addr_ptr: u32, input_ptr: u32, input_len: u32, result_ptr: u32, result_alloc_len: u32] -> [i32]>,
+		"scall" => scall<[gas: u64, addr_ptr: u32, input_ptr: u32, input_len: u32, result_ptr: u32, result_alloc_len: u32] -> [i32]>,
+	}
 }
