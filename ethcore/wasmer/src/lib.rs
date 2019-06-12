@@ -32,7 +32,6 @@ extern crate wasmer_runtime_core;
 mod runtime;
 #[cfg(test)]
 mod tests;
-mod env;
 mod panic_payload;
 mod parser;
 
@@ -129,7 +128,6 @@ impl vm::Vm for WasmRuntime {
 
 			if let (ExecutionOutcome::NotSpecial, Err(e)) = (execution_outcome, invoke_result) {
 				trace!(target: "wasm", "Error executing contract: {:?}", e);
-				println!("Trapped: {:?}", e);
 				return Err(vm::Error::Wasm(format!("Wasm runtime error: {:?}", e)));
 			}
 
@@ -142,8 +140,6 @@ impl vm::Vm for WasmRuntime {
 		let gas_left =
 			U256::from(gas_left) * U256::from(ext.schedule().wasm().opcodes_mul)
 				/ U256::from(ext.schedule().wasm().opcodes_div);
-
-		println!("After exec: gas left is {}, value is {:?}", gas_left, result);
 
 		if result.is_empty() {
 			trace!(target: "wasm", "Contract execution result is empty.");
