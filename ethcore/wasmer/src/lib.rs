@@ -44,6 +44,7 @@ use wasmer_runtime::{
     error,
 	instantiate,
 	memory,
+	memory::MemoryView,
 	Value,
 };
 
@@ -75,6 +76,7 @@ impl vm::Vm for WasmRuntime {
 			// Explicitly split the input into code and data
 			let (_module, code, data) = parser::payload(&params, ext.schedule().wasm())?;
 
+			// TODO: Hardcoded for now, should read from a config
 			let descriptor = wasmer_runtime::wasm::MemoryDescriptor {
 				minimum: wasmer_runtime::units::Pages(2),
 				maximum: Some(wasmer_runtime::units::Pages(65535)),
@@ -82,6 +84,8 @@ impl vm::Vm for WasmRuntime {
 			};
 
 			let mem_obj = memory::Memory::new(descriptor).unwrap();
+			let mem_view: MemoryView<u8> = mem_obj.view();
+			let memory_size = mem_view.len() / 65535;
 			let mut runtime = Runtime::with_params(
 				ext,
 				mem_obj.clone(),
@@ -106,10 +110,9 @@ impl vm::Vm for WasmRuntime {
 			// total_charge <- static_region * 2^32 * 2^16
 			// total_charge ∈ [0..2^64) if static_region ∈ [0..2^16)
 			// qed
-			
-			/* assert!(runtime.schedule().wasm().initial_mem_cost < 1 << 16);
-			runtime.charge(|s| initial_memory as u64 * s.wasm().initial_mem_cost as u64);
- 			*/
+
+			assert!(runtime.schedule().wasm().initial_mem_cost < 1 << 16);
+			runtime.charge(|s| memory_size as u64 * s.wasm().initial_mem_cost as u64);
 
 			let invoke_result = instance.call("call", &[]);
 			let mut execution_outcome = ExecutionOutcome::NotSpecial;

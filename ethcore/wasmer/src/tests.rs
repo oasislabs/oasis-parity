@@ -70,8 +70,9 @@ fn wasm_runtime() -> WasmRuntime {
 }
 
 /*
- TODO: The following exported runtime functions were not used in tests: 
- 	gas, panic, expf, get_bytes, get_bytes_len, set_bytes  
+	The following exported runtime functions were not used in tests:
+	gas, panic, expf, get_bytes, get_bytes_len, set_bytes
+	TODO: Add test cases to cover these functions
 */
  
 /// Empty contract does almost nothing except producing 1 (one) local node debug log message
@@ -303,21 +304,10 @@ fn create() {
 		}
 	};
 
-	println!("fake_calls: {:?}", &ext.calls);
-	println!("expected: {:?}", &FakeCall {
-			call_type: FakeCallType::Create,
-			gas: U256::from(67920),
-			sender_address: None,
-			receive_address: None,
-			value: Some(500_000_000.into()),
-			data: vec![0u8, 2, 4, 8, 16, 32, 64, 128],
-			code_address: None,
-		});
-
 	assert!(ext.calls.contains(
 		&FakeCall {
 			call_type: FakeCallType::Create,
-			gas: U256::from(67920),
+			gas: U256::from(59728),
 			sender_address: None,
 			receive_address: None,
 			value: Some(500_000_000.into()),
