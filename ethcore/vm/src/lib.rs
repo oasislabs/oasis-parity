@@ -29,8 +29,6 @@ extern crate rlp;
 extern crate serde;
 #[macro_use]
 extern crate serde_json;
-
-#[cfg(test)]
 extern crate elastic_array;
 
 mod action_params;
