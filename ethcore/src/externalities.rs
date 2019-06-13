@@ -200,16 +200,6 @@ impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> Ext for Externalities<'a, T, V, X, B>
 	}
 
 	fn create(&mut self, gas: &U256, value: &U256, code: &[u8], address_scheme: CreateContractAddress) -> ContractCreateResult {
-		if self.state.confidential_ctx.is_some()
-			&& self.state.confidential_ctx
-			.as_ref()
-			.unwrap()
-			.borrow()
-			.activated() {
-				error!("Can't create a contract when executing a confidential contract");
-				return ContractCreateResult::Failed;
-			}
-
 		// create new contract address
 		let (address, code_hash) = match self.state.nonce(&self.origin_info.address) {
 			Ok(nonce) => contract_address(address_scheme, &self.origin_info.address, &nonce, &code),
