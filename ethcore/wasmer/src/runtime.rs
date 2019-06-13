@@ -21,10 +21,8 @@ use hash;
 use vm::{self, CallType};
 
 use wasmer_runtime::{
-	func,
 	Ctx,
 	memory::Memory,
-	Value,
 };
 
 use super::panic_payload;
@@ -172,7 +170,7 @@ impl<'a> Runtime<'a> {
 	fn memory_zero(&mut self, ctx: &mut Ctx, offset: usize, len: usize) -> Result<()> {
 		ctx.memory(0).view()[offset as usize..(offset as usize + len)]
 			.iter()
-			.for_each(|(cell)| cell.set(0u8));
+			.for_each(|cell| cell.set(0u8));
 		Ok(())
 	}
 
@@ -359,7 +357,7 @@ impl<'a> Runtime<'a> {
 	}
 
     /// Query the length of the input bytes
-	fn input_length(&mut self, ctx: &mut Ctx) -> Result<i32> {
+	fn input_length(&mut self, _ctx: &mut Ctx) -> Result<i32> {
 		Ok(self.args.len() as i32)
 	}
 
@@ -374,7 +372,7 @@ impl<'a> Runtime<'a> {
 	}
 
 	/// Query the length of the return bytes
-	fn return_length(&mut self, ctx: &mut Ctx) -> Result<i32> {
+	fn return_length(&mut self, _ctx: &mut Ctx) -> Result<i32> {
 		Ok(self.result.len() as i32)
 	}
 
@@ -500,7 +498,6 @@ impl<'a> Runtime<'a> {
 		let address = self.address_at(ctx, address_ptr)?;
 		trace!(target: "wasm", "       address: {:?}", address);
 
-		let vofs = if use_val { 1 } else { 0 };
 		let val = if use_val { Some(self.u256_at(ctx, val_ptr)?) } else { None };
 		trace!(target: "wasm", "           val: {:?}", val);
 
@@ -883,7 +880,7 @@ impl<'a> Runtime<'a> {
 pub mod imports {
 	
 	use std::ffi::c_void;
-	use wasmer_runtime::{func, imports, Ctx, ImportObject};
+	use wasmer_runtime::{func, Ctx};
   use super::{Memory, Result, Runtime};
 
 	macro_rules! wrapped_imports {

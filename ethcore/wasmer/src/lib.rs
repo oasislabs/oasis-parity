@@ -36,7 +36,7 @@ mod parser;
 
 use std::ffi::c_void;
 use vm::{GasLeft, ReturnData, ActionParams};
-use runtime::{Runtime, RuntimeContext, Error};
+use runtime::{Runtime, RuntimeContext};
 use ethereum_types::U256;
 
 use wasmer_runtime::{
@@ -44,10 +44,7 @@ use wasmer_runtime::{
 	instantiate,
 	memory,
 	memory::MemoryView,
-	Value,
 };
-
-use wasmer_runtime_core::Func;
 
 /// Wasmer runtime instance
 pub struct WasmRuntime;
