@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Wasm Interpreter
+//! Wasmer Runtime
 
 extern crate byteorder;
 // extern crate ethcore_logger;
@@ -25,7 +25,6 @@ extern crate keccak_hash as hash;
 extern crate parity_wasm;
 extern crate vm;
 extern crate pwasm_utils as wasm_utils;
-extern crate wasmi;
 extern crate wasmer_runtime;
 extern crate wasmer_runtime_core;
 
@@ -50,7 +49,7 @@ use wasmer_runtime::{
 
 use wasmer_runtime_core::Func;
 
-/// Wasm interpreter instance
+/// Wasmer runtime instance
 pub struct WasmRuntime;
 
 enum ExecutionOutcome {
@@ -68,7 +67,7 @@ impl vm::Vm for WasmRuntime {
 
 		if adjusted_gas > ::std::u64::MAX.into()
 		{
-			return Err(vm::Error::Wasm("Wasm interpreter cannot run contracts with gas (wasm adjusted) >= 2^64".to_owned()));
+			return Err(vm::Error::Wasm("Wasm runtime cannot run contracts with gas (wasm adjusted) >= 2^64".to_owned()));
 		}
 
 		let (gas_left, result) = {

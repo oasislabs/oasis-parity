@@ -12,7 +12,6 @@ parity-wasm = "0.31"
 pwasm-utils = "0.2"
 vm = { path = "../vm" }
 # ethcore-logger = { path = "../../logger" }
-wasmi = "0.4"
 keccak-hash = { path = "../../util/hash" }
 wasmer-runtime = "0.4.2"
 wasmer-runtime-core = "0.4.2"
