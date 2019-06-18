@@ -72,19 +72,8 @@ impl vm::Vm for WasmRuntime {
 			// Explicitly split the input into code and data
 			let (_module, code, data) = parser::payload(&params, ext.schedule().wasm())?;
 
-			// TODO: Hardcoded for now, should read from a config
-			let descriptor = wasmer_runtime::wasm::MemoryDescriptor {
-				minimum: wasmer_runtime::units::Pages(2),
-				maximum: Some(wasmer_runtime::units::Pages(65535)),
-				shared: false,
-			};
-
-			let mem_obj = memory::Memory::new(descriptor).unwrap();
-			let mem_view: MemoryView<u8> = mem_obj.view();
-			let memory_size = mem_view.len() / 65535;
 			let mut runtime = Runtime::with_params(
 				ext,
-				mem_obj.clone(),
 				adjusted_gas.low_u64(), // cannot overflow, checked above
 				data.to_vec(),
 				RuntimeContext {
@@ -96,8 +85,25 @@ impl vm::Vm for WasmRuntime {
 			);
 
 			let raw_ptr = &mut runtime as *mut _ as *mut c_void;
-			let instance = instantiate(
-				&code, 
+			let module = wasmer_runtime::compile(&code).unwrap();
+
+			// Default memory descriptor
+			let mut descriptor = wasmer_runtime::wasm::MemoryDescriptor {
+				minimum: wasmer_runtime::units::Pages(0),
+				maximum: Some(wasmer_runtime::units::Pages(0)),
+				shared: false,
+			};
+
+			// Get memory descriptor from code import
+			// TODO handle case if more than 1 present
+			for (_index, (_import_object, expected_memory_desc)) in &module.info().imported_memories {
+				descriptor = *expected_memory_desc;
+			}
+
+			let mem_obj = memory::Memory::new(descriptor).unwrap();
+			let mem_view: MemoryView<u8> = mem_obj.view();
+			let memory_size = mem_view.len() / 65535;
+			let instance = module.instantiate(
 				&runtime::imports::get_import_object(mem_obj, raw_ptr)
 			).unwrap();
 

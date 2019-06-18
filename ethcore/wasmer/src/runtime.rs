@@ -39,7 +39,6 @@ pub struct Runtime<'a> {
 	gas_limit: u64,
 	ext: &'a mut vm::Ext,
 	context: RuntimeContext,
-	memory: Memory,
 	args: Vec<u8>,
 	result: Vec<u8>,
 }
@@ -126,7 +125,6 @@ impl<'a> Runtime<'a> {
 	/// New runtime for wasm contract with specified params
 	pub fn with_params(
 		ext: &mut vm::Ext,
-		memory: Memory,
 		gas_limit: u64,
 		args: Vec<u8>,
 		context: RuntimeContext,
@@ -134,7 +132,6 @@ impl<'a> Runtime<'a> {
 		Runtime {
 			gas_counter: 0,
 			gas_limit: gas_limit,
-			memory: memory,
 			ext: ext,
 			context: context,
 			args: args,
