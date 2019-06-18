@@ -113,7 +113,12 @@ extern crate rustc_hex;
 // extern crate stop_guard;
 // extern crate using_queue;
 pub extern crate vm;
+
 extern crate wasm;
+
+#[cfg(feature = "use-wasmer-runtime")]
+extern crate wasmer;
+
 extern crate memory_cache;
 pub extern crate journaldb;
 #[cfg(test)]
