@@ -1693,7 +1693,7 @@ mod tests {
 			ex.call(params, &mut Substate::new(), BytesRef::Fixed(&mut output), &mut NoopTracer, &mut NoopVMTracer, &mut ext_tracer).unwrap()
 		};
 
-		//assert_eq!(result, U256::from(20025));
+		assert_eq!(result, U256::from(20025));
 		// Since transaction errored due to wasm was not activated, result is just empty
 		assert_eq!(output[..], [0u8; 20][..]);
 	}
