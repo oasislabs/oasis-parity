@@ -38,6 +38,9 @@ use crate::mkvs::MKVS;
 
 const STORAGE_CACHE_ITEMS: usize = 8192;
 
+pub const MKVS_KEY_CODE: &'static [u8] = &[1u8];
+pub const MKVS_KEY_PREFIX_STORAGE: &'static [u8] = &[2u8];
+
 /// Boolean type for clean/dirty status.
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum Filth {
@@ -226,7 +229,7 @@ impl Account {
 			return Some(value);
 		}
 		let panicky_decoder = |bytes:&[u8]| ::rlp::decode(&bytes).expect("decoding db value failed");
-		let mut k = vec![2u8];
+		let mut k = MKVS_KEY_PREFIX_STORAGE.to_vec();
 		k.extend_from_slice(key);
 		let item = mkvs.get(&k).map(|value| panicky_decoder(&value));
 		item.map(|value: Vec<u8>| {
@@ -322,7 +325,7 @@ impl Account {
 			return Some(self.code_cache.clone());
 		}
 
-		match mkvs.get(&[1u8]) {
+		match mkvs.get(MKVS_KEY_CODE) {
 			Some(x) => {
 				self.code_size = Some(x.len());
 				self.code_cache = Arc::new(x);
@@ -355,7 +358,7 @@ impl Account {
 		trace!("Account::cache_code_size: ic={}; self.code_hash={:?}, self.code_cache={}", self.is_cached(), self.code_hash, self.code_cache.pretty());
 		self.code_size.is_some() ||
 			if self.code_hash != KECCAK_EMPTY {
-				match mkvs.get(&[1u8]) {
+				match mkvs.get(MKVS_KEY_CODE) {
 					Some(x) => {
 						self.code_size = Some(x.len());
 						true
@@ -441,7 +444,7 @@ impl Account {
             // Note: for confidential contracts we never remove from storage, even if the storage is
             //       zeroed out. This is guaranteed since the length will always be > 32 when
             //       encrypted.
-			let mut key = vec![2u8];
+			let mut key = MKVS_KEY_PREFIX_STORAGE.to_vec();
 			key.extend_from_slice(&k);
 			match v.len() == 32 && H256::from_slice(&v).is_zero() {
 				true => account_mkvs.remove(&key),
@@ -465,7 +468,7 @@ impl Account {
 				self.code_filth = Filth::Clean;
 			}
 			(true, false) => {
-				account_mkvs.insert(&[1u8], self.code_cache.as_ref());
+				account_mkvs.insert(MKVS_KEY_CODE, self.code_cache.as_ref());
 				self.code_size = Some(self.code_cache.len());
 				self.code_filth = Filth::Clean;
 			}

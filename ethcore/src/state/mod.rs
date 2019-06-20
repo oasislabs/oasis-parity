@@ -62,7 +62,7 @@ mod substate;
 
 pub mod backend;
 
-pub use self::account::Account;
+pub use self::account::{Account, MKVS_KEY_CODE, MKVS_KEY_PREFIX_STORAGE};
 pub use self::backend::{Backend, Basic as BasicBackend};
 pub use self::substate::Substate;
 
