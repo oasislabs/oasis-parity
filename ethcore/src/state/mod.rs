@@ -667,8 +667,7 @@ impl<B: Backend> State<B> {
 			let trie_res = self.db.get_cached(address, |acc| match acc {
 				None => Ok(None),
 				Some(a) => {
-					let address_hash = &a.address_hash(address);
-					let account_mkvs = ReadOnlyPrefixedMKVS::new(&self.mkvs, address_hash);
+					let account_mkvs = ReadOnlyPrefixedMKVS::new(&self.mkvs, address);
 					Ok(a.storage_at(&account_mkvs, &key))
 				}
 			});
@@ -680,9 +679,8 @@ impl<B: Backend> State<B> {
 			// otherwise cache the account localy and cache storage key there.
 			if let Some(ref mut acc) = local_account {
 				if let Some(ref account) = acc.account {
-					let address_hash = &account.address_hash(address);
-					let account_mkvs = ReadOnlyPrefixedMKVS::new(&self.mkvs, address_hash);
-					return Ok(account.storage_at(&account_mkvs, &key));
+					let account_mkvs = ReadOnlyPrefixedMKVS::new(&self.mkvs, address);
+					return Ok(account.storage_at(&account_mkvs, &key))
 				} else {
 					return Ok(None);
 				}
@@ -693,8 +691,7 @@ impl<B: Backend> State<B> {
 		let from_rlp = |b: &[u8]| Account::from_rlp(b).expect("decoding db value failed");
 		let maybe_acc = self.mkvs.get(&address).map(|value| from_rlp(&value));
 		let r = maybe_acc.as_ref().map_or(Ok(None), |a| {
-			let address_hash = &a.address_hash(address);
-			let account_mkvs = ReadOnlyPrefixedMKVS::new(&self.mkvs, address_hash);
+			let account_mkvs = ReadOnlyPrefixedMKVS::new(&self.mkvs, address);
 			Ok(a.storage_at(&account_mkvs, &key))
 		});
 		self.insert_cache(address, AccountEntry::new_clean(maybe_acc));
@@ -983,9 +980,8 @@ impl<B: Backend> State<B> {
 		let mut accounts = self.cache.borrow_mut();
 		for (address, ref mut a) in accounts.iter_mut().filter(|&(_, ref a)| a.is_dirty()) {
 			if let Some(ref mut account) = a.account {
-				let addr_hash = account.address_hash(address);
 				{
-					let mut account_mkvs = PrefixedMKVS::new(&mut self.mkvs, addr_hash.as_ref());
+					let mut account_mkvs = PrefixedMKVS::new(&mut self.mkvs, address);
 					account.commit_storage(&mut account_mkvs);
 					account.commit_code(&mut account_mkvs);
 				}
@@ -1227,8 +1223,7 @@ impl<B: Backend> State<B> {
 		// check local cache first
 		if let Some(ref mut maybe_acc) = self.cache.borrow_mut().get_mut(a) {
 			if let Some(ref mut account) = maybe_acc.account {
-				let address_hash = &account.address_hash(a);
-				let account_mkvs = ReadOnlyPrefixedMKVS::new(&self.mkvs, address_hash);
+				let account_mkvs = ReadOnlyPrefixedMKVS::new(&self.mkvs, a);
 				Self::update_account_cache(require, account, &self.db, &account_mkvs);
 				return Ok(f(Some(account)));
 			}
@@ -1237,8 +1232,7 @@ impl<B: Backend> State<B> {
 		// check global cache
 		let result = self.db.get_cached(a, |mut acc| {
 			if let Some(ref mut account) = acc {
-				let address_hash = &account.address_hash(a);
-				let account_mkvs = ReadOnlyPrefixedMKVS::new(&self.mkvs, address_hash);
+				let account_mkvs = ReadOnlyPrefixedMKVS::new(&self.mkvs, a);
 				Self::update_account_cache(require, account, &self.db, &account_mkvs);
 			}
 			f(acc.map(|a| &*a))
@@ -1250,8 +1244,7 @@ impl<B: Backend> State<B> {
 				let from_rlp = |b: &[u8]| Account::from_rlp(b).expect("decoding db value failed");
 				let mut maybe_acc = self.mkvs.get(&a).map(|value| from_rlp(&value));
 				if let Some(ref mut account) = maybe_acc.as_mut() {
-					let address_hash = &account.address_hash(a);
-					let account_mkvs = ReadOnlyPrefixedMKVS::new(&self.mkvs, address_hash);
+					let account_mkvs = ReadOnlyPrefixedMKVS::new(&self.mkvs, a);
 					Self::update_account_cache(require, account, &self.db, &account_mkvs);
 				}
 				let r = f(maybe_acc.as_ref());
@@ -1315,14 +1308,8 @@ impl<B: Backend> State<B> {
 			match entry.account {
 				Some(ref mut account) => {
 					if require_code {
-						let address_hash = &account.address_hash(a);
-						let account_mkvs = ReadOnlyPrefixedMKVS::new(&self.mkvs, address_hash);
-						Self::update_account_cache(
-							RequireCache::Code,
-							account,
-							&self.db,
-							&account_mkvs,
-						);
+						let account_mkvs = ReadOnlyPrefixedMKVS::new(&self.mkvs, a);
+						Self::update_account_cache(RequireCache::Code, account, &self.db, &account_mkvs);
 					}
 					account
 				}

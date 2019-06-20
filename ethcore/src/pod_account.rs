@@ -82,13 +82,13 @@ impl PodAccount {
 
 	pub fn insert_additional(&self, mkvs: &mut MKVS) {
 		match self.code {
-			Some(ref c) if !c.is_empty() => {
-				mkvs.insert(&keccak(c), c);
-			}
+			Some(ref c) if !c.is_empty() => { mkvs.insert(&[1u8], c); }
 			_ => {}
 		}
 		for (k, v) in &self.storage {
-			mkvs.insert(k.as_ref(), &rlp::encode(v));
+			let mut key = vec![2u8];
+			key.extend_from_slice(k);
+			mkvs.insert(&key, &rlp::encode(v));
 		}
 	}
 }

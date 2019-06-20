@@ -225,9 +225,10 @@ impl Account {
 		if let Some(value) = self.cached_storage_at(key) {
 			return Some(value);
 		}
-		let panicky_decoder =
-			|bytes: &[u8]| ::rlp::decode(&bytes).expect("decoding db value failed");
-		let item = mkvs.get(&key).map(|value| panicky_decoder(&value));
+		let panicky_decoder = |bytes:&[u8]| ::rlp::decode(&bytes).expect("decoding db value failed");
+		let mut k = vec![2u8];
+		k.extend_from_slice(key);
+		let item = mkvs.get(&k).map(|value| panicky_decoder(&value));
 		item.map(|value: Vec<u8>| {
 			self.storage_cache
 				.borrow_mut()
@@ -321,7 +322,7 @@ impl Account {
 			return Some(self.code_cache.clone());
 		}
 
-		match mkvs.get(&self.code_hash) {
+		match mkvs.get(&[1u8]) {
 			Some(x) => {
 				self.code_size = Some(x.len());
 				self.code_cache = Arc::new(x);
@@ -351,15 +352,10 @@ impl Account {
 	/// Provide a database to get `code_size`. Should not be called if it is a contract without code.
 	pub fn cache_code_size(&mut self, mkvs: &MKVS) -> bool {
 		// TODO: fill out self.code_cache;
-		trace!(
-			"Account::cache_code_size: ic={}; self.code_hash={:?}, self.code_cache={}",
-			self.is_cached(),
-			self.code_hash,
-			self.code_cache.pretty()
-		);
-		self.code_size.is_some()
-			|| if self.code_hash != KECCAK_EMPTY {
-				match mkvs.get(&self.code_hash) {
+		trace!("Account::cache_code_size: ic={}; self.code_hash={:?}, self.code_cache={}", self.is_cached(), self.code_hash, self.code_cache.pretty());
+		self.code_size.is_some() ||
+			if self.code_hash != KECCAK_EMPTY {
+				match mkvs.get(&[1u8]) {
 					Some(x) => {
 						self.code_size = Some(x.len());
 						true
@@ -441,13 +437,15 @@ impl Account {
 		for (k, v) in self.storage_changes.drain() {
 			// cast key and value to trait type,
 			// so we can call overloaded `to_bytes` method
-			//
-			// Note: for confidential contracts we never remove from storage, even if the storage is
-			//       zeroed out. This is guaranteed since the length will always be > 32 when
-			//       encrypted.
+            //
+            // Note: for confidential contracts we never remove from storage, even if the storage is
+            //       zeroed out. This is guaranteed since the length will always be > 32 when
+            //       encrypted.
+			let mut key = vec![2u8];
+			key.extend_from_slice(&k);
 			match v.len() == 32 && H256::from_slice(&v).is_zero() {
-				true => account_mkvs.remove(&k),
-				false => account_mkvs.insert(&k, &encode(&v)),
+				true => account_mkvs.remove(&key),
+				false => account_mkvs.insert(&key, &encode(&v)),
 			};
 
 			self.storage_cache.borrow_mut().insert(k, v);
@@ -467,7 +465,7 @@ impl Account {
 				self.code_filth = Filth::Clean;
 			}
 			(true, false) => {
-				account_mkvs.insert(self.code_hash.as_ref(), self.code_cache.as_ref());
+				account_mkvs.insert(&[1u8], self.code_cache.as_ref());
 				self.code_size = Some(self.code_cache.len());
 				self.code_filth = Filth::Clean;
 			}
