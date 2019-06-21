@@ -241,6 +241,11 @@ impl<Cost: CostType> vm::Vm for Interpreter<Cost> {
 		informant.done();
 		Ok(GasLeft::Known(gasometer.current_gas.as_u256()))
 	}
+
+	fn prepare(&mut self, params: ActionParams) -> vm::Result<()> {
+		Ok(())
+	}
+
 }
 
 impl<Cost: CostType> Interpreter<Cost> {

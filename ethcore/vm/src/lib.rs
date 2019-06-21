@@ -61,4 +61,7 @@ pub trait Vm {
 	/// It returns either an error, a known amount of gas left, or parameters to be used
 	/// to compute the final gas left.
 	fn exec(&mut self, params: ActionParams, ext: &mut Ext) -> Result<GasLeft>;
+
+	fn prepare(&mut self, params: ActionParams) -> Result<()>;
+
 }

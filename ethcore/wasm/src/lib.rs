@@ -16,6 +16,8 @@
 
 //! Wasm Interpreter
 
+#![feature(test)]
+
 extern crate byteorder;
 // extern crate ethcore_logger;
 extern crate ethereum_types;
@@ -32,8 +34,12 @@ mod env;
 mod panic_payload;
 mod parser;
 mod runtime;
+
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod benches;
 
 use vm::{ActionParams, GasLeft, ReturnData};
 use wasmi::{Error as InterpreterError, Trap};
@@ -191,4 +197,9 @@ impl vm::Vm for WasmInterpreter {
 			})
 		}
 	}
+
+	fn prepare(&mut self, params: ActionParams) -> vm::Result<()> {
+		Ok(())
+	}
+
 }

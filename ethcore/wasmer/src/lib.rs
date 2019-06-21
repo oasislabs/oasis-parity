@@ -16,8 +16,10 @@
 
 //! Wasmer Runtime
 
+#![feature(test)]
+
 extern crate byteorder;
-// extern crate ethcore_logger;
+extern crate ethcore_logger;
 extern crate ethereum_types;
 extern crate keccak_hash as hash;
 #[macro_use]
@@ -32,8 +34,12 @@ extern crate wasmer_runtime_core;
 mod panic_payload;
 mod parser;
 mod runtime;
+
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod benches;
 
 use ethereum_types::U256;
 use runtime::{Runtime, RuntimeContext};
@@ -52,6 +58,11 @@ enum ExecutionOutcome {
 }
 
 impl vm::Vm for WasmRuntime {
+
+	fn prepare(&mut self, params: ActionParams) -> vm::Result<()> {
+		Ok(())
+	}
+
 	fn exec(&mut self, params: ActionParams, ext: &mut vm::Ext) -> vm::Result<GasLeft> {
 		let adjusted_gas = params.gas * U256::from(ext.schedule().wasm().opcodes_div)
 			/ U256::from(ext.schedule().wasm().opcodes_mul);
@@ -79,8 +90,10 @@ impl vm::Vm for WasmRuntime {
 			);
 
 			let raw_ptr = &mut runtime as *mut _ as *mut c_void;
+			
+			// TODO: This line causes a lot of log output, find a way to limit to log level WARN
 			let module = wasmer_runtime::compile(&code).unwrap();
-
+			
 			// Default memory descriptor
 			let mut descriptor = wasmer_runtime::wasm::MemoryDescriptor {
 				minimum: wasmer_runtime::units::Pages(0),
