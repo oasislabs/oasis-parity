@@ -35,4 +35,9 @@ jobs:
       # Test ethcore
       - run:
           name: Run ethcore tests
-          command: cargo test --package ethcore --package ethcore-transaction --package ethkey --package vm --package wasm --features "ethkey-test"
+          command: cargo test --package ethcore --package ethcore-transaction --package ethkey --package vm --package wasm --package wasmer --features "ethkey-test"
+
+      # Test ethcore using wasmer
+      - run:
+          name: Run ethcore tests with wasmer
+          command: cargo test --package ethcore --package ethcore-transaction --package ethkey --package vm --package wasm --package wasmer --features "ethkey-test use-wasmer-runtime"
