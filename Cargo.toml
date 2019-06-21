@@ -99,6 +99,7 @@ secretstore = ["ethcore-secretstore"]
 final = ["parity-version/final"]
 deadlock_detection = ["parking_lot/deadlock_detection"]
 ethkey-test = ["ethkey/test"]
+use-wasmer-runtime = ["ethcore/use-wasmer-runtime"]
 
 [lib]
 path = "parity/lib.rs"
