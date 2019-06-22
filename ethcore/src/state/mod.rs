@@ -1433,7 +1433,7 @@ impl<B: Backend> State<B> {
 				.as_ref()
 				.expect("Cannot decrypt without a confidential context")
 				.borrow()
-				.decrypt_storage(value)
+				.decrypt_storage_value(value)
 				.expect("Corrupted state")
 		} else {
 			value
