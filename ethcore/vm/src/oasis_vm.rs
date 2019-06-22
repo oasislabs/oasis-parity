@@ -352,8 +352,9 @@ pub trait ConfidentialCtx {
 	/// Encrypts the given data to be placed into contract storage	under the context.
 	/// The runtime allows *only a given contract* to encrypt/decrypt this data, as
 	/// opposed to the `encrypt` method, which allows a user's client to decrypt.
-	fn encrypt_storage(&self, data: Vec<u8>) -> Result<Vec<u8>>;
-	/// Analog to `encrypt_storage` for decyrpting data.
+	fn encrypt_storage_value(&mut self, data: Vec<u8>) -> Result<Vec<u8>>;
+	fn encrypt_storage_key(&self, data: Vec<u8>) -> Result<Vec<u8>>;
+	/// Analog to `encrypt_storage` for decrypting data.
 	fn decrypt_storage(&self, data: Vec<u8>) -> Result<Vec<u8>>;
 	/// Creates the long term public key for the given contract. If it already
 	/// exists, returns the existing key. The first item is the key, the second
