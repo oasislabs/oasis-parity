@@ -17,7 +17,7 @@
 //! Statistical functions and helpers.
 
 use std::iter::FromIterator;
-use std::ops::{Add, Sub, Deref, Div};
+use std::ops::{Add, Deref, Div, Sub};
 
 #[macro_use]
 extern crate log;
@@ -34,7 +34,7 @@ impl<T: Ord> From<Vec<T>> for Corpus<T> {
 }
 
 impl<T: Ord> FromIterator<T> for Corpus<T> {
-	fn from_iter<I: IntoIterator<Item=T>>(iterable: I) -> Self {
+	fn from_iter<I: IntoIterator<Item = T>>(iterable: I) -> Self {
 		iterable.into_iter().collect::<Vec<_>>().into()
 	}
 }
@@ -42,7 +42,9 @@ impl<T: Ord> FromIterator<T> for Corpus<T> {
 impl<T> Deref for Corpus<T> {
 	type Target = [T];
 
-	fn deref(&self) -> &[T] { &self.0[..] }
+	fn deref(&self) -> &[T] {
+		&self.0[..]
+	}
 }
 
 impl<T: Ord> Corpus<T> {
@@ -75,7 +77,8 @@ impl<T: Ord> Corpus<T> {
 }
 
 impl<T: Ord + Copy + ::std::fmt::Display> Corpus<T>
-	where T: Add<Output=T> + Sub<Output=T> + Div<Output=T> + From<usize>
+where
+	T: Add<Output = T> + Sub<Output = T> + Div<Output = T> + From<usize>,
 {
 	/// Create a histogram of this corpus if it at least spans the buckets. Bounds are left closed.
 	/// Excludes outliers.
@@ -96,19 +99,33 @@ pub struct Histogram<T> {
 }
 
 impl<T: Ord + Copy + ::std::fmt::Display> Histogram<T>
-	where T: Add<Output=T> + Sub<Output=T> + Div<Output=T> + From<usize>
+where
+	T: Add<Output = T> + Sub<Output = T> + Div<Output = T> + From<usize>,
 {
 	// Histogram of a sorted corpus if it at least spans the buckets. Bounds are left closed.
 	fn create(corpus: &[T], bucket_number: usize) -> Option<Histogram<T>> {
-		if corpus.len() < 1 { return None; }
-		let corpus_end = corpus.last().expect("there is at least 1 element; qed").clone();
-		let corpus_start = corpus.first().expect("there is at least 1 element; qed").clone();
+		if corpus.len() < 1 {
+			return None;
+		}
+		let corpus_end = corpus
+			.last()
+			.expect("there is at least 1 element; qed")
+			.clone();
+		let corpus_start = corpus
+			.first()
+			.expect("there is at least 1 element; qed")
+			.clone();
 		trace!(target: "stats", "Computing histogram from {} to {} with {} buckets.", corpus_start, corpus_end, bucket_number);
 		// Bucket needs to be at least 1 wide.
 		let bucket_size = {
 			// Round up to get the entire corpus included.
-			let raw_bucket_size = (corpus_end - corpus_start + bucket_number.into()) / bucket_number.into();
-			if raw_bucket_size == 0.into() { 1.into() } else { raw_bucket_size }
+			let raw_bucket_size =
+				(corpus_end - corpus_start + bucket_number.into()) / bucket_number.into();
+			if raw_bucket_size == 0.into() {
+				1.into()
+			} else {
+				raw_bucket_size
+			}
 		};
 		let mut bucket_end = corpus_start + bucket_size;
 
@@ -126,7 +143,10 @@ impl<T: Ord + Copy + ::std::fmt::Display> Histogram<T>
 			bucket_bounds[bucket + 1] = bucket_end;
 			bucket_end = bucket_end + bucket_size;
 		}
-		Some(Histogram { bucket_bounds: bucket_bounds, counts: counts })
+		Some(Histogram {
+			bucket_bounds: bucket_bounds,
+			counts: counts,
+		})
 	}
 }
 
@@ -148,16 +168,32 @@ mod tests {
 
 	#[test]
 	fn check_histogram() {
-		let hist = Histogram::create(&[643,689,1408,2000,2296,2512,4250,4320,4842,4958,5804,6065,6098,6354,7002,7145,7845,8589,8593,8895], 5).unwrap();
+		let hist = Histogram::create(
+			&[
+				643, 689, 1408, 2000, 2296, 2512, 4250, 4320, 4842, 4958, 5804, 6065, 6098, 6354,
+				7002, 7145, 7845, 8589, 8593, 8895,
+			],
+			5,
+		)
+		.unwrap();
 		let correct_bounds: Vec<usize> = vec![643, 2294, 3945, 5596, 7247, 8898];
-		assert_eq!(Histogram { bucket_bounds: correct_bounds, counts: vec![4,2,4,6,4] }, hist);
+		assert_eq!(
+			Histogram {
+				bucket_bounds: correct_bounds,
+				counts: vec![4, 2, 4, 6, 4]
+			},
+			hist
+		);
 	}
 
 	#[test]
 	fn smaller_data_range_than_bucket_range() {
 		assert_eq!(
 			Histogram::create(&[1, 2, 2], 3),
-			Some(Histogram { bucket_bounds: vec![1, 2, 3, 4], counts: vec![1, 2, 0] })
+			Some(Histogram {
+				bucket_bounds: vec![1, 2, 3, 4],
+				counts: vec![1, 2, 0]
+			})
 		);
 	}
 
@@ -165,7 +201,10 @@ mod tests {
 	fn data_range_is_not_multiple_of_bucket_range() {
 		assert_eq!(
 			Histogram::create(&[1, 2, 5], 2),
-			Some(Histogram { bucket_bounds: vec![1, 4, 7], counts: vec![2, 1] })
+			Some(Histogram {
+				bucket_bounds: vec![1, 4, 7],
+				counts: vec![2, 1]
+			})
 		);
 	}
 
@@ -173,7 +212,10 @@ mod tests {
 	fn data_range_is_multiple_of_bucket_range() {
 		assert_eq!(
 			Histogram::create(&[1, 2, 6], 2),
-			Some(Histogram { bucket_bounds: vec![1, 4, 7], counts: vec![2, 1] })
+			Some(Histogram {
+				bucket_bounds: vec![1, 4, 7],
+				counts: vec![2, 1]
+			})
 		);
 	}
 

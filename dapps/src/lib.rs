@@ -35,10 +35,10 @@ extern crate jsonrpc_http_server;
 extern crate ethcore_bytes as bytes;
 extern crate ethereum_types;
 extern crate fetch;
+extern crate keccak_hash as hash;
 extern crate node_health;
 extern crate parity_dapps_glue as parity_dapps;
 extern crate parity_hash_fetch as hash_fetch;
-extern crate keccak_hash as hash;
 extern crate parity_version;
 extern crate registrar;
 
@@ -58,31 +58,31 @@ extern crate jsonrpc_core;
 #[cfg(test)]
 extern crate parity_reactor;
 
-mod endpoint;
-mod apps;
-mod page;
-mod router;
-mod handlers;
 mod api;
+mod apps;
+mod endpoint;
+mod handlers;
+mod page;
 mod proxypac;
-mod web;
+mod router;
 #[cfg(test)]
 mod tests;
+mod web;
 
+use futures_cpupool::CpuPool;
+use jsonrpc_http_server::{self as http, hyper, Origin};
+use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::mem;
 use std::path::PathBuf;
 use std::sync::Arc;
-use futures_cpupool::CpuPool;
-use jsonrpc_http_server::{self as http, hyper, Origin};
-use parking_lot::RwLock;
 
 use fetch::Fetch;
 use node_health::NodeHealth;
 
-pub use registrar::{RegistrarClient, Asynchronous};
 pub use node_health::SyncStatus;
 pub use page::builtin::Dapp;
+pub use registrar::{Asynchronous, RegistrarClient};
 
 /// Validates Web Proxy tokens
 pub trait WebProxyTokens: Send + Sync {
@@ -90,8 +90,13 @@ pub trait WebProxyTokens: Send + Sync {
 	fn domain(&self, token: &str) -> Option<Origin>;
 }
 
-impl<F> WebProxyTokens for F where F: Fn(String) -> Option<Origin> + Send + Sync {
-	fn domain(&self, token: &str) -> Option<Origin> { self(token.to_owned()) }
+impl<F> WebProxyTokens for F
+where
+	F: Fn(String) -> Option<Origin> + Send + Sync,
+{
+	fn domain(&self, token: &str) -> Option<Origin> {
+		self(token.to_owned())
+	}
 }
 
 /// Current supported endpoints.
@@ -106,9 +111,11 @@ pub struct Endpoints {
 impl Endpoints {
 	/// Returns a current list of app endpoints.
 	pub fn list(&self) -> Vec<apps::App> {
-		self.endpoints.read().iter().filter_map(|(ref k, ref e)| {
-			e.info().map(|ref info| info.with_id(k))
-		}).collect()
+		self.endpoints
+			.read()
+			.iter()
+			.filter_map(|(ref k, ref e)| e.info().map(|ref info| info.with_id(k)))
+			.collect()
 	}
 
 	/// Check for any changes in the local dapps folder and update.
@@ -118,7 +125,10 @@ impl Endpoints {
 			Some(pool) => pool,
 		};
 		let new_local = apps::fs::local_endpoints(&self.dapps_path, pool.clone());
-		let old_local = mem::replace(&mut *self.local_endpoints.write(), new_local.keys().cloned().collect());
+		let old_local = mem::replace(
+			&mut *self.local_endpoints.write(),
+			new_local.keys().cloned().collect(),
+		);
 		let (_, to_remove): (_, Vec<_>) = old_local
 			.into_iter()
 			.partition(|k| new_local.contains_key(&k.clone()));
@@ -156,17 +166,20 @@ impl Middleware {
 		dapps_path: PathBuf,
 		extra_dapps: Vec<PathBuf>,
 		dapps_domain: &str,
-		registrar: Arc<RegistrarClient<Call=Asynchronous>>,
+		registrar: Arc<RegistrarClient<Call = Asynchronous>>,
 		sync_status: Arc<SyncStatus>,
 		web_proxy_tokens: Arc<WebProxyTokens>,
 		fetch: F,
 	) -> Self {
-		let content_fetcher = Arc::new(apps::fetcher::ContentFetcher::new(
-			hash_fetch::urlhint::URLHintContract::new(registrar),
-			sync_status.clone(),
-			fetch.clone(),
-			pool.clone(),
-		).allow_dapps(true));
+		let content_fetcher = Arc::new(
+			apps::fetcher::ContentFetcher::new(
+				hash_fetch::urlhint::URLHintContract::new(registrar),
+				sync_status.clone(),
+				fetch.clone(),
+				pool.clone(),
+			)
+			.allow_dapps(true),
+		);
 		let (local_endpoints, endpoints) = apps::all_endpoints(
 			dapps_path.clone(),
 			extra_dapps,
@@ -182,10 +195,7 @@ impl Middleware {
 			pool: Some(pool.clone()),
 		};
 
-		let special = special_endpoints(
-			health,
-			content_fetcher.clone(),
-		);
+		let special = special_endpoints(health, content_fetcher.clone());
 
 		let router = router::Router::new(
 			content_fetcher,
@@ -194,10 +204,7 @@ impl Middleware {
 			dapps_domain.to_owned(),
 		);
 
-		Middleware {
-			endpoints,
-			router,
-		}
+		Middleware { endpoints, router }
 	}
 }
 
@@ -213,16 +220,16 @@ fn special_endpoints(
 ) -> HashMap<router::SpecialEndpoint, Option<Box<endpoint::Endpoint>>> {
 	let mut special = HashMap::new();
 	special.insert(router::SpecialEndpoint::Rpc, None);
-	special.insert(router::SpecialEndpoint::Api, Some(api::RestApi::new(
-		content_fetcher,
-		health,
-	)));
+	special.insert(
+		router::SpecialEndpoint::Api,
+		Some(api::RestApi::new(content_fetcher, health)),
+	);
 	special
 }
 
 /// Random filename
 fn random_filename() -> String {
-	use ::rand::Rng;
+	use rand::Rng;
 	let mut rng = ::rand::OsRng::new().unwrap();
 	rng.gen_ascii_chars().take(12).collect()
 }

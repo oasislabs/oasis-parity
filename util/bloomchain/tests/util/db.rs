@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+use bloomchain::group::{BloomGroup, BloomGroupDatabase, GroupPosition};
+use bloomchain::{Bloom, BloomDatabase, Position};
 use std::collections::HashMap;
-use bloomchain::{Position, Bloom, BloomDatabase};
-use bloomchain::group::{GroupPosition, BloomGroup, BloomGroupDatabase};
 
 #[derive(Default)]
 pub struct BloomMemoryDatabase {

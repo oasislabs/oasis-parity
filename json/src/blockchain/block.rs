@@ -16,18 +16,18 @@
 
 //! Blockchain test block deserializer.
 
-use bytes::Bytes;
 use blockchain::header::Header;
 use blockchain::transaction::Transaction;
+use bytes::Bytes;
 
 /// Blockchain test block deserializer.
 #[derive(Debug, PartialEq, Deserialize)]
 pub struct Block {
-	#[serde(rename="blockHeader")]
+	#[serde(rename = "blockHeader")]
 	header: Option<Header>,
 	rlp: Bytes,
 	transactions: Option<Vec<Transaction>>,
-	#[serde(rename="uncleHeaders")]
+	#[serde(rename = "uncleHeaders")]
 	uncles: Option<Vec<Header>>,
 }
 
@@ -40,8 +40,8 @@ impl Block {
 
 #[cfg(test)]
 mod tests {
-	use serde_json;
 	use blockchain::block::Block;
+	use serde_json;
 
 	#[test]
 	fn block_deserialization() {

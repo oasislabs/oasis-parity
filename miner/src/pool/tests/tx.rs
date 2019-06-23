@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use ethereum_types::{U256, H256};
-use ethkey::{Random, Generator};
+use ethereum_types::{H256, U256};
+use ethkey::{Generator, Random};
 use rustc_hex::FromHex;
-use transaction::{self, Transaction, SignedTransaction, UnverifiedTransaction};
+use transaction::{self, SignedTransaction, Transaction, UnverifiedTransaction};
 
 use pool::{verifier, VerifiedTransaction};
 
@@ -83,7 +83,7 @@ impl Tx {
 			data: "3331600055".from_hex().unwrap(),
 			gas: self.gas.into(),
 			gas_price: self.gas_price.into(),
-			nonce: self.nonce.into()
+			nonce: self.nonce.into(),
 		}
 	}
 
@@ -92,10 +92,12 @@ impl Tx {
 		let tx = Transaction {
 			action: transaction::Action::Create,
 			value: U256::from(100),
-			data: include_str!("../res/big_transaction.data").from_hex().unwrap(),
+			data: include_str!("../res/big_transaction.data")
+				.from_hex()
+				.unwrap(),
 			gas: self.gas.into(),
 			gas_price: self.gas_price.into(),
-			nonce: self.nonce.into()
+			nonce: self.nonce.into(),
 		};
 		tx.sign(keypair.secret(), None)
 	}
@@ -116,19 +118,30 @@ pub trait TxExt: Sized {
 	fn verified(self) -> Self::Verified;
 }
 
-impl<A, B, O, V, H> TxExt for (A, B) where
-	A: TxExt<Out=O, Verified=V, Hash=H>,
-	B: TxExt<Out=O, Verified=V, Hash=H>,
+impl<A, B, O, V, H> TxExt for (A, B)
+where
+	A: TxExt<Out = O, Verified = V, Hash = H>,
+	B: TxExt<Out = O, Verified = V, Hash = H>,
 {
 	type Out = (O, O);
 	type Verified = (V, V);
 	type Hash = (H, H);
 
-	fn hash(&self) -> Self::Hash { (self.0.hash(), self.1.hash()) }
-	fn local(self) -> Self::Out { (self.0.local(), self.1.local()) }
-	fn retracted(self) -> Self::Out { (self.0.retracted(), self.1.retracted()) }
-	fn unverified(self) -> Self::Out { (self.0.unverified(), self.1.unverified()) }
-	fn verified(self) -> Self::Verified { (self.0.verified(), self.1.verified()) }
+	fn hash(&self) -> Self::Hash {
+		(self.0.hash(), self.1.hash())
+	}
+	fn local(self) -> Self::Out {
+		(self.0.local(), self.1.local())
+	}
+	fn retracted(self) -> Self::Out {
+		(self.0.retracted(), self.1.retracted())
+	}
+	fn unverified(self) -> Self::Out {
+		(self.0.unverified(), self.1.unverified())
+	}
+	fn verified(self) -> Self::Verified {
+		(self.0.verified(), self.1.verified())
+	}
 }
 
 impl TxExt for SignedTransaction {
@@ -167,19 +180,30 @@ impl TxExt for Vec<SignedTransaction> {
 	}
 
 	fn local(self) -> Self::Out {
-		self.into_iter().map(Into::into).map(verifier::Transaction::Local).collect()
+		self.into_iter()
+			.map(Into::into)
+			.map(verifier::Transaction::Local)
+			.collect()
 	}
 
 	fn retracted(self) -> Self::Out {
-		self.into_iter().map(Into::into).map(verifier::Transaction::Retracted).collect()
+		self.into_iter()
+			.map(Into::into)
+			.map(verifier::Transaction::Retracted)
+			.collect()
 	}
 
 	fn unverified(self) -> Self::Out {
-		self.into_iter().map(Into::into).map(verifier::Transaction::Unverified).collect()
+		self.into_iter()
+			.map(Into::into)
+			.map(verifier::Transaction::Unverified)
+			.collect()
 	}
 
 	fn verified(self) -> Self::Verified {
-		self.into_iter().map(VerifiedTransaction::from_pending_block_transaction).collect()
+		self.into_iter()
+			.map(VerifiedTransaction::from_pending_block_transaction)
+			.collect()
 	}
 }
 

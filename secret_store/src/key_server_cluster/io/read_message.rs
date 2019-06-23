@@ -14,16 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::io;
-use futures::{Poll, Future, Async};
-use tokio_io::AsyncRead;
 use ethkey::KeyPair;
-use key_server_cluster::Error;
+use futures::{Async, Future, Poll};
+use key_server_cluster::io::{
+	read_encrypted_payload, read_header, read_payload, ReadHeader, ReadPayload,
+};
 use key_server_cluster::message::Message;
-use key_server_cluster::io::{read_header, ReadHeader, read_payload, read_encrypted_payload, ReadPayload};
+use key_server_cluster::Error;
+use std::io;
+use tokio_io::AsyncRead;
 
 /// Create future for read single message from the stream.
-pub fn read_message<A>(a: A) -> ReadMessage<A> where A: AsyncRead {
+pub fn read_message<A>(a: A) -> ReadMessage<A>
+where
+	A: AsyncRead,
+{
 	ReadMessage {
 		key: None,
 		state: ReadMessageState::ReadHeader(read_header(a)),
@@ -31,7 +36,10 @@ pub fn read_message<A>(a: A) -> ReadMessage<A> where A: AsyncRead {
 }
 
 /// Create future for read single encrypted message from the stream.
-pub fn read_encrypted_message<A>(a: A, key: KeyPair) -> ReadMessage<A> where A: AsyncRead {
+pub fn read_encrypted_message<A>(a: A, key: KeyPair) -> ReadMessage<A>
+where
+	A: AsyncRead,
+{
 	ReadMessage {
 		key: Some(key),
 		state: ReadMessageState::ReadHeader(read_header(a)),
@@ -50,7 +58,10 @@ pub struct ReadMessage<A> {
 	state: ReadMessageState<A>,
 }
 
-impl<A> Future for ReadMessage<A> where A: AsyncRead {
+impl<A> Future for ReadMessage<A>
+where
+	A: AsyncRead,
+{
 	type Item = (A, Result<Message, Error>);
 	type Error = io::Error;
 
@@ -69,11 +80,11 @@ impl<A> Future for ReadMessage<A> where A: AsyncRead {
 				};
 				let next = ReadMessageState::ReadPayload(future);
 				(next, Async::NotReady)
-			},
+			}
 			ReadMessageState::ReadPayload(ref mut future) => {
 				let (read, payload) = try_ready!(future.poll());
 				(ReadMessageState::Finished, Async::Ready((read, payload)))
-			},
+			}
 			ReadMessageState::Finished => panic!("poll ReadMessage after it's done"),
 		};
 
@@ -81,7 +92,7 @@ impl<A> Future for ReadMessage<A> where A: AsyncRead {
 		match result {
 			// by polling again, we register new future
 			Async::NotReady => self.poll(),
-			result => Ok(result)
+			result => Ok(result),
 		}
 	}
 }

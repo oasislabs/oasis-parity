@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+use hyper::{self, mime, StatusCode};
 use serde::Serialize;
 use serde_json;
-use hyper::{self, mime, StatusCode};
 
 use handlers::{ContentHandler, EchoHandler};
 
@@ -25,8 +25,7 @@ pub fn empty() -> hyper::Response {
 }
 
 pub fn as_json<T: Serialize>(status: StatusCode, val: &T) -> hyper::Response {
-	let json = serde_json::to_string(val)
-		.expect("serialization to string is infallible; qed");
+	let json = serde_json::to_string(val).expect("serialization to string is infallible; qed");
 	ContentHandler::new(status, json, mime::APPLICATION_JSON).into()
 }
 
@@ -35,9 +34,12 @@ pub fn ping(req: hyper::Request) -> hyper::Response {
 }
 
 pub fn not_found() -> hyper::Response {
-	as_json(StatusCode::NotFound, &::api::types::ApiError {
-		code: "404".into(),
-		title: "Not Found".into(),
-		detail: "Resource you requested has not been found.".into(),
-	})
+	as_json(
+		StatusCode::NotFound,
+		&::api::types::ApiError {
+			code: "404".into(),
+			title: "Not Found".into(),
+			detail: "Resource you requested has not been found.".into(),
+		},
+	)
 }

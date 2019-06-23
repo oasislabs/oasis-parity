@@ -14,20 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::fmt;
-use std::str::FromStr;
-use std::cmp::Ordering;
-use std::hash::{Hash, Hasher};
+use ethereum_types::{
+	Bloom as Eth2048, H160 as Eth160, H256 as Eth256, H512 as Eth512, H520 as Eth520, H64 as Eth64,
+};
+use rustc_hex::{FromHex, ToHex};
 use serde;
-use rustc_hex::{ToHex, FromHex};
-use ethereum_types::{H64 as Eth64, H160 as Eth160, H256 as Eth256, H520 as Eth520, H512 as Eth512, Bloom as Eth2048};
+use std::cmp::Ordering;
+use std::fmt;
+use std::hash::{Hash, Hasher};
+use std::str::FromStr;
 
 macro_rules! impl_hash {
 	($name: ident, $other: ident, $size: expr) => {
 		/// Hash serialization
 		pub struct $name(pub [u8; $size]);
 
-		impl Eq for $name { }
+		impl Eq for $name {}
 
 		impl Default for $name {
 			fn default() -> Self {
@@ -44,11 +46,14 @@ macro_rules! impl_hash {
 		impl fmt::Display for $name {
 			fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 				let hex = self.0.to_hex();
-				write!(f, "{}..{}", &hex[0..2], &hex[$size-2..$size])
+				write!(f, "{}..{}", &hex[0..2], &hex[$size - 2..$size])
 			}
 		}
 
-		impl<T> From<T> for $name where $other: From<T> {
+		impl<T> From<T> for $name
+		where
+			$other: From<T>,
+		{
 			fn from(o: T) -> Self {
 				$name($other::from(o).0)
 			}
@@ -93,7 +98,10 @@ macro_rules! impl_hash {
 		}
 
 		impl Hash for $name {
-			fn hash<H>(&self, state: &mut H) where H: Hasher {
+			fn hash<H>(&self, state: &mut H)
+			where
+				H: Hasher,
+			{
 				let self_ref: &[u8] = &self.0;
 				Hash::hash(self_ref, state)
 			}
@@ -109,7 +117,9 @@ macro_rules! impl_hash {
 
 		impl serde::Serialize for $name {
 			fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-			where S: serde::Serializer {
+			where
+				S: serde::Serializer,
+			{
 				let mut hex = "0x".to_owned();
 				hex.push_str(&self.0.to_hex());
 				serializer.serialize_str(&hex)
@@ -117,18 +127,27 @@ macro_rules! impl_hash {
 		}
 
 		impl<'a> serde::Deserialize<'a> for $name {
-			fn deserialize<D>(deserializer: D) -> Result<$name, D::Error> where D: serde::Deserializer<'a> {
+			fn deserialize<D>(deserializer: D) -> Result<$name, D::Error>
+			where
+				D: serde::Deserializer<'a>,
+			{
 				struct HashVisitor;
 
 				impl<'b> serde::de::Visitor<'b> for HashVisitor {
 					type Value = $name;
 
 					fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-						write!(formatter, "a 0x-prefixed, padded, hex-encoded hash with length {}", $size * 2)
+						write!(
+							formatter,
+							"a 0x-prefixed, padded, hex-encoded hash with length {}",
+							$size * 2
+						)
 					}
 
-					fn visit_str<E>(self, value: &str) -> Result<Self::Value, E> where E: serde::de::Error {
-
+					fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+					where
+						E: serde::de::Error,
+					{
 						if value.len() < 2 || !value.starts_with("0x") {
 							return Err(E::custom("expected a hex-encoded hash with 0x prefix"));
 						}
@@ -141,12 +160,15 @@ macro_rules! impl_hash {
 								let mut result = [0u8; $size];
 								result.copy_from_slice(v);
 								Ok($name(result))
-							},
+							}
 							Err(e) => Err(E::custom(format!("invalid hex value: {:?}", e))),
 						}
 					}
 
-					fn visit_string<E>(self, value: String) -> Result<Self::Value, E> where E: serde::de::Error {
+					fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+					where
+						E: serde::de::Error,
+					{
 						self.visit_str(value.as_ref())
 					}
 				}
@@ -154,7 +176,7 @@ macro_rules! impl_hash {
 				deserializer.deserialize_any(HashVisitor)
 			}
 		}
-	}
+	};
 }
 
 impl_hash!(H64, Eth64, 8);

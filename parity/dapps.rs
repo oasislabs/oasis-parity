@@ -20,19 +20,19 @@ use std::sync::Arc;
 use bytes::Bytes;
 use dir::default_data_path;
 use dir::helpers::replace_home;
-use ethcore::client::{Client, BlockChainClient, BlockId, CallContract};
-use sync::LightSync;
-use futures::{Future, future, IntoFuture};
+use ethcore::client::{BlockChainClient, BlockId, CallContract, Client};
+use ethereum_types::Address;
+use futures::{future, Future, IntoFuture};
 use futures_cpupool::CpuPool;
 use hash_fetch::fetch::Client as FetchClient;
-use registrar::{RegistrarClient, Asynchronous};
 use light::client::LightChainClient;
 use light::on_demand::{self, OnDemand};
-use node_health::{SyncStatus, NodeHealth};
+use node_health::{NodeHealth, SyncStatus};
+use registrar::{Asynchronous, RegistrarClient};
 use rpc;
 use rpc_apis::SignerService;
-use transaction::{Transaction, Action};
-use ethereum_types::Address;
+use sync::LightSync;
+use transaction::{Action, Transaction};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Configuration {
@@ -69,9 +69,7 @@ pub struct FullRegistrar {
 
 impl FullRegistrar {
 	pub fn new(client: Arc<Client>) -> Self {
-		FullRegistrar {
-			client,
-		}
+		FullRegistrar { client }
 	}
 }
 
@@ -79,12 +77,17 @@ impl RegistrarClient for FullRegistrar {
 	type Call = Asynchronous;
 
 	fn registrar_address(&self) -> Result<Address, String> {
-		self.client.registrar_address()
-			 .ok_or_else(|| "Registrar not defined.".into())
+		self.client
+			.registrar_address()
+			.ok_or_else(|| "Registrar not defined.".into())
 	}
 
 	fn call_contract(&self, address: Address, data: Bytes) -> Self::Call {
-		Box::new(self.client.call_contract(BlockId::Latest, address, data).into_future())
+		Box::new(
+			self.client
+				.call_contract(BlockId::Latest, address, data)
+				.into_future(),
+		)
 	}
 }
 
@@ -102,16 +105,23 @@ impl<T: LightChainClient + 'static> RegistrarClient for LightRegistrar<T> {
 	type Call = Box<Future<Item = Bytes, Error = String> + Send>;
 
 	fn registrar_address(&self) -> Result<Address, String> {
-		self.client.engine().additional_params().get("registrar")
-			 .ok_or_else(|| "Registrar not defined.".into())
-			 .and_then(|registrar| {
-				 registrar.parse().map_err(|e| format!("Invalid registrar address: {:?}", e))
-			 })
+		self.client
+			.engine()
+			.additional_params()
+			.get("registrar")
+			.ok_or_else(|| "Registrar not defined.".into())
+			.and_then(|registrar| {
+				registrar
+					.parse()
+					.map_err(|e| format!("Invalid registrar address: {:?}", e))
+			})
 	}
 
 	fn call_contract(&self, address: Address, data: Bytes) -> Self::Call {
 		let header = self.client.best_block_header();
-		let env_info = self.client.env_info(BlockId::Hash(header.hash()))
+		let env_info = self
+			.client
+			.env_info(BlockId::Hash(header.hash()))
 			.ok_or_else(|| format!("Cannot fetch env info for header {}", header.hash()));
 
 		let env_info = match env_info {
@@ -121,19 +131,23 @@ impl<T: LightChainClient + 'static> RegistrarClient for LightRegistrar<T> {
 
 		let maybe_future = self.sync.with_context(move |ctx| {
 			self.on_demand
-				.request(ctx, on_demand::request::TransactionProof {
-					tx: Transaction {
-						nonce: self.client.engine().account_start_nonce(header.number()),
-						action: Action::Call(address),
-						gas: 50_000.into(), // should be enough for all registry lookups. TODO: exponential backoff
-						gas_price: 0.into(),
-						value: 0.into(),
-						data: data,
-					}.fake_sign(Address::default()),
-					header: header.into(),
-					env_info: env_info,
-					engine: self.client.engine().clone(),
-				})
+				.request(
+					ctx,
+					on_demand::request::TransactionProof {
+						tx: Transaction {
+							nonce: self.client.engine().account_start_nonce(header.number()),
+							action: Action::Call(address),
+							gas: 50_000.into(), // should be enough for all registry lookups. TODO: exponential backoff
+							gas_price: 0.into(),
+							value: 0.into(),
+							data: data,
+						}
+						.fake_sign(Address::default()),
+						header: header.into(),
+						env_info: env_info,
+						engine: self.client.engine().clone(),
+					},
+				)
 				.expect("No back-references; therefore all back-refs valid; qed")
 				.then(|res| match res {
 					Ok(Ok(executed)) => Ok(executed.output),
@@ -144,7 +158,9 @@ impl<T: LightChainClient + 'static> RegistrarClient for LightRegistrar<T> {
 
 		match maybe_future {
 			Some(fut) => Box::new(fut),
-			None => Box::new(future::err("cannot query registry: network disabled".into())),
+			None => Box::new(future::err(
+				"cannot query registry: network disabled".into(),
+			)),
 		}
 	}
 }
@@ -155,7 +171,7 @@ impl<T: LightChainClient + 'static> RegistrarClient for LightRegistrar<T> {
 pub struct Dependencies {
 	pub node_health: NodeHealth,
 	pub sync_status: Arc<SyncStatus>,
-	pub contract_client: Arc<RegistrarClient<Call=Asynchronous>>,
+	pub contract_client: Arc<RegistrarClient<Call = Asynchronous>>,
 	pub fetch: FetchClient,
 	pub pool: CpuPool,
 	pub signer: Arc<SignerService>,
@@ -171,18 +187,19 @@ pub fn new(configuration: Configuration, deps: Dependencies) -> Result<Option<Mi
 		configuration.dapps_path,
 		configuration.extra_dapps,
 		rpc::DAPPS_DOMAIN,
-	).map(Some)
+	)
+	.map(Some)
 }
 
-pub use self::server::{Middleware, service};
+pub use self::server::{service, Middleware};
 
 #[cfg(not(feature = "dapps"))]
 mod server {
 	use super::Dependencies;
-	use std::sync::Arc;
-	use std::path::PathBuf;
 	use parity_rpc::{hyper, RequestMiddleware, RequestMiddlewareAction};
 	use rpc_apis;
+	use std::path::PathBuf;
+	use std::sync::Arc;
 
 	pub struct Middleware;
 	impl RequestMiddleware for Middleware {
@@ -208,9 +225,9 @@ mod server {
 #[cfg(feature = "dapps")]
 mod server {
 	use super::Dependencies;
+	use rpc_apis;
 	use std::path::PathBuf;
 	use std::sync::Arc;
-	use rpc_apis;
 
 	use parity_dapps;
 
@@ -239,9 +256,11 @@ mod server {
 	}
 
 	pub fn service(middleware: &Option<Middleware>) -> Option<Arc<rpc_apis::DappsService>> {
-		middleware.as_ref().map(|m| Arc::new(DappsServiceWrapper {
-			endpoints: m.endpoints().clone(),
-		}) as Arc<rpc_apis::DappsService>)
+		middleware.as_ref().map(|m| {
+			Arc::new(DappsServiceWrapper {
+				endpoints: m.endpoints().clone(),
+			}) as Arc<rpc_apis::DappsService>
+		})
 	}
 
 	pub struct DappsServiceWrapper {
@@ -250,7 +269,8 @@ mod server {
 
 	impl rpc_apis::DappsService for DappsServiceWrapper {
 		fn list_dapps(&self) -> Vec<rpc_apis::LocalDapp> {
-			self.endpoints.list()
+			self.endpoints
+				.list()
 				.into_iter()
 				.map(|app| rpc_apis::LocalDapp {
 					id: app.id.unwrap_or_else(|| "unknown".into()),

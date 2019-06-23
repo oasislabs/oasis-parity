@@ -27,25 +27,25 @@ pub struct Log {
 	/// Data
 	pub data: Bytes,
 	/// Block Hash
-	#[serde(rename="blockHash")]
+	#[serde(rename = "blockHash")]
 	pub block_hash: Option<H256>,
 	/// Block Number
-	#[serde(rename="blockNumber")]
+	#[serde(rename = "blockNumber")]
 	pub block_number: Option<U256>,
 	/// Transaction Hash
-	#[serde(rename="transactionHash")]
+	#[serde(rename = "transactionHash")]
 	pub transaction_hash: Option<H256>,
 	/// Transaction Index
-	#[serde(rename="transactionIndex")]
+	#[serde(rename = "transactionIndex")]
 	pub transaction_index: Option<U256>,
 	/// Log Index in Block
-	#[serde(rename="logIndex")]
+	#[serde(rename = "logIndex")]
 	pub log_index: Option<U256>,
 	/// Log Index in Transaction
-	#[serde(rename="transactionLogIndex")]
+	#[serde(rename = "transactionLogIndex")]
 	pub transaction_log_index: Option<U256>,
 	/// Log Type
-	#[serde(rename="type")]
+	#[serde(rename = "type")]
 	pub log_type: String,
 }
 
@@ -96,11 +96,16 @@ mod tests {
 		let log = Log {
 			address: H160::from_str("33990122638b9132ca29c723bdf037f1a891a70c").unwrap(),
 			topics: vec![
-				H256::from_str("a6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc").unwrap(),
-				H256::from_str("4861736852656700000000000000000000000000000000000000000000000000").unwrap(),
+				H256::from_str("a6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc")
+					.unwrap(),
+				H256::from_str("4861736852656700000000000000000000000000000000000000000000000000")
+					.unwrap(),
 			],
 			data: vec![].into(),
-			block_hash: Some(H256::from_str("ed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5").unwrap()),
+			block_hash: Some(
+				H256::from_str("ed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5")
+					.unwrap(),
+			),
 			block_number: Some(U256::from(0x4510c)),
 			transaction_hash: Some(H256::default()),
 			transaction_index: Some(U256::default()),

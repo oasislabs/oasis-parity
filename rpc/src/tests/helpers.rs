@@ -31,7 +31,8 @@ pub struct Server<T> {
 }
 
 impl<T> Server<T> {
-	pub fn new<F>(f: F) -> Server<T> where
+	pub fn new<F>(f: F) -> Server<T>
+	where
 		F: FnOnce(TokioRemote) -> T,
 	{
 		let event_loop = EventLoop::spawn();

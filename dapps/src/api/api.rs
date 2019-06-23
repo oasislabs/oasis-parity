@@ -20,9 +20,9 @@ use hyper::{Method, StatusCode};
 
 use api::response;
 use apps::fetcher::Fetcher;
-use endpoint::{Endpoint, Request, Response, EndpointPath};
+use endpoint::{Endpoint, EndpointPath, Request, Response};
 use futures::{future, Future};
-use node_health::{NodeHealth, HealthStatus};
+use node_health::{HealthStatus, NodeHealth};
 
 #[derive(Clone)]
 pub struct RestApi {
@@ -56,42 +56,35 @@ impl Endpoint for RestApi {
 }
 
 impl RestApi {
-	pub fn new(
-		fetcher: Arc<Fetcher>,
-		health: NodeHealth,
-	) -> Box<Endpoint> {
-		Box::new(RestApi {
-			fetcher,
-			health,
-		})
+	pub fn new(fetcher: Arc<Fetcher>, health: NodeHealth) -> Box<Endpoint> {
+		Box::new(RestApi { fetcher, health })
 	}
 
 	fn resolve_content(&self, hash: Option<&str>, path: EndpointPath, req: Request) -> Response {
 		trace!(target: "dapps", "Resolving content: {:?} from path: {:?}", hash, path);
 		match hash {
-			Some(hash) if self.fetcher.contains(hash) => {
-				self.fetcher.respond(path, req)
-			},
+			Some(hash) if self.fetcher.contains(hash) => self.fetcher.respond(path, req),
 			_ => Box::new(future::ok(response::not_found())),
 		}
 	}
 
 	fn health(&self) -> Response {
-		Box::new(self.health.health()
-			.then(|health| {
-				let status = match health {
-					Ok(ref health) => {
-						if [&health.peers.status, &health.sync.status].iter().any(|x| *x != &HealthStatus::Ok) {
-							StatusCode::PreconditionFailed // HTTP 412
-						} else {
-							StatusCode::Ok // HTTP 200
-						}
-					},
-					_ => StatusCode::ServiceUnavailable, // HTTP 503
-				};
+		Box::new(self.health.health().then(|health| {
+			let status = match health {
+				Ok(ref health) => {
+					if [&health.peers.status, &health.sync.status]
+						.iter()
+						.any(|x| *x != &HealthStatus::Ok)
+					{
+						StatusCode::PreconditionFailed // HTTP 412
+					} else {
+						StatusCode::Ok // HTTP 200
+					}
+				}
+				_ => StatusCode::ServiceUnavailable, // HTTP 503
+			};
 
-				Ok(response::as_json(status, &health).into())
-			})
-		)
+			Ok(response::as_json(status, &health).into())
+		}))
 	}
 }

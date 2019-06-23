@@ -25,12 +25,12 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate docopt;
-extern crate ethcore_transaction as transaction;
 extern crate ethcore_bytes as bytes;
+extern crate ethcore_transaction as transaction;
 extern crate ethereum_types;
-extern crate vm;
 extern crate evm;
 extern crate panic_hook;
+extern crate vm;
 
 #[cfg(test)]
 #[macro_use]
@@ -39,18 +39,18 @@ extern crate pretty_assertions;
 #[cfg(test)]
 extern crate tempdir;
 
+use bytes::Bytes;
+use docopt::Docopt;
+use ethcore::spec;
+use ethereum_types::{Address, U256};
+use rustc_hex::FromHex;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::{fmt, fs};
-use std::path::PathBuf;
-use docopt::Docopt;
-use rustc_hex::FromHex;
-use ethereum_types::{U256, Address};
-use bytes::Bytes;
-use ethcore::spec;
 use vm::{ActionParams, CallType};
 
-mod info;
 mod display;
+mod info;
 
 use info::Informant;
 
@@ -86,7 +86,9 @@ General options:
 fn main() {
 	panic_hook::set();
 
-	let args: Args = Docopt::new(USAGE).and_then(|d| d.deserialize()).unwrap_or_else(|e| e.exit());
+	let args: Args = Docopt::new(USAGE)
+		.and_then(|d| d.deserialize())
+		.unwrap_or_else(|e| e.exit());
 
 	if args.cmd_state_test {
 		run_state_test(args)
@@ -115,7 +117,10 @@ fn run_state_test(args: Args) {
 	let only_chain = args.flag_chain.map(|s| s.to_lowercase());
 
 	for (name, test) in state_test {
-		if let Some(false) = only_test.as_ref().map(|only_test| &name.to_lowercase() == only_test) {
+		if let Some(false) = only_test
+			.as_ref()
+			.map(|only_test| &name.to_lowercase() == only_test)
+		{
 			continue;
 		}
 
@@ -124,7 +129,10 @@ fn run_state_test(args: Args) {
 		let pre = test.pre_state.into();
 
 		for (spec, states) in test.post_states {
-			if let Some(false) = only_chain.as_ref().map(|only_chain| &format!("{:?}", spec).to_lowercase() == only_chain) {
+			if let Some(false) = only_chain
+				.as_ref()
+				.map(|only_chain| &format!("{:?}", spec).to_lowercase() == only_chain)
+			{
 				continue;
 			}
 
@@ -134,13 +142,40 @@ fn run_state_test(args: Args) {
 
 				if args.flag_json {
 					let i = display::json::Informant::default();
-					info::run_transaction(&name, idx, &spec, &pre, post_root, &env_info, transaction, i)
+					info::run_transaction(
+						&name,
+						idx,
+						&spec,
+						&pre,
+						post_root,
+						&env_info,
+						transaction,
+						i,
+					)
 				} else if args.flag_std_json {
 					let i = display::std_json::Informant::default();
-					info::run_transaction(&name, idx, &spec, &pre, post_root, &env_info, transaction, i)
+					info::run_transaction(
+						&name,
+						idx,
+						&spec,
+						&pre,
+						post_root,
+						&env_info,
+						transaction,
+						i,
+					)
 				} else {
 					let i = display::simple::Informant::default();
-					info::run_transaction(&name, idx, &spec, &pre, post_root, &env_info, transaction, i)
+					info::run_transaction(
+						&name,
+						idx,
+						&spec,
+						&pre,
+						post_root,
+						&env_info,
+						transaction,
+						i,
+					)
 				}
 			}
 		}
@@ -161,7 +196,11 @@ fn run_call<T: Informant>(args: Args, informant: T) {
 	}
 
 	let mut params = ActionParams::default();
-	params.call_type = if code.is_none() { CallType::Call } else { CallType::None };
+	params.call_type = if code.is_none() {
+		CallType::Call
+	} else {
+		CallType::None
+	};
 	params.code_address = to;
 	params.address = to;
 	params.sender = from;
@@ -237,13 +276,11 @@ impl Args {
 
 	pub fn spec(&self) -> Result<spec::Spec, String> {
 		Ok(match self.flag_chain {
-			Some(ref filename) =>  {
+			Some(ref filename) => {
 				let file = fs::File::open(filename).map_err(|e| format!("{}", e))?;
 				spec::Spec::load(&::std::env::temp_dir(), file)?
-			},
-			None => {
-				ethcore::ethereum::new_foundation(&::std::env::temp_dir())
-			},
+			}
+			None => ethcore::ethereum::new_foundation(&::std::env::temp_dir()),
 		})
 	}
 }
@@ -263,11 +300,13 @@ fn die<T: fmt::Display>(msg: T) -> ! {
 
 #[cfg(test)]
 mod tests {
-	use docopt::Docopt;
 	use super::{Args, USAGE};
+	use docopt::Docopt;
 
 	fn run<T: AsRef<str>>(args: &[T]) -> Args {
-		Docopt::new(USAGE).and_then(|d| d.argv(args.into_iter()).deserialize()).unwrap()
+		Docopt::new(USAGE)
+			.and_then(|d| d.argv(args.into_iter()).deserialize())
+			.unwrap()
 	}
 
 	#[test]
@@ -276,13 +315,20 @@ mod tests {
 			"parity-evm",
 			"--json",
 			"--std-json",
-			"--gas", "1",
-			"--gas-price", "2",
-			"--from", "0000000000000000000000000000000000000003",
-			"--to", "0000000000000000000000000000000000000004",
-			"--code", "05",
-			"--input", "06",
-			"--chain", "./testfile",
+			"--gas",
+			"1",
+			"--gas-price",
+			"2",
+			"--from",
+			"0000000000000000000000000000000000000003",
+			"--to",
+			"0000000000000000000000000000000000000004",
+			"--code",
+			"05",
+			"--input",
+			"06",
+			"--chain",
+			"./testfile",
 		]);
 
 		assert_eq!(args.flag_json, true);
@@ -302,10 +348,11 @@ mod tests {
 			"parity-evm",
 			"state-test",
 			"./file.json",
-			"--chain", "homestead",
+			"--chain",
+			"homestead",
 			"--only=add11",
 			"--json",
-			"--std-json"
+			"--std-json",
 		]);
 
 		assert_eq!(args.cmd_state_test, true);

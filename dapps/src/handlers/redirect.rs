@@ -20,14 +20,12 @@ use hyper::{self, header, StatusCode};
 
 #[derive(Clone)]
 pub struct Redirection {
-	to_url: String
+	to_url: String,
 }
 
 impl Redirection {
 	pub fn new<T: Into<String>>(url: T) -> Self {
-		Redirection {
-			to_url: url.into()
-		}
+		Redirection { to_url: url.into() }
 	}
 }
 

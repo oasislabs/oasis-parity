@@ -41,7 +41,7 @@ impl Default for NetworkSettings {
 			network_port: 30303,
 			rpc_enabled: true,
 			rpc_interface: "127.0.0.1".into(),
-			rpc_port: 8545
+			rpc_port: 8545,
 		}
 	}
 }

@@ -14,9 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::{BTreeMap, BTreeSet};
+use key_server_cluster::jobs::job_session::{
+	JobExecutor, JobPartialRequestAction, JobPartialResponseAction, JobTransport,
+};
 use key_server_cluster::{Error, NodeId};
-use key_server_cluster::jobs::job_session::{JobExecutor, JobTransport, JobPartialRequestAction, JobPartialResponseAction};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// No-work job to use in generics (TODO [Refac]: create separate ShareChangeConsensusSession && remove this)
 pub struct DummyJob;
@@ -34,7 +36,11 @@ impl JobExecutor for DummyJob {
 		unreachable!("dummy job methods are never called")
 	}
 
-	fn check_partial_response(&mut self, _s: &NodeId, _r: &()) -> Result<JobPartialResponseAction, Error> {
+	fn check_partial_response(
+		&mut self,
+		_s: &NodeId,
+		_r: &(),
+	) -> Result<JobPartialResponseAction, Error> {
 		unreachable!("dummy job methods are never called")
 	}
 

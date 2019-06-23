@@ -16,9 +16,9 @@
 
 //! Blockchain test account deserializer.
 
+use bytes::Bytes;
 use std::collections::BTreeMap;
 use uint::Uint;
-use bytes::Bytes;
 
 /// Blockchain test account deserializer.
 #[derive(Debug, PartialEq, Deserialize, Clone)]
@@ -37,8 +37,8 @@ pub struct Account {
 
 #[cfg(test)]
 mod tests {
-	use serde_json;
 	use blockchain::account::Account;
+	use serde_json;
 
 	#[test]
 	fn account_deserialization() {

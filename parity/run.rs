@@ -17,52 +17,54 @@
 use std::any::Any;
 use std::fmt;
 use std::sync::{Arc, Weak};
-use std::time::{Duration, Instant};
 use std::thread;
+use std::time::{Duration, Instant};
 
 use ansi_term::Colour;
+use cache::CacheConfig;
+use dapps;
+use db;
+use dir::{DatabaseDirectories, Directories};
 use ethcore::account_provider::{AccountProvider, AccountProviderSettings};
-use ethcore::client::{Client, Mode, DatabaseCompactionProfile, VMType, BlockChainClient, BlockInfo};
+use ethcore::client::{
+	BlockChainClient, BlockInfo, Client, DatabaseCompactionProfile, Mode, VMType,
+};
 use ethcore::ethstore::ethkey;
-use ethcore::miner::{stratum, Miner, MinerService, MinerOptions};
+use ethcore::miner::{stratum, Miner, MinerOptions, MinerService};
 use ethcore::snapshot;
-use ethcore::spec::{SpecParams, OptimizeFor};
+use ethcore::spec::{OptimizeFor, SpecParams};
 use ethcore::verification::queue::VerifierSettings;
 use ethcore_logger::{Config as LogConfig, RotatingLogger};
+use ethcore_private_tx::{EncryptorConfig, ProviderConfig, SecretStoreEncryptor};
 use ethcore_service::ClientService;
-use sync::{self, SyncConfig};
-use miner::work_notify::WorkPoster;
 use futures_cpupool::CpuPool;
 use hash_fetch::{self, fetch};
-use informant::{Informant, LightNodeInformantData, FullNodeInformantData};
+use helpers::{execute_upgrades, passwords_from_files, to_client_config};
+use informant::{FullNodeInformantData, Informant, LightNodeInformantData};
+use ipfs;
 use journaldb::Algorithm;
+use jsonrpc_core;
 use light::Cache as LightDataCache;
 use miner::external::ExternalMiner;
+use miner::work_notify::WorkPoster;
+use modules;
 use node_filter::NodeFilter;
 use node_health;
-use parity_reactor::EventLoop;
-use parity_rpc::{Origin, Metadata, NetworkSettings, informant, is_major_importing};
-use updater::{UpdatePolicy, Updater};
-use parity_version::version;
-use ethcore_private_tx::{ProviderConfig, EncryptorConfig, SecretStoreEncryptor};
 use params::{
-	SpecType, Pruning, AccountsConfig, GasPricerConfig, MinerExtras, Switch,
-	tracing_switch_to_bool, fatdb_switch_to_bool, mode_switch_to_bool
+	fatdb_switch_to_bool, mode_switch_to_bool, tracing_switch_to_bool, AccountsConfig,
+	GasPricerConfig, MinerExtras, Pruning, SpecType, Switch,
 };
-use helpers::{to_client_config, execute_upgrades, passwords_from_files};
-use upgrade::upgrade_key_location;
-use dir::{Directories, DatabaseDirectories};
-use cache::CacheConfig;
-use user_defaults::UserDefaults;
-use dapps;
-use ipfs;
-use jsonrpc_core;
-use modules;
+use parity_reactor::EventLoop;
+use parity_rpc::{informant, is_major_importing, Metadata, NetworkSettings, Origin};
+use parity_version::version;
 use rpc;
 use rpc_apis;
 use secretstore;
 use signer;
-use db;
+use sync::{self, SyncConfig};
+use updater::{UpdatePolicy, Updater};
+use upgrade::upgrade_key_location;
+use user_defaults::UserDefaults;
 
 // how often to take periodic snapshots.
 const SNAPSHOT_PERIOD: u64 = 5000;
@@ -143,10 +145,13 @@ impl ::local_store::NodeInfo for FullNodeInfo {
 			None => return Vec::new(),
 		};
 
-		miner.local_transactions()
+		miner
+			.local_transactions()
 			.values()
 			.filter_map(|status| match *status {
-				::miner::pool::local_transactions::Status::Pending(ref tx) => Some(tx.pending().clone()),
+				::miner::pool::local_transactions::Status::Pending(ref tx) => {
+					Some(tx.pending().clone())
+				}
 				_ => None,
 			})
 			.collect()
@@ -158,17 +163,24 @@ type LightClient = ::light::client::Client<::light_helpers::EpochFetch>;
 // helper for light execution.
 fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<RunningClient, String> {
 	use light::client as light_client;
-	use sync::{LightSyncParams, LightSync, ManageNetwork};
 	use parking_lot::{Mutex, RwLock};
+	use sync::{LightSync, LightSyncParams, ManageNetwork};
 
 	// load spec
-	let spec = cmd.spec.spec(SpecParams::new(cmd.dirs.cache.as_ref(), OptimizeFor::Memory))?;
+	let spec = cmd.spec.spec(SpecParams::new(
+		cmd.dirs.cache.as_ref(),
+		OptimizeFor::Memory,
+	))?;
 
 	// load genesis hash
 	let genesis_hash = spec.genesis_header().hash();
 
 	// database paths
-	let db_dirs = cmd.dirs.database(genesis_hash, cmd.spec.legacy_fork_name(), spec.data_dir.clone());
+	let db_dirs = cmd.dirs.database(
+		genesis_hash,
+		cmd.spec.legacy_fork_name(),
+		spec.data_dir.clone(),
+	);
 
 	// user defaults path
 	let user_defaults_path = db_dirs.user_defaults_path();
@@ -183,15 +195,25 @@ fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<Runnin
 	execute_upgrades(&cmd.dirs.base, &db_dirs, algorithm, &cmd.compaction)?;
 
 	// create dirs used by parity
-	cmd.dirs.create_dirs(cmd.dapps_conf.enabled, cmd.acc_conf.unlocked_accounts.len() == 0, cmd.secretstore_conf.enabled)?;
+	cmd.dirs.create_dirs(
+		cmd.dapps_conf.enabled,
+		cmd.acc_conf.unlocked_accounts.len() == 0,
+		cmd.secretstore_conf.enabled,
+	)?;
 
 	//print out running parity environment
 	print_running_environment(&spec.name, &cmd.dirs, &db_dirs, &cmd.dapps_conf);
 
-	info!("Running in experimental {} mode.", Colour::Blue.bold().paint("Light Client"));
+	info!(
+		"Running in experimental {} mode.",
+		Colour::Blue.bold().paint("Light Client")
+	);
 
 	// TODO: configurable cache size.
-	let cache = LightDataCache::new(Default::default(), Duration::from_secs(60 * GAS_CORPUS_EXPIRATION_MINUTES));
+	let cache = LightDataCache::new(
+		Default::default(),
+		Duration::from_secs(60 * GAS_CORPUS_EXPIRATION_MINUTES),
+	);
 	let cache = Arc::new(Mutex::new(cache));
 
 	// start client and create transaction queue.
@@ -216,15 +238,22 @@ fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<Runnin
 	};
 
 	// initialize database.
-	let db = db::open_db(&db_dirs.client_path(algorithm).to_str().expect("DB path could not be converted to string."),
-						 &cmd.cache_config,
-						 &cmd.compaction,
-						 cmd.wal)?;
+	let db = db::open_db(
+		&db_dirs
+			.client_path(algorithm)
+			.to_str()
+			.expect("DB path could not be converted to string."),
+		&cmd.cache_config,
+		&cmd.compaction,
+		cmd.wal,
+	)?;
 
 	let service = light_client::Service::start(config, &spec, fetch, db, cache.clone())
 		.map_err(|e| format!("Error starting light client: {}", e))?;
 	let client = service.client().clone();
-	let txq = Arc::new(RwLock::new(::light::transaction_queue::TransactionQueue::default()));
+	let txq = Arc::new(RwLock::new(
+		::light::transaction_queue::TransactionQueue::default(),
+	));
 	let provider = ::light::provider::LightProvider::new(client.clone(), txq.clone());
 
 	// start network.
@@ -236,8 +265,9 @@ fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<Runnin
 
 	let mut attached_protos = Vec::new();
 	let whisper_factory = if cmd.whisper.enabled {
-		let whisper_factory = ::whisper::setup(cmd.whisper.target_message_pool_size, &mut attached_protos)
-			.map_err(|e| format!("Failed to initialize whisper: {}", e))?;
+		let whisper_factory =
+			::whisper::setup(cmd.whisper.target_message_pool_size, &mut attached_protos)
+				.map_err(|e| format!("Failed to initialize whisper: {}", e))?;
 		whisper_factory
 	} else {
 		None
@@ -246,14 +276,17 @@ fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<Runnin
 	// set network path.
 	net_conf.net_config_path = Some(db_dirs.network_path().to_string_lossy().into_owned());
 	let sync_params = LightSyncParams {
-		network_config: net_conf.into_basic().map_err(|e| format!("Failed to produce network config: {}", e))?,
+		network_config: net_conf
+			.into_basic()
+			.map_err(|e| format!("Failed to produce network config: {}", e))?,
 		client: Arc::new(provider),
 		network_id: cmd.network_id.unwrap_or(spec.network_id()),
 		subprotocol_name: sync::LIGHT_PROTOCOL,
 		handlers: vec![on_demand.clone()],
 		attached_protos: attached_protos,
 	};
-	let light_sync = LightSync::new(sync_params).map_err(|e| format!("Error starting network: {}", e))?;
+	let light_sync =
+		LightSync::new(sync_params).map_err(|e| format!("Error starting network: {}", e))?;
 	let light_sync = Arc::new(light_sync);
 	*sync_handle.write() = Arc::downgrade(&light_sync);
 
@@ -269,7 +302,9 @@ fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<Runnin
 		remote: event_loop.remote(),
 	});
 
-	service.register_handler(queue_cull).map_err(|e| format!("Error attaching service: {:?}", e))?;
+	service
+		.register_handler(queue_cull)
+		.map_err(|e| format!("Error attaching service: {:?}", e))?;
 
 	// start the network.
 	light_sync.start_network();
@@ -277,11 +312,18 @@ fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<Runnin
 	let cpu_pool = CpuPool::new(4);
 
 	// fetch service
-	let fetch = fetch::Client::new().map_err(|e| format!("Error starting fetch client: {:?}", e))?;
+	let fetch =
+		fetch::Client::new().map_err(|e| format!("Error starting fetch client: {:?}", e))?;
 	let passwords = passwords_from_files(&cmd.acc_conf.password_files)?;
 
 	// prepare account provider
-	let account_provider = Arc::new(prepare_account_provider(&cmd.spec, &cmd.dirs, &spec.data_dir, cmd.acc_conf, &passwords)?);
+	let account_provider = Arc::new(prepare_account_provider(
+		&cmd.spec,
+		&cmd.dirs,
+		&spec.data_dir,
+		cmd.acc_conf,
+		&passwords,
+	)?);
 	let rpc_stats = Arc::new(informant::RpcStats::default());
 
 	// the dapps server
@@ -300,7 +342,9 @@ fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<Runnin
 			}
 		}
 		impl node_health::SyncStatus for LightSyncStatus {
-			fn is_major_importing(&self) -> bool { self.0.is_major_importing() }
+			fn is_major_importing(&self) -> bool {
+				self.0.is_major_importing()
+			}
 			fn peers(&self) -> (usize, usize) {
 				let peers = sync::LightSyncProvider::peer_numbers(&*self.0);
 				(peers.connected, peers.max)
@@ -314,14 +358,17 @@ fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<Runnin
 			event_loop.remote(),
 		);
 
-		(node_health.clone(), dapps::Dependencies {
-			sync_status,
-			node_health,
-			contract_client: Arc::new(contract_client),
-			fetch: fetch.clone(),
-			pool: cpu_pool.clone(),
-			signer: signer_service.clone(),
-		})
+		(
+			node_health.clone(),
+			dapps::Dependencies {
+				sync_status,
+				node_health,
+				contract_client: Arc::new(contract_client),
+				fetch: fetch.clone(),
+				pool: cpu_pool.clone(),
+				signer: signer_service.clone(),
+			},
+		)
 	};
 
 	let dapps_middleware = dapps::new(cmd.dapps_conf.clone(), dapps_deps.clone())?;
@@ -366,7 +413,13 @@ fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<Runnin
 	// start rpc servers
 	let rpc_direct = rpc::setup_apis(rpc_apis::ApiSet::All, &dependencies);
 	let ws_server = rpc::new_ws(cmd.ws_conf, &dependencies)?;
-	let http_server = rpc::new_http("HTTP JSON-RPC", "jsonrpc", cmd.http_conf.clone(), &dependencies, dapps_middleware)?;
+	let http_server = rpc::new_http(
+		"HTTP JSON-RPC",
+		"jsonrpc",
+		cmd.http_conf.clone(),
+		&dependencies,
+		dapps_middleware,
+	)?;
 	let ipc_server = rpc::new_ipc(cmd.ipc_conf, &dependencies)?;
 
 	// the informant
@@ -381,7 +434,9 @@ fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<Runnin
 		cmd.logger_config.color,
 	));
 	service.add_notify(informant.clone());
-	service.register_handler(informant.clone()).map_err(|_| "Unable to register informant handler".to_owned())?;
+	service
+		.register_handler(informant.clone())
+		.map_err(|_| "Unable to register informant handler".to_owned())?;
 
 	Ok(RunningClient {
 		inner: RunningClientInner::Light {
@@ -389,14 +444,19 @@ fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<Runnin
 			informant,
 			client,
 			keep_alive: Box::new((event_loop, service, ws_server, http_server, ipc_server)),
-		}
+		},
 	})
 }
 
-fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: Cr,
-						on_updater_rq: Rr) -> Result<RunningClient, String>
-	where Cr: Fn(String) + 'static + Send,
-		  Rr: Fn() + 'static + Send
+fn execute_impl<Cr, Rr>(
+	cmd: RunCmd,
+	logger: Arc<RotatingLogger>,
+	on_client_rq: Cr,
+	on_updater_rq: Rr,
+) -> Result<RunningClient, String>
+where
+	Cr: Fn(String) + 'static + Send,
+	Rr: Fn() + 'static + Send,
 {
 	// load spec
 	let spec = cmd.spec.spec(&cmd.dirs.cache)?;
@@ -405,7 +465,11 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 	let genesis_hash = spec.genesis_header().hash();
 
 	// database paths
-	let db_dirs = cmd.dirs.database(genesis_hash, cmd.spec.legacy_fork_name(), spec.data_dir.clone());
+	let db_dirs = cmd.dirs.database(
+		genesis_hash,
+		cmd.spec.legacy_fork_name(),
+		spec.data_dir.clone(),
+	);
 
 	// user defaults path
 	let user_defaults_path = db_dirs.user_defaults_path();
@@ -425,7 +489,10 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 	// get the mode
 	let mode = mode_switch_to_bool(cmd.mode, &user_defaults)?;
 	trace!(target: "mode", "mode is {:?}", mode);
-	let network_enabled = match mode { Mode::Dark(_) | Mode::Off => false, _ => true, };
+	let network_enabled = match mode {
+		Mode::Dark(_) | Mode::Off => false,
+		_ => true,
+	};
 
 	// get the update policy
 	let update_policy = cmd.update_policy;
@@ -438,7 +505,11 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 	execute_upgrades(&cmd.dirs.base, &db_dirs, algorithm, &cmd.compaction)?;
 
 	// create dirs used by parity
-	cmd.dirs.create_dirs(cmd.dapps_conf.enabled, cmd.acc_conf.unlocked_accounts.len() == 0, cmd.secretstore_conf.enabled)?;
+	cmd.dirs.create_dirs(
+		cmd.dapps_conf.enabled,
+		cmd.acc_conf.unlocked_accounts.len() == 0,
+		cmd.secretstore_conf.enabled,
+	)?;
 
 	// run in daemon mode
 	if let Some(pid_file) = cmd.daemon {
@@ -449,7 +520,8 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 	print_running_environment(&spec.name, &cmd.dirs, &db_dirs, &cmd.dapps_conf);
 
 	// display info about used pruning algorithm
-	info!("State DB configuration: {}{}{}",
+	info!(
+		"State DB configuration: {}{}{}",
 		Colour::White.bold().paint(algorithm.as_str()),
 		match fat_db {
 			true => Colour::White.bold().paint(" +Fat").to_string(),
@@ -460,11 +532,17 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 			false => "".to_owned(),
 		}
 	);
-	info!("Operating mode: {}", Colour::White.bold().paint(format!("{}", mode)));
+	info!(
+		"Operating mode: {}",
+		Colour::White.bold().paint(format!("{}", mode))
+	);
 
 	// display warning about using experimental journaldb algorithm
 	if !algorithm.is_stable() {
-		warn!("Your chosen strategy is {}! You can re-run with --pruning to change.", Colour::Red.bold().paint("unstable"));
+		warn!(
+			"Your chosen strategy is {}! You can re-run with --pruning to change.",
+			Colour::Red.bold().paint("unstable")
+		);
 	}
 
 	// create sync config
@@ -476,7 +554,9 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 	if spec.subprotocol_name().len() != 3 {
 		warn!("Your chain specification's subprotocol length is not 3. Ignoring.");
 	} else {
-		sync_config.subprotocol_name.clone_from_slice(spec.subprotocol_name().as_bytes());
+		sync_config
+			.subprotocol_name
+			.clone_from_slice(spec.subprotocol_name().as_bytes());
 	}
 
 	sync_config.fork_block = spec.fork_block();
@@ -505,7 +585,13 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 	let passwords = passwords_from_files(&cmd.acc_conf.password_files)?;
 
 	// prepare account provider
-	let account_provider = Arc::new(prepare_account_provider(&cmd.spec, &cmd.dirs, &spec.data_dir, cmd.acc_conf, &passwords)?);
+	let account_provider = Arc::new(prepare_account_provider(
+		&cmd.spec,
+		&cmd.dirs,
+		&spec.data_dir,
+		cmd.acc_conf,
+		&passwords,
+	)?);
 
 	let cpu_pool = CpuPool::new(4);
 
@@ -513,38 +599,56 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 	let event_loop = EventLoop::spawn();
 
 	// fetch service
-	let fetch = fetch::Client::new().map_err(|e| format!("Error starting fetch client: {:?}", e))?;
+	let fetch =
+		fetch::Client::new().map_err(|e| format!("Error starting fetch client: {:?}", e))?;
 
 	// create miner
 	let miner = Arc::new(Miner::new(
 		cmd.miner_options,
-		cmd.gas_pricer_conf.to_gas_pricer(fetch.clone(), cpu_pool.clone()),
+		cmd.gas_pricer_conf
+			.to_gas_pricer(fetch.clone(), cpu_pool.clone()),
 		&spec,
-		Some(account_provider.clone())
+		Some(account_provider.clone()),
 	));
-	miner.set_author(cmd.miner_extras.author, None).expect("Fails only if password is Some; password is None; qed");
+	miner
+		.set_author(cmd.miner_extras.author, None)
+		.expect("Fails only if password is Some; password is None; qed");
 	miner.set_gas_range_target(cmd.miner_extras.gas_range_target);
 	miner.set_extra_data(cmd.miner_extras.extra_data);
 	if !cmd.miner_extras.work_notify.is_empty() {
-		miner.add_work_listener(Box::new(
-			WorkPoster::new(&cmd.miner_extras.work_notify, fetch.clone(), event_loop.remote())
-		));
+		miner.add_work_listener(Box::new(WorkPoster::new(
+			&cmd.miner_extras.work_notify,
+			fetch.clone(),
+			event_loop.remote(),
+		)));
 	}
 	let engine_signer = cmd.miner_extras.engine_signer;
 	if engine_signer != Default::default() {
 		// Check if engine signer exists
 		if !account_provider.has_account(engine_signer).unwrap_or(false) {
-			return Err(format!("Consensus signer account not found for the current chain. {}", build_create_account_hint(&cmd.spec, &cmd.dirs.keys)));
+			return Err(format!(
+				"Consensus signer account not found for the current chain. {}",
+				build_create_account_hint(&cmd.spec, &cmd.dirs.keys)
+			));
 		}
 
 		// Check if any passwords have been read from the password file(s)
 		if passwords.is_empty() {
-			return Err(format!("No password found for the consensus signer {}. {}", engine_signer, VERIFY_PASSWORD_HINT));
+			return Err(format!(
+				"No password found for the consensus signer {}. {}",
+				engine_signer, VERIFY_PASSWORD_HINT
+			));
 		}
 
 		// Attempt to sign in the engine signer.
-		if !passwords.iter().any(|p| miner.set_author(engine_signer, Some(p.to_owned())).is_ok()) {
-			return Err(format!("No valid password for the consensus signer {}. {}", engine_signer, VERIFY_PASSWORD_HINT));
+		if !passwords
+			.iter()
+			.any(|p| miner.set_author(engine_signer, Some(p.to_owned())).is_ok())
+		{
+			return Err(format!(
+				"No valid password for the consensus signer {}. {}",
+				engine_signer, VERIFY_PASSWORD_HINT
+			));
 		}
 	}
 
@@ -594,9 +698,13 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 		&cmd.dirs.ipc_path(),
 		miner.clone(),
 		account_provider.clone(),
-		Box::new(SecretStoreEncryptor::new(cmd.private_encryptor_conf, fetch.clone()).map_err(|e| e.to_string())?),
+		Box::new(
+			SecretStoreEncryptor::new(cmd.private_encryptor_conf, fetch.clone())
+				.map_err(|e| e.to_string())?,
+		),
 		cmd.private_provider_conf,
-	).map_err(|e| format!("Client service error: {:?}", e))?;
+	)
+	.map_err(|e| format!("Client service error: {:?}", e))?;
 
 	let connection_filter_address = spec.params().node_permission_contract;
 	// drop the spec to free up genesis state.
@@ -610,7 +718,12 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 	// take handle to private transactions service
 	let private_tx_service = service.private_tx_service();
 	let private_tx_provider = private_tx_service.provider();
-	let connection_filter = connection_filter_address.map(|a| Arc::new(NodeFilter::new(Arc::downgrade(&client) as Weak<BlockChainClient>, a)));
+	let connection_filter = connection_filter_address.map(|a| {
+		Arc::new(NodeFilter::new(
+			Arc::downgrade(&client) as Weak<BlockChainClient>,
+			a,
+		))
+	});
 	let snapshot_service = service.snapshot_service();
 
 	// initialize the local node information store.
@@ -620,7 +733,7 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 			miner: match cmd.no_persistent_txqueue {
 				true => None,
 				false => Some(miner.clone()),
-			}
+			},
 		};
 
 		let store = ::local_store::create(db, ::ethcore::db::COL_NODE_INFO, node_info);
@@ -649,7 +762,9 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 	};
 
 	// register it as an IO service to update periodically.
-	service.register_io_handler(store).map_err(|_| "Unable to register local store handler".to_owned())?;
+	service
+		.register_io_handler(store)
+		.map_err(|_| "Unable to register local store handler".to_owned())?;
 
 	// create external miner
 	let external_miner = Arc::new(ExternalMiner::default());
@@ -663,8 +778,9 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 	let mut attached_protos = Vec::new();
 
 	let whisper_factory = if cmd.whisper.enabled {
-		let whisper_factory = ::whisper::setup(cmd.whisper.target_message_pool_size, &mut attached_protos)
-			.map_err(|e| format!("Failed to initialize whisper: {}", e))?;
+		let whisper_factory =
+			::whisper::setup(cmd.whisper.target_message_pool_size, &mut attached_protos)
+				.map_err(|e| format!("Failed to initialize whisper: {}", e))?;
 
 		whisper_factory
 	} else {
@@ -681,8 +797,11 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 		client.clone(),
 		&cmd.logger_config,
 		attached_protos,
-		connection_filter.clone().map(|f| f as Arc<::sync::ConnectionFilter + 'static>),
-	).map_err(|e| format!("Sync error: {}", e))?;
+		connection_filter
+			.clone()
+			.map(|f| f as Arc<::sync::ConnectionFilter + 'static>),
+	)
+	.map_err(|e| format!("Sync error: {}", e))?;
 
 	service.add_notify(chain_notify.clone());
 
@@ -708,7 +827,12 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 		Arc::downgrade(&(service.client() as Arc<BlockChainClient>)),
 		Arc::downgrade(&sync_provider),
 		update_policy,
-		hash_fetch::Client::with_fetch(contract_client.clone(), cpu_pool.clone(), updater_fetch, event_loop.remote())
+		hash_fetch::Client::with_fetch(
+			contract_client.clone(),
+			cpu_pool.clone(),
+			updater_fetch,
+			event_loop.remote(),
+		),
 	);
 	service.add_notify(updater.clone());
 
@@ -721,7 +845,11 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 	let (node_health, dapps_deps) = {
 		let (sync, client) = (sync_provider.clone(), client.clone());
 
-		struct SyncStatus(Arc<sync::SyncProvider>, Arc<Client>, sync::NetworkConfiguration);
+		struct SyncStatus(
+			Arc<sync::SyncProvider>,
+			Arc<Client>,
+			sync::NetworkConfiguration,
+		);
 		impl fmt::Debug for SyncStatus {
 			fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
 				write!(fmt, "Dapps Sync Status")
@@ -733,7 +861,10 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 			}
 			fn peers(&self) -> (usize, usize) {
 				let status = self.0.status();
-				(status.num_peers, status.current_max_peers(self.2.min_peers, self.2.max_peers) as usize)
+				(
+					status.num_peers,
+					status.current_max_peers(self.2.min_peers, self.2.max_peers) as usize,
+				)
 			}
 		}
 
@@ -743,14 +874,17 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 			node_health::TimeChecker::new(&cmd.ntp_servers, cpu_pool.clone()),
 			event_loop.remote(),
 		);
-		(node_health.clone(), dapps::Dependencies {
-			sync_status,
-			node_health,
-			contract_client,
-			fetch: fetch.clone(),
-			pool: cpu_pool.clone(),
-			signer: signer_service.clone(),
-		})
+		(
+			node_health.clone(),
+			dapps::Dependencies {
+				sync_status,
+				node_health,
+				contract_client,
+				fetch: fetch.clone(),
+				pool: cpu_pool.clone(),
+				signer: signer_service.clone(),
+			},
+		)
 	};
 	let dapps_middleware = dapps::new(cmd.dapps_conf.clone(), dapps_deps.clone())?;
 
@@ -790,14 +924,19 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 		} else {
 			None
 		},
-
 	};
 
 	// start rpc servers
 	let rpc_direct = rpc::setup_apis(rpc_apis::ApiSet::All, &dependencies);
 	let ws_server = rpc::new_ws(cmd.ws_conf.clone(), &dependencies)?;
 	let ipc_server = rpc::new_ipc(cmd.ipc_conf, &dependencies)?;
-	let http_server = rpc::new_http("HTTP JSON-RPC", "jsonrpc", cmd.http_conf.clone(), &dependencies, dapps_middleware)?;
+	let http_server = rpc::new_http(
+		"HTTP JSON-RPC",
+		"jsonrpc",
+		cmd.http_conf.clone(),
+		&dependencies,
+		dapps_middleware,
+	)?;
 
 	// secret store key server
 	let secretstore_deps = secretstore::Dependencies {
@@ -807,7 +946,8 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 		account_provider: account_provider,
 		accounts_passwords: &passwords,
 	};
-	let secretstore_key_server = secretstore::start(cmd.secretstore_conf.clone(), secretstore_deps)?;
+	let secretstore_key_server =
+		secretstore::start(cmd.secretstore_conf.clone(), secretstore_deps)?;
 
 	// the ipfs server
 	let ipfs_server = ipfs::start_server(cmd.ipfs_conf.clone(), client.clone())?;
@@ -824,7 +964,9 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 		cmd.logger_config.color,
 	));
 	service.add_notify(informant.clone());
-	service.register_io_handler(informant.clone()).map_err(|_| "Unable to register informant handler".to_owned())?;
+	service
+		.register_io_handler(informant.clone())
+		.map_err(|_| "Unable to register informant handler".to_owned())?;
 
 	// save user defaults
 	user_defaults.is_first_launch = false;
@@ -839,7 +981,7 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 		if let Some(mode) = mode {
 			user_defaults.mode = mode;
 		}
-		let _ = user_defaults.save(&user_defaults_path);	// discard failures - there's nothing we can do
+		let _ = user_defaults.save(&user_defaults_path); // discard failures - there's nothing we can do
 	});
 
 	// the watcher must be kept alive.
@@ -858,7 +1000,7 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 
 			service.add_notify(watcher.clone());
 			Some(watcher)
-		},
+		}
 	};
 
 	client.set_exit_handler(on_client_rq);
@@ -870,8 +1012,17 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 			informant,
 			client,
 			client_service: Arc::new(service),
-			keep_alive: Box::new((watcher, updater, ws_server, http_server, ipc_server, secretstore_key_server, ipfs_server, event_loop)),
-		}
+			keep_alive: Box::new((
+				watcher,
+				updater,
+				ws_server,
+				http_server,
+				ipc_server,
+				secretstore_key_server,
+				ipfs_server,
+				event_loop,
+			)),
+		},
 	})
 }
 
@@ -885,13 +1036,17 @@ pub struct RunningClient {
 
 enum RunningClientInner {
 	Light {
-		rpc: jsonrpc_core::MetaIoHandler<Metadata, informant::Middleware<rpc_apis::LightClientNotifier>>,
+		rpc: jsonrpc_core::MetaIoHandler<
+			Metadata,
+			informant::Middleware<rpc_apis::LightClientNotifier>,
+		>,
 		informant: Arc<Informant<LightNodeInformantData>>,
 		client: Arc<LightClient>,
 		keep_alive: Box<Any>,
 	},
 	Full {
-		rpc: jsonrpc_core::MetaIoHandler<Metadata, informant::Middleware<informant::ClientNotifier>>,
+		rpc:
+			jsonrpc_core::MetaIoHandler<Metadata, informant::Middleware<informant::ClientNotifier>>,
 		informant: Arc<Informant<FullNodeInformantData>>,
 		client: Arc<Client>,
 		client_service: Arc<ClientService>,
@@ -909,19 +1064,20 @@ impl RunningClient {
 		};
 
 		match self.inner {
-			RunningClientInner::Light { ref rpc, .. } => {
-				rpc.handle_request_sync(request, metadata)
-			},
-			RunningClientInner::Full { ref rpc, .. } => {
-				rpc.handle_request_sync(request, metadata)
-			},
+			RunningClientInner::Light { ref rpc, .. } => rpc.handle_request_sync(request, metadata),
+			RunningClientInner::Full { ref rpc, .. } => rpc.handle_request_sync(request, metadata),
 		}
 	}
 
 	/// Shuts down the client.
 	pub fn shutdown(self) {
 		match self.inner {
-			RunningClientInner::Light { rpc, informant, client, keep_alive } => {
+			RunningClientInner::Light {
+				rpc,
+				informant,
+				client,
+				keep_alive,
+			} => {
 				// Create a weak reference to the client so that we can wait on shutdown
 				// until it is dropped
 				let weak_client = Arc::downgrade(&client);
@@ -931,8 +1087,14 @@ impl RunningClient {
 				drop(informant);
 				drop(client);
 				wait_for_drop(weak_client);
-			},
-			RunningClientInner::Full { rpc, informant, client, client_service, keep_alive } => {
+			}
+			RunningClientInner::Full {
+				rpc,
+				informant,
+				client,
+				client_service,
+				keep_alive,
+			} => {
 				info!("Finishing work, please wait...");
 				// Create a weak reference to the client so that we can wait on shutdown
 				// until it is dropped
@@ -962,10 +1124,15 @@ impl RunningClient {
 /// `on_updater_rq` is the action to perform when the updater has a new binary to execute.
 ///
 /// On error, returns what to print on stderr.
-pub fn execute<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>,
-						on_client_rq: Cr, on_updater_rq: Rr) -> Result<RunningClient, String>
-	where Cr: Fn(String) + 'static + Send,
-		  Rr: Fn() + 'static + Send
+pub fn execute<Cr, Rr>(
+	cmd: RunCmd,
+	logger: Arc<RotatingLogger>,
+	on_client_rq: Cr,
+	on_updater_rq: Rr,
+) -> Result<RunningClient, String>
+where
+	Cr: Fn(String) + 'static + Send,
+	Rr: Fn() + 'static + Send,
 {
 	if cmd.light {
 		execute_light_impl(cmd, logger)
@@ -991,54 +1158,93 @@ fn daemonize(_pid_file: String) -> Result<(), String> {
 	Err("daemon is no supported on windows".into())
 }
 
-fn print_running_environment(spec_name: &String, dirs: &Directories, db_dirs: &DatabaseDirectories, dapps_conf: &dapps::Configuration) {
+fn print_running_environment(
+	spec_name: &String,
+	dirs: &Directories,
+	db_dirs: &DatabaseDirectories,
+	dapps_conf: &dapps::Configuration,
+) {
 	info!("Starting {}", Colour::White.bold().paint(version()));
-	info!("Keys path {}", Colour::White.bold().paint(dirs.keys_path(spec_name).to_string_lossy().into_owned()));
-	info!("DB path {}", Colour::White.bold().paint(db_dirs.db_root_path().to_string_lossy().into_owned()));
-	info!("Path to dapps {}", Colour::White.bold().paint(dapps_conf.dapps_path.to_string_lossy().into_owned()));
+	info!(
+		"Keys path {}",
+		Colour::White
+			.bold()
+			.paint(dirs.keys_path(spec_name).to_string_lossy().into_owned())
+	);
+	info!(
+		"DB path {}",
+		Colour::White
+			.bold()
+			.paint(db_dirs.db_root_path().to_string_lossy().into_owned())
+	);
+	info!(
+		"Path to dapps {}",
+		Colour::White
+			.bold()
+			.paint(dapps_conf.dapps_path.to_string_lossy().into_owned())
+	);
 }
 
-fn prepare_account_provider(spec: &SpecType, dirs: &Directories, data_dir: &str, cfg: AccountsConfig, passwords: &[String]) -> Result<AccountProvider, String> {
-	use ethcore::ethstore::EthStore;
+fn prepare_account_provider(
+	spec: &SpecType,
+	dirs: &Directories,
+	data_dir: &str,
+	cfg: AccountsConfig,
+	passwords: &[String],
+) -> Result<AccountProvider, String> {
 	use ethcore::ethstore::accounts_dir::RootDiskDirectory;
+	use ethcore::ethstore::EthStore;
 
 	let path = dirs.keys_path(data_dir);
 	upgrade_key_location(&dirs.legacy_keys_path(cfg.testnet), &path);
-	let dir = Box::new(RootDiskDirectory::create(&path).map_err(|e| format!("Could not open keys directory: {}", e))?);
+	let dir = Box::new(
+		RootDiskDirectory::create(&path)
+			.map_err(|e| format!("Could not open keys directory: {}", e))?,
+	);
 	let account_settings = AccountProviderSettings {
 		enable_hardware_wallets: cfg.enable_hardware_wallets,
 		hardware_wallet_classic_key: spec == &SpecType::Classic,
 		unlock_keep_secret: cfg.enable_fast_unlock,
-		blacklisted_accounts: 	match *spec {
+		blacklisted_accounts: match *spec {
 			SpecType::Morden | SpecType::Ropsten | SpecType::Kovan | SpecType::Dev => vec![],
-			_ => vec![
-				"00a329c0648769a73afac7f9381e08fb43dbea72".into()
-			],
+			_ => vec!["00a329c0648769a73afac7f9381e08fb43dbea72".into()],
 		},
 	};
 
-	let ethstore = EthStore::open_with_iterations(dir, cfg.iterations).map_err(|e| format!("Could not open keys directory: {}", e))?;
+	let ethstore = EthStore::open_with_iterations(dir, cfg.iterations)
+		.map_err(|e| format!("Could not open keys directory: {}", e))?;
 	if cfg.refresh_time > 0 {
 		ethstore.set_refresh_time(::std::time::Duration::from_secs(cfg.refresh_time));
 	}
-	let account_provider = AccountProvider::new(
-		Box::new(ethstore),
-		account_settings,
-	);
+	let account_provider = AccountProvider::new(Box::new(ethstore), account_settings);
 
 	for a in cfg.unlocked_accounts {
 		// Check if the account exists
 		if !account_provider.has_account(a).unwrap_or(false) {
-			return Err(format!("Account {} not found for the current chain. {}", a, build_create_account_hint(spec, &dirs.keys)));
+			return Err(format!(
+				"Account {} not found for the current chain. {}",
+				a,
+				build_create_account_hint(spec, &dirs.keys)
+			));
 		}
 
 		// Check if any passwords have been read from the password file(s)
 		if passwords.is_empty() {
-			return Err(format!("No password found to unlock account {}. {}", a, VERIFY_PASSWORD_HINT));
+			return Err(format!(
+				"No password found to unlock account {}. {}",
+				a, VERIFY_PASSWORD_HINT
+			));
 		}
 
-		if !passwords.iter().any(|p| account_provider.unlock_account_permanently(a, (*p).clone()).is_ok()) {
-			return Err(format!("No valid password to unlock account {}. {}", a, VERIFY_PASSWORD_HINT));
+		if !passwords.iter().any(|p| {
+			account_provider
+				.unlock_account_permanently(a, (*p).clone())
+				.is_ok()
+		}) {
+			return Err(format!(
+				"No valid password to unlock account {}. {}",
+				a, VERIFY_PASSWORD_HINT
+			));
 		}
 	}
 
@@ -1051,25 +1257,42 @@ fn prepare_account_provider(spec: &SpecType, dirs: &Directories, data_dir: &str,
 }
 
 fn insert_dev_account(account_provider: &AccountProvider) {
-	let secret: ethkey::Secret = "4d5db4107d237df6a3d58ee5f70ae63d73d7658d4026f2eefd2f204c81682cb7".into();
-	let dev_account = ethkey::KeyPair::from_secret(secret.clone()).expect("Valid secret produces valid key;qed");
+	let secret: ethkey::Secret =
+		"4d5db4107d237df6a3d58ee5f70ae63d73d7658d4026f2eefd2f204c81682cb7".into();
+	let dev_account =
+		ethkey::KeyPair::from_secret(secret.clone()).expect("Valid secret produces valid key;qed");
 	if let Ok(false) = account_provider.has_account(dev_account.address()) {
 		match account_provider.insert_account(secret, "") {
 			Err(e) => warn!("Unable to add development account: {}", e),
 			Ok(address) => {
-				let _ = account_provider.set_account_name(address.clone(), "Development Account".into());
-				let _ = account_provider.set_account_meta(address, ::serde_json::to_string(&(vec![
-					("description", "Never use this account outside of development chain!"),
-					("passwordHint","Password is empty string"),
-				].into_iter().collect::<::std::collections::HashMap<_,_>>())).expect("Serialization of hashmap does not fail."));
-			},
+				let _ = account_provider
+					.set_account_name(address.clone(), "Development Account".into());
+				let _ = account_provider.set_account_meta(
+					address,
+					::serde_json::to_string(
+						&(vec![
+							(
+								"description",
+								"Never use this account outside of development chain!",
+							),
+							("passwordHint", "Password is empty string"),
+						]
+						.into_iter()
+						.collect::<::std::collections::HashMap<_, _>>()),
+					)
+					.expect("Serialization of hashmap does not fail."),
+				);
+			}
 		}
 	}
 }
 
 // Construct an error `String` with an adaptive hint on how to create an account.
 fn build_create_account_hint(spec: &SpecType, keys: &str) -> String {
-	format!("You can create an account via RPC, UI or `parity account new --chain {} --keys-path {}`.", spec, keys)
+	format!(
+		"You can create an account via RPC, UI or `parity account new --chain {} --keys-path {}`.",
+		spec, keys
+	)
 }
 
 fn wait_for_drop<T>(w: Weak<T>) {

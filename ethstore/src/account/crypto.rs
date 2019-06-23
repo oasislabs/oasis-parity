@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::str;
-use ethkey::Secret;
-use {json, Error, crypto};
+use account::{Aes128Ctr, Cipher, Kdf, Pbkdf2, Prf};
 use crypto::Keccak256;
+use ethkey::Secret;
 use random::Random;
 use smallvec::SmallVec;
-use account::{Cipher, Kdf, Aes128Ctr, Pbkdf2, Prf};
+use std::str;
+use {crypto, json, Error};
 
 /// Encrypted data
 #[derive(Debug, PartialEq, Clone)]
@@ -73,18 +73,27 @@ impl From<Crypto> for String {
 
 impl Crypto {
 	/// Encrypt account secret
-	pub fn with_secret(secret: &Secret, password: &str, iterations: u32) -> Result<Self, crypto::Error> {
+	pub fn with_secret(
+		secret: &Secret,
+		password: &str,
+		iterations: u32,
+	) -> Result<Self, crypto::Error> {
 		Crypto::with_plain(&*secret, password, iterations)
 	}
 
 	/// Encrypt custom plain data
-	pub fn with_plain(plain: &[u8], password: &str, iterations: u32) -> Result<Self, crypto::Error> {
+	pub fn with_plain(
+		plain: &[u8],
+		password: &str,
+		iterations: u32,
+	) -> Result<Self, crypto::Error> {
 		let salt: [u8; 32] = Random::random();
 		let iv: [u8; 16] = Random::random();
 
 		// two parts of derived key
 		// DK = [ DK[0..15] DK[16..31] ] = [derived_left_bits, derived_right_bits]
-		let (derived_left_bits, derived_right_bits) = crypto::derive_key_iterations(password, &salt, iterations);
+		let (derived_left_bits, derived_right_bits) =
+			crypto::derive_key_iterations(password, &salt, iterations);
 
 		// preallocated (on-stack in case of `Secret`) buffer to hold cipher
 		// length = length(plain) as we are using CTR-approach
@@ -98,9 +107,7 @@ impl Crypto {
 		let mac = crypto::derive_mac(&derived_right_bits, &*ciphertext).keccak256();
 
 		Ok(Crypto {
-			cipher: Cipher::Aes128Ctr(Aes128Ctr {
-				iv: iv,
-			}),
+			cipher: Cipher::Aes128Ctr(Aes128Ctr { iv: iv }),
 			ciphertext: ciphertext.into_vec(),
 			kdf: Kdf::Pbkdf2(Pbkdf2 {
 				dklen: crypto::KEY_LENGTH as u32,
@@ -130,14 +137,18 @@ impl Crypto {
 
 	fn do_decrypt(&self, password: &str, expected_len: usize) -> Result<Vec<u8>, Error> {
 		let (derived_left_bits, derived_right_bits) = match self.kdf {
-			Kdf::Pbkdf2(ref params) => crypto::derive_key_iterations(password, &params.salt, params.c),
-			Kdf::Scrypt(ref params) => crypto::scrypt::derive_key(password, &params.salt, params.n, params.p, params.r)?,
+			Kdf::Pbkdf2(ref params) => {
+				crypto::derive_key_iterations(password, &params.salt, params.c)
+			}
+			Kdf::Scrypt(ref params) => {
+				crypto::scrypt::derive_key(password, &params.salt, params.n, params.p, params.r)?
+			}
 		};
 
 		let mac = crypto::derive_mac(&derived_right_bits, &self.ciphertext).keccak256();
 
 		if !crypto::is_equal(&mac, &self.mac) {
-			return Err(Error::InvalidPassword)
+			return Err(Error::InvalidPassword);
 		}
 
 		let mut plain: SmallVec<[u8; 32]> = SmallVec::from_vec(vec![0; expected_len]);
@@ -148,17 +159,22 @@ impl Crypto {
 				debug_assert!(expected_len >= self.ciphertext.len());
 
 				let from = expected_len - self.ciphertext.len();
-				crypto::aes::decrypt_128_ctr(&derived_left_bits, &params.iv, &self.ciphertext, &mut plain[from..])?;
+				crypto::aes::decrypt_128_ctr(
+					&derived_left_bits,
+					&params.iv,
+					&self.ciphertext,
+					&mut plain[from..],
+				)?;
 				Ok(plain.into_iter().collect())
-			},
+			}
 		}
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use ethkey::{Generator, Random};
 	use super::{Crypto, Error};
+	use ethkey::{Generator, Random};
 
 	#[test]
 	fn crypto_with_secret_create() {
@@ -172,7 +188,10 @@ mod tests {
 	fn crypto_with_secret_invalid_password() {
 		let keypair = Random.generate().unwrap();
 		let crypto = Crypto::with_secret(keypair.secret(), "this is sparta", 10240).unwrap();
-		assert_matches!(crypto.secret("this is sparta!"), Err(Error::InvalidPassword))
+		assert_matches!(
+			crypto.secret("this is sparta!"),
+			Err(Error::InvalidPassword)
+		)
 	}
 
 	#[test]

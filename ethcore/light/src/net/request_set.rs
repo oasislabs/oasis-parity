@@ -25,10 +25,10 @@ use std::collections::{BTreeMap, HashMap};
 use std::iter::FromIterator;
 use std::time::{Duration, Instant};
 
-use request::Request;
-use request::NetworkRequests as Requests;
-use net::{timeout, ReqId};
 use ethereum_types::U256;
+use net::{timeout, ReqId};
+use request::NetworkRequests as Requests;
+use request::Request;
 
 // Request set entry: requests + cost.
 #[derive(Debug)]
@@ -79,7 +79,10 @@ impl RequestSet {
 			None => return None,
 		};
 
-		let Entry(req, cost) = self.reqs.remove(&id).expect("entry in `ids` implies entry in `reqs`; qed");
+		let Entry(req, cost) = self
+			.reqs
+			.remove(&id)
+			.expect("entry in `ids` implies entry in `reqs`; qed");
 
 		match self.reqs.keys().next() {
 			Some(k) if *k > id => self.base = Some(now),
@@ -99,14 +102,20 @@ impl RequestSet {
 			None => return false,
 		};
 
-		let first_req = self.reqs.values().next()
+		let first_req = self
+			.reqs
+			.values()
+			.next()
 			.expect("base existing implies `reqs` non-empty; qed");
 
 		base + compute_timeout(&first_req.0) <= now
 	}
 
 	/// Collect all pending request ids.
-	pub fn collect_ids<F>(&self) -> F where F: FromIterator<ReqId> {
+	pub fn collect_ids<F>(&self) -> F
+	where
+		F: FromIterator<ReqId>,
+	{
 		self.ids.keys().cloned().collect()
 	}
 
@@ -116,12 +125,16 @@ impl RequestSet {
 	}
 
 	/// Whether the set is empty.
-	pub fn is_empty(&self) -> bool { self.len() == 0 }
+	pub fn is_empty(&self) -> bool {
+		self.len() == 0
+	}
 
 	/// The cumulative cost of all requests in the set.
 	// this may be useful later for load balancing.
 	#[allow(dead_code)]
-	pub fn cumulative_cost(&self) -> U256 { self.cumulative_cost }
+	pub fn cumulative_cost(&self) -> U256 {
+		self.cumulative_cost
+	}
 }
 
 // helper to calculate timeout for a specific set of requests.
@@ -145,10 +158,10 @@ fn compute_timeout(reqs: &Requests) -> Duration {
 
 #[cfg(test)]
 mod tests {
+	use super::{compute_timeout, RequestSet};
 	use net::ReqId;
 	use request::Builder;
-	use std::time::{Instant, Duration};
-	use super::{RequestSet, compute_timeout};
+	use std::time::{Duration, Instant};
 
 	#[test]
 	fn multi_timeout() {
@@ -158,14 +171,21 @@ mod tests {
 		let the_req = Builder::default().build();
 		let req_time = compute_timeout(&the_req);
 		req_set.insert(ReqId(0), the_req.clone(), 0.into(), test_begin);
-		req_set.insert(ReqId(1), the_req, 0.into(), test_begin + Duration::from_secs(1));
+		req_set.insert(
+			ReqId(1),
+			the_req,
+			0.into(),
+			test_begin + Duration::from_secs(1),
+		);
 
 		assert_eq!(req_set.base, Some(test_begin));
 
 		let test_end = test_begin + req_time;
 		assert!(req_set.check_timeout(test_end));
 
-		req_set.remove(&ReqId(0), test_begin + Duration::from_secs(1)).unwrap();
+		req_set
+			.remove(&ReqId(0), test_begin + Duration::from_secs(1))
+			.unwrap();
 		assert!(!req_set.check_timeout(test_end));
 		assert!(req_set.check_timeout(test_end + Duration::from_secs(1)));
 	}

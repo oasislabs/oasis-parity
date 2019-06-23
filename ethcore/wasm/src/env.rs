@@ -18,8 +18,8 @@
 
 use std::cell::RefCell;
 use wasmi::{
-	self, Signature, Error, FuncRef, FuncInstance, MemoryDescriptor,
-	MemoryRef, MemoryInstance, memory_units,
+	self, memory_units, Error, FuncInstance, FuncRef, MemoryDescriptor, MemoryInstance, MemoryRef,
+	Signature,
 };
 
 /// Internal ids all functions runtime supports. This is just a glue for wasmi interpreter
@@ -63,165 +63,73 @@ pub mod ids {
 /// Signatures of all functions runtime supports. The actual dispatch happens at
 /// impl runtime::Runtime methods.
 pub mod signatures {
-	use wasmi::{self, ValueType};
 	use wasmi::ValueType::*;
+	use wasmi::{self, ValueType};
 
 	pub struct StaticSignature(pub &'static [ValueType], pub Option<ValueType>);
 
-	pub const STORAGE_READ: StaticSignature = StaticSignature(
-		&[I32, I32],
-		None,
-	);
+	pub const STORAGE_READ: StaticSignature = StaticSignature(&[I32, I32], None);
 
-	pub const STORAGE_WRITE: StaticSignature = StaticSignature(
-		&[I32, I32],
-		None,
-	);
+	pub const STORAGE_WRITE: StaticSignature = StaticSignature(&[I32, I32], None);
 
-	pub const RET: StaticSignature = StaticSignature(
-		&[I32, I32],
-		None,
-	);
+	pub const RET: StaticSignature = StaticSignature(&[I32, I32], None);
 
-	pub const GAS: StaticSignature = StaticSignature(
-		&[I32],
-		None,
-	);
+	pub const GAS: StaticSignature = StaticSignature(&[I32], None);
 
-	pub const FETCH_INPUT: StaticSignature = StaticSignature(
-		&[I32],
-		None,
-	);
+	pub const FETCH_INPUT: StaticSignature = StaticSignature(&[I32], None);
 
-	pub const INPUT_LENGTH: StaticSignature = StaticSignature(
-		&[],
-		Some(I32),
-	);
+	pub const INPUT_LENGTH: StaticSignature = StaticSignature(&[], Some(I32));
 
-	pub const CCALL: StaticSignature = StaticSignature(
-		&[I64, I32, I32, I32, I32, I32, I32],
-		Some(I32),
-	);
+	pub const CCALL: StaticSignature =
+		StaticSignature(&[I64, I32, I32, I32, I32, I32, I32], Some(I32));
 
-	pub const DCALL: StaticSignature = StaticSignature(
-		&[I64, I32, I32, I32, I32, I32],
-		Some(I32),
-	);
+	pub const DCALL: StaticSignature = StaticSignature(&[I64, I32, I32, I32, I32, I32], Some(I32));
 
-	pub const SCALL: StaticSignature = StaticSignature(
-		&[I64, I32, I32, I32, I32, I32],
-		Some(I32),
-	);
+	pub const SCALL: StaticSignature = StaticSignature(&[I64, I32, I32, I32, I32, I32], Some(I32));
 
-	pub const PANIC: StaticSignature = StaticSignature(
-		&[I32, I32],
-		None,
-	);
+	pub const PANIC: StaticSignature = StaticSignature(&[I32, I32], None);
 
-	pub const DEBUG: StaticSignature = StaticSignature(
-		&[I32, I32],
-		None,
-	);
+	pub const DEBUG: StaticSignature = StaticSignature(&[I32, I32], None);
 
-	pub const SYSCALL: StaticSignature = StaticSignature(
-		&[I32, I32],
-		Some(I32),
-	);
+	pub const SYSCALL: StaticSignature = StaticSignature(&[I32, I32], Some(I32));
 
-	pub const EXPF: StaticSignature = StaticSignature(
-		&[F32],
-		Some(F32),
-	);
+	pub const EXPF: StaticSignature = StaticSignature(&[F32], Some(F32));
 
-	pub const VALUE: StaticSignature = StaticSignature(
-		&[I32],
-		None,
-	);
+	pub const VALUE: StaticSignature = StaticSignature(&[I32], None);
 
-	pub const CREATE: StaticSignature = StaticSignature(
-		&[I32, I32, I32, I32],
-		Some(I32),
-	);
+	pub const CREATE: StaticSignature = StaticSignature(&[I32, I32, I32, I32], Some(I32));
 
-	pub const SUICIDE: StaticSignature = StaticSignature(
-		&[I32],
-		None,
-	);
+	pub const SUICIDE: StaticSignature = StaticSignature(&[I32], None);
 
-	pub const BLOCKHASH: StaticSignature = StaticSignature(
-		&[I64, I32],
-		None,
-	);
+	pub const BLOCKHASH: StaticSignature = StaticSignature(&[I64, I32], None);
 
-	pub const BLOCKNUMBER: StaticSignature = StaticSignature(
-		&[],
-		Some(I64),
-	);
+	pub const BLOCKNUMBER: StaticSignature = StaticSignature(&[], Some(I64));
 
-	pub const COINBASE: StaticSignature = StaticSignature(
-		&[I32],
-		None,
-	);
+	pub const COINBASE: StaticSignature = StaticSignature(&[I32], None);
 
-	pub const DIFFICULTY: StaticSignature = StaticSignature(
-		&[I32],
-		None,
-	);
+	pub const DIFFICULTY: StaticSignature = StaticSignature(&[I32], None);
 
-	pub const GASLIMIT: StaticSignature = StaticSignature(
-		&[I32],
-		None,
-	);
+	pub const GASLIMIT: StaticSignature = StaticSignature(&[I32], None);
 
-	pub const TIMESTAMP: StaticSignature = StaticSignature(
-		&[],
-		Some(I64),
-	);
+	pub const TIMESTAMP: StaticSignature = StaticSignature(&[], Some(I64));
 
-	pub const ADDRESS: StaticSignature = StaticSignature(
-		&[I32],
-		None,
-	);
+	pub const ADDRESS: StaticSignature = StaticSignature(&[I32], None);
 
-	pub const SENDER: StaticSignature = StaticSignature(
-		&[I32],
-		None,
-	);
+	pub const SENDER: StaticSignature = StaticSignature(&[I32], None);
 
-	pub const ORIGIN: StaticSignature = StaticSignature(
-		&[I32],
-		None,
-	);
+	pub const ORIGIN: StaticSignature = StaticSignature(&[I32], None);
 
-	pub const ELOG: StaticSignature = StaticSignature(
-		&[I32, I32, I32, I32],
-		None,
-	);
+	pub const ELOG: StaticSignature = StaticSignature(&[I32, I32, I32, I32], None);
 
-	pub const GET_BYTES: StaticSignature = StaticSignature(
-		&[I32, I32],
-		None,
-	);
+	pub const GET_BYTES: StaticSignature = StaticSignature(&[I32, I32], None);
 
-	pub const GET_BYTES_LEN: StaticSignature = StaticSignature(
-		&[I32],
-		Some(I64),
-	);
+	pub const GET_BYTES_LEN: StaticSignature = StaticSignature(&[I32], Some(I64));
 
-	pub const SET_BYTES: StaticSignature = StaticSignature(
-		&[I32, I32, I64],
-		None,
-	);
+	pub const SET_BYTES: StaticSignature = StaticSignature(&[I32, I32, I64], None);
 
-	pub const FETCH_RETURN: StaticSignature = StaticSignature(
-		&[I32],
-		None,
-	);
+	pub const FETCH_RETURN: StaticSignature = StaticSignature(&[I32], None);
 
-	pub const RETURN_LENGTH: StaticSignature = StaticSignature(
-		&[],
-		Some(I32),
-	);
+	pub const RETURN_LENGTH: StaticSignature = StaticSignature(&[], Some(I32));
 
 	impl Into<wasmi::Signature> for StaticSignature {
 		fn into(self) -> wasmi::Signature {
@@ -262,15 +170,16 @@ impl ImportResolver {
 			let mut mem_ref = self.memory.borrow_mut();
 			if mem_ref.is_none() {
 				*mem_ref = Some(
-					MemoryInstance::alloc(
-						memory_units::Pages(0),
-						Some(memory_units::Pages(0)),
-					).expect("Memory allocation (0, 0) should not fail; qed")
+					MemoryInstance::alloc(memory_units::Pages(0), Some(memory_units::Pages(0)))
+						.expect("Memory allocation (0, 0) should not fail; qed"),
 				);
 			}
 		}
 
-		self.memory.borrow().clone().expect("it is either existed or was created as (0, 0) above; qed")
+		self.memory
+			.borrow()
+			.clone()
+			.expect("it is either existed or was created as (0, 0) above; qed")
 	}
 
 	/// Returns memory size module initially requested
@@ -314,9 +223,10 @@ impl wasmi::ModuleImportResolver for ImportResolver {
 			"get_bytes_len" => host(signatures::GET_BYTES_LEN, ids::GET_BYTES_LEN_FUNC),
 			"set_bytes" => host(signatures::SET_BYTES, ids::SET_BYTES_FUNC),
 			_ => {
-				return Err(wasmi::Error::Instantiation(
-					format!("Export {} not found", field_name),
-				))
+				return Err(wasmi::Error::Instantiation(format!(
+					"Export {} not found",
+					field_name
+				)))
 			}
 		};
 
@@ -330,19 +240,27 @@ impl wasmi::ModuleImportResolver for ImportResolver {
 	) -> Result<MemoryRef, Error> {
 		if field_name == "memory" {
 			let effective_max = descriptor.maximum().unwrap_or(self.max_memory + 1);
-			if descriptor.initial() > self.max_memory || effective_max > self.max_memory
-			{
-				Err(Error::Instantiation(format!("Module requested too much memory: initial={}, effective={}, max={}", descriptor.initial(), effective_max, self.max_memory)))
+			if descriptor.initial() > self.max_memory || effective_max > self.max_memory {
+				Err(Error::Instantiation(format!(
+					"Module requested too much memory: initial={}, effective={}, max={}",
+					descriptor.initial(),
+					effective_max,
+					self.max_memory
+				)))
 			} else {
 				let mem = MemoryInstance::alloc(
 					memory_units::Pages(descriptor.initial() as usize),
-					descriptor.maximum().map(|x| memory_units::Pages(x as usize)),
+					descriptor
+						.maximum()
+						.map(|x| memory_units::Pages(x as usize)),
 				)?;
 				*self.memory.borrow_mut() = Some(mem.clone());
 				Ok(mem)
 			}
 		} else {
-			Err(Error::Instantiation("Memory imported under unknown name".to_owned()))
+			Err(Error::Instantiation(
+				"Memory imported under unknown name".to_owned(),
+			))
 		}
 	}
 }

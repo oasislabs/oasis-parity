@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use jsonrpc_core::Error;
-use jsonrpc_core::futures::{self, Future};
 use jsonrpc_core::futures::sync::oneshot;
+use jsonrpc_core::futures::{self, Future};
+use jsonrpc_core::Error;
 use v1::helpers::errors;
 
 pub type Res<T> = Result<T, Error>;
@@ -51,7 +51,7 @@ impl<T> Future for Receiver<T> {
 			Err(e) => {
 				debug!(target: "rpc", "Responding to a canceled request: {:?}", e);
 				Err(errors::internal("Request was canceled by client.", e))
-			},
+			}
 		}
 	}
 }
@@ -59,9 +59,5 @@ impl<T> Future for Receiver<T> {
 pub fn oneshot<T>() -> (Sender<T>, Receiver<T>) {
 	let (tx, rx) = futures::oneshot();
 
-	(Sender {
-		sender: tx,
-	}, Receiver {
-		receiver: rx,
-	})
+	(Sender { sender: tx }, Receiver { receiver: rx })
 }

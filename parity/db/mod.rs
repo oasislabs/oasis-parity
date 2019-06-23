@@ -16,10 +16,10 @@
 
 //! Database-related operations.
 
-#[path="rocksdb/mod.rs"]
+#[path = "rocksdb/mod.rs"]
 mod impls;
 
-pub use self::impls::{open_db, open_client_db, restoration_db_handler, migrate};
+pub use self::impls::{migrate, open_client_db, open_db, restoration_db_handler};
 
 #[cfg(feature = "secretstore")]
 pub use self::impls::open_secretstore_db;

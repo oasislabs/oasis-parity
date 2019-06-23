@@ -16,29 +16,29 @@
 
 //! Blockchain block.
 
+use hash::{keccak, KECCAK_EMPTY_LIST_RLP, KECCAK_NULL_RLP};
 use std::cmp;
-use std::sync::Arc;
 use std::collections::HashSet;
-use hash::{keccak, KECCAK_NULL_RLP, KECCAK_EMPTY_LIST_RLP};
+use std::sync::Arc;
 use triehash::ordered_trie_root;
 
-use rlp::{Rlp, RlpStream, Encodable, Decodable, DecoderError, encode_list};
-use ethereum_types::{H256, U256, Address, Bloom};
 use bytes::Bytes;
+use ethereum_types::{Address, Bloom, H256, U256};
+use rlp::{encode_list, Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use unexpected::{Mismatch, OutOfBounds};
 
-use vm::{ConfidentialCtx, EnvInfo, LastHashes};
 use engines::EthEngine;
-use error::{Error, BlockError};
+use error::{BlockError, Error};
 use factory::Factories;
-use header::{Header, ExtendedHeader};
+use header::{ExtendedHeader, Header};
 use journaldb::overlaydb::OverlayDB;
 use receipt::{Receipt, TransactionOutcome};
-use state::{State, ApplyResult};
-use state::backend::{Wrapped as WrappedBackend};
+use state::backend::Wrapped as WrappedBackend;
+use state::{ApplyResult, State};
+use vm::{ConfidentialCtx, EnvInfo, LastHashes};
 // use state_db::StateDB;
-use trace::{Tracing, FlatTrace, VMTrace};
-use transaction::{UnverifiedTransaction, SignedTransaction, Error as TransactionError};
+use trace::{FlatTrace, Tracing, VMTrace};
+use transaction::{Error as TransactionError, SignedTransaction, UnverifiedTransaction};
 // use verification::PreverifiedBlock;
 use views::BlockView;
 
@@ -159,31 +159,50 @@ pub trait IsBlock {
 	fn to_base(&self) -> Block {
 		Block {
 			header: self.header().clone(),
-			transactions: self.transactions().iter().cloned().map(Into::into).collect(),
+			transactions: self
+				.transactions()
+				.iter()
+				.cloned()
+				.map(Into::into)
+				.collect(),
 			uncles: self.uncles().to_vec(),
 		}
 	}
 
 	/// Get the header associated with this object's block.
-	fn header(&self) -> &Header { &self.block().header }
+	fn header(&self) -> &Header {
+		&self.block().header
+	}
 
 	/// Get the final state associated with this object's block.
-	fn state(&self) -> &State<StateDB> { &self.block().state }
+	fn state(&self) -> &State<StateDB> {
+		&self.block().state
+	}
 
 	/// Get all information on transactions in this block.
-	fn transactions(&self) -> &[SignedTransaction] { &self.block().transactions }
+	fn transactions(&self) -> &[SignedTransaction] {
+		&self.block().transactions
+	}
 
 	/// Get all information on receipts in this block.
-	fn receipts(&self) -> &[Receipt] { &self.block().receipts }
+	fn receipts(&self) -> &[Receipt] {
+		&self.block().receipts
+	}
 
 	/// Get all information concerning transaction tracing in this block.
-	fn traces(&self) -> &Tracing { &self.block().traces }
+	fn traces(&self) -> &Tracing {
+		&self.block().traces
+	}
 
 	/// Get all uncles in this block.
-	fn uncles(&self) -> &[Header] { &self.block().uncles }
+	fn uncles(&self) -> &[Header] {
+		&self.block().uncles
+	}
 
 	/// Get tracing enabled flag for this block.
-	fn tracing_enabled(&self) -> bool { self.block().traces.is_enabled() }
+	fn tracing_enabled(&self) -> bool {
+		self.block().traces.is_enabled()
+	}
 }
 
 /// Trait for a object that has a state database.
@@ -193,7 +212,9 @@ pub trait Drain {
 }
 
 impl IsBlock for ExecutedBlock {
-	fn block(&self) -> &ExecutedBlock { self }
+	fn block(&self) -> &ExecutedBlock {
+		self
+	}
 }
 
 impl ::parity_machine::LiveBlock for ExecutedBlock {
@@ -289,11 +310,17 @@ impl<'x> OpenBlock<'x> {
 		gas_limit: U256,
 		extra_data: Bytes,
 		is_epoch_begin: bool,
-		ancestry: &mut Iterator<Item=ExtendedHeader>,
-		confidential_ctx: Option<Box<ConfidentialCtx>>
+		ancestry: &mut Iterator<Item = ExtendedHeader>,
+		confidential_ctx: Option<Box<ConfidentialCtx>>,
 	) -> Result<Self, Error> {
 		let number = parent.number() + 1;
-		let state = State::from_existing(mkvs, db, engine.account_start_nonce(number), factories, confidential_ctx)?;
+		let state = State::from_existing(
+			mkvs,
+			db,
+			engine.account_start_nonce(number),
+			factories,
+			confidential_ctx,
+		)?;
 		let mut r = OpenBlock {
 			block: ExecutedBlock::new(state, last_hashes, tracing),
 			engine: engine,
@@ -337,9 +364,11 @@ impl<'x> OpenBlock<'x> {
 	/// NOTE Will check chain constraints and the uncle number but will NOT check
 	/// that the header itself is actually valid.
 	pub fn push_uncle(&mut self, valid_uncle_header: Header) -> Result<(), BlockError> {
-		let max_uncles = self.engine.maximum_uncle_count(self.block.header().number());
+		let max_uncles = self
+			.engine
+			.maximum_uncle_count(self.block.header().number());
 		if self.block.uncles.len() + 1 > max_uncles {
-			return Err(BlockError::TooManyUncles(OutOfBounds{
+			return Err(BlockError::TooManyUncles(OutOfBounds {
 				min: None,
 				max: Some(max_uncles),
 				found: self.block.uncles.len() + 1,
@@ -359,15 +388,28 @@ impl<'x> OpenBlock<'x> {
 	/// Push a transaction into a block and return the full
 	/// outcome of the transaction. Useful to have access to the
 	/// bytes of the transaction
-	pub fn push_transaction_with_outcome(&mut self, t: SignedTransaction, h: Option<H256>, should_return_value: bool) -> ApplyResult<FlatTrace, VMTrace> {
+	pub fn push_transaction_with_outcome(
+		&mut self,
+		t: SignedTransaction,
+		h: Option<H256>,
+		should_return_value: bool,
+	) -> ApplyResult<FlatTrace, VMTrace> {
 		if self.block.transactions_set.contains(&t.hash()) {
 			return Err(TransactionError::AlreadyImported.into());
 		}
 
 		let env_info = self.env_info();
-		let outcome = self.block.state.apply(&env_info, self.engine.machine(), &t, self.block.traces.is_enabled(), should_return_value)?;
+		let outcome = self.block.state.apply(
+			&env_info,
+			self.engine.machine(),
+			&t,
+			self.block.traces.is_enabled(),
+			should_return_value,
+		)?;
 
-		self.block.transactions_set.insert(h.unwrap_or_else(||t.hash()));
+		self.block
+			.transactions_set
+			.insert(h.unwrap_or_else(|| t.hash()));
 		self.block.transactions.push(t.into());
 		if let Tracing::Enabled(ref mut traces) = self.block.traces {
 			traces.push(outcome.trace.clone().into());
@@ -410,7 +452,9 @@ impl<'x> OpenBlock<'x> {
 	fn push_transactions(&mut self, transactions: Vec<SignedTransaction>) -> Result<(), Error> {
 		use std::time;
 
-		let slow_tx = option_env!("SLOW_TX_DURATION").and_then(|v| v.parse().ok()).unwrap_or(100);
+		let slow_tx = option_env!("SLOW_TX_DURATION")
+			.and_then(|v| v.parse().ok())
+			.unwrap_or(100);
 		for t in transactions {
 			let hash = t.hash();
 			let start = time::Instant::now();
@@ -418,7 +462,12 @@ impl<'x> OpenBlock<'x> {
 			let took = start.elapsed();
 			let took_ms = took.as_secs() * 1000 + took.subsec_nanos() as u64 / 1000000;
 			if took > time::Duration::from_millis(slow_tx) {
-				warn!("Heavy ({} ms) transaction in block {:?}: {:?}", took_ms, block.header().number(), hash);
+				warn!(
+					"Heavy ({} ms) transaction in block {:?}: {:?}",
+					took_ms,
+					block.header().number(),
+					hash
+				);
 			}
 			debug!(target: "tx", "Transaction {:?} took: {} ms", hash, took_ms);
 		}
@@ -433,12 +482,16 @@ impl<'x> OpenBlock<'x> {
 		self.block.header.set_timestamp(header.timestamp());
 		self.block.header.set_author(*header.author());
 		self.block.header.set_uncles_hash(*header.uncles_hash());
-		self.block.header.set_transactions_root(*header.transactions_root());
+		self.block
+			.header
+			.set_transactions_root(*header.transactions_root());
 		// TODO: that's horrible. set only for backwards compatibility
 		if header.extra_data().len() > self.engine.maximum_extra_data_size() {
 			warn!("Couldn't set extradata. Ignoring.");
 		} else {
-			self.block.header.set_extra_data(header.extra_data().clone());
+			self.block
+				.header
+				.set_extra_data(header.extra_data().clone());
 		}
 	}
 
@@ -457,15 +510,26 @@ impl<'x> OpenBlock<'x> {
 		if let Err(e) = s.block.state.commit() {
 			warn!("Encountered error on state commit: {}", e);
 		}
-		s.block.header.set_transactions_root(ordered_trie_root(s.block.transactions.iter().map(|e| e.rlp_bytes())));
+		s.block.header.set_transactions_root(ordered_trie_root(
+			s.block.transactions.iter().map(|e| e.rlp_bytes()),
+		));
 		let uncle_bytes = encode_list(&s.block.uncles).into_vec();
 		s.block.header.set_uncles_hash(keccak(&uncle_bytes));
-		s.block.header.set_receipts_root(ordered_trie_root(s.block.receipts.iter().map(|r| r.rlp_bytes())));
-		s.block.header.set_log_bloom(s.block.receipts.iter().fold(Bloom::zero(), |mut b, r| {
-			b.accrue_bloom(&r.log_bloom);
-			b
-		}));
-		s.block.header.set_gas_used(s.block.receipts.last().map_or_else(U256::zero, |r| r.gas_used));
+		s.block.header.set_receipts_root(ordered_trie_root(
+			s.block.receipts.iter().map(|r| r.rlp_bytes()),
+		));
+		s.block
+			.header
+			.set_log_bloom(s.block.receipts.iter().fold(Bloom::zero(), |mut b, r| {
+				b.accrue_bloom(&r.log_bloom);
+				b
+			}));
+		s.block.header.set_gas_used(
+			s.block
+				.receipts
+				.last()
+				.map_or_else(U256::zero, |r| r.gas_used),
+		);
 
 		ClosedBlock {
 			block: s.block,
@@ -488,22 +552,39 @@ impl<'x> OpenBlock<'x> {
 			warn!("Encountered error on state commit: {}", e);
 		}
 
-		if s.block.header.transactions_root().is_zero() || s.block.header.transactions_root() == &KECCAK_NULL_RLP {
-			s.block.header.set_transactions_root(ordered_trie_root(s.block.transactions.iter().map(|e| e.rlp_bytes())));
+		if s.block.header.transactions_root().is_zero()
+			|| s.block.header.transactions_root() == &KECCAK_NULL_RLP
+		{
+			s.block.header.set_transactions_root(ordered_trie_root(
+				s.block.transactions.iter().map(|e| e.rlp_bytes()),
+			));
 		}
 		let uncle_bytes = encode_list(&s.block.uncles).into_vec();
-		if s.block.header.uncles_hash().is_zero() || s.block.header.uncles_hash() == &KECCAK_EMPTY_LIST_RLP {
+		if s.block.header.uncles_hash().is_zero()
+			|| s.block.header.uncles_hash() == &KECCAK_EMPTY_LIST_RLP
+		{
 			s.block.header.set_uncles_hash(keccak(&uncle_bytes));
 		}
-		if s.block.header.receipts_root().is_zero() || s.block.header.receipts_root() == &KECCAK_NULL_RLP {
-			s.block.header.set_receipts_root(ordered_trie_root(s.block.receipts.iter().map(|r| r.rlp_bytes())));
+		if s.block.header.receipts_root().is_zero()
+			|| s.block.header.receipts_root() == &KECCAK_NULL_RLP
+		{
+			s.block.header.set_receipts_root(ordered_trie_root(
+				s.block.receipts.iter().map(|r| r.rlp_bytes()),
+			));
 		}
 
-		s.block.header.set_log_bloom(s.block.receipts.iter().fold(Bloom::zero(), |mut b, r| {
-			b.accrue_bloom(&r.log_bloom);
-			b
-		}));
-		s.block.header.set_gas_used(s.block.receipts.last().map_or_else(U256::zero, |r| r.gas_used));
+		s.block
+			.header
+			.set_log_bloom(s.block.receipts.iter().fold(Bloom::zero(), |mut b, r| {
+				b.accrue_bloom(&r.log_bloom);
+				b
+			}));
+		s.block.header.set_gas_used(
+			s.block
+				.receipts
+				.last()
+				.map_or_else(U256::zero, |r| r.gas_used),
+		);
 
 		LockedBlock {
 			block: s.block,
@@ -512,24 +593,34 @@ impl<'x> OpenBlock<'x> {
 	}
 
 	/// Return mutable block reference. To be used in tests only.
-	pub fn block_mut(&mut self) -> &mut ExecutedBlock { &mut self.block }
+	pub fn block_mut(&mut self) -> &mut ExecutedBlock {
+		&mut self.block
+	}
 }
 
 impl<'x> IsBlock for OpenBlock<'x> {
-	fn block(&self) -> &ExecutedBlock { &self.block }
+	fn block(&self) -> &ExecutedBlock {
+		&self.block
+	}
 }
 
 impl<'x> IsBlock for ClosedBlock {
-	fn block(&self) -> &ExecutedBlock { &self.block }
+	fn block(&self) -> &ExecutedBlock {
+		&self.block
+	}
 }
 
 impl<'x> IsBlock for LockedBlock {
-	fn block(&self) -> &ExecutedBlock { &self.block }
+	fn block(&self) -> &ExecutedBlock {
+		&self.block
+	}
 }
 
 impl ClosedBlock {
 	/// Get the hash of the header without seal arguments.
-	pub fn hash(&self) -> H256 { self.header().bare_hash() }
+	pub fn hash(&self) -> H256 {
+		self.header().bare_hash()
+	}
 
 	/// Turn this into a `LockedBlock`, unable to be reopened again.
 	pub fn lock(self) -> LockedBlock {
@@ -554,7 +645,6 @@ impl ClosedBlock {
 }
 
 impl LockedBlock {
-
 	/// Removes outcomes from receipts and updates the receipt root.
 	///
 	/// This is done after the block is enacted for historical reasons.
@@ -565,15 +655,17 @@ impl LockedBlock {
 		for receipt in &mut self.block.receipts {
 			receipt.outcome = TransactionOutcome::Unknown;
 		}
-		self.block.header.set_receipts_root(
-			ordered_trie_root(self.block.receipts.iter().map(|r| r.rlp_bytes()))
-		);
+		self.block.header.set_receipts_root(ordered_trie_root(
+			self.block.receipts.iter().map(|r| r.rlp_bytes()),
+		));
 		// compute hash and cache it.
 		self.block.header.compute_hash();
 	}
 
 	/// Get the hash of the header without seal arguments.
-	pub fn hash(&self) -> H256 { self.header().bare_hash() }
+	pub fn hash(&self) -> H256 {
+		self.header().bare_hash()
+	}
 
 	/// Provide a valid seal in order to turn this into a `SealedBlock`.
 	///
@@ -582,12 +674,17 @@ impl LockedBlock {
 		let expected_seal_fields = engine.seal_fields(self.header());
 		let mut s = self;
 		if seal.len() != expected_seal_fields {
-			return Err(BlockError::InvalidSealArity(
-				Mismatch { expected: expected_seal_fields, found: seal.len() }));
+			return Err(BlockError::InvalidSealArity(Mismatch {
+				expected: expected_seal_fields,
+				found: seal.len(),
+			}));
 		}
 		s.block.header.set_seal(seal);
 		s.block.header.compute_hash();
-		Ok(SealedBlock { block: s.block, uncle_bytes: s.uncle_bytes })
+		Ok(SealedBlock {
+			block: s.block,
+			uncle_bytes: s.uncle_bytes,
+		})
 	}
 
 	/// Provide a valid seal in order to turn this into a `SealedBlock`.
@@ -605,7 +702,10 @@ impl LockedBlock {
 		// TODO: passing state context to avoid engines owning it?
 		match engine.verify_local_seal(&s.block.header) {
 			Err(e) => Err((e, s)),
-			_ => Ok(SealedBlock { block: s.block, uncle_bytes: s.uncle_bytes }),
+			_ => Ok(SealedBlock {
+				block: s.block,
+				uncle_bytes: s.uncle_bytes,
+			}),
 		}
 	}
 }
@@ -636,7 +736,9 @@ impl Drain for SealedBlock {
 }
 
 impl IsBlock for SealedBlock {
-	fn block(&self) -> &ExecutedBlock { &self.block }
+	fn block(&self) -> &ExecutedBlock {
+		&self.block
+	}
 }
 
 // // /// Enact the block given by block header, transactions and uncles

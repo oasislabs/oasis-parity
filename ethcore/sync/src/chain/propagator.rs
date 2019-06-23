@@ -15,31 +15,22 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 use bytes::Bytes;
-use ethereum_types::H256;
 use ethcore::client::BlockChainInfo;
 use ethcore::header::BlockNumber;
-use network::{PeerId, PacketId};
+use ethereum_types::H256;
+use network::{PacketId, PeerId};
 use rand::Rng;
 use rlp::{Encodable, RlpStream};
-use sync_io::SyncIo;
 use std::cmp;
 use std::collections::HashSet;
+use sync_io::SyncIo;
 use transaction::SignedTransaction;
 
 use super::{
-	random,
-	ChainSync,
-	MAX_PEER_LAG_PROPAGATION,
-	MAX_PEERS_PROPAGATION,
-	MAX_TRANSACTION_PACKET_SIZE,
-	MAX_TRANSACTIONS_TO_PROPAGATE,
-	MIN_PEERS_PROPAGATION,
-	CONSENSUS_DATA_PACKET,
-	NEW_BLOCK_HASHES_PACKET,
-	NEW_BLOCK_PACKET,
-	PRIVATE_TRANSACTION_PACKET,
-	SIGNED_PRIVATE_TRANSACTION_PACKET,
-	TRANSACTIONS_PACKET,
+	random, ChainSync, CONSENSUS_DATA_PACKET, MAX_PEERS_PROPAGATION, MAX_PEER_LAG_PROPAGATION,
+	MAX_TRANSACTIONS_TO_PROPAGATE, MAX_TRANSACTION_PACKET_SIZE, MIN_PEERS_PROPAGATION,
+	NEW_BLOCK_HASHES_PACKET, NEW_BLOCK_PACKET, PRIVATE_TRANSACTION_PACKET,
+	SIGNED_PRIVATE_TRANSACTION_PACKET, TRANSACTIONS_PACKET,
 };
 
 /// Checks if peer is able to process service transactions
@@ -52,11 +43,15 @@ fn accepts_service_transaction(client_id: &str) -> bool {
 	if !client_id.starts_with(PARITY_CLIENT_ID_PREFIX) {
 		return false;
 	}
-	let ver: Vec<u32> = client_id[PARITY_CLIENT_ID_PREFIX.len()..].split('.')
+	let ver: Vec<u32> = client_id[PARITY_CLIENT_ID_PREFIX.len()..]
+		.split('.')
 		.take(2)
 		.filter_map(|s| s.parse().ok())
 		.collect();
-	ver.len() == 2 && (ver[0] > SERVICE_TRANSACTIONS_VERSION.0 || (ver[0] == SERVICE_TRANSACTIONS_VERSION.0 && ver[1] >= SERVICE_TRANSACTIONS_VERSION.1))
+	ver.len() == 2
+		&& (ver[0] > SERVICE_TRANSACTIONS_VERSION.0
+			|| (ver[0] == SERVICE_TRANSACTIONS_VERSION.0
+				&& ver[1] >= SERVICE_TRANSACTIONS_VERSION.1))
 }
 
 /// The Chain Sync Propagator: propagates data to peers
@@ -64,16 +59,22 @@ pub struct SyncPropagator;
 
 impl SyncPropagator {
 	/// propagates latest block to a set of peers
-	pub fn propagate_blocks(sync: &mut ChainSync, chain_info: &BlockChainInfo, io: &mut SyncIo, blocks: &[H256], peers: &[PeerId]) -> usize {
+	pub fn propagate_blocks(
+		sync: &mut ChainSync,
+		chain_info: &BlockChainInfo,
+		io: &mut SyncIo,
+		blocks: &[H256],
+		peers: &[PeerId],
+	) -> usize {
 		trace!(target: "sync", "Sending NewBlocks to {:?}", peers);
 		let mut sent = 0;
 		for peer_id in peers {
 			if blocks.is_empty() {
-				let rlp =  ChainSync::create_latest_block_rlp(io.chain());
+				let rlp = ChainSync::create_latest_block_rlp(io.chain());
 				SyncPropagator::send_packet(io, *peer_id, NEW_BLOCK_PACKET, rlp);
 			} else {
 				for h in blocks {
-					let rlp =  ChainSync::create_new_block_rlp(io.chain(), h);
+					let rlp = ChainSync::create_new_block_rlp(io.chain(), h);
 					SyncPropagator::send_packet(io, *peer_id, NEW_BLOCK_PACKET, rlp);
 				}
 			}
@@ -86,12 +87,21 @@ impl SyncPropagator {
 	}
 
 	/// propagates new known hashes to all peers
-	pub fn propagate_new_hashes(sync: &mut ChainSync, chain_info: &BlockChainInfo, io: &mut SyncIo, peers: &[PeerId]) -> usize {
+	pub fn propagate_new_hashes(
+		sync: &mut ChainSync,
+		chain_info: &BlockChainInfo,
+		io: &mut SyncIo,
+		peers: &[PeerId],
+	) -> usize {
 		trace!(target: "sync", "Sending NewHashes to {:?}", peers);
 		let mut sent = 0;
 		let last_parent = *io.chain().best_block_header().parent_hash();
 		for peer_id in peers {
-			sent += match ChainSync::create_new_hashes_rlp(io.chain(), &last_parent, &chain_info.best_block_hash) {
+			sent += match ChainSync::create_new_hashes_rlp(
+				io.chain(),
+				&last_parent,
+				&chain_info.best_block_hash,
+			) {
 				Some(rlp) => {
 					{
 						if let Some(ref mut peer) = sync.peers.get_mut(peer_id) {
@@ -100,8 +110,8 @@ impl SyncPropagator {
 					}
 					SyncPropagator::send_packet(io, *peer_id, NEW_BLOCK_HASHES_PACKET, rlp);
 					1
-				},
-				None => 0
+				}
+				None => 0,
 			}
 		}
 		sent
@@ -119,7 +129,8 @@ impl SyncPropagator {
 			return 0;
 		}
 
-		let (transactions, service_transactions): (Vec<_>, Vec<_>) = transactions.iter()
+		let (transactions, service_transactions): (Vec<_>, Vec<_>) = transactions
+			.iter()
 			.map(|tx| tx.signed())
 			.partition(|tx| !tx.gas_price.is_zero());
 
@@ -127,27 +138,45 @@ impl SyncPropagator {
 		let mut affected_peers = HashSet::new();
 		if !transactions.is_empty() {
 			let peers = SyncPropagator::select_peers_for_transactions(sync, |_| true);
-			affected_peers = SyncPropagator::propagate_transactions_to_peers(sync, io, peers, transactions);
+			affected_peers =
+				SyncPropagator::propagate_transactions_to_peers(sync, io, peers, transactions);
 		}
 
 		// most of times service_transactions will be empty
 		// => there's no need to merge packets
 		if !service_transactions.is_empty() {
-			let service_transactions_peers = SyncPropagator::select_peers_for_transactions(sync, |peer_id| accepts_service_transaction(&io.peer_info(*peer_id)));
-			let service_transactions_affected_peers = SyncPropagator::propagate_transactions_to_peers(sync, io, service_transactions_peers, service_transactions);
+			let service_transactions_peers =
+				SyncPropagator::select_peers_for_transactions(sync, |peer_id| {
+					accepts_service_transaction(&io.peer_info(*peer_id))
+				});
+			let service_transactions_affected_peers =
+				SyncPropagator::propagate_transactions_to_peers(
+					sync,
+					io,
+					service_transactions_peers,
+					service_transactions,
+				);
 			affected_peers.extend(&service_transactions_affected_peers);
 		}
 
 		affected_peers.len()
 	}
 
-	fn propagate_transactions_to_peers(sync: &mut ChainSync, io: &mut SyncIo, peers: Vec<PeerId>, transactions: Vec<&SignedTransaction>) -> HashSet<PeerId> {
-		let all_transactions_hashes = transactions.iter()
+	fn propagate_transactions_to_peers(
+		sync: &mut ChainSync,
+		io: &mut SyncIo,
+		peers: Vec<PeerId>,
+		transactions: Vec<&SignedTransaction>,
+	) -> HashSet<PeerId> {
+		let all_transactions_hashes = transactions
+			.iter()
 			.map(|tx| tx.hash())
 			.collect::<HashSet<H256>>();
 		let all_transactions_rlp = {
 			let mut packet = RlpStream::new_list(transactions.len());
-			for tx in &transactions { packet.append(&**tx); }
+			for tx in &transactions {
+				packet.append(&**tx);
+			}
 			packet.out()
 		};
 
@@ -245,12 +274,16 @@ impl SyncPropagator {
 
 	pub fn propagate_latest_blocks(sync: &mut ChainSync, io: &mut SyncIo, sealed: &[H256]) {
 		let chain_info = io.chain().chain_info();
-		if (((chain_info.best_block_number as i64) - (sync.last_sent_block_number as i64)).abs() as BlockNumber) < MAX_PEER_LAG_PROPAGATION {
+		if (((chain_info.best_block_number as i64) - (sync.last_sent_block_number as i64)).abs()
+			as BlockNumber)
+			< MAX_PEER_LAG_PROPAGATION
+		{
 			let mut peers = sync.get_lagging_peers(&chain_info);
 			if sealed.is_empty() {
 				let hashes = SyncPropagator::propagate_new_hashes(sync, &chain_info, io, &peers);
 				peers = ChainSync::select_random_peers(&peers);
-				let blocks = SyncPropagator::propagate_blocks(sync, &chain_info, io, sealed, &peers);
+				let blocks =
+					SyncPropagator::propagate_blocks(sync, &chain_info, io, sealed, &peers);
 				if blocks != 0 || hashes != 0 {
 					trace!(target: "sync", "Sent latest {} blocks and {} hashes to peers.", blocks, hashes);
 				}
@@ -268,10 +301,7 @@ impl SyncPropagator {
 		let peers = sync.get_consensus_peers();
 		trace!(target: "sync", "Sending proposed blocks to {:?}", peers);
 		for block in proposed {
-			let rlp = ChainSync::create_block_rlp(
-				block,
-				io.chain().chain_info().total_difficulty
-			);
+			let rlp = ChainSync::create_block_rlp(block, io.chain().chain_info().total_difficulty);
 			for peer_id in &peers {
 				SyncPropagator::send_packet(io, *peer_id, NEW_BLOCK_PACKET, rlp.clone());
 			}
@@ -297,22 +327,35 @@ impl SyncPropagator {
 	}
 
 	/// Broadcast signed private transaction message to peers.
-	pub fn propagate_signed_private_transaction(sync: &mut ChainSync, io: &mut SyncIo, packet: Bytes) {
+	pub fn propagate_signed_private_transaction(
+		sync: &mut ChainSync,
+		io: &mut SyncIo,
+		packet: Bytes,
+	) {
 		let lucky_peers = ChainSync::select_random_peers(&sync.get_private_transaction_peers());
 		trace!(target: "sync", "Sending signed private transaction packet to {:?}", lucky_peers);
 		for peer_id in lucky_peers {
-			SyncPropagator::send_packet(io, peer_id, SIGNED_PRIVATE_TRANSACTION_PACKET, packet.clone());
+			SyncPropagator::send_packet(
+				io,
+				peer_id,
+				SIGNED_PRIVATE_TRANSACTION_PACKET,
+				packet.clone(),
+			);
 		}
 	}
 
 	fn select_peers_for_transactions<F>(sync: &ChainSync, filter: F) -> Vec<PeerId>
-		where F: Fn(&PeerId) -> bool {
+	where
+		F: Fn(&PeerId) -> bool,
+	{
 		// sqrt(x)/x scaled to max u32
-		let fraction = ((sync.peers.len() as f64).powf(-0.5) * (u32::max_value() as f64).round()) as u32;
+		let fraction =
+			((sync.peers.len() as f64).powf(-0.5) * (u32::max_value() as f64).round()) as u32;
 		let small = sync.peers.len() < MIN_PEERS_PROPAGATION;
 
 		let mut random = random::new();
-		sync.peers.keys()
+		sync.peers
+			.keys()
 			.cloned()
 			.filter(filter)
 			.filter(|_| small || random.next_u32() < fraction)
@@ -334,12 +377,15 @@ mod tests {
 	use ethcore::client::{BlockInfo, ChainInfo, EachBlockWith, TestBlockChainClient};
 	use parking_lot::RwLock;
 	use private_tx::NoopPrivateTxHandler;
-	use rlp::{Rlp};
-	use std::collections::{VecDeque};
-	use tests::helpers::{TestIo};
+	use rlp::Rlp;
+	use std::collections::VecDeque;
+	use tests::helpers::TestIo;
 	use tests::snapshot::TestSnapshotService;
 
-	use super::{*, super::{*, tests::*}};
+	use super::{
+		super::{tests::*, *},
+		*,
+	};
 
 	#[test]
 	fn sends_new_hashes_to_lagging_peer() {
@@ -352,7 +398,8 @@ mod tests {
 		let mut io = TestIo::new(&mut client, &ss, &queue, None);
 
 		let peers = sync.get_lagging_peers(&chain_info);
-		let peer_count = SyncPropagator::propagate_new_hashes(&mut sync, &chain_info, &mut io, &peers);
+		let peer_count =
+			SyncPropagator::propagate_new_hashes(&mut sync, &chain_info, &mut io, &peers);
 
 		// 1 message should be send
 		assert_eq!(1, io.packets.len());
@@ -372,7 +419,8 @@ mod tests {
 		let ss = TestSnapshotService::new();
 		let mut io = TestIo::new(&mut client, &ss, &queue, None);
 		let peers = sync.get_lagging_peers(&chain_info);
-		let peer_count = SyncPropagator::propagate_blocks(&mut sync, &chain_info, &mut io, &[], &peers);
+		let peer_count =
+			SyncPropagator::propagate_blocks(&mut sync, &chain_info, &mut io, &[], &peers);
 
 		// 1 message should be send
 		assert_eq!(1, io.packets.len());
@@ -393,7 +441,13 @@ mod tests {
 		let ss = TestSnapshotService::new();
 		let mut io = TestIo::new(&mut client, &ss, &queue, None);
 		let peers = sync.get_lagging_peers(&chain_info);
-		let peer_count = SyncPropagator::propagate_blocks(&mut sync ,&chain_info, &mut io, &[hash.clone()], &peers);
+		let peer_count = SyncPropagator::propagate_blocks(
+			&mut sync,
+			&chain_info,
+			&mut io,
+			&[hash.clone()],
+			&peers,
+		);
 
 		// 1 message should be send
 		assert_eq!(1, io.packets.len());
@@ -409,8 +463,13 @@ mod tests {
 		client.add_blocks(2, EachBlockWith::Uncle);
 		let queue = RwLock::new(VecDeque::new());
 		let block = client.block(BlockId::Latest).unwrap().into_inner();
-		let mut sync = ChainSync::new(SyncConfig::default(), &client, Arc::new(NoopPrivateTxHandler));
-		sync.peers.insert(0,
+		let mut sync = ChainSync::new(
+			SyncConfig::default(),
+			&client,
+			Arc::new(NoopPrivateTxHandler),
+		);
+		sync.peers.insert(
+			0,
 			PeerInfo {
 				// Messaging protocol
 				protocol_version: 2,
@@ -429,7 +488,8 @@ mod tests {
 				snapshot_hash: None,
 				asking_snapshot_data: None,
 				block_set: None,
-			});
+			},
+		);
 		let ss = TestSnapshotService::new();
 		let mut io = TestIo::new(&mut client, &ss, &queue, None);
 		SyncPropagator::propagate_proposed_blocks(&mut sync, &mut io, &[block]);
@@ -496,7 +556,11 @@ mod tests {
 		client.add_blocks(100, EachBlockWith::Uncle);
 		client.insert_transaction_to_queue();
 		// Sync with no peers
-		let mut sync = ChainSync::new(SyncConfig::default(), &client, Arc::new(NoopPrivateTxHandler));
+		let mut sync = ChainSync::new(
+			SyncConfig::default(),
+			&client,
+			Arc::new(NoopPrivateTxHandler),
+		);
 		let queue = RwLock::new(VecDeque::new());
 		let ss = TestSnapshotService::new();
 		let mut io = TestIo::new(&mut client, &ss, &queue, None);
@@ -558,7 +622,11 @@ mod tests {
 		SyncPropagator::propagate_new_transactions(&mut sync, &mut io);
 
 		let stats = sync.transactions_stats();
-		assert_eq!(stats.len(), 1, "Should maintain stats for single transaction.")
+		assert_eq!(
+			stats.len(),
+			1,
+			"Should maintain stats for single transaction."
+		)
 	}
 
 	#[test]
@@ -566,7 +634,11 @@ mod tests {
 		let mut client = TestBlockChainClient::new();
 		client.insert_transaction_with_gas_price_to_queue(U256::zero());
 		let block_hash = client.block_hash_delta_minus(1);
-		let mut sync = ChainSync::new(SyncConfig::default(), &client, Arc::new(NoopPrivateTxHandler));
+		let mut sync = ChainSync::new(
+			SyncConfig::default(),
+			&client,
+			Arc::new(NoopPrivateTxHandler),
+		);
 		let queue = RwLock::new(VecDeque::new());
 		let ss = TestSnapshotService::new();
 		let mut io = TestIo::new(&mut client, &ss, &queue, None);
@@ -588,8 +660,14 @@ mod tests {
 		SyncPropagator::propagate_new_transactions(&mut sync, &mut io);
 
 		// peer#2 && peer#4 are receiving service transaction
-		assert!(io.packets.iter().any(|p| p.packet_id == 0x02 && p.recipient == 2)); // TRANSACTIONS_PACKET
-		assert!(io.packets.iter().any(|p| p.packet_id == 0x02 && p.recipient == 4)); // TRANSACTIONS_PACKET
+		assert!(io
+			.packets
+			.iter()
+			.any(|p| p.packet_id == 0x02 && p.recipient == 2)); // TRANSACTIONS_PACKET
+		assert!(io
+			.packets
+			.iter()
+			.any(|p| p.packet_id == 0x02 && p.recipient == 4)); // TRANSACTIONS_PACKET
 		assert_eq!(io.packets.len(), 2);
 	}
 
@@ -599,7 +677,11 @@ mod tests {
 		let tx1_hash = client.insert_transaction_to_queue();
 		let tx2_hash = client.insert_transaction_with_gas_price_to_queue(U256::zero());
 		let block_hash = client.block_hash_delta_minus(1);
-		let mut sync = ChainSync::new(SyncConfig::default(), &client, Arc::new(NoopPrivateTxHandler));
+		let mut sync = ChainSync::new(
+			SyncConfig::default(),
+			&client,
+			Arc::new(NoopPrivateTxHandler),
+		);
 		let queue = RwLock::new(VecDeque::new());
 		let ss = TestSnapshotService::new();
 		let mut io = TestIo::new(&mut client, &ss, &queue, None);
@@ -614,9 +696,12 @@ mod tests {
 		// two separate packets for peer are queued:
 		// 1) with non-service-transaction
 		// 2) with service transaction
-		let sent_transactions: Vec<UnverifiedTransaction> = io.packets.iter()
+		let sent_transactions: Vec<UnverifiedTransaction> = io
+			.packets
+			.iter()
 			.filter_map(|p| {
-				if p.packet_id != 0x02 || p.recipient != 1 { // TRANSACTIONS_PACKET
+				if p.packet_id != 0x02 || p.recipient != 1 {
+					// TRANSACTIONS_PACKET
 					return None;
 				}
 

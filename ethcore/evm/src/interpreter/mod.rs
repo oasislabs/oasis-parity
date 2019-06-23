@@ -19,28 +19,28 @@
 #[macro_use]
 mod informant;
 mod gasometer;
-mod stack;
 mod memory;
 mod shared_cache;
+mod stack;
 
-use std::marker::PhantomData;
-use std::{cmp, mem};
-use std::sync::Arc;
+use ethereum_types::{Address, H256, U256, U512};
 use hash::keccak;
-use ethereum_types::{U256, U512, H256, Address};
+use std::marker::PhantomData;
+use std::sync::Arc;
+use std::{cmp, mem};
 
 use vm::{
-	self, ActionParams, ActionValue, CallType, MessageCallResult,
-	ContractCreateResult, CreateContractAddress, ReturnData, GasLeft
+	self, ActionParams, ActionValue, CallType, ContractCreateResult, CreateContractAddress,
+	GasLeft, MessageCallResult, ReturnData,
 };
 
 use evm::CostType;
 use instructions::{self, Instruction, InstructionInfo};
 
 use self::gasometer::Gasometer;
-use self::stack::{Stack, VecStack};
 use self::memory::Memory;
 pub use self::shared_cache::SharedCache;
+use self::stack::{Stack, VecStack};
 
 use bit_set::BitSet;
 
@@ -60,11 +60,10 @@ const TWO_POW_248: U256 = U256([0, 0, 0, 0x100000000000000]); //0x1 00000000 000
 /// Abstraction over raw vector of Bytes. Easier state management of PC.
 struct CodeReader<'a> {
 	position: ProgramCounter,
-	code: &'a [u8]
+	code: &'a [u8],
 }
 
 impl<'a> CodeReader<'a> {
-
 	/// Create new code reader - starting at position 0.
 	fn new(code: &'a [u8]) -> Self {
 		CodeReader {
@@ -81,7 +80,7 @@ impl<'a> CodeReader<'a> {
 		U256::from(&self.code[pos..max])
 	}
 
-	fn len (&self) -> usize {
+	fn len(&self) -> usize {
 		self.code.len()
 	}
 }
@@ -118,7 +117,10 @@ impl<Cost: CostType> vm::Vm for Interpreter<Cost> {
 		let mut informant = informant::EvmInformant::new(ext.depth());
 		let mut do_trace = true;
 
-		let code = &params.code.as_ref().expect("exec always called with code; qed");
+		let code = &params
+			.code
+			.as_ref()
+			.expect("exec always called with code; qed");
 		let mut valid_jump_destinations = None;
 
 		let mut gasometer = Gasometer::<Cost>::new(Cost::from_u256(params.gas)?);
@@ -131,17 +133,25 @@ impl<Cost: CostType> vm::Vm for Interpreter<Cost> {
 			reader.position += 1;
 
 			// TODO: make compile-time removable if too much of a performance hit.
-			do_trace = do_trace && ext.trace_next_instruction(
-				reader.position - 1, instruction, gasometer.current_gas.as_u256(),
-			);
+			do_trace = do_trace
+				&& ext.trace_next_instruction(
+					reader.position - 1,
+					instruction,
+					gasometer.current_gas.as_u256(),
+				);
 
 			let info = &infos[instruction as usize];
 			self.verify_instruction(ext, instruction, info, &stack)?;
 
 			// Calculate gas cost
-			let requirements = gasometer.requirements(ext, instruction, info, &stack, self.mem.size())?;
+			let requirements =
+				gasometer.requirements(ext, instruction, info, &stack, self.mem.size())?;
 			if do_trace {
-				ext.trace_prepare_execute(reader.position - 1, instruction, requirements.gas_cost.as_u256());
+				ext.trace_prepare_execute(
+					reader.position - 1,
+					instruction,
+					requirements.gas_cost.as_u256(),
+				);
 			}
 
 			gasometer.verify_gas(&requirements.gas_cost)?;
@@ -149,16 +159,33 @@ impl<Cost: CostType> vm::Vm for Interpreter<Cost> {
 			gasometer.current_mem_gas = requirements.memory_total_gas;
 			gasometer.current_gas = gasometer.current_gas - requirements.gas_cost;
 
-			evm_debug!({ informant.before_instruction(reader.position, instruction, info, &gasometer.current_gas, &stack) });
+			evm_debug!({
+				informant.before_instruction(
+					reader.position,
+					instruction,
+					info,
+					&gasometer.current_gas,
+					&stack,
+				)
+			});
 
 			let (mem_written, store_written) = match do_trace {
-				true => (Self::mem_written(instruction, &stack), Self::store_written(instruction, &stack)),
+				true => (
+					Self::mem_written(instruction, &stack),
+					Self::store_written(instruction, &stack),
+				),
 				false => (None, None),
 			};
 
 			// Execute instruction
 			let result = self.exec_instruction(
-				gasometer.current_gas, &params, ext, instruction, &mut reader, &mut stack, requirements.provide_gas
+				gasometer.current_gas,
+				&params,
+				ext,
+				instruction,
+				&mut reader,
+				&mut stack,
+				requirements.provide_gas,
 			)?;
 
 			evm_debug!({ informant.after_instruction(instruction) });
@@ -171,7 +198,7 @@ impl<Cost: CostType> vm::Vm for Interpreter<Cost> {
 				ext.trace_executed(
 					gasometer.current_gas.as_u256(),
 					stack.peek_top(info.ret),
-					mem_written.map(|(o, s)| (o, &(self.mem[o..o+s]))),
+					mem_written.map(|(o, s)| (o, &(self.mem[o..o + s]))),
 					store_written,
 				);
 			}
@@ -180,24 +207,35 @@ impl<Cost: CostType> vm::Vm for Interpreter<Cost> {
 			match result {
 				InstructionResult::JumpToPosition(position) => {
 					if valid_jump_destinations.is_none() {
-						let code_hash = params.code_hash.clone().unwrap_or_else(|| keccak(code.as_ref()));
-						valid_jump_destinations = Some(self.cache.jump_destinations(&code_hash, code));
+						let code_hash = params
+							.code_hash
+							.clone()
+							.unwrap_or_else(|| keccak(code.as_ref()));
+						valid_jump_destinations =
+							Some(self.cache.jump_destinations(&code_hash, code));
 					}
-					let jump_destinations = valid_jump_destinations.as_ref().expect("jump_destinations are initialized on first jump; qed");
+					let jump_destinations = valid_jump_destinations
+						.as_ref()
+						.expect("jump_destinations are initialized on first jump; qed");
 					let pos = self.verify_jump(position, jump_destinations)?;
 					reader.position = pos;
-				},
-				InstructionResult::StopExecutionNeedsReturn {gas, init_off, init_size, apply} => {
+				}
+				InstructionResult::StopExecutionNeedsReturn {
+					gas,
+					init_off,
+					init_size,
+					apply,
+				} => {
 					informant.done();
 					let mem = mem::replace(&mut self.mem, Vec::new());
 					return Ok(GasLeft::NeedsReturn {
 						gas_left: gas.as_u256(),
 						data: mem.into_return_data(init_off, init_size),
-						apply_state: apply
+						apply_state: apply,
 					});
-				},
+				}
 				InstructionResult::StopExecution => break,
-				_ => {},
+				_ => {}
 			}
 		}
 		informant.done();
@@ -216,24 +254,35 @@ impl<Cost: CostType> Interpreter<Cost> {
 		}
 	}
 
-	fn verify_instruction(&self, ext: &vm::Ext, instruction: Instruction, info: &InstructionInfo, stack: &Stack<U256>) -> vm::Result<()> {
+	fn verify_instruction(
+		&self,
+		ext: &vm::Ext,
+		instruction: Instruction,
+		info: &InstructionInfo,
+		stack: &Stack<U256>,
+	) -> vm::Result<()> {
 		let schedule = ext.schedule();
 
-		if (instruction == instructions::DELEGATECALL && !schedule.have_delegate_call) ||
-			(instruction == instructions::CREATE2 && !schedule.have_create2) ||
-			(instruction == instructions::STATICCALL && !schedule.have_static_call) ||
-			((instruction == instructions::RETURNDATACOPY || instruction == instructions::RETURNDATASIZE) && !schedule.have_return_data) ||
-			(instruction == instructions::REVERT && !schedule.have_revert) ||
-			((instruction == instructions::SHL || instruction == instructions::SHR || instruction == instructions::SAR) && !schedule.have_bitwise_shifting) {
-
+		if (instruction == instructions::DELEGATECALL && !schedule.have_delegate_call)
+			|| (instruction == instructions::CREATE2 && !schedule.have_create2)
+			|| (instruction == instructions::STATICCALL && !schedule.have_static_call)
+			|| ((instruction == instructions::RETURNDATACOPY
+				|| instruction == instructions::RETURNDATASIZE)
+				&& !schedule.have_return_data)
+			|| (instruction == instructions::REVERT && !schedule.have_revert)
+			|| ((instruction == instructions::SHL
+				|| instruction == instructions::SHR
+				|| instruction == instructions::SAR)
+				&& !schedule.have_bitwise_shifting)
+		{
 			return Err(vm::Error::BadInstruction {
-				instruction: instruction
+				instruction: instruction,
 			});
 		}
 
 		if info.tier == instructions::GasPriceTier::Invalid {
 			return Err(vm::Error::BadInstruction {
-				instruction: instruction
+				instruction: instruction,
 			});
 		}
 
@@ -241,28 +290,27 @@ impl<Cost: CostType> Interpreter<Cost> {
 			Err(vm::Error::StackUnderflow {
 				instruction: info.name,
 				wanted: info.args,
-				on_stack: stack.size()
+				on_stack: stack.size(),
 			})
 		} else if stack.size() - info.args + info.ret > schedule.stack_limit {
 			Err(vm::Error::OutOfStack {
 				instruction: info.name,
 				wanted: info.ret - info.args,
-				limit: schedule.stack_limit
+				limit: schedule.stack_limit,
 			})
 		} else {
 			Ok(())
 		}
 	}
 
-	fn mem_written(
-		instruction: Instruction,
-		stack: &Stack<U256>
-	) -> Option<(usize, usize)> {
+	fn mem_written(instruction: Instruction, stack: &Stack<U256>) -> Option<(usize, usize)> {
 		let read = |pos| stack.peek(pos).low_u64() as usize;
 		let written = match instruction {
 			instructions::MSTORE | instructions::MLOAD => Some((read(0), 32)),
 			instructions::MSTORE8 => Some((read(0), 1)),
-			instructions::CALLDATACOPY | instructions::CODECOPY | instructions::RETURNDATACOPY => Some((read(0), read(2))),
+			instructions::CALLDATACOPY | instructions::CODECOPY | instructions::RETURNDATACOPY => {
+				Some((read(0), read(2)))
+			}
 			instructions::EXTCODECOPY => Some((read(1), read(3))),
 			instructions::CALL | instructions::CALLCODE => Some((read(5), read(6))),
 			instructions::DELEGATECALL | instructions::STATICCALL => Some((read(4), read(5))),
@@ -275,10 +323,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 		}
 	}
 
-	fn store_written(
-		instruction: Instruction,
-		stack: &Stack<U256>
-	) -> Option<(U256, U256)> {
+	fn store_written(instruction: Instruction, stack: &Stack<U256>) -> Option<(U256, U256)> {
 		match instruction {
 			instructions::SSTORE => Some((stack.peek(0).clone(), stack.peek(1).clone())),
 			_ => None,
@@ -293,27 +338,23 @@ impl<Cost: CostType> Interpreter<Cost> {
 		instruction: Instruction,
 		code: &mut CodeReader,
 		stack: &mut Stack<U256>,
-		provided: Option<Cost>
+		provided: Option<Cost>,
 	) -> vm::Result<InstructionResult<Cost>> {
 		match instruction {
 			instructions::JUMP => {
 				let jump = stack.pop_back();
-				return Ok(InstructionResult::JumpToPosition(
-					jump
-				));
-			},
+				return Ok(InstructionResult::JumpToPosition(jump));
+			}
 			instructions::JUMPI => {
 				let jump = stack.pop_back();
 				let condition = stack.pop_back();
 				if !self.is_zero(&condition) {
-					return Ok(InstructionResult::JumpToPosition(
-						jump
-					));
+					return Ok(InstructionResult::JumpToPosition(jump));
 				}
-			},
+			}
 			instructions::JUMPDEST => {
 				// ignore
-			},
+			}
 			instructions::CREATE | instructions::CREATE2 => {
 				let endowment = stack.pop_back();
 				let init_off = stack.pop_back();
@@ -328,34 +369,54 @@ impl<Cost: CostType> Interpreter<Cost> {
 				// clear return data buffer before creating new call frame.
 				self.return_data = ReturnData::empty();
 
-				let can_create = ext.balance(&params.address)? >= endowment && ext.depth() < ext.schedule().max_depth;
+				let can_create = ext.balance(&params.address)? >= endowment
+					&& ext.depth() < ext.schedule().max_depth;
 				if !can_create {
 					stack.push(U256::zero());
 					return Ok(InstructionResult::UnusedGas(create_gas));
 				}
 
 				let contract_code = self.mem.read_slice(init_off, init_size);
-				let address_scheme = if instruction == instructions::CREATE { CreateContractAddress::FromSenderAndNonce } else { CreateContractAddress::FromSenderAndCodeHash };
+				let address_scheme = if instruction == instructions::CREATE {
+					CreateContractAddress::FromSenderAndNonce
+				} else {
+					CreateContractAddress::FromSenderAndCodeHash
+				};
 
-				let create_result = ext.create(&create_gas.as_u256(), &endowment, contract_code, address_scheme);
+				let create_result = ext.create(
+					&create_gas.as_u256(),
+					&endowment,
+					contract_code,
+					address_scheme,
+				);
 				return match create_result {
 					ContractCreateResult::Created(address, gas_left) => {
 						stack.push(address_to_u256(address));
-						Ok(InstructionResult::UnusedGas(Cost::from_u256(gas_left).expect("Gas left cannot be greater.")))
-					},
+						Ok(InstructionResult::UnusedGas(
+							Cost::from_u256(gas_left).expect("Gas left cannot be greater."),
+						))
+					}
 					ContractCreateResult::Reverted(gas_left, return_data) => {
 						stack.push(U256::zero());
 						self.return_data = return_data;
-						Ok(InstructionResult::UnusedGas(Cost::from_u256(gas_left).expect("Gas left cannot be greater.")))
-					},
+						Ok(InstructionResult::UnusedGas(
+							Cost::from_u256(gas_left).expect("Gas left cannot be greater."),
+						))
+					}
 					ContractCreateResult::Failed => {
 						stack.push(U256::zero());
 						Ok(InstructionResult::Ok)
-					},
+					}
 				};
-			},
-			instructions::CALL | instructions::CALLCODE | instructions::DELEGATECALL | instructions::STATICCALL => {
-				assert!(ext.schedule().call_value_transfer_gas > ext.schedule().call_stipend, "overflow possible");
+			}
+			instructions::CALL
+			| instructions::CALLCODE
+			| instructions::DELEGATECALL
+			| instructions::STATICCALL => {
+				assert!(
+					ext.schedule().call_value_transfer_gas > ext.schedule().call_stipend,
+					"overflow possible"
+				);
 
 				stack.pop_back();
 				let call_gas = provided.expect("`provided` comes through Self::exec from `Gasometer::get_gas_cost_mem`; `gas_gas_mem_cost` guarantees `Some` when instruction is `CALL`/`CALLCODE`/`DELEGATECALL`/`CREATE`; this is one of `CALL`/`CALLCODE`/`DELEGATECALL`; qed");
@@ -376,10 +437,14 @@ impl<Cost: CostType> Interpreter<Cost> {
 				let out_size = stack.pop_back();
 
 				// Add stipend (only CALL|CALLCODE when value > 0)
-				let call_gas = call_gas + value.map_or_else(|| Cost::from(0), |val| match val.is_zero() {
-					false => Cost::from(ext.schedule().call_stipend),
-					true => Cost::from(0),
-				});
+				let call_gas = call_gas
+					+ value.map_or_else(
+						|| Cost::from(0),
+						|val| match val.is_zero() {
+							false => Cost::from(ext.schedule().call_stipend),
+							true => Cost::from(0),
+						},
+					);
 
 				// Get sender & receive addresses, check if we have balance
 				let (sender_address, receive_address, has_balance, call_type) = match instruction {
@@ -387,16 +452,33 @@ impl<Cost: CostType> Interpreter<Cost> {
 						if ext.is_static() && value.map_or(false, |v| !v.is_zero()) {
 							return Err(vm::Error::MutableCallInStaticContext);
 						}
-						let has_balance = ext.balance(&params.address)? >= value.expect("value set for all but delegate call; qed");
+						let has_balance = ext.balance(&params.address)?
+							>= value.expect("value set for all but delegate call; qed");
 						(&params.address, &code_address, has_balance, CallType::Call)
-					},
+					}
 					instructions::CALLCODE => {
-						let has_balance = ext.balance(&params.address)? >= value.expect("value set for all but delegate call; qed");
-						(&params.address, &params.address, has_balance, CallType::CallCode)
-					},
-					instructions::DELEGATECALL => (&params.sender, &params.address, true, CallType::DelegateCall),
-					instructions::STATICCALL => (&params.address, &code_address, true, CallType::StaticCall),
-					_ => panic!(format!("Unexpected instruction {} in CALL branch.", instruction))
+						let has_balance = ext.balance(&params.address)?
+							>= value.expect("value set for all but delegate call; qed");
+						(
+							&params.address,
+							&params.address,
+							has_balance,
+							CallType::CallCode,
+						)
+					}
+					instructions::DELEGATECALL => (
+						&params.sender,
+						&params.address,
+						true,
+						CallType::DelegateCall,
+					),
+					instructions::STATICCALL => {
+						(&params.address, &code_address, true, CallType::StaticCall)
+					}
+					_ => panic!(format!(
+						"Unexpected instruction {} in CALL branch.",
+						instruction
+					)),
 				};
 
 				// clear return data buffer before creating new call frame.
@@ -411,92 +493,115 @@ impl<Cost: CostType> Interpreter<Cost> {
 				let call_result = {
 					// we need to write and read from memory in the same time
 					// and we don't want to copy
-					let input = unsafe { ::std::mem::transmute(self.mem.read_slice(in_off, in_size)) };
+					let input =
+						unsafe { ::std::mem::transmute(self.mem.read_slice(in_off, in_size)) };
 					let output = self.mem.writeable_slice(out_off, out_size);
-					ext.call(&call_gas.as_u256(), sender_address, receive_address, value, input, &code_address, output, call_type)
+					ext.call(
+						&call_gas.as_u256(),
+						sender_address,
+						receive_address,
+						value,
+						input,
+						&code_address,
+						output,
+						call_type,
+					)
 				};
 
 				return match call_result {
 					MessageCallResult::Success(gas_left, data) => {
 						stack.push(U256::one());
 						self.return_data = data;
-						Ok(InstructionResult::UnusedGas(Cost::from_u256(gas_left).expect("Gas left cannot be greater than current one")))
-					},
+						Ok(InstructionResult::UnusedGas(
+							Cost::from_u256(gas_left)
+								.expect("Gas left cannot be greater than current one"),
+						))
+					}
 					MessageCallResult::Reverted(gas_left, data) => {
 						stack.push(U256::zero());
 						self.return_data = data;
-						Ok(InstructionResult::UnusedGas(Cost::from_u256(gas_left).expect("Gas left cannot be greater than current one")))
-					},
-					MessageCallResult::Failed  => {
+						Ok(InstructionResult::UnusedGas(
+							Cost::from_u256(gas_left)
+								.expect("Gas left cannot be greater than current one"),
+						))
+					}
+					MessageCallResult::Failed => {
 						stack.push(U256::zero());
 						Ok(InstructionResult::Ok)
-					},
+					}
 				};
-			},
+			}
 			instructions::RETURN => {
 				let init_off = stack.pop_back();
 				let init_size = stack.pop_back();
 
-				return Ok(InstructionResult::StopExecutionNeedsReturn {gas: gas, init_off: init_off, init_size: init_size, apply: true})
-			},
+				return Ok(InstructionResult::StopExecutionNeedsReturn {
+					gas: gas,
+					init_off: init_off,
+					init_size: init_size,
+					apply: true,
+				});
+			}
 			instructions::REVERT => {
 				let init_off = stack.pop_back();
 				let init_size = stack.pop_back();
 
-				return Ok(InstructionResult::StopExecutionNeedsReturn {gas: gas, init_off: init_off, init_size: init_size, apply: false})
-			},
+				return Ok(InstructionResult::StopExecutionNeedsReturn {
+					gas: gas,
+					init_off: init_off,
+					init_size: init_size,
+					apply: false,
+				});
+			}
 			instructions::STOP => {
 				return Ok(InstructionResult::StopExecution);
-			},
+			}
 			instructions::SUICIDE => {
 				let address = stack.pop_back();
 				ext.suicide(&u256_to_address(&address))?;
 				return Ok(InstructionResult::StopExecution);
-			},
+			}
 			instructions::LOG0...instructions::LOG4 => {
 				let no_of_topics = instructions::get_log_topics(instruction);
 
 				let offset = stack.pop_back();
 				let size = stack.pop_back();
-				let topics = stack.pop_n(no_of_topics)
-					.iter()
-					.map(H256::from)
-					.collect();
+				let topics = stack.pop_n(no_of_topics).iter().map(H256::from).collect();
 				ext.log(topics, self.mem.read_slice(offset, size))?;
-			},
+			}
 			instructions::PUSH1...instructions::PUSH32 => {
 				let bytes = instructions::get_push_bytes(instruction);
 				let val = code.read(bytes);
 				stack.push(val);
-			},
+			}
 			instructions::MLOAD => {
 				let word = self.mem.read(stack.pop_back());
 				stack.push(U256::from(word));
-			},
+			}
 			instructions::MSTORE => {
 				let offset = stack.pop_back();
 				let word = stack.pop_back();
 				Memory::write(&mut self.mem, offset, word);
-			},
+			}
 			instructions::MSTORE8 => {
 				let offset = stack.pop_back();
 				let byte = stack.pop_back();
 				self.mem.write_byte(offset, byte);
-			},
+			}
 			instructions::MSIZE => {
 				stack.push(U256::from(self.mem.size()));
-			},
+			}
 			instructions::SHA3 => {
 				let offset = stack.pop_back();
 				let size = stack.pop_back();
 				let k = keccak(self.mem.read_slice(offset, size));
 				stack.push(U256::from(&*k));
-			},
+			}
 			instructions::SLOAD => {
 				let key = H256::from(&stack.pop_back());
 				let word = U256::from(&*ext.storage_at(&key)?);
 				stack.push(word);
-			},
+			}
 			instructions::SSTORE => {
 				let address = H256::from(&stack.pop_back());
 				let val = stack.pop_back();
@@ -507,32 +612,32 @@ impl<Cost: CostType> Interpreter<Cost> {
 					ext.inc_sstore_clears(32)?;
 				}
 				ext.set_storage(address, H256::from(&val))?;
-			},
+			}
 			instructions::PC => {
 				stack.push(U256::from(code.position - 1));
-			},
+			}
 			instructions::GAS => {
 				stack.push(gas.as_u256());
-			},
+			}
 			instructions::ADDRESS => {
 				stack.push(address_to_u256(params.address.clone()));
-			},
+			}
 			instructions::ORIGIN => {
 				stack.push(address_to_u256(params.origin.clone()));
-			},
+			}
 			instructions::BALANCE => {
 				let address = u256_to_address(&stack.pop_back());
 				let balance = ext.balance(&address)?;
 				stack.push(balance);
-			},
+			}
 			instructions::CALLER => {
 				stack.push(address_to_u256(params.sender.clone()));
-			},
+			}
 			instructions::CALLVALUE => {
 				stack.push(match params.value {
-					ActionValue::Transfer(val) | ActionValue::Apparent(val) => val
+					ActionValue::Transfer(val) | ActionValue::Apparent(val) => val,
 				});
-			},
+			}
 			instructions::CALLDATALOAD => {
 				let big_id = stack.pop_back();
 				let id = big_id.low_u64() as usize;
@@ -541,7 +646,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 					let bound = cmp::min(data.len(), max);
 					if id < bound && big_id < U256::from(data.len()) {
 						let mut v = [0u8; 32];
-						v[0..bound-id].clone_from_slice(&data[id..bound]);
+						v[0..bound - id].clone_from_slice(&data[id..bound]);
 						stack.push(U256::from(&v[..]))
 					} else {
 						stack.push(U256::zero())
@@ -549,24 +654,29 @@ impl<Cost: CostType> Interpreter<Cost> {
 				} else {
 					stack.push(U256::zero())
 				}
-			},
+			}
 			instructions::CALLDATASIZE => {
 				stack.push(U256::from(params.data.clone().map_or(0, |l| l.len())));
-			},
+			}
 			instructions::CODESIZE => {
 				stack.push(U256::from(code.len()));
-			},
-			instructions::RETURNDATASIZE => {
-				stack.push(U256::from(self.return_data.len()))
-			},
+			}
+			instructions::RETURNDATASIZE => stack.push(U256::from(self.return_data.len())),
 			instructions::EXTCODESIZE => {
 				let address = u256_to_address(&stack.pop_back());
 				let len = ext.extcodesize(&address)?;
 				stack.push(U256::from(len));
-			},
+			}
 			instructions::CALLDATACOPY => {
-				Self::copy_data_to_memory(&mut self.mem, stack, params.data.as_ref().map_or_else(|| &[] as &[u8], |d| &*d as &[u8]));
-			},
+				Self::copy_data_to_memory(
+					&mut self.mem,
+					stack,
+					params
+						.data
+						.as_ref()
+						.map_or_else(|| &[] as &[u8], |d| &*d as &[u8]),
+				);
+			}
 			instructions::RETURNDATACOPY => {
 				{
 					let source_offset = stack.peek(1);
@@ -577,38 +687,45 @@ impl<Cost: CostType> Interpreter<Cost> {
 					}
 				}
 				Self::copy_data_to_memory(&mut self.mem, stack, &*self.return_data);
-			},
+			}
 			instructions::CODECOPY => {
-				Self::copy_data_to_memory(&mut self.mem, stack, params.code.as_ref().map_or_else(|| &[] as &[u8], |c| &**c as &[u8]));
-			},
+				Self::copy_data_to_memory(
+					&mut self.mem,
+					stack,
+					params
+						.code
+						.as_ref()
+						.map_or_else(|| &[] as &[u8], |c| &**c as &[u8]),
+				);
+			}
 			instructions::EXTCODECOPY => {
 				let address = u256_to_address(&stack.pop_back());
 				let code = ext.extcode(&address)?;
 				Self::copy_data_to_memory(&mut self.mem, stack, &code);
-			},
+			}
 			instructions::GASPRICE => {
 				stack.push(params.gas_price.clone());
-			},
+			}
 			instructions::BLOCKHASH => {
 				let block_number = stack.pop_back();
 				let block_hash = ext.blockhash(&block_number);
 				stack.push(U256::from(&*block_hash));
-			},
+			}
 			instructions::COINBASE => {
 				stack.push(address_to_u256(ext.env_info().author.clone()));
-			},
+			}
 			instructions::TIMESTAMP => {
 				stack.push(U256::from(ext.env_info().timestamp));
-			},
+			}
 			instructions::NUMBER => {
 				stack.push(U256::from(ext.env_info().number));
-			},
+			}
 			instructions::DIFFICULTY => {
 				stack.push(ext.env_info().difficulty.clone());
-			},
+			}
 			instructions::GASLIMIT => {
 				stack.push(ext.env_info().gas_limit.clone());
-			},
+			}
 			_ => {
 				self.exec_stack_instruction(instruction, stack)?;
 			}
@@ -622,19 +739,25 @@ impl<Cost: CostType> Interpreter<Cost> {
 		let size = stack.pop_back();
 		let source_size = U256::from(source.len());
 
-		let output_end = match source_offset > source_size || size > source_size || source_offset + size > source_size {
+		let output_end = match source_offset > source_size
+			|| size > source_size
+			|| source_offset + size > source_size
+		{
 			true => {
 				let zero_slice = if source_offset > source_size {
 					mem.writeable_slice(dest_offset, size)
 				} else {
-					mem.writeable_slice(dest_offset + source_size - source_offset, source_offset + size - source_size)
+					mem.writeable_slice(
+						dest_offset + source_size - source_offset,
+						source_offset + size - source_size,
+					)
 				};
 				for i in zero_slice.iter_mut() {
 					*i = 0;
 				}
 				source.len()
-			},
-			false => (size.low_u64() + source_offset.low_u64()) as usize
+			}
+			false => (size.low_u64() + source_offset.low_u64()) as usize,
 		};
 
 		if source_offset < source_size {
@@ -649,9 +772,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 		if valid_jump_destinations.contains(jump) && U256::from(jump) == jump_u {
 			Ok(jump)
 		} else {
-			Err(vm::Error::BadJumpDestination {
-				destination: jump
-			})
+			Err(vm::Error::BadJumpDestination { destination: jump })
 		}
 	}
 
@@ -667,35 +788,39 @@ impl<Cost: CostType> Interpreter<Cost> {
 		}
 	}
 
-	fn exec_stack_instruction(&self, instruction: Instruction, stack: &mut Stack<U256>) -> vm::Result<()> {
+	fn exec_stack_instruction(
+		&self,
+		instruction: Instruction,
+		stack: &mut Stack<U256>,
+	) -> vm::Result<()> {
 		match instruction {
 			instructions::DUP1...instructions::DUP16 => {
 				let position = instructions::get_dup_position(instruction);
 				let val = stack.peek(position).clone();
 				stack.push(val);
-			},
+			}
 			instructions::SWAP1...instructions::SWAP16 => {
 				let position = instructions::get_swap_position(instruction);
 				stack.swap_with_top(position)
-			},
+			}
 			instructions::POP => {
 				stack.pop_back();
-			},
+			}
 			instructions::ADD => {
 				let a = stack.pop_back();
 				let b = stack.pop_back();
 				stack.push(a.overflowing_add(b).0);
-			},
+			}
 			instructions::MUL => {
 				let a = stack.pop_back();
 				let b = stack.pop_back();
 				stack.push(a.overflowing_mul(b).0);
-			},
+			}
 			instructions::SUB => {
 				let a = stack.pop_back();
 				let b = stack.pop_back();
 				stack.push(a.overflowing_sub(b).0);
-			},
+			}
 			instructions::DIV => {
 				let a = stack.pop_back();
 				let b = stack.pop_back();
@@ -716,7 +841,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 				} else {
 					U256::zero()
 				});
-			},
+			}
 			instructions::MOD => {
 				let a = stack.pop_back();
 				let b = stack.pop_back();
@@ -725,7 +850,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 				} else {
 					U256::zero()
 				});
-			},
+			}
 			instructions::SDIV => {
 				let (a, sign_a) = get_and_reset_sign(stack.pop_back());
 				let (b, sign_b) = get_and_reset_sign(stack.pop_back());
@@ -740,7 +865,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 					let c = a.overflowing_div(b).0;
 					set_sign(c, sign_a ^ sign_b)
 				});
-			},
+			}
 			instructions::SMOD => {
 				let ua = stack.pop_back();
 				let ub = stack.pop_back();
@@ -753,22 +878,22 @@ impl<Cost: CostType> Interpreter<Cost> {
 				} else {
 					U256::zero()
 				});
-			},
+			}
 			instructions::EXP => {
 				let base = stack.pop_back();
 				let expon = stack.pop_back();
 				let res = base.overflowing_pow(expon).0;
 				stack.push(res);
-			},
+			}
 			instructions::NOT => {
 				let a = stack.pop_back();
 				stack.push(!a);
-			},
+			}
 			instructions::LT => {
 				let a = stack.pop_back();
 				let b = stack.pop_back();
 				stack.push(self.bool_to_u256(a < b));
-			},
+			}
 			instructions::SLT => {
 				let (a, neg_a) = get_and_reset_sign(stack.pop_back());
 				let (b, neg_b) = get_and_reset_sign(stack.pop_back());
@@ -777,13 +902,14 @@ impl<Cost: CostType> Interpreter<Cost> {
 				let is_negative_lt = a > b && (neg_a & neg_b);
 				let has_different_signs = neg_a && !neg_b;
 
-				stack.push(self.bool_to_u256(is_positive_lt | is_negative_lt | has_different_signs));
-			},
+				stack
+					.push(self.bool_to_u256(is_positive_lt | is_negative_lt | has_different_signs));
+			}
 			instructions::GT => {
 				let a = stack.pop_back();
 				let b = stack.pop_back();
 				stack.push(self.bool_to_u256(a > b));
-			},
+			}
 			instructions::SGT => {
 				let (a, neg_a) = get_and_reset_sign(stack.pop_back());
 				let (b, neg_b) = get_and_reset_sign(stack.pop_back());
@@ -792,41 +918,42 @@ impl<Cost: CostType> Interpreter<Cost> {
 				let is_negative_gt = a < b && (neg_a & neg_b);
 				let has_different_signs = !neg_a && neg_b;
 
-				stack.push(self.bool_to_u256(is_positive_gt | is_negative_gt | has_different_signs));
-			},
+				stack
+					.push(self.bool_to_u256(is_positive_gt | is_negative_gt | has_different_signs));
+			}
 			instructions::EQ => {
 				let a = stack.pop_back();
 				let b = stack.pop_back();
 				stack.push(self.bool_to_u256(a == b));
-			},
+			}
 			instructions::ISZERO => {
 				let a = stack.pop_back();
 				stack.push(self.bool_to_u256(self.is_zero(&a)));
-			},
+			}
 			instructions::AND => {
 				let a = stack.pop_back();
 				let b = stack.pop_back();
 				stack.push(a & b);
-			},
+			}
 			instructions::OR => {
 				let a = stack.pop_back();
 				let b = stack.pop_back();
 				stack.push(a | b);
-			},
+			}
 			instructions::XOR => {
 				let a = stack.pop_back();
 				let b = stack.pop_back();
 				stack.push(a ^ b);
-			},
+			}
 			instructions::BYTE => {
 				let word = stack.pop_back();
 				let val = stack.pop_back();
 				let byte = match word < U256::from(32) {
 					true => (val >> (8 * (31 - word.low_u64() as usize))) & U256::from(0xff),
-					false => U256::zero()
+					false => U256::zero(),
 				};
 				stack.push(byte);
-			},
+			}
 			instructions::ADDMOD => {
 				let a = stack.pop_back();
 				let b = stack.pop_back();
@@ -841,7 +968,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 				} else {
 					U256::zero()
 				});
-			},
+			}
 			instructions::MULMOD => {
 				let a = stack.pop_back();
 				let b = stack.pop_back();
@@ -855,7 +982,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 				} else {
 					U256::zero()
 				});
-			},
+			}
 			instructions::SIGNEXTEND => {
 				let bit = stack.pop_back();
 				if bit < U256::from(32) {
@@ -864,13 +991,9 @@ impl<Cost: CostType> Interpreter<Cost> {
 
 					let bit = number.bit(bit_position);
 					let mask = (U256::one() << bit_position) - U256::one();
-					stack.push(if bit {
-						number | !mask
-					} else {
-						number & mask
-					});
+					stack.push(if bit { number | !mask } else { number & mask });
 				}
-			},
+			}
 			instructions::SHL => {
 				const CONST_256: U256 = U256([256, 0, 0, 0]);
 
@@ -883,7 +1006,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 					value << (shift.as_u32() as usize)
 				};
 				stack.push(result);
-			},
+			}
 			instructions::SHR => {
 				const CONST_256: U256 = U256([256, 0, 0, 0]);
 
@@ -896,7 +1019,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 					value >> (shift.as_u32() as usize)
 				};
 				stack.push(result);
-			},
+			}
 			instructions::SAR => {
 				// We cannot use get_and_reset_sign/set_sign here, because the rounding looks different.
 
@@ -922,16 +1045,15 @@ impl<Cost: CostType> Interpreter<Cost> {
 					shifted
 				};
 				stack.push(result);
-			},
+			}
 			_ => {
 				return Err(vm::Error::BadInstruction {
-					instruction: instruction
+					instruction: instruction,
 				});
 			}
 		}
 		Ok(())
 	}
-
 }
 
 fn get_and_reset_sign(value: U256) -> (U256, bool) {
@@ -960,13 +1082,13 @@ fn address_to_u256(value: Address) -> U256 {
 
 #[cfg(test)]
 mod tests {
-	use std::sync::Arc;
-	use rustc_hex::FromHex;
-	use vmtype::VMType;
-	use factory::Factory;
-	use vm::{Vm, ActionParams, ActionValue};
-	use vm::tests::{FakeExt, test_finalize};
 	use ethereum_types::U256;
+	use factory::Factory;
+	use rustc_hex::FromHex;
+	use std::sync::Arc;
+	use vm::tests::{test_finalize, FakeExt};
+	use vm::{ActionParams, ActionValue, Vm};
+	use vmtype::VMType;
 
 	fn interpreter(gas: &U256) -> Box<Vm> {
 		Factory::new(VMType::Interpreter, 1).create(gas)

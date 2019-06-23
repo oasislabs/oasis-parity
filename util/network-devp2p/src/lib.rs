@@ -60,31 +60,31 @@
 //TODO: use Poll from mio
 #![allow(deprecated)]
 
-extern crate ethcore_io as io;
+extern crate ansi_term; //TODO: remove this
+extern crate bytes;
+extern crate crypto as rcrypto;
 extern crate ethcore_bytes;
 extern crate ethcore_crypto as crypto;
-extern crate ethereum_types;
-extern crate parking_lot;
-extern crate mio;
-extern crate tiny_keccak;
-extern crate crypto as rcrypto;
-extern crate rand;
-extern crate ansi_term; //TODO: remove this
-extern crate rustc_hex;
-extern crate igd;
-extern crate libc;
-extern crate slab;
-extern crate ethkey;
-extern crate rlp;
-extern crate bytes;
-extern crate path;
+extern crate ethcore_io as io;
 extern crate ethcore_logger;
 extern crate ethcore_network as network;
+extern crate ethereum_types;
+extern crate ethkey;
+extern crate igd;
 extern crate ipnetwork;
 extern crate keccak_hash as hash;
+extern crate libc;
+extern crate mio;
+extern crate parity_snappy as snappy;
+extern crate parking_lot;
+extern crate path;
+extern crate rand;
+extern crate rlp;
+extern crate rustc_hex;
 extern crate serde;
 extern crate serde_json;
-extern crate parity_snappy as snappy;
+extern crate slab;
+extern crate tiny_keccak;
 
 #[macro_use]
 extern crate error_chain;
@@ -95,20 +95,21 @@ extern crate serde_derive;
 
 #[cfg(test)]
 extern crate tempdir;
-#[cfg(test)] #[macro_use]
+#[cfg(test)]
+#[macro_use]
 extern crate assert_matches;
 
-mod host;
 mod connection;
-mod handshake;
-mod session;
 mod discovery;
-mod service;
-mod node_table;
+mod handshake;
+mod host;
 mod ip_utils;
+mod node_table;
+mod service;
+mod session;
 
-pub use service::NetworkService;
 pub use host::NetworkContext;
+pub use service::NetworkService;
 
 pub use io::TimerToken;
 pub use node_table::{validate_node_url, NodeId};

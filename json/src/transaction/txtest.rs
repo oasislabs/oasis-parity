@@ -16,16 +16,16 @@
 
 //! Transaction test deserialization.
 
-use uint::Uint;
 use bytes::Bytes;
 use hash::Address;
 use transaction::Transaction;
+use uint::Uint;
 
 /// Transaction test deserialization.
 #[derive(Debug, PartialEq, Deserialize)]
 pub struct TransactionTest {
 	/// Block number.
-	#[serde(rename="blocknumber")]
+	#[serde(rename = "blocknumber")]
 	pub block_number: Option<Uint>,
 	/// Transaction rlp.
 	pub rlp: Bytes,

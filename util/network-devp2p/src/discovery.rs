@@ -15,30 +15,30 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 use ethcore_bytes::Bytes;
-use std::net::SocketAddr;
-use std::collections::{HashSet, HashMap, VecDeque};
-use std::mem;
-use std::default::Default;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use mio::*;
-use mio::deprecated::{Handler, EventLoop};
-use mio::udp::*;
-use hash::keccak;
 use ethereum_types::{H256, H520};
-use rlp::{Rlp, RlpStream, encode_list};
-use node_table::*;
-use network::{Error, ErrorKind};
-use io::{StreamToken, IoContext};
-use ethkey::{Secret, KeyPair, sign, recover};
+use ethkey::{recover, sign, KeyPair, Secret};
+use hash::keccak;
+use io::{IoContext, StreamToken};
+use mio::deprecated::{EventLoop, Handler};
+use mio::udp::*;
+use mio::*;
 use network::IpFilter;
+use network::{Error, ErrorKind};
+use node_table::*;
+use rlp::{encode_list, Rlp, RlpStream};
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::default::Default;
+use std::mem;
+use std::net::SocketAddr;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use PROTOCOL_VERSION;
 
-const ADDRESS_BYTES_SIZE: usize = 32;						// Size of address type in bytes.
-const ADDRESS_BITS: usize = 8 * ADDRESS_BYTES_SIZE;			// Denoted by n in [Kademlia].
-const DISCOVERY_MAX_STEPS: u16 = 8;							// Max iterations of discovery. (discover)
-const BUCKET_SIZE: usize = 16;		// Denoted by k in [Kademlia]. Number of nodes stored in each bucket.
-const ALPHA: usize = 3;				// Denoted by \alpha in [Kademlia]. Number of concurrent FindNode requests.
+const ADDRESS_BYTES_SIZE: usize = 32; // Size of address type in bytes.
+const ADDRESS_BITS: usize = 8 * ADDRESS_BYTES_SIZE; // Denoted by n in [Kademlia].
+const DISCOVERY_MAX_STEPS: u16 = 8; // Max iterations of discovery. (discover)
+const BUCKET_SIZE: usize = 16; // Denoted by k in [Kademlia]. Number of nodes stored in each bucket.
+const ALPHA: usize = 3; // Denoted by \alpha in [Kademlia]. Number of concurrent FindNode requests.
 const MAX_DATAGRAM_SIZE: usize = 1280;
 
 const PACKET_PING: u8 = 1;
@@ -74,7 +74,7 @@ impl Default for NodeBucket {
 impl NodeBucket {
 	fn new() -> Self {
 		NodeBucket {
-			nodes: VecDeque::new()
+			nodes: VecDeque::new(),
 		}
 	}
 }
@@ -107,7 +107,13 @@ pub struct TableUpdates {
 }
 
 impl Discovery {
-	pub fn new(key: &KeyPair, listen: SocketAddr, public: NodeEndpoint, token: StreamToken, ip_filter: IpFilter) -> Discovery {
+	pub fn new(
+		key: &KeyPair,
+		listen: SocketAddr,
+		public: NodeEndpoint,
+		token: StreamToken,
+		ip_filter: IpFilter,
+	) -> Discovery {
 		let socket = UdpSocket::bind(&listen).expect("Error binding UDP socket");
 		Discovery {
 			id: key.public().clone(),
@@ -164,22 +170,34 @@ impl Discovery {
 
 		let ping = {
 			let bucket = &mut self.node_buckets[dist];
-			let updated = if let Some(node) = bucket.nodes.iter_mut().find(|n| n.address.id == e.id) {
+			let updated = if let Some(node) = bucket.nodes.iter_mut().find(|n| n.address.id == e.id)
+			{
 				node.address = e.clone();
 				node.timeout = None;
 				true
-			} else { false };
+			} else {
+				false
+			};
 
 			if !updated {
-				bucket.nodes.push_front(BucketEntry { address: e, timeout: None, id_hash: id_hash, });
+				bucket.nodes.push_front(BucketEntry {
+					address: e,
+					timeout: None,
+					id_hash: id_hash,
+				});
 			}
 
 			if bucket.nodes.len() > BUCKET_SIZE {
 				//ping least active node
-				let last = bucket.nodes.back_mut().expect("Last item is always present when len() > 0");
+				let last = bucket
+					.nodes
+					.back_mut()
+					.expect("Last item is always present when len() > 0");
 				last.timeout = Some(Instant::now());
 				Some(last.address.endpoint.clone())
-			} else { None }
+			} else {
+				None
+			}
 		};
 		if let Some(endpoint) = ping {
 			self.ping(&endpoint);
@@ -192,7 +210,7 @@ impl Discovery {
 			Some(dist) => dist,
 			None => {
 				warn!(target: "discovery", "Received ping from self");
-				return
+				return;
 			}
 		};
 
@@ -213,7 +231,10 @@ impl Discovery {
 	fn update_new_nodes(&mut self) {
 		let mut count = 0usize;
 		while !self.adding_nodes.is_empty() && count < MAX_NODES_PING {
-			let node = self.adding_nodes.pop().expect("pop is always Some if not empty; qed");
+			let node = self
+				.adding_nodes
+				.pop()
+				.expect("pop is always Some if not empty; qed");
 			self.add_node(node);
 			count += 1;
 		}
@@ -228,11 +249,19 @@ impl Discovery {
 		let mut tried_count = 0;
 		{
 			let nearest = self.nearest_node_entries(&self.discovery_id).into_iter();
-			let nearest = nearest.filter(|x| !self.discovery_nodes.contains(&x.id)).take(ALPHA).collect::<Vec<_>>();
+			let nearest = nearest
+				.filter(|x| !self.discovery_nodes.contains(&x.id))
+				.take(ALPHA)
+				.collect::<Vec<_>>();
 			for r in nearest {
 				let rlp = encode_list(&(&[self.discovery_id.clone()][..]));
 				self.send_packet(PACKET_FIND_NODE, &r.endpoint.udp_address(), &rlp)
-					.unwrap_or_else(|e| warn!("Error sending node discovery packet for {:?}: {:?}", &r.endpoint, e));
+					.unwrap_or_else(|e| {
+						warn!(
+							"Error sending node discovery packet for {:?}: {:?}",
+							&r.endpoint, e
+						)
+					});
 				self.discovery_nodes.insert(r.id.clone());
 				tried_count += 1;
 				trace!(target: "discovery", "Sent FindNode to {:?}", &r.endpoint);
@@ -271,15 +300,24 @@ impl Discovery {
 			.unwrap_or_else(|e| warn!("Error sending Ping packet: {:?}", e))
 	}
 
-	fn send_packet(&mut self, packet_id: u8, address: &SocketAddr, payload: &[u8]) -> Result<(), Error> {
+	fn send_packet(
+		&mut self,
+		packet_id: u8,
+		address: &SocketAddr,
+		payload: &[u8],
+	) -> Result<(), Error> {
 		let mut rlp = RlpStream::new();
 		rlp.append_raw(&[packet_id], 1);
 		let source = Rlp::new(payload);
 		rlp.begin_list(source.item_count()? + 1);
-		for i in 0 .. source.item_count()? {
+		for i in 0..source.item_count()? {
 			rlp.append_raw(source.at(i)?.as_raw(), 1);
 		}
-		let timestamp = 60 + SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as u32;
+		let timestamp = 60
+			+ SystemTime::now()
+				.duration_since(UNIX_EPOCH)
+				.unwrap_or_default()
+				.as_secs() as u32;
 		rlp.append(&timestamp);
 
 		let bytes = rlp.drain();
@@ -352,14 +390,16 @@ impl Discovery {
 		ret
 	}
 
-	pub fn writable<Message>(&mut self, io: &IoContext<Message>) where Message: Send + Sync + Clone {
+	pub fn writable<Message>(&mut self, io: &IoContext<Message>)
+	where
+		Message: Send + Sync + Clone,
+	{
 		while let Some(data) = self.send_queue.pop_front() {
 			match self.udp_socket.send_to(&data.payload, &data.address) {
-				Ok(Some(size)) if size == data.payload.len() => {
-				},
+				Ok(Some(size)) if size == data.payload.len() => {}
 				Ok(Some(_)) => {
 					warn!("UDP sent incomplete datagramm");
-				},
+				}
 				Ok(None) => {
 					self.send_queue.push_front(data);
 					return;
@@ -370,14 +410,21 @@ impl Discovery {
 				}
 			}
 		}
-		io.update_registration(self.token).unwrap_or_else(|e| debug!("Error updating discovery registration: {:?}", e));
+		io.update_registration(self.token)
+			.unwrap_or_else(|e| debug!("Error updating discovery registration: {:?}", e));
 	}
 
 	fn send_to(&mut self, payload: Bytes, address: SocketAddr) {
-		self.send_queue.push_back(Datagramm { payload: payload, address: address });
+		self.send_queue.push_back(Datagramm {
+			payload: payload,
+			address: address,
+		});
 	}
 
-	pub fn readable<Message>(&mut self, io: &IoContext<Message>) -> Option<TableUpdates> where Message: Send + Sync + Clone {
+	pub fn readable<Message>(&mut self, io: &IoContext<Message>) -> Option<TableUpdates>
+	where
+		Message: Send + Sync + Clone,
+	{
 		let mut buf: [u8; MAX_DATAGRAM_SIZE] = unsafe { mem::uninitialized() };
 		let writable = !self.send_queue.is_empty();
 		let res = match self.udp_socket.recv_from(&mut buf) {
@@ -393,12 +440,17 @@ impl Discovery {
 		};
 		let new_writable = !self.send_queue.is_empty();
 		if writable != new_writable {
-			io.update_registration(self.token).unwrap_or_else(|e| debug!("Error updating discovery registration: {:?}", e));
+			io.update_registration(self.token)
+				.unwrap_or_else(|e| debug!("Error updating discovery registration: {:?}", e));
 		}
 		res
 	}
 
-	fn on_packet(&mut self, packet: &[u8], from: SocketAddr) -> Result<Option<TableUpdates>, Error> {
+	fn on_packet(
+		&mut self,
+		packet: &[u8],
+		from: SocketAddr,
+	) -> Result<Option<TableUpdates>, Error> {
 		// validate packet
 		if packet.len() < 32 + 65 + 4 + 1 {
 			return Err(ErrorKind::BadProtocol.into());
@@ -429,7 +481,10 @@ impl Discovery {
 
 	/// Validate that given timestamp is in within one second of now or in the future
 	fn check_timestamp(&self, timestamp: u64) -> Result<(), Error> {
-		let secs_since_epoch = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+		let secs_since_epoch = SystemTime::now()
+			.duration_since(UNIX_EPOCH)
+			.unwrap_or_default()
+			.as_secs();
 		if self.check_timestamps && timestamp < secs_since_epoch {
 			debug!(target: "discovery", "Expired packet");
 			return Err(ErrorKind::Expired.into());
@@ -441,14 +496,23 @@ impl Discovery {
 		entry.endpoint.is_allowed(&self.ip_filter) && entry.id != self.id
 	}
 
-	fn on_ping(&mut self, rlp: &Rlp, node: &NodeId, from: &SocketAddr, echo_hash: &[u8]) -> Result<Option<TableUpdates>, Error> {
+	fn on_ping(
+		&mut self,
+		rlp: &Rlp,
+		node: &NodeId,
+		from: &SocketAddr,
+		echo_hash: &[u8],
+	) -> Result<Option<TableUpdates>, Error> {
 		trace!(target: "discovery", "Got Ping from {:?}", &from);
 		let source = NodeEndpoint::from_rlp(&rlp.at(1)?)?;
 		let dest = NodeEndpoint::from_rlp(&rlp.at(2)?)?;
 		let timestamp: u64 = rlp.val_at(3)?;
 		self.check_timestamp(timestamp)?;
 		let mut added_map = HashMap::new();
-		let entry = NodeEntry { id: node.clone(), endpoint: source.clone() };
+		let entry = NodeEntry {
+			id: node.clone(),
+			endpoint: source.clone(),
+		};
 		if !entry.endpoint.is_valid() {
 			debug!(target: "discovery", "Got bad address: {:?}", entry);
 		} else if !self.is_allowed(&entry) {
@@ -462,16 +526,27 @@ impl Discovery {
 		response.append(&echo_hash);
 		self.send_packet(PACKET_PONG, from, &response.drain())?;
 
-		Ok(Some(TableUpdates { added: added_map, removed: HashSet::new() }))
+		Ok(Some(TableUpdates {
+			added: added_map,
+			removed: HashSet::new(),
+		}))
 	}
 
-	fn on_pong(&mut self, rlp: &Rlp, node: &NodeId, from: &SocketAddr) -> Result<Option<TableUpdates>, Error> {
+	fn on_pong(
+		&mut self,
+		rlp: &Rlp,
+		node: &NodeId,
+		from: &SocketAddr,
+	) -> Result<Option<TableUpdates>, Error> {
 		trace!(target: "discovery", "Got Pong from {:?}", &from);
 		// TODO: validate pong packet in rlp.val_at(1)
 		let dest = NodeEndpoint::from_rlp(&rlp.at(0)?)?;
 		let timestamp: u64 = rlp.val_at(2)?;
 		self.check_timestamp(timestamp)?;
-		let mut entry = NodeEntry { id: node.clone(), endpoint: dest };
+		let mut entry = NodeEntry {
+			id: node.clone(),
+			endpoint: dest,
+		};
 		if !entry.endpoint.is_valid() {
 			debug!(target: "discovery", "Bad address: {:?}", entry);
 			entry.endpoint.address = from.clone();
@@ -480,7 +555,12 @@ impl Discovery {
 		Ok(None)
 	}
 
-	fn on_find_node(&mut self, rlp: &Rlp, _node: &NodeId, from: &SocketAddr) -> Result<Option<TableUpdates>, Error> {
+	fn on_find_node(
+		&mut self,
+		rlp: &Rlp,
+		_node: &NodeId,
+		from: &SocketAddr,
+	) -> Result<Option<TableUpdates>, Error> {
 		trace!(target: "discovery", "Got FindNode from {:?}", &from);
 		let target: NodeId = rlp.val_at(0)?;
 		let timestamp: u64 = rlp.val_at(1)?;
@@ -503,7 +583,7 @@ impl Discovery {
 		let packets = chunks.map(|c| {
 			let mut rlp = RlpStream::new_list(1);
 			rlp.begin_list(c.len());
-			for n in 0 .. c.len() {
+			for n in 0..c.len() {
 				rlp.begin_list(4);
 				c[n].endpoint.to_rlp(&mut rlp);
 				rlp.append(&c[n].id);
@@ -513,7 +593,12 @@ impl Discovery {
 		packets.collect()
 	}
 
-	fn on_neighbours(&mut self, rlp: &Rlp, _node: &NodeId, from: &SocketAddr) -> Result<Option<TableUpdates>, Error> {
+	fn on_neighbours(
+		&mut self,
+		rlp: &Rlp,
+		_node: &NodeId,
+		from: &SocketAddr,
+	) -> Result<Option<TableUpdates>, Error> {
 		// TODO: validate packet
 		let mut added = HashMap::new();
 		trace!(target: "discovery", "Got {} Neighbours from {:?}", rlp.at(0)?.item_count()?, &from);
@@ -527,7 +612,10 @@ impl Discovery {
 			if node_id == self.id {
 				continue;
 			}
-			let entry = NodeEntry { id: node_id.clone(), endpoint: endpoint };
+			let entry = NodeEntry {
+				id: node_id.clone(),
+				endpoint: endpoint,
+			};
 			if !self.is_allowed(&entry) {
 				debug!(target: "discovery", "Address not allowed: {:?}", entry);
 				continue;
@@ -536,7 +624,10 @@ impl Discovery {
 			self.ping(&entry.endpoint);
 			self.update_node(entry);
 		}
-		Ok(Some(TableUpdates { added: added, removed: HashSet::new() }))
+		Ok(Some(TableUpdates {
+			added: added,
+			removed: HashSet::new(),
+		}))
 	}
 
 	fn check_expired(&mut self, force: bool) -> HashSet<NodeId> {
@@ -547,13 +638,14 @@ impl Discovery {
 				if let Some(timeout) = node.timeout {
 					if !force && now.duration_since(timeout) < PING_TIMEOUT {
 						true
-					}
-					else {
+					} else {
 						trace!(target: "discovery", "Removed expired node {:?}", &node.address);
 						removed.insert(node.address.id.clone());
 						false
 					}
-				} else { true }
+				} else {
+					true
+				}
 			});
 		}
 		removed
@@ -563,26 +655,51 @@ impl Discovery {
 		let removed = self.check_expired(false);
 		self.discover();
 		if !removed.is_empty() {
-			Some(TableUpdates { added: HashMap::new(), removed: removed })
-		} else { None }
+			Some(TableUpdates {
+				added: HashMap::new(),
+				removed: removed,
+			})
+		} else {
+			None
+		}
 	}
 
 	pub fn refresh(&mut self) {
 		self.start();
 	}
 
-	pub fn register_socket<Host:Handler>(&self, event_loop: &mut EventLoop<Host>) -> Result<(), Error> {
-		event_loop.register(&self.udp_socket, Token(self.token), Ready::all(), PollOpt::edge()).expect("Error registering UDP socket");
+	pub fn register_socket<Host: Handler>(
+		&self,
+		event_loop: &mut EventLoop<Host>,
+	) -> Result<(), Error> {
+		event_loop
+			.register(
+				&self.udp_socket,
+				Token(self.token),
+				Ready::all(),
+				PollOpt::edge(),
+			)
+			.expect("Error registering UDP socket");
 		Ok(())
 	}
 
-	pub fn update_registration<Host:Handler>(&self, event_loop: &mut EventLoop<Host>) -> Result<(), Error> {
+	pub fn update_registration<Host: Handler>(
+		&self,
+		event_loop: &mut EventLoop<Host>,
+	) -> Result<(), Error> {
 		let registration = if !self.send_queue.is_empty() {
 			Ready::readable() | Ready::writable()
 		} else {
 			Ready::readable()
 		};
-		event_loop.reregister(&self.udp_socket, Token(self.token), registration, PollOpt::edge()).expect("Error reregistering UDP socket");
+		event_loop
+			.reregister(
+				&self.udp_socket,
+				Token(self.token),
+				registration,
+				PollOpt::edge(),
+			)
+			.expect("Error reregistering UDP socket");
 		Ok(())
 	}
 }
@@ -590,25 +707,28 @@ impl Discovery {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::net::{SocketAddr};
-	use node_table::{Node, NodeId, NodeEndpoint};
+	use node_table::{Node, NodeEndpoint, NodeId};
+	use std::net::SocketAddr;
 
-	use std::str::FromStr;
+	use ethkey::{Generator, Random};
 	use rustc_hex::FromHex;
-	use ethkey::{Random, Generator};
+	use std::str::FromStr;
 
 	#[test]
 	fn find_node() {
 		let mut nearest = Vec::new();
 		let node = Node::from_str("enode://a979fb575495b8d6db44f750317d0f4622bf4c2aa3365d6af7c284339968eef29b69ad0dce72a4d8db5ebb4968de0e3bec910127f134779fbcb0cb6d3331163c@127.0.0.1:7770").unwrap();
 		for _ in 0..1000 {
-			nearest.push( NodeEntry { id: node.id.clone(), endpoint: node.endpoint.clone() });
+			nearest.push(NodeEntry {
+				id: node.id.clone(),
+				endpoint: node.endpoint.clone(),
+			});
 		}
 
 		let packets = Discovery::prepare_neighbours_packets(&nearest);
 		assert_eq!(packets.len(), 77);
 		for p in &packets[0..76] {
-			assert!(p.len() > 1280/2);
+			assert!(p.len() > 1280 / 2);
 			assert!(p.len() <= 1280);
 		}
 		assert!(packets.last().unwrap().len() > 0);
@@ -618,30 +738,61 @@ mod tests {
 	fn discovery() {
 		let key1 = Random.generate().unwrap();
 		let key2 = Random.generate().unwrap();
-		let ep1 = NodeEndpoint { address: SocketAddr::from_str("127.0.0.1:40444").unwrap(), udp_port: 40444 };
-		let ep2 = NodeEndpoint { address: SocketAddr::from_str("127.0.0.1:40445").unwrap(), udp_port: 40445 };
-		let mut discovery1 = Discovery::new(&key1, ep1.address.clone(), ep1.clone(), 0, IpFilter::default());
-		let mut discovery2 = Discovery::new(&key2, ep2.address.clone(), ep2.clone(), 0, IpFilter::default());
+		let ep1 = NodeEndpoint {
+			address: SocketAddr::from_str("127.0.0.1:40444").unwrap(),
+			udp_port: 40444,
+		};
+		let ep2 = NodeEndpoint {
+			address: SocketAddr::from_str("127.0.0.1:40445").unwrap(),
+			udp_port: 40445,
+		};
+		let mut discovery1 = Discovery::new(
+			&key1,
+			ep1.address.clone(),
+			ep1.clone(),
+			0,
+			IpFilter::default(),
+		);
+		let mut discovery2 = Discovery::new(
+			&key2,
+			ep2.address.clone(),
+			ep2.clone(),
+			0,
+			IpFilter::default(),
+		);
 
 		let node1 = Node::from_str("enode://a979fb575495b8d6db44f750317d0f4622bf4c2aa3365d6af7c284339968eef29b69ad0dce72a4d8db5ebb4968de0e3bec910127f134779fbcb0cb6d3331163c@127.0.0.1:7770").unwrap();
 		let node2 = Node::from_str("enode://b979fb575495b8d6db44f750317d0f4622bf4c2aa3365d6af7c284339968eef29b69ad0dce72a4d8db5ebb4968de0e3bec910127f134779fbcb0cb6d3331163c@127.0.0.1:7771").unwrap();
-		discovery1.add_node(NodeEntry { id: node1.id.clone(), endpoint: node1.endpoint.clone() });
-		discovery1.add_node(NodeEntry { id: node2.id.clone(), endpoint: node2.endpoint.clone() });
+		discovery1.add_node(NodeEntry {
+			id: node1.id.clone(),
+			endpoint: node1.endpoint.clone(),
+		});
+		discovery1.add_node(NodeEntry {
+			id: node2.id.clone(),
+			endpoint: node2.endpoint.clone(),
+		});
 
-		discovery2.add_node(NodeEntry { id: key1.public().clone(), endpoint: ep1.clone() });
+		discovery2.add_node(NodeEntry {
+			id: key1.public().clone(),
+			endpoint: ep1.clone(),
+		});
 		discovery2.refresh();
 
-		for _ in 0 .. 10 {
+		for _ in 0..10 {
 			while !discovery1.send_queue.is_empty() {
 				let datagramm = discovery1.send_queue.pop_front().unwrap();
 				if datagramm.address == ep2.address {
-					discovery2.on_packet(&datagramm.payload, ep1.address.clone()).ok();
+					discovery2
+						.on_packet(&datagramm.payload, ep1.address.clone())
+						.ok();
 				}
 			}
 			while !discovery2.send_queue.is_empty() {
 				let datagramm = discovery2.send_queue.pop_front().unwrap();
 				if datagramm.address == ep1.address {
-					discovery1.on_packet(&datagramm.payload, ep2.address.clone()).ok();
+					discovery1
+						.on_packet(&datagramm.payload, ep2.address.clone())
+						.ok();
 				}
 			}
 			discovery2.round();
@@ -652,10 +803,17 @@ mod tests {
 	#[test]
 	fn removes_expired() {
 		let key = Random.generate().unwrap();
-		let ep = NodeEndpoint { address: SocketAddr::from_str("127.0.0.1:40446").unwrap(), udp_port: 40447 };
-		let mut discovery = Discovery::new(&key, ep.address.clone(), ep.clone(), 0, IpFilter::default());
+		let ep = NodeEndpoint {
+			address: SocketAddr::from_str("127.0.0.1:40446").unwrap(),
+			udp_port: 40447,
+		};
+		let mut discovery =
+			Discovery::new(&key, ep.address.clone(), ep.clone(), 0, IpFilter::default());
 		for _ in 0..1200 {
-			discovery.add_node(NodeEntry { id: NodeId::random(), endpoint: ep.clone() });
+			discovery.add_node(NodeEntry {
+				id: NodeId::random(),
+				endpoint: ep.clone(),
+			});
 		}
 		assert!(discovery.nearest_node_entries(&NodeId::new()).len() <= 16);
 		let removed = discovery.check_expired(true).len();
@@ -667,12 +825,19 @@ mod tests {
 		use super::*;
 
 		let key = Random.generate().unwrap();
-		let ep = NodeEndpoint { address: SocketAddr::from_str("127.0.0.1:40447").unwrap(), udp_port: 40447 };
-		let mut discovery = Discovery::new(&key, ep.address.clone(), ep.clone(), 0, IpFilter::default());
+		let ep = NodeEndpoint {
+			address: SocketAddr::from_str("127.0.0.1:40447").unwrap(),
+			udp_port: 40447,
+		};
+		let mut discovery =
+			Discovery::new(&key, ep.address.clone(), ep.clone(), 0, IpFilter::default());
 
 		for _ in 0..(16 + 10) {
 			discovery.node_buckets[0].nodes.push_back(BucketEntry {
-				address: NodeEntry { id: NodeId::new(), endpoint: ep.clone() },
+				address: NodeEntry {
+					id: NodeId::new(),
+					endpoint: ep.clone(),
+				},
 				timeout: None,
 				id_hash: keccak(NodeId::new()),
 			});
@@ -684,7 +849,10 @@ mod tests {
 	#[test]
 	fn routing_table_insertions_lookups() {
 		use super::*;
-		let ep = NodeEndpoint { address: SocketAddr::from_str("127.0.0.1:40448").unwrap(), udp_port: 40447 };
+		let ep = NodeEndpoint {
+			address: SocketAddr::from_str("127.0.0.1:40448").unwrap(),
+			udp_port: 40447,
+		};
 		let node_ids_hex: [&str; 32] = [
 			"22536fa57acc12c4993295cbc26fef4550513496712b301ad2283d356c8108521244a362e64e6d907a0d0b4e65526699c5ae3cfebfc680505fe3b33d50672835",
 			"22c482f42401546f8dd7ed6b1c0cad976da6630730f1116614579ccb084791a528ff2676bfe94434de80e5d7e479f1ea1d7737077da3bd5e69a0f3e5bf596091",
@@ -719,38 +887,40 @@ mod tests {
 			"e1268f5dd9552a11989df9d4953bb388e7466711b2bd9882a3ed4d0767a21f046c53c20f9a18d66bae1d6a5544492857ddecb0b5b4818bd4557be252ddd66c71",
 			"e626019dc0b50b9e254461f19d29e69a4669c5256134a6352c6c30d3bc55d201a5b43fc2e006556cfaf29765b683e807e03093798942826244e4ee9e47c75d3f",
 		];
-		let node_entries = node_ids_hex.iter()
+		let node_entries = node_ids_hex
+			.iter()
 			.map(|node_id_hex| NodeId::from_str(node_id_hex).unwrap())
-			.map(|node_id| NodeEntry { id: node_id, endpoint: ep.clone() })
+			.map(|node_id| NodeEntry {
+				id: node_id,
+				endpoint: ep.clone(),
+			})
 			.collect::<Vec<_>>();
 
 		let secret_hex = "6c71d1b8930d29e6371be1081f2c909c64b46440a1716314c3c9df995cb3aed1";
 		let key = Secret::from_str(secret_hex)
 			.and_then(|secret| KeyPair::from_secret(secret))
 			.unwrap();
-		let mut discovery = Discovery::new(&key, ep.address.clone(), ep.clone(), 0, IpFilter::default());
+		let mut discovery =
+			Discovery::new(&key, ep.address.clone(), ep.clone(), 0, IpFilter::default());
 
-		node_entries.iter().for_each(|entry| discovery.update_node(entry.clone()));
+		node_entries
+			.iter()
+			.for_each(|entry| discovery.update_node(entry.clone()));
 
 		let expected_bucket_sizes = vec![
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 3, 7, 8, 12
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 3, 7, 8, 12,
 		];
-		let actual_bucket_sizes = discovery.node_buckets.iter()
+		let actual_bucket_sizes = discovery
+			.node_buckets
+			.iter()
 			.map(|ref bucket| bucket.nodes.len())
 			.collect::<Vec<_>>();
 		assert_eq!(actual_bucket_sizes, expected_bucket_sizes);
@@ -772,29 +942,37 @@ mod tests {
 	#[test]
 	fn packets() {
 		let key = Random.generate().unwrap();
-		let ep = NodeEndpoint { address: SocketAddr::from_str("127.0.0.1:40449").unwrap(), udp_port: 40449 };
-		let mut discovery = Discovery::new(&key, ep.address.clone(), ep.clone(), 0, IpFilter::default());
+		let ep = NodeEndpoint {
+			address: SocketAddr::from_str("127.0.0.1:40449").unwrap(),
+			udp_port: 40449,
+		};
+		let mut discovery =
+			Discovery::new(&key, ep.address.clone(), ep.clone(), 0, IpFilter::default());
 		discovery.check_timestamps = false;
 		let from = SocketAddr::from_str("99.99.99.99:40445").unwrap();
 
 		let packet = "\
-		e9614ccfd9fc3e74360018522d30e1419a143407ffcce748de3e22116b7e8dc92ff74788c0b6663a\
-		aa3d67d641936511c8f8d6ad8698b820a7cf9e1be7155e9a241f556658c55428ec0563514365799a\
-		4be2be5a685a80971ddcfa80cb422cdd0101ec04cb847f000001820cfa8215a8d790000000000000\
-		000000000000000000018208ae820d058443b9a3550102\
-		".from_hex().unwrap();
+		              e9614ccfd9fc3e74360018522d30e1419a143407ffcce748de3e22116b7e8dc92ff74788c0b6663a\
+		              aa3d67d641936511c8f8d6ad8698b820a7cf9e1be7155e9a241f556658c55428ec0563514365799a\
+		              4be2be5a685a80971ddcfa80cb422cdd0101ec04cb847f000001820cfa8215a8d790000000000000\
+		              000000000000000000018208ae820d058443b9a3550102\
+		              "
+		.from_hex()
+		.unwrap();
 		assert!(discovery.on_packet(&packet, from.clone()).is_ok());
 
 		let packet = "\
-		577be4349c4dd26768081f58de4c6f375a7a22f3f7adda654d1428637412c3d7fe917cadc56d4e5e\
-		7ffae1dbe3efffb9849feb71b262de37977e7c7a44e677295680e9e38ab26bee2fcbae207fba3ff3\
-		d74069a50b902a82c9903ed37cc993c50001f83e82022bd79020010db83c4d001500000000abcdef\
-		12820cfa8215a8d79020010db885a308d313198a2e037073488208ae82823a8443b9a355c5010203\
-		040531b9019afde696e582a78fa8d95ea13ce3297d4afb8ba6433e4154caa5ac6431af1b80ba7602\
-		3fa4090c408f6b4bc3701562c031041d4702971d102c9ab7fa5eed4cd6bab8f7af956f7d565ee191\
-		7084a95398b6a21eac920fe3dd1345ec0a7ef39367ee69ddf092cbfe5b93e5e568ebc491983c09c7\
-		6d922dc3\
-		".from_hex().unwrap();
+		              577be4349c4dd26768081f58de4c6f375a7a22f3f7adda654d1428637412c3d7fe917cadc56d4e5e\
+		              7ffae1dbe3efffb9849feb71b262de37977e7c7a44e677295680e9e38ab26bee2fcbae207fba3ff3\
+		              d74069a50b902a82c9903ed37cc993c50001f83e82022bd79020010db83c4d001500000000abcdef\
+		              12820cfa8215a8d79020010db885a308d313198a2e037073488208ae82823a8443b9a355c5010203\
+		              040531b9019afde696e582a78fa8d95ea13ce3297d4afb8ba6433e4154caa5ac6431af1b80ba7602\
+		              3fa4090c408f6b4bc3701562c031041d4702971d102c9ab7fa5eed4cd6bab8f7af956f7d565ee191\
+		              7084a95398b6a21eac920fe3dd1345ec0a7ef39367ee69ddf092cbfe5b93e5e568ebc491983c09c7\
+		              6d922dc3\
+		              "
+		.from_hex()
+		.unwrap();
 		assert!(discovery.on_packet(&packet, from.clone()).is_ok());
 
 		let packet = "\
@@ -804,33 +982,39 @@ mod tests {
 		ae82823aa0fbc914b16819237dcd8801d7e53f69e9719adecb3cc0e790c57e91ca4461c9548443b9\
 		a355c6010203c2040506a0c969a58f6f9095004c0177a6b47f451530cab38966a25cca5cb58f0555
 		42124e\
-		".from_hex().unwrap();
+		"
+		.from_hex()
+		.unwrap();
 		assert!(discovery.on_packet(&packet, from.clone()).is_ok());
 
 		let packet = "\
-		c7c44041b9f7c7e41934417ebac9a8e1a4c6298f74553f2fcfdcae6ed6fe53163eb3d2b52e39fe91\
-		831b8a927bf4fc222c3902202027e5e9eb812195f95d20061ef5cd31d502e47ecb61183f74a504fe\
-		04c51e73df81f25c4d506b26db4517490103f84eb840ca634cae0d49acb401d8a4c6b6fe8c55b70d\
-		115bf400769cc1400f3258cd31387574077f301b421bc84df7266c44e9e6d569fc56be0081290476\
-		7bf5ccd1fc7f8443b9a35582999983999999280dc62cc8255c73471e0a61da0c89acdc0e035e260a\
-		dd7fc0c04ad9ebf3919644c91cb247affc82b69bd2ca235c71eab8e49737c937a2c396\
-		".from_hex().unwrap();
+		              c7c44041b9f7c7e41934417ebac9a8e1a4c6298f74553f2fcfdcae6ed6fe53163eb3d2b52e39fe91\
+		              831b8a927bf4fc222c3902202027e5e9eb812195f95d20061ef5cd31d502e47ecb61183f74a504fe\
+		              04c51e73df81f25c4d506b26db4517490103f84eb840ca634cae0d49acb401d8a4c6b6fe8c55b70d\
+		              115bf400769cc1400f3258cd31387574077f301b421bc84df7266c44e9e6d569fc56be0081290476\
+		              7bf5ccd1fc7f8443b9a35582999983999999280dc62cc8255c73471e0a61da0c89acdc0e035e260a\
+		              dd7fc0c04ad9ebf3919644c91cb247affc82b69bd2ca235c71eab8e49737c937a2c396\
+		              "
+		.from_hex()
+		.unwrap();
 		assert!(discovery.on_packet(&packet, from.clone()).is_ok());
 
 		let packet = "\
-		c679fc8fe0b8b12f06577f2e802d34f6fa257e6137a995f6f4cbfc9ee50ed3710faf6e66f932c4c8\
-		d81d64343f429651328758b47d3dbc02c4042f0fff6946a50f4a49037a72bb550f3a7872363a83e1\
-		b9ee6469856c24eb4ef80b7535bcf99c0004f9015bf90150f84d846321163782115c82115db84031\
-		55e1427f85f10a5c9a7755877748041af1bcd8d474ec065eb33df57a97babf54bfd2103575fa8291\
-		15d224c523596b401065a97f74010610fce76382c0bf32f84984010203040101b840312c55512422\
-		cf9b8a4097e9a6ad79402e87a15ae909a4bfefa22398f03d20951933beea1e4dfa6f968212385e82\
-		9f04c2d314fc2d4e255e0d3bc08792b069dbf8599020010db83c4d001500000000abcdef12820d05\
-		820d05b84038643200b172dcfef857492156971f0e6aa2c538d8b74010f8e140811d53b98c765dd2\
-		d96126051913f44582e8c199ad7c6d6819e9a56483f637feaac9448aacf8599020010db885a308d3\
-		13198a2e037073488203e78203e8b8408dcab8618c3253b558d459da53bd8fa68935a719aff8b811\
-		197101a4b2b47dd2d47295286fc00cc081bb542d760717d1bdd6bec2c37cd72eca367d6dd3b9df73\
-		8443b9a355010203b525a138aa34383fec3d2719a0\
-		".from_hex().unwrap();
+		              c679fc8fe0b8b12f06577f2e802d34f6fa257e6137a995f6f4cbfc9ee50ed3710faf6e66f932c4c8\
+		              d81d64343f429651328758b47d3dbc02c4042f0fff6946a50f4a49037a72bb550f3a7872363a83e1\
+		              b9ee6469856c24eb4ef80b7535bcf99c0004f9015bf90150f84d846321163782115c82115db84031\
+		              55e1427f85f10a5c9a7755877748041af1bcd8d474ec065eb33df57a97babf54bfd2103575fa8291\
+		              15d224c523596b401065a97f74010610fce76382c0bf32f84984010203040101b840312c55512422\
+		              cf9b8a4097e9a6ad79402e87a15ae909a4bfefa22398f03d20951933beea1e4dfa6f968212385e82\
+		              9f04c2d314fc2d4e255e0d3bc08792b069dbf8599020010db83c4d001500000000abcdef12820d05\
+		              820d05b84038643200b172dcfef857492156971f0e6aa2c538d8b74010f8e140811d53b98c765dd2\
+		              d96126051913f44582e8c199ad7c6d6819e9a56483f637feaac9448aacf8599020010db885a308d3\
+		              13198a2e037073488203e78203e8b8408dcab8618c3253b558d459da53bd8fa68935a719aff8b811\
+		              197101a4b2b47dd2d47295286fc00cc081bb542d760717d1bdd6bec2c37cd72eca367d6dd3b9df73\
+		              8443b9a355010203b525a138aa34383fec3d2719a0\
+		              "
+		.from_hex()
+		.unwrap();
 		assert!(discovery.on_packet(&packet, from.clone()).is_ok());
 	}
 
@@ -838,17 +1022,40 @@ mod tests {
 	fn test_ping() {
 		let key1 = Random.generate().unwrap();
 		let key2 = Random.generate().unwrap();
-		let ep1 = NodeEndpoint { address: SocketAddr::from_str("127.0.0.1:40344").unwrap(), udp_port: 40344 };
-		let ep2 = NodeEndpoint { address: SocketAddr::from_str("127.0.0.1:40345").unwrap(), udp_port: 40345 };
-		let mut discovery1 = Discovery::new(&key1, ep1.address.clone(), ep1.clone(), 0, IpFilter::default());
-		let mut discovery2 = Discovery::new(&key2, ep2.address.clone(), ep2.clone(), 0, IpFilter::default());
+		let ep1 = NodeEndpoint {
+			address: SocketAddr::from_str("127.0.0.1:40344").unwrap(),
+			udp_port: 40344,
+		};
+		let ep2 = NodeEndpoint {
+			address: SocketAddr::from_str("127.0.0.1:40345").unwrap(),
+			udp_port: 40345,
+		};
+		let mut discovery1 = Discovery::new(
+			&key1,
+			ep1.address.clone(),
+			ep1.clone(),
+			0,
+			IpFilter::default(),
+		);
+		let mut discovery2 = Discovery::new(
+			&key2,
+			ep2.address.clone(),
+			ep2.clone(),
+			0,
+			IpFilter::default(),
+		);
 
 		discovery1.ping(&ep2);
 		let ping_data = discovery1.send_queue.pop_front().unwrap();
-		discovery2.on_packet(&ping_data.payload, ep1.address.clone()).ok();
+		discovery2
+			.on_packet(&ping_data.payload, ep1.address.clone())
+			.ok();
 		let pong_data = discovery2.send_queue.pop_front().unwrap();
 		let data = &pong_data.payload[(32 + 65)..];
 		let rlp = Rlp::new(&data[1..]);
-		assert_eq!(ping_data.payload[0..32], rlp.val_at::<Vec<u8>>(1).unwrap()[..])
+		assert_eq!(
+			ping_data.payload[0..32],
+			rlp.val_at::<Vec<u8>>(1).unwrap()[..]
+		)
 	}
 }

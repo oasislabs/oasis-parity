@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::{Arc, Weak};
 use bytes::Bytes;
-use ethereum_types::Address;
-use ethcore::client::{Client, BlockChainClient, ChainInfo, Nonce};
+use ethcore::client::{BlockChainClient, ChainInfo, Client, Nonce};
 use ethcore::miner::{Miner, MinerService};
+use ethereum_types::Address;
+use std::sync::{Arc, Weak};
 use sync::SyncProvider;
-use transaction::{Transaction, SignedTransaction, Action};
+use transaction::{Action, SignedTransaction, Transaction};
 use {Error, NodeKeyPair};
 
 #[derive(Clone)]
@@ -38,7 +38,12 @@ pub struct TrustedClient {
 
 impl TrustedClient {
 	/// Create new trusted client.
-	pub fn new(self_key_pair: Arc<NodeKeyPair>, client: Arc<Client>, sync: Arc<SyncProvider>, miner: Arc<Miner>) -> Self {
+	pub fn new(
+		self_key_pair: Arc<NodeKeyPair>,
+		client: Arc<Client>,
+		sync: Arc<SyncProvider>,
+		miner: Arc<Miner>,
+	) -> Self {
 		TrustedClient {
 			self_key_pair: self_key_pair,
 			client: Arc::downgrade(&client),
@@ -49,7 +54,8 @@ impl TrustedClient {
 
 	/// Get 'trusted' `Client` reference only if it is synchronized && trusted.
 	pub fn get(&self) -> Option<Arc<Client>> {
-		self.client.upgrade()
+		self.client
+			.upgrade()
 			.and_then(|client| self.sync.upgrade().map(|sync| (client, sync)))
 			.and_then(|(client, sync)| {
 				let is_synced = !sync.status().is_syncing(client.queue_info());
@@ -68,8 +74,14 @@ impl TrustedClient {
 
 	/// Transact contract.
 	pub fn transact_contract(&self, contract: Address, tx_data: Bytes) -> Result<(), Error> {
-		let client = self.client.upgrade().ok_or_else(|| Error::Internal("cannot submit tx when client is offline".into()))?;
-		let miner = self.miner.upgrade().ok_or_else(|| Error::Internal("cannot submit tx when miner is offline".into()))?;
+		let client = self
+			.client
+			.upgrade()
+			.ok_or_else(|| Error::Internal("cannot submit tx when client is offline".into()))?;
+		let miner = self
+			.miner
+			.upgrade()
+			.ok_or_else(|| Error::Internal("cannot submit tx when miner is offline".into()))?;
 		let engine = client.engine();
 		let transaction = Transaction {
 			nonce: client.latest_nonce(&self.self_key_pair.address()),
@@ -82,7 +94,8 @@ impl TrustedClient {
 		let chain_id = engine.signing_chain_id(&client.latest_env_info());
 		let signature = self.self_key_pair.sign(&transaction.hash(chain_id))?;
 		let signed = SignedTransaction::new(transaction.with_signature(signature, chain_id))?;
-		miner.import_own_transaction(&*client, signed.into())
+		miner
+			.import_own_transaction(&*client, signed.into())
 			.map_err(|e| Error::Internal(format!("failed to import tx: {}", e)))
 			.map(|_| ())
 	}

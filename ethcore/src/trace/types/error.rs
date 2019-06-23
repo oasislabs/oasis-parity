@@ -16,8 +16,8 @@
 
 //! Trace errors.
 
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::fmt;
-use rlp::{Encodable, RlpStream, Decodable, DecoderError, Rlp};
 use vm::Error as VmError;
 
 /// Trace evm errors.
@@ -149,8 +149,8 @@ impl Decodable for Error {
 
 #[cfg(test)]
 mod tests {
-	use rlp::*;
 	use super::Error;
+	use rlp::*;
 
 	#[test]
 	fn encode_error() {

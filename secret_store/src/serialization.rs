@@ -14,23 +14,26 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+use bytes::Bytes;
+use ethereum_types::{H160, H256};
+use ethkey::{Public, Secret, Signature};
+use rustc_hex::{FromHex, ToHex};
+use serde::de::{Error as SerdeError, Visitor};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::ops::Deref;
-use rustc_hex::{ToHex, FromHex};
-use serde::{Serialize, Deserialize, Serializer, Deserializer};
-use serde::de::{Visitor, Error as SerdeError};
-use ethkey::{Public, Secret, Signature};
-use ethereum_types::{H160, H256};
-use bytes::Bytes;
 use types::Requester;
 
 macro_rules! impl_bytes_deserialize {
 	($name: ident, $value: expr, true) => {
-		$value[2..].from_hex().map($name).map_err(SerdeError::custom)
+		$value[2..]
+			.from_hex()
+			.map($name)
+			.map_err(SerdeError::custom)
 	};
 	($name: ident, $value: expr, false) => {
 		$value[2..].parse().map($name).map_err(SerdeError::custom)
-	}
+	};
 }
 
 macro_rules! impl_bytes {
@@ -108,7 +111,12 @@ impl_bytes!(SerializableH256, H256, false, (Default, PartialOrd, Ord));
 /// Serializable H160.
 impl_bytes!(SerializableH160, H160, false, (Default));
 /// Serializable H512 (aka Public).
-impl_bytes!(SerializablePublic, Public, false, (Default, PartialOrd, Ord));
+impl_bytes!(
+	SerializablePublic,
+	Public,
+	false,
+	(Default, PartialOrd, Ord)
+);
 /// Serializable Secret.
 impl_bytes!(SerializableSecret, Secret, false, ());
 /// Serializable Signature.
@@ -158,15 +166,16 @@ impl From<Requester> for SerializableRequester {
 
 #[cfg(test)]
 mod tests {
-	use serde_json;
 	use super::{SerializableBytes, SerializablePublic};
+	use serde_json;
 
 	#[test]
 	fn serialize_and_deserialize_bytes() {
 		let bytes = SerializableBytes(vec![1, 2, 3, 4]);
 		let bytes_serialized = serde_json::to_string(&bytes).unwrap();
 		assert_eq!(&bytes_serialized, r#""0x01020304""#);
-		let bytes_deserialized: SerializableBytes = serde_json::from_str(&bytes_serialized).unwrap();
+		let bytes_deserialized: SerializableBytes =
+			serde_json::from_str(&bytes_serialized).unwrap();
 		assert_eq!(bytes_deserialized, bytes);
 	}
 
@@ -175,7 +184,8 @@ mod tests {
 		let public = SerializablePublic("cac6c205eb06c8308d65156ff6c862c62b000b8ead121a4455a8ddeff7248128d895692136f240d5d1614dc7cc4147b1bd584bd617e30560bb872064d09ea325".parse().unwrap());
 		let public_serialized = serde_json::to_string(&public).unwrap();
 		assert_eq!(&public_serialized, r#""0xcac6c205eb06c8308d65156ff6c862c62b000b8ead121a4455a8ddeff7248128d895692136f240d5d1614dc7cc4147b1bd584bd617e30560bb872064d09ea325""#);
-		let public_deserialized: SerializablePublic = serde_json::from_str(&public_serialized).unwrap();
+		let public_deserialized: SerializablePublic =
+			serde_json::from_str(&public_serialized).unwrap();
 		assert_eq!(public_deserialized, public);
 	}
 }

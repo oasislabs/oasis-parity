@@ -14,15 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+use ethereum_types::{Address, H256};
+use ethkey::{public_to_address, Public, Secret};
+use kvdb::KeyValueDB;
+use serde_json;
+use serialization::{
+	SerializableAddress, SerializableH256, SerializablePublic, SerializableSecret,
+};
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use serde_json;
 use tiny_keccak::Keccak;
-use ethereum_types::{H256, Address};
-use ethkey::{Secret, Public, public_to_address};
-use kvdb::KeyValueDB;
-use types::{Error, ServerKeyId, NodeId};
-use serialization::{SerializablePublic, SerializableSecret, SerializableH256, SerializableAddress};
+use types::{Error, NodeId, ServerKeyId};
 
 /// Key of version value.
 const DB_META_KEY_VERSION: &'static [u8; 7] = b"version";
@@ -77,7 +79,7 @@ pub trait KeyStorage: Send + Sync {
 	/// Check if storage contains document encryption key
 	fn contains(&self, document: &ServerKeyId) -> bool;
 	/// Iterate through storage
-	fn iter<'a>(&'a self) -> Box<Iterator<Item=(ServerKeyId, DocumentKeyShare)> + 'a>;
+	fn iter<'a>(&'a self) -> Box<Iterator<Item = (ServerKeyId, DocumentKeyShare)> + 'a>;
 }
 
 /// Persistent document encryption keys storage
@@ -87,7 +89,7 @@ pub struct PersistentKeyStorage {
 
 /// Persistent document encryption keys storage iterator
 pub struct PersistentKeyStorageIterator<'a> {
-	iter: Box<Iterator<Item=(Box<[u8]>, Box<[u8]>)> + 'a>,
+	iter: Box<Iterator<Item = (Box<[u8]>, Box<[u8]>)> + 'a>,
 }
 
 /// V0 of encrypted key share, as it is stored by key storage on the single key server.
@@ -136,7 +138,7 @@ struct SerializableDocumentKeyShareV2 {
 	/// Encrypted point.
 	pub encrypted_point: Option<SerializablePublic>,
 	/// Versions.
-	pub versions: Vec<SerializableDocumentKeyShareVersionV2>
+	pub versions: Vec<SerializableDocumentKeyShareVersionV2>,
 }
 
 /// V2 of encrypted key share version, as it is stored by key storage on the single key server.
@@ -164,7 +166,7 @@ struct SerializableDocumentKeyShareV3 {
 	/// Encrypted point.
 	pub encrypted_point: Option<SerializablePublic>,
 	/// Versions.
-	pub versions: Vec<SerializableDocumentKeyShareVersionV3>
+	pub versions: Vec<SerializableDocumentKeyShareVersionV3>,
 }
 
 /// V3 of encrypted key share version, as it is stored by key storage on the single key server.
@@ -175,9 +177,7 @@ impl PersistentKeyStorage {
 	pub fn new(db: Arc<KeyValueDB>) -> Result<Self, Error> {
 		let db = upgrade_db(db)?;
 
-		Ok(PersistentKeyStorage {
-			db: db,
-		})
+		Ok(PersistentKeyStorage { db: db })
 	}
 }
 
@@ -188,8 +188,13 @@ fn upgrade_db(db: Arc<KeyValueDB>) -> Result<Arc<KeyValueDB>, Error> {
 		0 => {
 			let mut batch = db.transaction();
 			batch.put(None, DB_META_KEY_VERSION, &[CURRENT_VERSION]);
-			for (db_key, db_value) in db.iter(None).into_iter().filter(|&(ref k, _)| **k != *DB_META_KEY_VERSION) {
-				let v0_key = serde_json::from_slice::<SerializableDocumentKeyShareV0>(&db_value).map_err(|e| Error::Database(e.to_string()))?;
+			for (db_key, db_value) in db
+				.iter(None)
+				.into_iter()
+				.filter(|&(ref k, _)| **k != *DB_META_KEY_VERSION)
+			{
+				let v0_key = serde_json::from_slice::<SerializableDocumentKeyShareV0>(&db_value)
+					.map_err(|e| Error::Database(e.to_string()))?;
 				let current_key = CurrentSerializableDocumentKeyShare {
 					// author is used in separate generation + encrypt sessions.
 					// in v0 there have been only simultaneous GenEnc sessions.
@@ -199,22 +204,31 @@ fn upgrade_db(db: Arc<KeyValueDB>) -> Result<Arc<KeyValueDB>, Error> {
 					common_point: Some(v0_key.common_point),
 					encrypted_point: Some(v0_key.encrypted_point),
 					versions: vec![CurrentSerializableDocumentKeyVersion {
-						hash: DocumentKeyShareVersion::data_hash(v0_key.id_numbers.iter().map(|(k, v)| (&***k, &****v))).into(),
+						hash: DocumentKeyShareVersion::data_hash(
+							v0_key.id_numbers.iter().map(|(k, v)| (&***k, &****v)),
+						)
+						.into(),
 						id_numbers: v0_key.id_numbers,
 						secret_share: v0_key.secret_share,
 					}],
 				};
-				let db_value = serde_json::to_vec(&current_key).map_err(|e| Error::Database(e.to_string()))?;
+				let db_value =
+					serde_json::to_vec(&current_key).map_err(|e| Error::Database(e.to_string()))?;
 				batch.put(None, &*db_key, &*db_value);
 			}
 			db.write(batch)?;
 			Ok(db)
-		},
+		}
 		1 => {
 			let mut batch = db.transaction();
 			batch.put(None, DB_META_KEY_VERSION, &[CURRENT_VERSION]);
-			for (db_key, db_value) in db.iter(None).into_iter().filter(|&(ref k, _)| **k != *DB_META_KEY_VERSION) {
-				let v1_key = serde_json::from_slice::<SerializableDocumentKeyShareV1>(&db_value).map_err(|e| Error::Database(e.to_string()))?;
+			for (db_key, db_value) in db
+				.iter(None)
+				.into_iter()
+				.filter(|&(ref k, _)| **k != *DB_META_KEY_VERSION)
+			{
+				let v1_key = serde_json::from_slice::<SerializableDocumentKeyShareV1>(&db_value)
+					.map_err(|e| Error::Database(e.to_string()))?;
 				let current_key = CurrentSerializableDocumentKeyShare {
 					author: public_to_address(&v1_key.author).into(), // added in v1 + changed in v3
 					threshold: v1_key.threshold,
@@ -222,12 +236,16 @@ fn upgrade_db(db: Arc<KeyValueDB>) -> Result<Arc<KeyValueDB>, Error> {
 					common_point: v1_key.common_point,
 					encrypted_point: v1_key.encrypted_point,
 					versions: vec![CurrentSerializableDocumentKeyVersion {
-						hash: DocumentKeyShareVersion::data_hash(v1_key.id_numbers.iter().map(|(k, v)| (&***k, &****v))).into(),
+						hash: DocumentKeyShareVersion::data_hash(
+							v1_key.id_numbers.iter().map(|(k, v)| (&***k, &****v)),
+						)
+						.into(),
 						id_numbers: v1_key.id_numbers,
 						secret_share: v1_key.secret_share,
 					}],
 				};
-				let db_value = serde_json::to_vec(&current_key).map_err(|e| Error::Database(e.to_string()))?;
+				let db_value =
+					serde_json::to_vec(&current_key).map_err(|e| Error::Database(e.to_string()))?;
 				batch.put(None, &*db_key, &*db_value);
 			}
 			db.write(batch)?;
@@ -236,8 +254,13 @@ fn upgrade_db(db: Arc<KeyValueDB>) -> Result<Arc<KeyValueDB>, Error> {
 		2 => {
 			let mut batch = db.transaction();
 			batch.put(None, DB_META_KEY_VERSION, &[CURRENT_VERSION]);
-			for (db_key, db_value) in db.iter(None).into_iter().filter(|&(ref k, _)| **k != *DB_META_KEY_VERSION) {
-				let v2_key = serde_json::from_slice::<SerializableDocumentKeyShareV2>(&db_value).map_err(|e| Error::Database(e.to_string()))?;
+			for (db_key, db_value) in db
+				.iter(None)
+				.into_iter()
+				.filter(|&(ref k, _)| **k != *DB_META_KEY_VERSION)
+			{
+				let v2_key = serde_json::from_slice::<SerializableDocumentKeyShareV2>(&db_value)
+					.map_err(|e| Error::Database(e.to_string()))?;
 				let current_key = CurrentSerializableDocumentKeyShare {
 					author: public_to_address(&v2_key.author).into(), // changed in v3
 					threshold: v2_key.threshold,
@@ -246,14 +269,18 @@ fn upgrade_db(db: Arc<KeyValueDB>) -> Result<Arc<KeyValueDB>, Error> {
 					encrypted_point: v2_key.encrypted_point,
 					versions: v2_key.versions,
 				};
-				let db_value = serde_json::to_vec(&current_key).map_err(|e| Error::Database(e.to_string()))?;
+				let db_value =
+					serde_json::to_vec(&current_key).map_err(|e| Error::Database(e.to_string()))?;
 				batch.put(None, &*db_key, &*db_value);
 			}
 			db.write(batch)?;
 			Ok(db)
-		},
+		}
 		3 => Ok(db),
-		_ => Err(Error::Database(format!("unsupported SecretStore database version: {}", version))),
+		_ => Err(Error::Database(format!(
+			"unsupported SecretStore database version: {}",
+			version
+		))),
 	}
 }
 
@@ -271,7 +298,8 @@ impl KeyStorage for PersistentKeyStorage {
 	}
 
 	fn get(&self, document: &ServerKeyId) -> Result<Option<DocumentKeyShare>, Error> {
-		self.db.get(None, document)
+		self.db
+			.get(None, document)
 			.map_err(|e| Error::Database(e.to_string()))
 			.and_then(|key| match key {
 				None => Ok(None),
@@ -293,17 +321,19 @@ impl KeyStorage for PersistentKeyStorage {
 		for (key, _) in self.iter() {
 			batch.delete(None, &key);
 		}
-		self.db.write(batch)
+		self.db
+			.write(batch)
 			.map_err(|e| Error::Database(e.to_string()))
 	}
 
 	fn contains(&self, document: &ServerKeyId) -> bool {
-		self.db.get(None, document)
+		self.db
+			.get(None, document)
 			.map(|k| k.is_some())
 			.unwrap_or(false)
 	}
 
-	fn iter<'a>(&'a self) -> Box<Iterator<Item=(ServerKeyId, DocumentKeyShare)> + 'a> {
+	fn iter<'a>(&'a self) -> Box<Iterator<Item = (ServerKeyId, DocumentKeyShare)> + 'a> {
 		Box::new(PersistentKeyStorageIterator {
 			iter: self.db.iter(None),
 		})
@@ -314,10 +344,11 @@ impl<'a> Iterator for PersistentKeyStorageIterator<'a> {
 	type Item = (ServerKeyId, DocumentKeyShare);
 
 	fn next(&mut self) -> Option<(ServerKeyId, DocumentKeyShare)> {
-		self.iter.as_mut().next()
-			.and_then(|(db_key, db_val)| serde_json::from_slice::<CurrentSerializableDocumentKeyShare>(&db_val)
-					  .ok()
-					  .map(|key| ((*db_key).into(), key.into())))
+		self.iter.as_mut().next().and_then(|(db_key, db_val)| {
+			serde_json::from_slice::<CurrentSerializableDocumentKeyShare>(&db_val)
+				.ok()
+				.map(|key| ((*db_key).into(), key.into()))
+		})
 	}
 }
 
@@ -325,14 +356,18 @@ impl DocumentKeyShare {
 	/// Get last version reference.
 	#[cfg(test)]
 	pub fn last_version(&self) -> Result<&DocumentKeyShareVersion, Error> {
-		self.versions.iter().rev()
+		self.versions
+			.iter()
+			.rev()
 			.nth(0)
 			.ok_or_else(|| Error::Database("key version is not found".into()))
 	}
 
 	/// Get given version reference.
 	pub fn version(&self, version: &H256) -> Result<&DocumentKeyShareVersion, Error> {
-		self.versions.iter().rev()
+		self.versions
+			.iter()
+			.rev()
 			.find(|v| &v.hash == version)
 			.ok_or_else(|| Error::Database("key version is not found".into()))
 	}
@@ -349,7 +384,10 @@ impl DocumentKeyShareVersion {
 	}
 
 	/// Calculate hash of given version data.
-	pub fn data_hash<'a, I>(id_numbers: I) -> H256 where I: Iterator<Item=(&'a [u8], &'a [u8])> {
+	pub fn data_hash<'a, I>(id_numbers: I) -> H256
+	where
+		I: Iterator<Item = (&'a [u8], &'a [u8])>,
+	{
 		let mut nodes_keccak = Keccak::new_keccak256();
 
 		for (node, node_number) in id_numbers {
@@ -381,7 +419,11 @@ impl From<DocumentKeyShareVersion> for SerializableDocumentKeyShareVersionV3 {
 	fn from(version: DocumentKeyShareVersion) -> Self {
 		SerializableDocumentKeyShareVersionV3 {
 			hash: version.hash.into(),
-			id_numbers: version.id_numbers.into_iter().map(|(k, v)| (k.into(), v.into())).collect(),
+			id_numbers: version
+				.id_numbers
+				.into_iter()
+				.map(|(k, v)| (k.into(), v.into()))
+				.collect(),
 			secret_share: version.secret_share.into(),
 		}
 	}
@@ -395,10 +437,16 @@ impl From<SerializableDocumentKeyShareV3> for DocumentKeyShare {
 			public: key.public.into(),
 			common_point: key.common_point.map(Into::into),
 			encrypted_point: key.encrypted_point.map(Into::into),
-			versions: key.versions.into_iter()
+			versions: key
+				.versions
+				.into_iter()
 				.map(|v| DocumentKeyShareVersion {
 					hash: v.hash.into(),
-					id_numbers: v.id_numbers.into_iter().map(|(k, v)| (k.into(), v.into())).collect(),
+					id_numbers: v
+						.id_numbers
+						.into_iter()
+						.map(|(k, v)| (k.into(), v.into()))
+						.collect(),
 					secret_share: v.secret_share.into(),
 				})
 				.collect(),
@@ -410,18 +458,21 @@ impl From<SerializableDocumentKeyShareV3> for DocumentKeyShare {
 pub mod tests {
 	extern crate tempdir;
 
-	use std::collections::HashMap;
-	use std::sync::Arc;
+	use self::tempdir::TempDir;
+	use super::{
+		upgrade_db, CurrentSerializableDocumentKeyShare, DocumentKeyShare, DocumentKeyShareVersion,
+		KeyStorage, PersistentKeyStorage, SerializableDocumentKeyShareV0,
+		SerializableDocumentKeyShareV1, SerializableDocumentKeyShareV2,
+		SerializableDocumentKeyShareVersionV2, CURRENT_VERSION, DB_META_KEY_VERSION,
+	};
+	use ethereum_types::{Address, H256};
+	use ethkey::{public_to_address, Generator, Public, Random, Secret};
+	use kvdb_rocksdb::Database;
 	use parking_lot::RwLock;
 	use serde_json;
-	use self::tempdir::TempDir;
-	use ethereum_types::{Address, H256};
-	use ethkey::{Random, Generator, Public, Secret, public_to_address};
-	use kvdb_rocksdb::Database;
+	use std::collections::HashMap;
+	use std::sync::Arc;
 	use types::{Error, ServerKeyId};
-	use super::{DB_META_KEY_VERSION, CURRENT_VERSION, KeyStorage, PersistentKeyStorage, DocumentKeyShare,
-		DocumentKeyShareVersion, CurrentSerializableDocumentKeyShare, upgrade_db, SerializableDocumentKeyShareV0,
-		SerializableDocumentKeyShareV1, SerializableDocumentKeyShareV2, SerializableDocumentKeyShareVersionV2};
 
 	/// In-memory document encryption keys storage
 	#[derive(Default)]
@@ -458,7 +509,7 @@ pub mod tests {
 			self.keys.read().contains_key(document)
 		}
 
-		fn iter<'a>(&'a self) -> Box<Iterator<Item=(ServerKeyId, DocumentKeyShare)> + 'a> {
+		fn iter<'a>(&'a self) -> Box<Iterator<Item = (ServerKeyId, DocumentKeyShare)> + 'a> {
 			Box::new(self.keys.read().clone().into_iter())
 		}
 	}
@@ -476,9 +527,12 @@ pub mod tests {
 			encrypted_point: Some(Random.generate().unwrap().public().clone()),
 			versions: vec![DocumentKeyShareVersion {
 				hash: Default::default(),
-				id_numbers: vec![
-					(Random.generate().unwrap().public().clone(), Random.generate().unwrap().secret().clone())
-				].into_iter().collect(),
+				id_numbers: vec![(
+					Random.generate().unwrap().public().clone(),
+					Random.generate().unwrap().secret().clone(),
+				)]
+				.into_iter()
+				.collect(),
 				secret_share: Random.generate().unwrap().secret().clone(),
 			}],
 		};
@@ -491,9 +545,12 @@ pub mod tests {
 			encrypted_point: Some(Random.generate().unwrap().public().clone()),
 			versions: vec![DocumentKeyShareVersion {
 				hash: Default::default(),
-				id_numbers: vec![
-					(Random.generate().unwrap().public().clone(), Random.generate().unwrap().secret().clone())
-				].into_iter().collect(),
+				id_numbers: vec![(
+					Random.generate().unwrap().public().clone(),
+					Random.generate().unwrap().secret().clone(),
+				)]
+				.into_iter()
+				.collect(),
 				secret_share: Random.generate().unwrap().secret().clone(),
 			}],
 		};
@@ -543,8 +600,14 @@ pub mod tests {
 		let db = upgrade_db(Arc::new(db)).unwrap();
 
 		// check upgrade
-		assert_eq!(db.get(None, DB_META_KEY_VERSION).unwrap().unwrap()[0], CURRENT_VERSION);
-		let key = serde_json::from_slice::<CurrentSerializableDocumentKeyShare>(&db.get(None, &[7]).unwrap().map(|key| key.to_vec()).unwrap()).unwrap();
+		assert_eq!(
+			db.get(None, DB_META_KEY_VERSION).unwrap().unwrap()[0],
+			CURRENT_VERSION
+		);
+		let key = serde_json::from_slice::<CurrentSerializableDocumentKeyShare>(
+			&db.get(None, &[7]).unwrap().map(|key| key.to_vec()).unwrap(),
+		)
+		.unwrap();
 		assert_eq!(Address::default(), key.author.clone().into());
 		assert_eq!(777, key.threshold);
 		assert_eq!(Some("99e82b163b062d55a64085bacfd407bb55f194ba5fb7a1af9c34b84435455520f1372e0e650a4f91aed0058cb823f62146ccb5599c8d13372c300dea866b69fc".parse::<Public>().unwrap()), key.common_point.clone().map(Into::into));
@@ -555,7 +618,12 @@ pub mod tests {
 			"b486d3840218837b035c66196ecb15e6b067ca20101e11bd5e626288ab6806ecc70b8307012626bd512bad1559112d11d21025cef48cc7a1d2f3976da08f36c8".parse::<Public>().unwrap(),
 			"281b6bf43cb86d0dc7b98e1b7def4a80f3ce16d28d2308f934f116767306f06c".parse::<Secret>().unwrap(),
 		)], key.versions[0].id_numbers.clone().into_iter().map(|(k, v)| (k.into(), v.into())).collect::<Vec<(Public, Secret)>>());
-		assert_eq!("00125d85a05e5e63e214cb60fe63f132eec8a103aa29266b7e6e6c5b7597230b".parse::<Secret>().unwrap(), key.versions[0].secret_share.clone().into());
+		assert_eq!(
+			"00125d85a05e5e63e214cb60fe63f132eec8a103aa29266b7e6e6c5b7597230b"
+				.parse::<Secret>()
+				.unwrap(),
+			key.versions[0].secret_share.clone().into()
+		);
 	}
 
 	#[test]
@@ -586,8 +654,14 @@ pub mod tests {
 		let db = upgrade_db(Arc::new(db)).unwrap();
 
 		// check upgrade
-		assert_eq!(db.get(None, DB_META_KEY_VERSION).unwrap().unwrap()[0], CURRENT_VERSION);
-		let key = serde_json::from_slice::<CurrentSerializableDocumentKeyShare>(&db.get(None, &[7]).unwrap().map(|key| key.to_vec()).unwrap()).unwrap();
+		assert_eq!(
+			db.get(None, DB_META_KEY_VERSION).unwrap().unwrap()[0],
+			CURRENT_VERSION
+		);
+		let key = serde_json::from_slice::<CurrentSerializableDocumentKeyShare>(
+			&db.get(None, &[7]).unwrap().map(|key| key.to_vec()).unwrap(),
+		)
+		.unwrap();
 		assert_eq!(777, key.threshold);
 		assert_eq!(Some("99e82b163b062d55a64085bacfd407bb55f194ba5fb7a1af9c34b84435455520f1372e0e650a4f91aed0058cb823f62146ccb5599c8d13372c300dea866b69fc".parse::<Public>().unwrap()), key.common_point.clone().map(Into::into));
 		assert_eq!(Some("7e05df9dd077ec21ed4bc45c9fe9e0a43d65fa4be540630de615ced5e95cf5c3003035eb713317237d7667feeeb64335525158f5f7411f67aca9645169ea554c".parse::<Public>().unwrap()), key.encrypted_point.clone().map(Into::into));
@@ -599,7 +673,12 @@ pub mod tests {
 			"281b6bf43cb86d0dc7b98e1b7def4a80f3ce16d28d2308f934f116767306f06c".parse::<Secret>().unwrap(),
 		)], key.versions[0].id_numbers.clone().into_iter().map(|(k, v)| (k.into(), v.into())).collect::<Vec<(Public, Secret)>>());
 
-		assert_eq!("00125d85a05e5e63e214cb60fe63f132eec8a103aa29266b7e6e6c5b7597230b".parse::<Secret>().unwrap(), key.versions[0].secret_share.clone().into());
+		assert_eq!(
+			"00125d85a05e5e63e214cb60fe63f132eec8a103aa29266b7e6e6c5b7597230b"
+				.parse::<Secret>()
+				.unwrap(),
+			key.versions[0].secret_share.clone().into()
+		);
 	}
 
 	#[test]
@@ -634,8 +713,14 @@ pub mod tests {
 		let db = upgrade_db(Arc::new(db)).unwrap();
 
 		// check upgrade
-		assert_eq!(db.get(None, DB_META_KEY_VERSION).unwrap().unwrap()[0], CURRENT_VERSION);
-		let key = serde_json::from_slice::<CurrentSerializableDocumentKeyShare>(&db.get(None, &[7]).unwrap().map(|key| key.to_vec()).unwrap()).unwrap();
+		assert_eq!(
+			db.get(None, DB_META_KEY_VERSION).unwrap().unwrap()[0],
+			CURRENT_VERSION
+		);
+		let key = serde_json::from_slice::<CurrentSerializableDocumentKeyShare>(
+			&db.get(None, &[7]).unwrap().map(|key| key.to_vec()).unwrap(),
+		)
+		.unwrap();
 		assert_eq!(777, key.threshold);
 		assert_eq!(Some("99e82b163b062d55a64085bacfd407bb55f194ba5fb7a1af9c34b84435455520f1372e0e650a4f91aed0058cb823f62146ccb5599c8d13372c300dea866b69fc".parse::<Public>().unwrap()), key.common_point.clone().map(Into::into));
 		assert_eq!(Some("7e05df9dd077ec21ed4bc45c9fe9e0a43d65fa4be540630de615ced5e95cf5c3003035eb713317237d7667feeeb64335525158f5f7411f67aca9645169ea554c".parse::<Public>().unwrap()), key.encrypted_point.clone().map(Into::into));
@@ -647,6 +732,11 @@ pub mod tests {
 			"281b6bf43cb86d0dc7b98e1b7def4a80f3ce16d28d2308f934f116767306f06c".parse::<Secret>().unwrap(),
 		)], key.versions[0].id_numbers.clone().into_iter().map(|(k, v)| (k.into(), v.into())).collect::<Vec<(Public, Secret)>>());
 
-		assert_eq!("00125d85a05e5e63e214cb60fe63f132eec8a103aa29266b7e6e6c5b7597230b".parse::<Secret>().unwrap(), key.versions[0].secret_share.clone().into());
+		assert_eq!(
+			"00125d85a05e5e63e214cb60fe63f132eec8a103aa29266b7e6e6c5b7597230b"
+				.parse::<Secret>()
+				.unwrap(),
+			key.versions[0].secret_share.clone().into()
+		);
 	}
 }

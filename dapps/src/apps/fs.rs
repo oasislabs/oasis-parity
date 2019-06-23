@@ -14,14 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+use futures_cpupool::CpuPool;
 use std::collections::BTreeMap;
+use std::fs;
 use std::io;
 use std::io::Read;
-use std::fs;
 use std::path::{Path, PathBuf};
-use futures_cpupool::CpuPool;
 
-use apps::manifest::{MANIFEST_FILENAME, deserialize_manifest};
+use apps::manifest::{deserialize_manifest, MANIFEST_FILENAME};
 use endpoint::{Endpoint, EndpointInfo};
 use page::{local, PageCache};
 
@@ -64,15 +64,24 @@ fn read_manifest(name: &str, mut path: PathBuf) -> EndpointInfo {
 /// Returns Dapp Id and Local Dapp Endpoint for given filesystem path.
 /// Parses the path to extract last component (for name).
 /// `None` is returned when path is invalid or non-existent.
-pub fn local_endpoint<P: AsRef<Path>>(path: P, pool: CpuPool) -> Option<(String, Box<local::Dapp>)> {
+pub fn local_endpoint<P: AsRef<Path>>(
+	path: P,
+	pool: CpuPool,
+) -> Option<(String, Box<local::Dapp>)> {
 	let path = path.as_ref().to_owned();
 	path.canonicalize().ok().and_then(|path| {
 		let name = path.file_name().and_then(|name| name.to_str());
 		name.map(|name| {
 			let dapp = local_dapp(name.into(), path.clone());
-			(dapp.id, Box::new(local::Dapp::new(
-				pool.clone(), dapp.path, dapp.info, PageCache::Disabled)
-			))
+			(
+				dapp.id,
+				Box::new(local::Dapp::new(
+					pool.clone(),
+					dapp.path,
+					dapp.info,
+					PageCache::Disabled,
+				)),
+			)
 		})
 	})
 }
@@ -89,12 +98,20 @@ fn local_dapp(name: String, path: PathBuf) -> LocalDapp {
 
 /// Returns endpoints for Local Dapps found for given filesystem path.
 /// Scans the directory and collects `local::Dapp`.
-pub fn local_endpoints<P: AsRef<Path>>(dapps_path: P, pool: CpuPool) -> BTreeMap<String, Box<Endpoint>> {
+pub fn local_endpoints<P: AsRef<Path>>(
+	dapps_path: P,
+	pool: CpuPool,
+) -> BTreeMap<String, Box<Endpoint>> {
 	let mut pages = BTreeMap::<String, Box<Endpoint>>::new();
 	for dapp in local_dapps(dapps_path.as_ref()) {
 		pages.insert(
 			dapp.id,
-			Box::new(local::Dapp::new(pool.clone(), dapp.path, dapp.info, PageCache::Disabled))
+			Box::new(local::Dapp::new(
+				pool.clone(),
+				dapp.path,
+				dapp.info,
+				PageCache::Disabled,
+			)),
 		);
 	}
 	pages
@@ -108,7 +125,8 @@ fn local_dapps(dapps_path: &Path) -> Vec<LocalDapp> {
 	}
 
 	let files = files.expect("Check is done earlier");
-	files.map(|dir| {
+	files
+		.map(|dir| {
 			let entry = dir?;
 			let file_type = entry.file_type()?;
 
@@ -118,7 +136,9 @@ fn local_dapps(dapps_path: &Path) -> Vec<LocalDapp> {
 			}
 
 			// take directory name and path
-			entry.file_name().into_string()
+			entry
+				.file_name()
+				.into_string()
 				.map(|name| (name, entry.path()))
 				.map_err(|e| {
 					info!(target: "dapps", "Unable to load dapp: {:?}. Reason: {:?}", entry.path(), e);

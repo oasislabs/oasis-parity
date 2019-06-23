@@ -16,21 +16,21 @@
 
 #![feature(test)]
 
-extern crate test;
-extern crate ethcore_util as util;
-extern crate rand;
 extern crate bn;
-extern crate ethcore_crypto;
-extern crate ethkey;
-extern crate rustc_hex;
 extern crate ethcore_bigint;
+extern crate ethcore_crypto;
+extern crate ethcore_util as util;
+extern crate ethkey;
+extern crate rand;
+extern crate rustc_hex;
+extern crate test;
 
-use self::test::{Bencher};
-use rand::{StdRng};
+use self::test::Bencher;
+use rand::StdRng;
 
 #[bench]
 fn bn_128_pairing(b: &mut Bencher) {
-	use bn::{pairing, G1, G2, Fr, Group};
+	use bn::{pairing, Fr, Group, G1, G2};
 
 	let rng = &mut ::rand::thread_rng();
 
@@ -47,7 +47,7 @@ fn bn_128_pairing(b: &mut Bencher) {
 
 #[bench]
 fn bn_128_mul(b: &mut Bencher) {
-	use bn::{AffineG1, G1, Fr, Group};
+	use bn::{AffineG1, Fr, Group, G1};
 
 	let mut rng = StdRng::new().unwrap();
 	let p: G1 = G1::random(&mut rng);
@@ -72,9 +72,9 @@ fn sha256(b: &mut Bencher) {
 
 #[bench]
 fn ecrecover(b: &mut Bencher) {
-	use rustc_hex::FromHex;
-	use ethkey::{Signature, recover as ec_recover};
 	use ethcore_bigint::hash::H256;
+	use ethkey::{recover as ec_recover, Signature};
+	use rustc_hex::FromHex;
 	let input = FromHex::from_hex("47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad000000000000000000000000000000000000000000000000000000000000001b650acf9d3f5f0a2c799776a1254355d5f4061762a237396a99a0e0e3fc2bcd6729514a0dacb2e623ac4abd157cb18163ff942280db4d5caad66ddf941ba12e03").unwrap();
 	let hash = H256::from_slice(&input[0..32]);
 	let v = H256::from_slice(&input[32..64]);
@@ -83,7 +83,9 @@ fn ecrecover(b: &mut Bencher) {
 
 	let bit = match v[31] {
 		27 | 28 if &v.0[..31] == &[0; 31] => v[31] - 27,
-		_ => { return; },
+		_ => {
+			return;
+		}
 	};
 
 	let s = Signature::from_rsv(&r, &s, bit);

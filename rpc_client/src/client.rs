@@ -14,44 +14,33 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::fmt::{Debug, Formatter, Error as FmtError};
-use std::io::{BufReader, BufRead};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::collections::BTreeMap;
+use std::fmt::{Debug, Error as FmtError, Formatter};
+use std::io::{BufRead, BufReader};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::thread;
 use std::time;
 
-use std::path::PathBuf;
 use hash::keccak;
 use parking_lot::Mutex;
-use url::Url;
 use std::fs::File;
+use std::path::PathBuf;
+use url::Url;
 
 use ws::ws::{
-	self,
-	Request,
-	Handler,
-	Sender,
-	Handshake,
-	Error as WsError,
-	ErrorKind as WsErrorKind,
-	Message,
-	Result as WsResult,
+	self, Error as WsError, ErrorKind as WsErrorKind, Handler, Handshake, Message, Request,
+	Result as WsResult, Sender,
 };
 
 use serde::de::DeserializeOwned;
-use serde_json::{
-	self as json,
-	Value as JsonValue,
-	Error as JsonError,
-};
+use serde_json::{self as json, Error as JsonError, Value as JsonValue};
 
-use futures::{Canceled, Complete, Future, oneshot, done};
+use futures::{done, oneshot, Canceled, Complete, Future};
 
-use jsonrpc_core::{Id, Version, Params, Error as JsonRpcError};
 use jsonrpc_core::request::MethodCall;
-use jsonrpc_core::response::{Output, Success, Failure};
+use jsonrpc_core::response::{Failure, Output, Success};
+use jsonrpc_core::{Error as JsonRpcError, Id, Params, Version};
 
 use BoxFuture;
 
@@ -67,11 +56,7 @@ struct RpcHandler {
 }
 
 impl RpcHandler {
-	fn new(
-		out: Sender,
-		auth_code: String,
-		complete: Complete<Result<Rpc, RpcError>>
-	) -> Self {
+	fn new(out: Sender, auth_code: String, complete: Complete<Result<Rpc, RpcError>>) -> Self {
 		RpcHandler {
 			out: Some(out),
 			auth_code: auth_code,
@@ -85,23 +70,22 @@ impl Handler for RpcHandler {
 	fn build_request(&mut self, url: &Url) -> WsResult<Request> {
 		match Request::from_url(url) {
 			Ok(mut r) => {
-				let timestamp = time::UNIX_EPOCH.elapsed().map_err(|err| {
-					WsError::new(WsErrorKind::Internal, format!("{}", err))
-				})?;
+				let timestamp = time::UNIX_EPOCH
+					.elapsed()
+					.map_err(|err| WsError::new(WsErrorKind::Internal, format!("{}", err)))?;
 				let secs = timestamp.as_secs();
 				let hashed = keccak(format!("{}:{}", self.auth_code, secs));
 				let proto = format!("{:x}_{}", hashed, secs);
 				r.add_protocol(&proto);
 				Ok(r)
-			},
-			Err(e) =>
-				Err(WsError::new(WsErrorKind::Internal, format!("{}", e))),
+			}
+			Err(e) => Err(WsError::new(WsErrorKind::Internal, format!("{}", e))),
 		}
 	}
 	fn on_error(&mut self, err: WsError) {
 		match self.complete.take() {
 			Some(c) => match c.send(Err(RpcError::WsError(err))) {
-				Ok(_) => {},
+				Ok(_) => {}
 				Err(_) => warn!(target: "rpc-client", "Unable to notify about error."),
 			},
 			None => warn!(target: "rpc-client", "unexpected error: {}", err),
@@ -119,7 +103,7 @@ impl Handler for RpcHandler {
 					warn!(target: "rpc-client", "Unable to open a connection.")
 				}
 				Ok(())
-			},
+			}
 			_ => {
 				let msg = format!("on_open called twice");
 				Err(WsError::new(WsErrorKind::Internal, msg))
@@ -131,12 +115,19 @@ impl Handler for RpcHandler {
 		let response_id;
 		let string = &msg.to_string();
 		match json::from_str::<Output>(&string) {
-			Ok(Output::Success(Success { result, id: Id::Num(id), .. })) =>
-			{
+			Ok(Output::Success(Success {
+				result,
+				id: Id::Num(id),
+				..
+			})) => {
 				ret = Ok(result);
 				response_id = id as usize;
 			}
-			Ok(Output::Failure(Failure { error, id: Id::Num(id), .. })) => {
+			Ok(Output::Failure(Failure {
+				error,
+				id: Id::Num(id),
+				..
+			})) => {
 				ret = Err(error);
 				response_id = id as usize;
 			}
@@ -147,22 +138,24 @@ impl Handler for RpcHandler {
 					string,
 					e
 				);
-				return Ok(())
-			},
+				return Ok(());
+			}
 			_ => {
 				warn!(
 					target: "rpc-client",
 					"recieved invalid message: {}",
 					string
 				);
-				return Ok(())
+				return Ok(());
 			}
 		}
 
 		match self.pending.remove(response_id) {
-			Some(c) => if let Err(_) = c.send(ret.map_err(|err| RpcError::JsonRpc(err))) {
-				warn!(target: "rpc-client", "Unable to send response.")
-			},
+			Some(c) => {
+				if let Err(_) = c.send(ret.map_err(|err| RpcError::JsonRpc(err))) {
+					warn!(target: "rpc-client", "Unable to send response.")
+				}
+			}
 			None => warn!(
 				target: "rpc-client",
 				"warning: unexpected id: {}",
@@ -175,9 +168,7 @@ impl Handler for RpcHandler {
 
 /// Keeping track of issued requests to be matched up with responses
 #[derive(Clone)]
-struct Pending(
-	Arc<Mutex<BTreeMap<usize, Complete<Result<JsonValue, RpcError>>>>>
-);
+struct Pending(Arc<Mutex<BTreeMap<usize, Complete<Result<JsonValue, RpcError>>>>>);
 
 impl Pending {
 	fn new() -> Self {
@@ -186,10 +177,7 @@ impl Pending {
 	fn insert(&mut self, k: usize, v: Complete<Result<JsonValue, RpcError>>) {
 		self.0.lock().insert(k, v);
 	}
-	fn remove(
-		&mut self,
-		k: usize
-	) -> Option<Complete<Result<JsonValue, RpcError>>> {
+	fn remove(&mut self, k: usize) -> Option<Complete<Result<JsonValue, RpcError>>> {
 		self.0.lock().remove(&k)
 	}
 }
@@ -223,9 +211,7 @@ impl Rpc {
 	}
 
 	/// Non-blocking, returns a future
-	pub fn connect(
-		url: &str, authpath: &PathBuf
-	) -> BoxFuture<Result<Self, RpcError>, Canceled> {
+	pub fn connect(url: &str, authpath: &PathBuf) -> BoxFuture<Result<Self, RpcError>, Canceled> {
 		let (c, p) = oneshot::<Result<Self, RpcError>>();
 		match get_authcode(authpath) {
 			Err(e) => return Box::new(done(Ok(Err(e)))),
@@ -239,20 +225,18 @@ impl Rpc {
 					let conn = ws::connect(url, |out| {
 						// this will panic if the closure is called twice,
 						// which it should never be.
-						let c = once.take()
-							.expect("connection closure called only once");
+						let c = once.take().expect("connection closure called only once");
 						RpcHandler::new(out, code.clone(), c)
 					});
 					match conn {
 						Err(err) => {
 							// since ws::connect is only called once, it cannot
 							// both fail and succeed.
-							let c = once.take()
-								.expect("connection closure called only once");
+							let c = once.take().expect("connection closure called only once");
 							let _ = c.send(Err(RpcError::WsError(err)));
-						},
+						}
 						// c will complete on the `on_open` event in the Handler
-						_ => ()
+						_ => (),
 					}
 				});
 				Box::new(p)
@@ -262,10 +246,13 @@ impl Rpc {
 
 	/// Non-blocking, returns a future of the request response
 	pub fn request<T>(
-		&mut self, method: &'static str, params: Vec<JsonValue>
+		&mut self,
+		method: &'static str,
+		params: Vec<JsonValue>,
 	) -> BoxFuture<Result<T, RpcError>, Canceled>
-		where T: DeserializeOwned + Send + Sized {
-
+	where
+		T: DeserializeOwned + Send + Sized,
+	{
 		let (c, p) = oneshot::<Result<JsonValue, RpcError>>();
 
 		let id = self.counter.fetch_add(1, Ordering::Relaxed);
@@ -278,18 +265,15 @@ impl Rpc {
 			id: Id::Num(id as u64),
 		};
 
-		let serialized = json::to_string(&request)
-			.expect("request is serializable");
+		let serialized = json::to_string(&request).expect("request is serializable");
 		let _ = self.out.send(serialized);
 
-		Box::new(p.map(|result| {
-			match result {
-				Ok(json) => {
-					let t: T = json::from_value(json)?;
-					Ok(t)
-				},
-				Err(err) => Err(err)
+		Box::new(p.map(|result| match result {
+			Ok(json) => {
+				let t: T = json::from_value(json)?;
+				Ok(t)
 			}
+			Err(err) => Err(err),
 		}))
 	}
 }
@@ -308,22 +292,14 @@ pub enum RpcError {
 impl Debug for RpcError {
 	fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
 		match *self {
-			RpcError::WrongVersion(ref s)
-				=> write!(f, "Expected version 2.0, got {}", s),
-			RpcError::ParseError(ref err)
-				=> write!(f, "ParseError: {}", err),
-			RpcError::MalformedResponse(ref s)
-				=> write!(f, "Malformed response: {}", s),
-			RpcError::JsonRpc(ref json)
-				=> write!(f, "JsonRpc error: {:?}", json),
-			RpcError::WsError(ref s)
-				=> write!(f, "Websocket error: {}", s),
-			RpcError::Canceled(ref s)
-				=> write!(f, "Futures error: {:?}", s),
-			RpcError::UnexpectedId
-				=> write!(f, "Unexpected response id"),
-			RpcError::NoAuthCode
-				=> write!(f, "No authcodes available"),
+			RpcError::WrongVersion(ref s) => write!(f, "Expected version 2.0, got {}", s),
+			RpcError::ParseError(ref err) => write!(f, "ParseError: {}", err),
+			RpcError::MalformedResponse(ref s) => write!(f, "Malformed response: {}", s),
+			RpcError::JsonRpc(ref json) => write!(f, "JsonRpc error: {:?}", json),
+			RpcError::WsError(ref s) => write!(f, "Websocket error: {}", s),
+			RpcError::Canceled(ref s) => write!(f, "Futures error: {:?}", s),
+			RpcError::UnexpectedId => write!(f, "Unexpected response id"),
+			RpcError::NoAuthCode => write!(f, "No authcodes available"),
 		}
 	}
 }

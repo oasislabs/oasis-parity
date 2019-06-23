@@ -14,19 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::BTreeMap;
-use std::fmt::{Debug, Formatter, Error as FmtError};
-use std::time;
-use std::sync::Arc;
-use parking_lot::{Condvar, Mutex};
 use ethereum_types::Address;
 use ethkey::Public;
-use key_server_cluster::{Error, NodeId, SessionId, Requester, KeyStorage,
-	DocumentKeyShare, ServerKeyId};
 use key_server_cluster::cluster::Cluster;
 use key_server_cluster::cluster_sessions::ClusterSession;
-use key_server_cluster::message::{Message, EncryptionMessage, InitializeEncryptionSession,
-	ConfirmEncryptionInitialization, EncryptionSessionError};
+use key_server_cluster::message::{
+	ConfirmEncryptionInitialization, EncryptionMessage, EncryptionSessionError,
+	InitializeEncryptionSession, Message,
+};
+use key_server_cluster::{
+	DocumentKeyShare, Error, KeyStorage, NodeId, Requester, ServerKeyId, SessionId,
+};
+use parking_lot::{Condvar, Mutex};
+use std::collections::BTreeMap;
+use std::fmt::{Debug, Error as FmtError, Formatter};
+use std::sync::Arc;
+use std::time;
 
 /// Encryption (distributed key generation) session.
 /// Based on "ECDKG: A Distributed Key Generation Protocol Based on Elliptic Curve Discrete Logarithm" paper:
@@ -134,12 +137,19 @@ impl SessionImpl {
 
 	/// Wait for session completion.
 	pub fn wait(&self, timeout: Option<time::Duration>) -> Result<(), Error> {
-		Self::wait_session(&self.completed, &self.data, timeout, |data| data.result.clone())
-			.expect("wait_session returns Some if called without timeout; qed")
+		Self::wait_session(&self.completed, &self.data, timeout, |data| {
+			data.result.clone()
+		})
+		.expect("wait_session returns Some if called without timeout; qed")
 	}
 
 	/// Start new session initialization. This must be called on master node.
-	pub fn initialize(&self, requester: Requester, common_point: Public, encrypted_point: Public) -> Result<(), Error> {
+	pub fn initialize(
+		&self,
+		requester: Requester,
+		common_point: Public,
+		encrypted_point: Public,
+	) -> Result<(), Error> {
 		let mut data = self.data.lock();
 
 		// check state
@@ -149,29 +159,44 @@ impl SessionImpl {
 
 		// update state
 		data.state = SessionState::WaitingForInitializationConfirm;
-		data.nodes.extend(self.cluster.nodes().into_iter().map(|n| (n, NodeData {
-			initialization_confirmed: &n == self.node(),
-		})));
+		data.nodes.extend(self.cluster.nodes().into_iter().map(|n| {
+			(
+				n,
+				NodeData {
+					initialization_confirmed: &n == self.node(),
+				},
+			)
+		}));
 
 		// TODO [Sec]: id signature is not enough here, as it was already used in key generation
 		// TODO [Reliability]: there could be situation when some nodes have failed to store encrypted data
 		// => potential problems during restore. some confirmation step is needed (2pc)?
 		// save encryption data
 		if let Some(encrypted_data) = self.encrypted_data.clone() {
-			let requester_address = requester.address(&self.id).map_err(Error::InsufficientRequesterData)?;
-			update_encrypted_data(&self.key_storage, self.id.clone(),
-				encrypted_data, requester_address, common_point.clone(), encrypted_point.clone())?;
+			let requester_address = requester
+				.address(&self.id)
+				.map_err(Error::InsufficientRequesterData)?;
+			update_encrypted_data(
+				&self.key_storage,
+				self.id.clone(),
+				encrypted_data,
+				requester_address,
+				common_point.clone(),
+				encrypted_point.clone(),
+			)?;
 		}
 
 		// start initialization
 		if data.nodes.len() > 1 {
-			self.cluster.broadcast(Message::Encryption(EncryptionMessage::InitializeEncryptionSession(InitializeEncryptionSession {
-				session: self.id.clone().into(),
-				session_nonce: self.nonce,
-				requester: requester.into(),
-				common_point: common_point.into(),
-				encrypted_point: encrypted_point.into(),
-			})))
+			self.cluster.broadcast(Message::Encryption(
+				EncryptionMessage::InitializeEncryptionSession(InitializeEncryptionSession {
+					session: self.id.clone().into(),
+					session_nonce: self.nonce,
+					requester: requester.into(),
+					common_point: common_point.into(),
+					encrypted_point: encrypted_point.into(),
+				}),
+			))
 		} else {
 			data.state = SessionState::Finished;
 			data.result = Some(Ok(()));
@@ -182,7 +207,11 @@ impl SessionImpl {
 	}
 
 	/// When session initialization message is received.
-	pub fn on_initialize_session(&self, sender: NodeId, message: &InitializeEncryptionSession) -> Result<(), Error> {
+	pub fn on_initialize_session(
+		&self,
+		sender: NodeId,
+		message: &InitializeEncryptionSession,
+	) -> Result<(), Error> {
 		debug_assert!(self.id == *message.session);
 		debug_assert!(&sender != self.node());
 
@@ -196,23 +225,40 @@ impl SessionImpl {
 		// check that the requester is the author of the encrypted data
 		if let Some(encrypted_data) = self.encrypted_data.clone() {
 			let requester: Requester = message.requester.clone().into();
-			let requester_address = requester.address(&self.id).map_err(Error::InsufficientRequesterData)?;
-			update_encrypted_data(&self.key_storage, self.id.clone(),
-				encrypted_data, requester_address, message.common_point.clone().into(), message.encrypted_point.clone().into())?;
+			let requester_address = requester
+				.address(&self.id)
+				.map_err(Error::InsufficientRequesterData)?;
+			update_encrypted_data(
+				&self.key_storage,
+				self.id.clone(),
+				encrypted_data,
+				requester_address,
+				message.common_point.clone().into(),
+				message.encrypted_point.clone().into(),
+			)?;
 		}
 
 		// update state
 		data.state = SessionState::Finished;
 
 		// send confirmation back to master node
-		self.cluster.send(&sender, Message::Encryption(EncryptionMessage::ConfirmEncryptionInitialization(ConfirmEncryptionInitialization {
-			session: self.id.clone().into(),
-			session_nonce: self.nonce,
-		})))
+		self.cluster.send(
+			&sender,
+			Message::Encryption(EncryptionMessage::ConfirmEncryptionInitialization(
+				ConfirmEncryptionInitialization {
+					session: self.id.clone().into(),
+					session_nonce: self.nonce,
+				},
+			)),
+		)
 	}
 
 	/// When session initialization confirmation message is reeived.
-	pub fn on_confirm_initialization(&self, sender: NodeId, message: &ConfirmEncryptionInitialization) -> Result<(), Error> {
+	pub fn on_confirm_initialization(
+		&self,
+		sender: NodeId,
+		message: &ConfirmEncryptionInitialization,
+	) -> Result<(), Error> {
 		debug_assert!(self.id == *message.session);
 		debug_assert!(&sender != self.node());
 
@@ -220,7 +266,8 @@ impl SessionImpl {
 		debug_assert!(data.nodes.contains_key(&sender));
 
 		// check if all nodes have confirmed initialization
-		data.nodes.get_mut(&sender)
+		data.nodes
+			.get_mut(&sender)
 			.expect("message is received from cluster; nodes contains all cluster nodes; qed")
 			.initialization_confirmed = true;
 		if !data.nodes.values().all(|n| n.initialization_confirmed) {
@@ -249,14 +296,17 @@ impl ClusterSession for SessionImpl {
 
 	fn is_finished(&self) -> bool {
 		let data = self.data.lock();
-		data.state == SessionState::Failed
-			|| data.state == SessionState::Finished
+		data.state == SessionState::Failed || data.state == SessionState::Finished
 	}
 
 	fn on_node_timeout(&self, node: &NodeId) {
 		let mut data = self.data.lock();
 
-		warn!("{}: encryption session failed because {} connection has timeouted", self.node(), node);
+		warn!(
+			"{}: encryption session failed because {} connection has timeouted",
+			self.node(),
+			node
+		);
 
 		data.state = SessionState::Failed;
 		data.result = Some(Err(Error::NodeDisconnected));
@@ -278,16 +328,23 @@ impl ClusterSession for SessionImpl {
 		// => broadcast error if error occured on this node
 		if *node == self.self_node_id {
 			// do not bother processing send error, as we already processing error
-			let _ = self.cluster.broadcast(Message::Encryption(EncryptionMessage::EncryptionSessionError(EncryptionSessionError {
-				session: self.id.clone().into(),
-				session_nonce: self.nonce,
-				error: error.clone().into(),
-			})));
+			let _ = self.cluster.broadcast(Message::Encryption(
+				EncryptionMessage::EncryptionSessionError(EncryptionSessionError {
+					session: self.id.clone().into(),
+					session_nonce: self.nonce,
+					error: error.clone().into(),
+				}),
+			));
 		}
 
 		let mut data = self.data.lock();
 
-		warn!("{}: encryption session failed with error: {} from {}", self.node(), error, node);
+		warn!(
+			"{}: encryption session failed with error: {} from {}",
+			self.node(),
+			error,
+			node
+		);
 
 		data.state = SessionState::Failed;
 		data.result = Some(Err(error));
@@ -301,14 +358,16 @@ impl ClusterSession for SessionImpl {
 
 		match message {
 			&Message::Encryption(ref message) => match message {
-				&EncryptionMessage::InitializeEncryptionSession(ref message) =>
-					self.on_initialize_session(sender.clone(), message),
-				&EncryptionMessage::ConfirmEncryptionInitialization(ref message) =>
-					self.on_confirm_initialization(sender.clone(), message),
+				&EncryptionMessage::InitializeEncryptionSession(ref message) => {
+					self.on_initialize_session(sender.clone(), message)
+				}
+				&EncryptionMessage::ConfirmEncryptionInitialization(ref message) => {
+					self.on_confirm_initialization(sender.clone(), message)
+				}
 				&EncryptionMessage::EncryptionSessionError(ref message) => {
 					self.on_session_error(sender, message.error.clone());
 					Ok(())
-				},
+				}
 			},
 			_ => unreachable!("cluster checks message to be correct before passing; qed"),
 		}
@@ -334,7 +393,14 @@ pub fn check_encrypted_data(key_share: Option<&DocumentKeyShare>) -> Result<(), 
 }
 
 /// Update key share with encrypted document key.
-pub fn update_encrypted_data(key_storage: &Arc<KeyStorage>, key_id: ServerKeyId, mut key_share: DocumentKeyShare, author: Address, common_point: Public, encrypted_point: Public) -> Result<(), Error> {
+pub fn update_encrypted_data(
+	key_storage: &Arc<KeyStorage>,
+	key_id: ServerKeyId,
+	mut key_share: DocumentKeyShare,
+	author: Address,
+	common_point: Public,
+	encrypted_point: Public,
+) -> Result<(), Error> {
 	// author must be the same
 	if key_share.author != author {
 		return Err(Error::AccessDenied);

@@ -27,14 +27,15 @@ pub mod denominations;
 // pub use self::ethash::{Ethash};
 pub use self::denominations::*;
 
-use machine::EthereumMachine;
 use super::spec::*;
+use machine::EthereumMachine;
 
 fn load<'a, T: Into<Option<SpecParams<'a>>>>(params: T, b: &[u8]) -> Spec {
 	match params.into() {
 		Some(params) => Spec::load(b),
-		None => Spec::load(b)
-	}.expect("chain spec is invalid")
+		None => Spec::load(b),
+	}
+	.expect("chain spec is invalid")
 }
 
 fn load_machine(b: &[u8]) -> EthereumMachine {
@@ -43,110 +44,195 @@ fn load_machine(b: &[u8]) -> EthereumMachine {
 
 /// Create a new Foundation Olympic chain spec.
 pub fn new_olympic<'a, T: Into<SpecParams<'a>>>(params: T) -> Spec {
-	load(params.into(), include_bytes!("../../res/ethereum/olympic.json"))
+	load(
+		params.into(),
+		include_bytes!("../../res/ethereum/olympic.json"),
+	)
 }
 
 /// Create a new Foundation Mainnet chain spec.
 pub fn new_foundation<'a, T: Into<SpecParams<'a>>>(params: T) -> Spec {
-	load(params.into(), include_bytes!("../../res/ethereum/foundation.json"))
+	load(
+		params.into(),
+		include_bytes!("../../res/ethereum/foundation.json"),
+	)
 }
 
 /// Create a new Classic Mainnet chain spec without the DAO hardfork.
 pub fn new_classic<'a, T: Into<SpecParams<'a>>>(params: T) -> Spec {
-	load(params.into(), include_bytes!("../../res/ethereum/classic.json"))
+	load(
+		params.into(),
+		include_bytes!("../../res/ethereum/classic.json"),
+	)
 }
 
 /// Create a new Expanse mainnet chain spec.
 pub fn new_expanse<'a, T: Into<SpecParams<'a>>>(params: T) -> Spec {
-	load(params.into(), include_bytes!("../../res/ethereum/expanse.json"))
+	load(
+		params.into(),
+		include_bytes!("../../res/ethereum/expanse.json"),
+	)
 }
 
 /// Create a new Musicoin mainnet chain spec.
 pub fn new_musicoin<'a, T: Into<SpecParams<'a>>>(params: T) -> Spec {
-	load(params.into(), include_bytes!("../../res/ethereum/musicoin.json"))
+	load(
+		params.into(),
+		include_bytes!("../../res/ethereum/musicoin.json"),
+	)
 }
 
 /// Create a new Ellaism mainnet chain spec.
 pub fn new_ellaism<'a, T: Into<SpecParams<'a>>>(params: T) -> Spec {
-	load(params.into(), include_bytes!("../../res/ethereum/ellaism.json"))
+	load(
+		params.into(),
+		include_bytes!("../../res/ethereum/ellaism.json"),
+	)
 }
 
 /// Create a new Easthub mainnet chain spec.
 pub fn new_easthub<'a, T: Into<SpecParams<'a>>>(params: T) -> Spec {
-	load(params.into(), include_bytes!("../../res/ethereum/easthub.json"))
+	load(
+		params.into(),
+		include_bytes!("../../res/ethereum/easthub.json"),
+	)
 }
 
 /// Create a new Ethereum Social mainnet chain spec ¯\_(ツ)_/¯ .
 pub fn new_social<'a, T: Into<SpecParams<'a>>>(params: T) -> Spec {
-	load(params.into(), include_bytes!("../../res/ethereum/social.json"))
+	load(
+		params.into(),
+		include_bytes!("../../res/ethereum/social.json"),
+	)
 }
 
 /// Create a new Kovan testnet chain spec.
 pub fn new_kovan<'a, T: Into<SpecParams<'a>>>(params: T) -> Spec {
-	load(params.into(), include_bytes!("../../res/ethereum/kovan.json"))
+	load(
+		params.into(),
+		include_bytes!("../../res/ethereum/kovan.json"),
+	)
 }
 
 /// Create a new Foundation Ropsten chain spec.
 pub fn new_ropsten<'a, T: Into<SpecParams<'a>>>(params: T) -> Spec {
-	load(params.into(), include_bytes!("../../res/ethereum/ropsten.json"))
+	load(
+		params.into(),
+		include_bytes!("../../res/ethereum/ropsten.json"),
+	)
 }
 
 /// Create a new Morden chain spec.
 pub fn new_morden<'a, T: Into<SpecParams<'a>>>(params: T) -> Spec {
-	load(params.into(), include_bytes!("../../res/ethereum/morden.json"))
+	load(
+		params.into(),
+		include_bytes!("../../res/ethereum/morden.json"),
+	)
 }
 
 // For tests
 
 /// Create a new Foundation Frontier-era chain spec as though it never changes to Homestead.
-pub fn new_frontier_test() -> Spec { load(None, include_bytes!("../../res/ethereum/frontier_test.json")) }
+pub fn new_frontier_test() -> Spec {
+	load(
+		None,
+		include_bytes!("../../res/ethereum/frontier_test.json"),
+	)
+}
 
 /// Create a new Ropsten chain spec.
-pub fn new_ropsten_test() -> Spec { load(None, include_bytes!("../../res/ethereum/ropsten.json")) }
+pub fn new_ropsten_test() -> Spec {
+	load(None, include_bytes!("../../res/ethereum/ropsten.json"))
+}
 
 /// Create a new Foundation Homestead-era chain spec as though it never changed from Frontier.
-pub fn new_homestead_test() -> Spec { load(None, include_bytes!("../../res/ethereum/homestead_test.json")) }
+pub fn new_homestead_test() -> Spec {
+	load(
+		None,
+		include_bytes!("../../res/ethereum/homestead_test.json"),
+	)
+}
 
 /// Create a new Foundation Homestead-EIP150-era chain spec as though it never changed from Homestead/Frontier.
-pub fn new_eip150_test() -> Spec { load(None, include_bytes!("../../res/ethereum/eip150_test.json")) }
+pub fn new_eip150_test() -> Spec {
+	load(None, include_bytes!("../../res/ethereum/eip150_test.json"))
+}
 
 /// Create a new Foundation Homestead-EIP161-era chain spec as though it never changed from Homestead/Frontier.
-pub fn new_eip161_test() -> Spec { load(None, include_bytes!("../../res/ethereum/eip161_test.json")) }
+pub fn new_eip161_test() -> Spec {
+	load(None, include_bytes!("../../res/ethereum/eip161_test.json"))
+}
 
 /// Create a new Foundation Frontier/Homestead/DAO chain spec with transition points at #5 and #8.
-pub fn new_transition_test() -> Spec { load(None, include_bytes!("../../res/ethereum/transition_test.json")) }
+pub fn new_transition_test() -> Spec {
+	load(
+		None,
+		include_bytes!("../../res/ethereum/transition_test.json"),
+	)
+}
 
 /// Create a new Foundation Mainnet chain spec without genesis accounts.
-pub fn new_mainnet_like() -> Spec { load(None, include_bytes!("../../res/ethereum/frontier_like_test.json")) }
+pub fn new_mainnet_like() -> Spec {
+	load(
+		None,
+		include_bytes!("../../res/ethereum/frontier_like_test.json"),
+	)
+}
 
 /// Create a new Foundation Byzantium era spec.
-pub fn new_byzantium_test() -> Spec { load(None, include_bytes!("../../res/ethereum/byzantium_test.json")) }
+pub fn new_byzantium_test() -> Spec {
+	load(
+		None,
+		include_bytes!("../../res/ethereum/byzantium_test.json"),
+	)
+}
 
 /// Create a new Foundation Constantinople era spec.
-pub fn new_constantinople_test() -> Spec { load(None, include_bytes!("../../res/ethereum/constantinople_test.json")) }
+pub fn new_constantinople_test() -> Spec {
+	load(
+		None,
+		include_bytes!("../../res/ethereum/constantinople_test.json"),
+	)
+}
 
 /// Create a new Musicoin-MCIP3-era spec.
-pub fn new_mcip3_test() -> Spec { load(None, include_bytes!("../../res/ethereum/mcip3_test.json")) }
+pub fn new_mcip3_test() -> Spec {
+	load(None, include_bytes!("../../res/ethereum/mcip3_test.json"))
+}
 
 // For tests
 
 /// Create a new Foundation Frontier-era chain spec as though it never changes to Homestead.
-pub fn new_frontier_test_machine() -> EthereumMachine { load_machine(include_bytes!("../../res/ethereum/frontier_test.json")) }
+pub fn new_frontier_test_machine() -> EthereumMachine {
+	load_machine(include_bytes!("../../res/ethereum/frontier_test.json"))
+}
 
 /// Create a new Foundation Homestead-era chain spec as though it never changed from Frontier.
-pub fn new_homestead_test_machine() -> EthereumMachine { load_machine(include_bytes!("../../res/ethereum/homestead_test.json")) }
+pub fn new_homestead_test_machine() -> EthereumMachine {
+	load_machine(include_bytes!("../../res/ethereum/homestead_test.json"))
+}
 
 /// Create a new Foundation Byzantium era spec.
-pub fn new_byzantium_test_machine() -> EthereumMachine { load_machine(include_bytes!("../../res/ethereum/byzantium_test.json")) }
+pub fn new_byzantium_test_machine() -> EthereumMachine {
+	load_machine(include_bytes!("../../res/ethereum/byzantium_test.json"))
+}
 
 /// Create a new Foundation Constantinople era spec.
-pub fn new_constantinople_test_machine() -> EthereumMachine { load_machine(include_bytes!("../../res/ethereum/constantinople_test.json")) }
+pub fn new_constantinople_test_machine() -> EthereumMachine {
+	load_machine(include_bytes!(
+		"../../res/ethereum/constantinople_test.json"
+	))
+}
 
 /// Create a new Musicoin-MCIP3-era spec.
-pub fn new_mcip3_test_machine() -> EthereumMachine { load_machine(include_bytes!("../../res/ethereum/mcip3_test.json")) }
+pub fn new_mcip3_test_machine() -> EthereumMachine {
+	load_machine(include_bytes!("../../res/ethereum/mcip3_test.json"))
+}
 
 /// Create new Kovan spec with wasm activated at certain block
-pub fn new_kovan_wasm_test_machine() -> EthereumMachine { load_machine(include_bytes!("../../res/ethereum/kovan_wasm_test.json")) }
+pub fn new_kovan_wasm_test_machine() -> EthereumMachine {
+	load_machine(include_bytes!("../../res/ethereum/kovan_wasm_test.json"))
+}
 /*
 #[cfg(test)]
 mod tests {

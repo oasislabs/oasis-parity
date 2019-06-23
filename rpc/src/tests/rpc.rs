@@ -15,32 +15,35 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 use devtools::http_client;
-use jsonrpc_core::MetaIoHandler;
 use http::{self, hyper};
+use jsonrpc_core::MetaIoHandler;
 
-use {HttpServer};
 use tests::helpers::Server;
 use v1::{extractors, Metadata};
+use HttpServer;
 
 fn serve(handler: Option<MetaIoHandler<Metadata>>) -> Server<HttpServer> {
 	let address = "127.0.0.1:0".parse().unwrap();
 	let handler = handler.unwrap_or_default();
 
-	Server::new(|remote| ::start_http(
-		&address,
-		http::DomainsValidation::Disabled,
-		http::DomainsValidation::Disabled,
-		handler,
-		remote,
-		extractors::RpcExtractor,
-		Some(|request: hyper::Request| {
-			http::RequestMiddlewareAction::Proceed {
-				should_continue_on_invalid_cors: false,
-				request,
-			}
-		}),
-		1,
-	).unwrap())
+	Server::new(|remote| {
+		::start_http(
+			&address,
+			http::DomainsValidation::Disabled,
+			http::DomainsValidation::Disabled,
+			handler,
+			remote,
+			extractors::RpcExtractor,
+			Some(
+				|request: hyper::Request| http::RequestMiddlewareAction::Proceed {
+					should_continue_on_invalid_cors: false,
+					request,
+				},
+			),
+			1,
+		)
+		.unwrap()
+	})
 }
 
 /// Test a single request to running server
@@ -50,9 +53,9 @@ fn request(server: Server<HttpServer>, request: &str) -> http_client::Response {
 
 #[cfg(test)]
 mod testsing {
+	use super::{request, Server};
 	use jsonrpc_core::{MetaIoHandler, Value};
 	use v1::Metadata;
-	use super::{request, Server};
 
 	fn serve() -> (Server<::HttpServer>, ::std::net::SocketAddr) {
 		let mut io = MetaIoHandler::default();
@@ -73,8 +76,10 @@ mod testsing {
 		// when
 		let req = r#"{"method":"hello","params":[],"jsonrpc":"2.0","id":1}"#;
 		let expected = "34\n{\"jsonrpc\":\"2.0\",\"result\":\"unknown via RPC\",\"id\":1}\n\n0\n\n";
-		let res = request(server,
-			&format!("\
+		let res = request(
+			server,
+			&format!(
+				"\
 				POST / HTTP/1.1\r\n\
 				Host: {}\r\n\
 				Content-Type: application/json\r\n\
@@ -82,7 +87,11 @@ mod testsing {
 				Connection: close\r\n\
 				\r\n\
 				{}
-			", address, req.len(), req)
+			",
+				address,
+				req.len(),
+				req
+			),
 		);
 
 		// then
@@ -97,9 +106,12 @@ mod testsing {
 
 		// when
 		let req = r#"{"method":"hello","params":[],"jsonrpc":"2.0","id":1}"#;
-		let expected = "38\n{\"jsonrpc\":\"2.0\",\"result\":\"curl/7.16.3 via RPC\",\"id\":1}\n\n0\n\n";
-		let res = request(server,
-			&format!("\
+		let expected =
+			"38\n{\"jsonrpc\":\"2.0\",\"result\":\"curl/7.16.3 via RPC\",\"id\":1}\n\n0\n\n";
+		let res = request(
+			server,
+			&format!(
+				"\
 				POST / HTTP/1.1\r\n\
 				Host: {}\r\n\
 				Content-Type: application/json\r\n\
@@ -108,7 +120,11 @@ mod testsing {
 				User-Agent: curl/7.16.3\r\n\
 				\r\n\
 				{}
-			", address, req.len(), req)
+			",
+				address,
+				req.len(),
+				req
+			),
 		);
 
 		// then
@@ -123,9 +139,12 @@ mod testsing {
 
 		// when
 		let req = r#"{"method":"hello","params":[],"jsonrpc":"2.0","id":1}"#;
-		let expected = "3A\n{\"jsonrpc\":\"2.0\",\"result\":\"Dapp http://parity.io\",\"id\":1}\n\n0\n\n";
-		let res = request(server,
-			&format!("\
+		let expected =
+			"3A\n{\"jsonrpc\":\"2.0\",\"result\":\"Dapp http://parity.io\",\"id\":1}\n\n0\n\n";
+		let res = request(
+			server,
+			&format!(
+				"\
 				POST / HTTP/1.1\r\n\
 				Host: {}\r\n\
 				Content-Type: application/json\r\n\
@@ -135,7 +154,11 @@ mod testsing {
 				User-Agent: curl/7.16.3\r\n\
 				\r\n\
 				{}
-			", address, req.len(), req)
+			",
+				address,
+				req.len(),
+				req
+			),
 		);
 
 		// then
@@ -151,8 +174,10 @@ mod testsing {
 		// when
 		let req = r#"{"method":"hello","params":[],"jsonrpc":"2.0","id":1}"#;
 		let expected = "44\n{\"jsonrpc\":\"2.0\",\"result\":\"Dapp http://wallet.ethereum.org\",\"id\":1}\n\n0\n\n";
-		let res = request(server,
-			&format!("\
+		let res = request(
+			server,
+			&format!(
+				"\
 				POST / HTTP/1.1\r\n\
 				Host: {}\r\n\
 				Content-Type: application/json\r\n\
@@ -163,7 +188,11 @@ mod testsing {
 				User-Agent: curl/7.16.3\r\n\
 				\r\n\
 				{}
-			", address, req.len(), req)
+			",
+				address,
+				req.len(),
+				req
+			),
 		);
 
 		// then

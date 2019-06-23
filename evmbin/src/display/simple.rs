@@ -16,8 +16,8 @@
 
 //! Simple VM output.
 
-use ethcore::trace;
 use bytes::ToPretty;
+use ethcore::trace;
 
 use display;
 use info as vm;
@@ -37,11 +37,11 @@ impl vm::Informant for Informant {
 				println!("Output: 0x{}", success.output.to_hex());
 				println!("Gas used: {:x}", success.gas_used);
 				println!("Time: {}", display::format_time(&success.time));
-			},
+			}
 			Err(failure) => {
 				println!("Error: {}", failure.error);
 				println!("Time: {}", display::format_time(&failure.time));
-			},
+			}
 		}
 	}
 }
@@ -49,7 +49,14 @@ impl vm::Informant for Informant {
 impl trace::VMTracer for Informant {
 	type Output = ();
 
-	fn prepare_subtrace(&self, _code: &[u8]) -> Self where Self: Sized { Default::default() }
+	fn prepare_subtrace(&self, _code: &[u8]) -> Self
+	where
+		Self: Sized,
+	{
+		Default::default()
+	}
 	fn done_subtrace(&mut self, _sub: Self) {}
-	fn drain(self) -> Option<()> { None }
+	fn drain(self) -> Option<()> {
+		None
+	}
 }

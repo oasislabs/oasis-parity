@@ -18,11 +18,11 @@
 
 mod content;
 mod echo;
+mod errors;
 mod fetch;
 mod reader;
 mod redirect;
 mod streaming;
-mod errors;
 
 pub use self::content::ContentHandler;
 pub use self::echo::EchoHandler;

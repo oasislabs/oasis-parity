@@ -16,14 +16,14 @@
 
 //! RPC Requests Statistics
 
-use std::fmt;
-use std::sync::Arc;
-use std::sync::atomic::{self, AtomicUsize};
-use std::time;
 use futures_cpupool as pool;
 use jsonrpc_core as rpc;
 use order_stat;
 use parking_lot::RwLock;
+use std::fmt;
+use std::sync::atomic::{self, AtomicUsize};
+use std::sync::Arc;
+use std::time;
 
 pub use self::pool::CpuPool;
 
@@ -123,7 +123,11 @@ impl<T: Default + Copy + Ord> StatsCalculator<T> {
 	pub fn approximated_median(&self) -> T {
 		let mut copy = [T::default(); STATS_SAMPLES];
 		copy.copy_from_slice(&self.samples);
-		let bound = if self.filled { STATS_SAMPLES } else { self.idx + 1 };
+		let bound = if self.filled {
+			STATS_SAMPLES
+		} else {
+			self.idx + 1
+		};
 
 		let (_, &mut median) = order_stat::median_of_medians(&mut copy[0..bound]);
 		median
@@ -210,9 +214,10 @@ impl<M: rpc::Metadata, T: ActivityNotifier> rpc::Middleware<M> for Middleware<T>
 		rpc::FutureResponse,
 	>;
 
-	fn on_request<F, X>(&self, request: rpc::Request, meta: M, process: F) -> Self::Future where
+	fn on_request<F, X>(&self, request: rpc::Request, meta: M, process: F) -> Self::Future
+	where
 		F: FnOnce(rpc::Request, M) -> X,
-		X: rpc::futures::Future<Item=Option<rpc::Response>, Error=()> + Send + 'static,
+		X: rpc::futures::Future<Item = Option<rpc::Response>, Error = ()> + Send + 'static,
 	{
 		use self::rpc::futures::future::Either::{A, B};
 
@@ -259,7 +264,7 @@ impl ActivityNotifier for ClientNotifier {
 #[cfg(test)]
 mod tests {
 
-	use super::{RateCalculator, StatsCalculator, RpcStats};
+	use super::{RateCalculator, RpcStats, StatsCalculator};
 
 	#[test]
 	fn should_calculate_rate() {

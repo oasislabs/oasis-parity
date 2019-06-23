@@ -16,10 +16,10 @@
 
 //! Parity-specific PUB-SUB rpc interface.
 
-use jsonrpc_core::{Result, Value, Params};
-use jsonrpc_pubsub::SubscriptionId;
-use jsonrpc_macros::Trailing;
+use jsonrpc_core::{Params, Result, Value};
 use jsonrpc_macros::pubsub::Subscriber;
+use jsonrpc_macros::Trailing;
+use jsonrpc_pubsub::SubscriptionId;
 
 build_rpc_trait! {
 	/// Parity-specific PUB-SUB rpc interface.

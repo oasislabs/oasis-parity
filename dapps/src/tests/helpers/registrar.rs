@@ -14,20 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::collections::HashMap;
 use std::str;
 use std::sync::Arc;
-use std::collections::HashMap;
 
-use ethereum_types::{H256, Address};
 use bytes::{Bytes, ToPretty};
-use registrar::{RegistrarClient, Asynchronous};
+use ethereum_types::{Address, H256};
 use parking_lot::Mutex;
+use registrar::{Asynchronous, RegistrarClient};
 use rustc_hex::FromHex;
 
 const REGISTRAR: &'static str = "8e4e9b13d4b45cb0befc93c3061b1408f67316b2";
 const URLHINT: &'static str = "deadbeefcafe0000000000000000000000000000";
 const URLHINT_RESOLVE: &'static str = "267b6922";
-const DEFAULT_HASH: &'static str = "1472a9e190620cdf6b31f383373e45efcfe869a820c91f9ccd7eb9fb45e4985d";
+const DEFAULT_HASH: &'static str =
+	"1472a9e190620cdf6b31f383373e45efcfe869a820c91f9ccd7eb9fb45e4985d";
 
 pub struct FakeRegistrar {
 	pub calls: Arc<Mutex<Vec<(String, String)>>>,
@@ -45,8 +46,11 @@ impl FakeRegistrar {
 					Ok(format!("000000000000000000000000{}", URLHINT).from_hex().unwrap()),
 				);
 				map.insert(
-					(URLHINT.into(), format!("{}{}", URLHINT_RESOLVE, DEFAULT_HASH)),
-					Ok(vec![])
+					(
+						URLHINT.into(),
+						format!("{}{}", URLHINT_RESOLVE, DEFAULT_HASH),
+					),
+					Ok(vec![]),
 				);
 				map
 			}),
@@ -56,7 +60,7 @@ impl FakeRegistrar {
 	pub fn set_result(&self, hash: H256, result: Result<Bytes, String>) {
 		self.responses.lock().insert(
 			(URLHINT.into(), format!("{}{:x}", URLHINT_RESOLVE, hash)),
-			result
+			result,
 		);
 	}
 }
@@ -71,7 +75,12 @@ impl RegistrarClient for FakeRegistrar {
 	fn call_contract(&self, address: Address, data: Bytes) -> Self::Call {
 		let call = (address.to_hex(), data.to_hex());
 		self.calls.lock().push(call.clone());
-		let res = self.responses.lock().get(&call).cloned().expect(&format!("No response for call: {:?}", call));
+		let res = self
+			.responses
+			.lock()
+			.get(&call)
+			.cloned()
+			.expect(&format!("No response for call: {:?}", call));
 		Box::new(::futures::future::done(res))
 	}
 }

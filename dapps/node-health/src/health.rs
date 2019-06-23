@@ -16,15 +16,15 @@
 
 //! Reporting node's health.
 
-use std::sync::Arc;
-use std::time::Duration;
-use futures::Future;
 use futures::sync::oneshot;
-use types::{HealthInfo, HealthStatus, Health};
-use time::{TimeChecker, MAX_DRIFT};
+use futures::Future;
 use parity_reactor::Remote;
 use parking_lot::Mutex;
-use {SyncStatus};
+use std::sync::Arc;
+use std::time::Duration;
+use time::{TimeChecker, MAX_DRIFT};
+use types::{Health, HealthInfo, HealthStatus};
+use SyncStatus;
 
 const TIMEOUT: Duration = Duration::from_secs(5);
 const PROOF: &str = "Only one closure is invoked.";
@@ -40,7 +40,11 @@ pub struct NodeHealth {
 impl NodeHealth {
 	/// Creates new `NodeHealth`.
 	pub fn new(sync_status: Arc<SyncStatus>, time: TimeChecker, remote: Remote) -> Self {
-		NodeHealth { sync_status, time, remote, }
+		NodeHealth {
+			sync_status,
+			time,
+			remote,
+		}
 	}
 
 	/// Query latest health report.
@@ -53,10 +57,12 @@ impl NodeHealth {
 		let tx = Arc::new(Mutex::new(Some(tx)));
 		let tx2 = tx.clone();
 		self.remote.spawn_with_timeout(
-			move |_| time.then(move |result| {
-				let _ = tx.lock().take().expect(PROOF).send(Ok(result));
-				Ok(())
-			}),
+			move |_| {
+				time.then(move |result| {
+					let _ = tx.lock().take().expect(PROOF).send(Ok(result));
+					Ok(())
+				})
+			},
 			TIMEOUT,
 			move || {
 				let _ = tx2.lock().take().expect(PROOF).send(Err(()));

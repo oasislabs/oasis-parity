@@ -17,9 +17,8 @@
 use devtools::http_client;
 use rustc_hex::FromHex;
 use tests::helpers::{
-	serve_with_registrar, serve_with_registrar_and_sync, serve_with_fetch,
-	serve_with_registrar_and_fetch,
-	request, assert_security_headers
+	assert_security_headers, request, serve_with_fetch, serve_with_registrar,
+	serve_with_registrar_and_fetch, serve_with_registrar_and_sync,
 };
 
 #[test]
@@ -28,13 +27,14 @@ fn should_resolve_dapp() {
 	let (server, registrar) = serve_with_registrar();
 
 	// when
-	let response = request(server,
+	let response = request(
+		server,
 		"\
-			GET / HTTP/1.1\r\n\
-			Host: 1472a9e190620cdf6b31f383373e45efcfe869a820c91f9ccd7eb9fb45e4985d.web3.site\r\n\
-			Connection: close\r\n\
-			\r\n\
-		"
+		 GET / HTTP/1.1\r\n\
+		 Host: 1472a9e190620cdf6b31f383373e45efcfe869a820c91f9ccd7eb9fb45e4985d.web3.site\r\n\
+		 Connection: close\r\n\
+		 \r\n\
+		 ",
 	);
 
 	// then
@@ -49,13 +49,14 @@ fn should_return_503_when_syncing_but_should_make_the_calls() {
 	let (server, registrar) = serve_with_registrar_and_sync();
 
 	// when
-	let response = request(server,
+	let response = request(
+		server,
 		"\
-			GET / HTTP/1.1\r\n\
-			Host: 1472a9e190620cdf6b31f383373e45efcfe869a820c91f9ccd7eb9fb45e4985d.web3.site\r\n\
-			Connection: close\r\n\
-			\r\n\
-		"
+		 GET / HTTP/1.1\r\n\
+		 Host: 1472a9e190620cdf6b31f383373e45efcfe869a820c91f9ccd7eb9fb45e4985d.web3.site\r\n\
+		 Connection: close\r\n\
+		 \r\n\
+		 ",
 	);
 
 	// then
@@ -73,18 +74,21 @@ fn should_return_502_on_hash_mismatch() {
 	let (server, fetch, registrar) = serve_with_registrar_and_fetch();
 	let gavcoin = GAVCOIN_DAPP.from_hex().unwrap();
 	registrar.set_result(
-		"94f093625c06887d94d9fee0d5f9cc4aaa46f33d24d1c7e4b5237e7c37d547dd".parse().unwrap(),
-		Ok(gavcoin.clone())
+		"94f093625c06887d94d9fee0d5f9cc4aaa46f33d24d1c7e4b5237e7c37d547dd"
+			.parse()
+			.unwrap(),
+		Ok(gavcoin.clone()),
 	);
 
 	// when
-	let response = request(server,
+	let response = request(
+		server,
 		"\
-			GET / HTTP/1.1\r\n\
-			Host: 94f093625c06887d94d9fee0d5f9cc4aaa46f33d24d1c7e4b5237e7c37d547dd.web3.site\r\n\
-			Connection: close\r\n\
-			\r\n\
-		"
+		 GET / HTTP/1.1\r\n\
+		 Host: 94f093625c06887d94d9fee0d5f9cc4aaa46f33d24d1c7e4b5237e7c37d547dd.web3.site\r\n\
+		 Connection: close\r\n\
+		 \r\n\
+		 ",
 	);
 
 	// then
@@ -94,7 +98,11 @@ fn should_return_502_on_hash_mismatch() {
 	fetch.assert_no_more_requests();
 
 	response.assert_status("HTTP/1.1 502 Bad Gateway");
-	assert!(response.body.contains("HashMismatch"), "Expected hash mismatch response, got: {:?}", response.body);
+	assert!(
+		response.body.contains("HashMismatch"),
+		"Expected hash mismatch response, got: {:?}",
+		response.body
+	);
 	assert_security_headers(&response.headers);
 }
 
@@ -104,18 +112,21 @@ fn should_return_error_for_invalid_dapp_zip() {
 	let (server, fetch, registrar) = serve_with_registrar_and_fetch();
 	let gavcoin = GAVCOIN_DAPP.from_hex().unwrap();
 	registrar.set_result(
-		"2be00befcf008bc0e7d9cdefc194db9c75352e8632f48498b5a6bfce9f02c88e".parse().unwrap(),
-		Ok(gavcoin.clone())
+		"2be00befcf008bc0e7d9cdefc194db9c75352e8632f48498b5a6bfce9f02c88e"
+			.parse()
+			.unwrap(),
+		Ok(gavcoin.clone()),
 	);
 
 	// when
-	let response = request(server,
+	let response = request(
+		server,
 		"\
-			GET / HTTP/1.1\r\n\
-			Host: 2be00befcf008bc0e7d9cdefc194db9c75352e8632f48498b5a6bfce9f02c88e.web3.site\r\n\
-			Connection: close\r\n\
-			\r\n\
-		"
+		 GET / HTTP/1.1\r\n\
+		 Host: 2be00befcf008bc0e7d9cdefc194db9c75352e8632f48498b5a6bfce9f02c88e.web3.site\r\n\
+		 Connection: close\r\n\
+		 \r\n\
+		 ",
 	);
 
 	// then
@@ -125,7 +136,11 @@ fn should_return_error_for_invalid_dapp_zip() {
 	fetch.assert_no_more_requests();
 
 	response.assert_status("HTTP/1.1 502 Bad Gateway");
-	assert!(response.body.contains("InvalidArchive"), "Expected invalid zip response, got: {:?}", response.body);
+	assert!(
+		response.body.contains("InvalidArchive"),
+		"Expected invalid zip response, got: {:?}",
+		response.body
+	);
 	assert_security_headers(&response.headers);
 }
 
@@ -135,27 +150,31 @@ fn should_return_fetched_dapp_content() {
 	let (server, fetch, registrar) = serve_with_registrar_and_fetch();
 	let gavcoin = GAVCOIN_DAPP.from_hex().unwrap();
 	registrar.set_result(
-		"9c94e154dab8acf859b30ee80fc828fb1d38359d938751b65db71d460588d82a".parse().unwrap(),
-		Ok(gavcoin.clone())
+		"9c94e154dab8acf859b30ee80fc828fb1d38359d938751b65db71d460588d82a"
+			.parse()
+			.unwrap(),
+		Ok(gavcoin.clone()),
 	);
 	fetch.set_response(include_bytes!("../../res/gavcoin.zip"));
 
 	// when
-	let response1 = http_client::request(server.addr(),
+	let response1 = http_client::request(
+		server.addr(),
 		"\
-			GET /index.html HTTP/1.1\r\n\
-			Host: 9c94e154dab8acf859b30ee80fc828fb1d38359d938751b65db71d460588d82a.web3.site\r\n\
-			Connection: close\r\n\
-			\r\n\
-		"
+		 GET /index.html HTTP/1.1\r\n\
+		 Host: 9c94e154dab8acf859b30ee80fc828fb1d38359d938751b65db71d460588d82a.web3.site\r\n\
+		 Connection: close\r\n\
+		 \r\n\
+		 ",
 	);
-	let response2 = http_client::request(server.addr(),
+	let response2 = http_client::request(
+		server.addr(),
 		"\
-			GET /manifest.json HTTP/1.1\r\n\
-			Host: 9c94e154dab8acf859b30ee80fc828fb1d38359d938751b65db71d460588d82a.web3.site\r\n\
-			Connection: close\r\n\
-			\r\n\
-		"
+		 GET /manifest.json HTTP/1.1\r\n\
+		 Host: 9c94e154dab8acf859b30ee80fc828fb1d38359d938751b65db71d460588d82a.web3.site\r\n\
+		 Connection: close\r\n\
+		 \r\n\
+		 ",
 	);
 
 	// then
@@ -167,12 +186,14 @@ fn should_return_fetched_dapp_content() {
 	response1.assert_status("HTTP/1.1 200 OK");
 	assert_security_headers(&response1.headers);
 	assert!(
-		response1.body.contains(r#"18
+		response1.body.contains(
+			r#"18
 <h1>Hello Gavcoin!</h1>
 
 0
 
-"#),
+"#
+		),
 		"Expected Gavcoin body: {}",
 		response1.body
 	);
@@ -204,18 +225,21 @@ fn should_return_fetched_content() {
 	let (server, fetch, registrar) = serve_with_registrar_and_fetch();
 	let gavcoin = GAVCOIN_ICON.from_hex().unwrap();
 	registrar.set_result(
-		"2be00befcf008bc0e7d9cdefc194db9c75352e8632f48498b5a6bfce9f02c88e".parse().unwrap(),
-		Ok(gavcoin.clone())
+		"2be00befcf008bc0e7d9cdefc194db9c75352e8632f48498b5a6bfce9f02c88e"
+			.parse()
+			.unwrap(),
+		Ok(gavcoin.clone()),
 	);
 
 	// when
-	let response = request(server,
+	let response = request(
+		server,
 		"\
-			GET / HTTP/1.1\r\n\
-			Host: 2be00befcf008bc0e7d9cdefc194db9c75352e8632f48498b5a6bfce9f02c88e.web3.site\r\n\
-			Connection: close\r\n\
-			\r\n\
-		"
+		 GET / HTTP/1.1\r\n\
+		 Host: 2be00befcf008bc0e7d9cdefc194db9c75352e8632f48498b5a6bfce9f02c88e.web3.site\r\n\
+		 Connection: close\r\n\
+		 \r\n\
+		 ",
 	);
 
 	// then
@@ -234,15 +258,18 @@ fn should_cache_content() {
 	let (server, fetch, registrar) = serve_with_registrar_and_fetch();
 	let gavcoin = GAVCOIN_ICON.from_hex().unwrap();
 	registrar.set_result(
-		"2be00befcf008bc0e7d9cdefc194db9c75352e8632f48498b5a6bfce9f02c88e".parse().unwrap(),
-		Ok(gavcoin.clone())
+		"2be00befcf008bc0e7d9cdefc194db9c75352e8632f48498b5a6bfce9f02c88e"
+			.parse()
+			.unwrap(),
+		Ok(gavcoin.clone()),
 	);
-	let request_str = "\
-		GET / HTTP/1.1\r\n\
-		Host: 2be00befcf008bc0e7d9cdefc194db9c75352e8632f48498b5a6bfce9f02c88e.web3.site\r\n\
-		Connection: close\r\n\
-		\r\n\
-	";
+	let request_str =
+		"\
+		 GET / HTTP/1.1\r\n\
+		 Host: 2be00befcf008bc0e7d9cdefc194db9c75352e8632f48498b5a6bfce9f02c88e.web3.site\r\n\
+		 Connection: close\r\n\
+		 \r\n\
+		 ";
 
 	let response = http_client::request(server.addr(), request_str);
 	fetch.assert_requested("https://raw.githubusercontent.com/ethcore/dapp-assets/b88e983abaa1a6a6345b8d9448c15b117ddb540e/tokens/gavcoin-64x64.png");
@@ -265,21 +292,22 @@ fn should_not_request_content_twice() {
 	let (server, fetch, registrar) = serve_with_registrar_and_fetch();
 	let gavcoin = GAVCOIN_ICON.from_hex().unwrap();
 	registrar.set_result(
-		"2be00befcf008bc0e7d9cdefc194db9c75352e8632f48498b5a6bfce9f02c88e".parse().unwrap(),
-		Ok(gavcoin.clone())
+		"2be00befcf008bc0e7d9cdefc194db9c75352e8632f48498b5a6bfce9f02c88e"
+			.parse()
+			.unwrap(),
+		Ok(gavcoin.clone()),
 	);
-	let request_str = "\
-		GET / HTTP/1.1\r\n\
-		Host: 2be00befcf008bc0e7d9cdefc194db9c75352e8632f48498b5a6bfce9f02c88e.web3.site\r\n\
-		Connection: close\r\n\
-		\r\n\
-	";
+	let request_str =
+		"\
+		 GET / HTTP/1.1\r\n\
+		 Host: 2be00befcf008bc0e7d9cdefc194db9c75352e8632f48498b5a6bfce9f02c88e.web3.site\r\n\
+		 Connection: close\r\n\
+		 \r\n\
+		 ";
 	let fire_request = || {
 		let addr = server.addr().to_owned();
 		let req = request_str.to_owned();
-		thread::spawn(move || {
-			http_client::request(&addr, &req)
-		})
+		thread::spawn(move || http_client::request(&addr, &req))
 	};
 	let control = fetch.manual();
 
@@ -307,10 +335,17 @@ fn should_not_request_content_twice() {
 fn should_encode_and_decode_base32() {
 	use base32;
 
-	let encoded = base32::encode(base32::Alphabet::Crockford, "token+https://parity.io".as_bytes());
+	let encoded = base32::encode(
+		base32::Alphabet::Crockford,
+		"token+https://parity.io".as_bytes(),
+	);
 	assert_eq!("EHQPPSBE5DM78X3GECX2YBVGC5S6JX3S5SMPY", &encoded);
 
-	let data = base32::decode(base32::Alphabet::Crockford, "EHQPPSBE5DM78X3GECX2YBVGC5S6JX3S5SMPY").unwrap();
+	let data = base32::decode(
+		base32::Alphabet::Crockford,
+		"EHQPPSBE5DM78X3GECX2YBVGC5S6JX3S5SMPY",
+	)
+	.unwrap();
 	assert_eq!("token+https://parity.io", &String::from_utf8(data).unwrap());
 }
 
@@ -320,13 +355,14 @@ fn should_stream_web_content() {
 	let (server, fetch) = serve_with_fetch("token", "https://parity.io");
 
 	// when
-	let response = request(server,
+	let response = request(
+		server,
 		"\
-			GET / HTTP/1.1\r\n\
-			Host: EHQPPSBE5DM78X3GECX2YBVGC5S6JX3S5SMPY.web.web3.site\r\n\
-			Connection: close\r\n\
-			\r\n\
-		"
+		 GET / HTTP/1.1\r\n\
+		 Host: EHQPPSBE5DM78X3GECX2YBVGC5S6JX3S5SMPY.web.web3.site\r\n\
+		 Connection: close\r\n\
+		 \r\n\
+		 ",
 	);
 
 	// then
@@ -343,13 +379,14 @@ fn should_support_base32_encoded_web_urls() {
 	let (server, fetch) = serve_with_fetch("token", "https://parity.io");
 
 	// when
-	let response = request(server,
+	let response = request(
+		server,
 		"\
-			GET /styles.css?test=123 HTTP/1.1\r\n\
-			Host: EHQPPSBE5DM78X3GECX2YBVGC5S6JX3S5SMPY.web.web3.site\r\n\
-			Connection: close\r\n\
-			\r\n\
-		"
+		 GET /styles.css?test=123 HTTP/1.1\r\n\
+		 Host: EHQPPSBE5DM78X3GECX2YBVGC5S6JX3S5SMPY.web.web3.site\r\n\
+		 Connection: close\r\n\
+		 \r\n\
+		 ",
 	);
 
 	// then
@@ -363,7 +400,8 @@ fn should_support_base32_encoded_web_urls() {
 #[test]
 fn should_correctly_handle_long_label_when_splitted() {
 	// given
-	let (server, fetch) = serve_with_fetch("xolrg9fePeQyKLnL", "https://contribution.melonport.com");
+	let (server, fetch) =
+		serve_with_fetch("xolrg9fePeQyKLnL", "https://contribution.melonport.com");
 
 	// when
 	let response = request(server,
@@ -389,13 +427,14 @@ fn should_support_base32_encoded_web_urls_as_path() {
 	let (server, fetch) = serve_with_fetch("token", "https://parity.io");
 
 	// when
-	let response = request(server,
+	let response = request(
+		server,
 		"\
-			GET /web/EHQPPSBE5DM78X3GECX2YBVGC5S6JX3S5SMPY/styles.css?test=123 HTTP/1.1\r\n\
-			Host: localhost:8080\r\n\
-			Connection: close\r\n\
-			\r\n\
-		"
+		 GET /web/EHQPPSBE5DM78X3GECX2YBVGC5S6JX3S5SMPY/styles.css?test=123 HTTP/1.1\r\n\
+		 Host: localhost:8080\r\n\
+		 Connection: close\r\n\
+		 \r\n\
+		 ",
 	);
 
 	// then
@@ -412,13 +451,14 @@ fn should_return_error_on_non_whitelisted_domain() {
 	let (server, fetch) = serve_with_fetch("token", "https://ethcore.io");
 
 	// when
-	let response = request(server,
+	let response = request(
+		server,
 		"\
-			GET / HTTP/1.1\r\n\
-			Host: EHQPPSBE5DM78X3GECX2YBVGC5S6JX3S5SMPY.web.web3.site\r\n\
-			Connection: close\r\n\
-			\r\n\
-		"
+		 GET / HTTP/1.1\r\n\
+		 Host: EHQPPSBE5DM78X3GECX2YBVGC5S6JX3S5SMPY.web.web3.site\r\n\
+		 Connection: close\r\n\
+		 \r\n\
+		 ",
 	);
 
 	// then
@@ -434,13 +474,14 @@ fn should_return_error_on_invalid_token() {
 	let (server, fetch) = serve_with_fetch("test", "https://parity.io");
 
 	// when
-	let response = request(server,
+	let response = request(
+		server,
 		"\
-			GET / HTTP/1.1\r\n\
-			Host: EHQPPSBE5DM78X3GECX2YBVGC5S6JX3S5SMPY.web.web3.site\r\n\
-			Connection: close\r\n\
-			\r\n\
-		"
+		 GET / HTTP/1.1\r\n\
+		 Host: EHQPPSBE5DM78X3GECX2YBVGC5S6JX3S5SMPY.web.web3.site\r\n\
+		 Connection: close\r\n\
+		 \r\n\
+		 ",
 	);
 
 	// then
@@ -456,13 +497,14 @@ fn should_return_error_on_invalid_protocol() {
 	let (server, fetch) = serve_with_fetch("token", "ftp://parity.io");
 
 	// when
-	let response = request(server,
+	let response = request(
+		server,
 		"\
-			GET /web/token/ftp/parity.io/ HTTP/1.1\r\n\
-			Host: localhost:8080\r\n\
-			Connection: close\r\n\
-			\r\n\
-		"
+		 GET /web/token/ftp/parity.io/ HTTP/1.1\r\n\
+		 Host: localhost:8080\r\n\
+		 Connection: close\r\n\
+		 \r\n\
+		 ",
 	);
 
 	// then
@@ -478,16 +520,17 @@ fn should_disallow_non_get_requests() {
 	let (server, fetch) = serve_with_fetch("token", "https://parity.io");
 
 	// when
-	let response = request(server,
+	let response = request(
+		server,
 		"\
-			POST / HTTP/1.1\r\n\
-			Host: EHQPPSBE5DM78X3GECX2YBVGC5S6JX3S5SMPY.web.web3.site\r\n\
-			Content-Type: application/json\r\n\
-			Connection: close\r\n\
-			\r\n\
-			123\r\n\
-			\r\n\
-		"
+		 POST / HTTP/1.1\r\n\
+		 Host: EHQPPSBE5DM78X3GECX2YBVGC5S6JX3S5SMPY.web.web3.site\r\n\
+		 Content-Type: application/json\r\n\
+		 Connection: close\r\n\
+		 \r\n\
+		 123\r\n\
+		 \r\n\
+		 ",
 	);
 
 	// then
@@ -503,19 +546,23 @@ fn should_fix_absolute_requests_based_on_referer() {
 	let (server, fetch) = serve_with_fetch("token", "https://parity.io");
 
 	// when
-	let response = request(server,
+	let response = request(
+		server,
 		"\
-			GET /styles.css HTTP/1.1\r\n\
-			Host: localhost:8080\r\n\
-			Connection: close\r\n\
-			Referer: http://localhost:8080/web/EHQPPSBE5DM78X3GECX2YBVGC5S6JX3S5SMPY/\r\n\
-			\r\n\
-		"
+		 GET /styles.css HTTP/1.1\r\n\
+		 Host: localhost:8080\r\n\
+		 Connection: close\r\n\
+		 Referer: http://localhost:8080/web/EHQPPSBE5DM78X3GECX2YBVGC5S6JX3S5SMPY/\r\n\
+		 \r\n\
+		 ",
 	);
 
 	// then
 	response.assert_status("HTTP/1.1 302 Found");
-	response.assert_header("Location", "/web/EHQPPSBE5DM78X3GECX2YBVGC5S6JX3S5SMPY/styles.css");
+	response.assert_header(
+		"Location",
+		"/web/EHQPPSBE5DM78X3GECX2YBVGC5S6JX3S5SMPY/styles.css",
+	);
 
 	fetch.assert_no_more_requests();
 }
@@ -526,19 +573,23 @@ fn should_fix_absolute_requests_based_on_referer_in_url() {
 	let (server, fetch) = serve_with_fetch("token", "https://parity.io");
 
 	// when
-	let response = request(server,
+	let response = request(
+		server,
 		"\
-			GET /styles.css HTTP/1.1\r\n\
-			Host: localhost:8080\r\n\
-			Connection: close\r\n\
-			Referer: http://localhost:8080/?__referer=web/EHQPPSBE5DM78X3GECX2YBVGC5S6JX3S5SMPY/\r\n\
-			\r\n\
-		"
+		 GET /styles.css HTTP/1.1\r\n\
+		 Host: localhost:8080\r\n\
+		 Connection: close\r\n\
+		 Referer: http://localhost:8080/?__referer=web/EHQPPSBE5DM78X3GECX2YBVGC5S6JX3S5SMPY/\r\n\
+		 \r\n\
+		 ",
 	);
 
 	// then
 	response.assert_status("HTTP/1.1 302 Found");
-	response.assert_header("Location", "/web/EHQPPSBE5DM78X3GECX2YBVGC5S6JX3S5SMPY/styles.css");
+	response.assert_header(
+		"Location",
+		"/web/EHQPPSBE5DM78X3GECX2YBVGC5S6JX3S5SMPY/styles.css",
+	);
 
 	fetch.assert_no_more_requests();
 }

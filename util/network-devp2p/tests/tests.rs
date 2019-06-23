@@ -14,24 +14,24 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-extern crate parking_lot;
 extern crate ethcore_bytes;
 extern crate ethcore_io as io;
 extern crate ethcore_logger;
 extern crate ethcore_network;
 extern crate ethcore_network_devp2p;
 extern crate ethkey;
+extern crate parking_lot;
 
+use ethcore_bytes::Bytes;
+use ethcore_network::*;
+use ethcore_network_devp2p::NetworkService;
+use ethkey::{Generator, Random};
+use io::TimerToken;
+use parking_lot::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use std::sync::Arc;
 use std::thread;
 use std::time::*;
-use parking_lot::Mutex;
-use ethcore_bytes::Bytes;
-use ethcore_network::*;
-use ethcore_network_devp2p::NetworkService;
-use ethkey::{Random, Generator};
-use io::TimerToken;
 
 pub struct TestProtocol {
 	drop_session: bool,
@@ -52,7 +52,9 @@ impl TestProtocol {
 	/// Creates and register protocol with the network service
 	pub fn register(service: &mut NetworkService, drop_session: bool) -> Arc<TestProtocol> {
 		let handler = Arc::new(TestProtocol::new(drop_session));
-		service.register_protocol(handler.clone(), *b"tst", &[(42u8, 1u8), (43u8, 1u8)]).expect("Error registering test protocol handler");
+		service
+			.register_protocol(handler.clone(), *b"tst", &[(42u8, 1u8), (43u8, 1u8)])
+			.expect("Error registering test protocol handler");
 		handler
 	}
 
@@ -101,9 +103,12 @@ impl NetworkProtocolHandler for TestProtocol {
 
 #[test]
 fn net_service() {
-	let service = NetworkService::new(NetworkConfiguration::new_local(), None).expect("Error creating network service");
+	let service = NetworkService::new(NetworkConfiguration::new_local(), None)
+		.expect("Error creating network service");
 	service.start().unwrap();
-	service.register_protocol(Arc::new(TestProtocol::new(false)), *b"myp", &[(1u8, 1u8)]).unwrap();
+	service
+		.register_protocol(Arc::new(TestProtocol::new(false)), *b"myp", &[(1u8, 1u8)])
+		.unwrap();
 }
 
 #[test]
@@ -120,12 +125,12 @@ fn net_disconnect() {
 	let key1 = Random.generate().unwrap();
 	let mut config1 = NetworkConfiguration::new_local();
 	config1.use_secret = Some(key1.secret().clone());
-	config1.boot_nodes = vec![ ];
+	config1.boot_nodes = vec![];
 	let mut service1 = NetworkService::new(config1, None).unwrap();
 	service1.start().unwrap();
 	let handler1 = TestProtocol::register(&mut service1, false);
 	let mut config2 = NetworkConfiguration::new_local();
-	config2.boot_nodes = vec![ service1.local_url().unwrap() ];
+	config2.boot_nodes = vec![service1.local_url().unwrap()];
 	let mut service2 = NetworkService::new(config2, None).unwrap();
 	service2.start().unwrap();
 	let handler2 = TestProtocol::register(&mut service2, true);

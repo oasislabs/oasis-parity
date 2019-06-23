@@ -16,7 +16,7 @@
 
 //! Blockchain filter
 
-use ethereum_types::{H256, Address, Bloom, BloomInput};
+use ethereum_types::{Address, Bloom, BloomInput, H256};
 use ids::BlockId;
 use log_entry::LogEntry;
 
@@ -40,19 +40,19 @@ pub struct TxFilter {
 	/// From address of a transaction.
 	/// If None, all transactions match. Otherwise only transactions
 	/// originated by the specified from address match
-	pub from_address: Option<Address>
+	pub from_address: Option<Address>,
 }
 
 impl TxFilter {
 	pub fn matches(&self, entry: &TxEntry) -> bool {
 		match self.transaction_hash {
 			Some(hash) => return entry.transaction_hash == hash,
-			_ => { }
+			_ => {}
 		}
 
 		match self.from_address {
 			Some(from) => return from == entry.from_address,
-			_ => { }
+			_ => {}
 		}
 
 		false
@@ -89,12 +89,7 @@ pub struct Filter {
 
 impl Clone for Filter {
 	fn clone(&self) -> Self {
-		let mut topics = [
-			None,
-			None,
-			None,
-			None,
-		];
+		let mut topics = [None, None, None, None];
 		for i in 0..4 {
 			topics[i] = self.topics[i].clone();
 		}
@@ -113,43 +108,58 @@ impl Filter {
 	/// Returns combinations of each address and topic.
 	pub fn bloom_possibilities(&self) -> Vec<Bloom> {
 		let blooms = match self.address {
-			Some(ref addresses) if !addresses.is_empty() =>
-				addresses.iter()
-					.map(|ref address| Bloom::from(BloomInput::Raw(address)))
-					.collect(),
-			_ => vec![Bloom::default()]
+			Some(ref addresses) if !addresses.is_empty() => addresses
+				.iter()
+				.map(|ref address| Bloom::from(BloomInput::Raw(address)))
+				.collect(),
+			_ => vec![Bloom::default()],
 		};
 
 		self.topics.iter().fold(blooms, |bs, topic| match *topic {
 			None => bs,
-			Some(ref topics) => bs.into_iter().flat_map(|bloom| {
-				topics.into_iter().map(|topic| {
-					let mut b = bloom.clone();
-					b.accrue(BloomInput::Raw(topic));
-					b
-				}).collect::<Vec<Bloom>>()
-			}).collect()
+			Some(ref topics) => bs
+				.into_iter()
+				.flat_map(|bloom| {
+					topics
+						.into_iter()
+						.map(|topic| {
+							let mut b = bloom.clone();
+							b.accrue(BloomInput::Raw(topic));
+							b
+						})
+						.collect::<Vec<Bloom>>()
+				})
+				.collect(),
 		})
 	}
 
 	/// Returns true if given log entry matches filter.
 	pub fn matches(&self, log: &LogEntry) -> bool {
 		let matches = match self.address {
-			Some(ref addresses) if !addresses.is_empty() =>	addresses.iter().any(|address| &log.address == address),
-			_ => true
+			Some(ref addresses) if !addresses.is_empty() => {
+				addresses.iter().any(|address| &log.address == address)
+			}
+			_ => true,
 		};
 
-		matches && self.topics.iter().enumerate().all(|(i, topic)| match *topic {
-			Some(ref topics) if !topics.is_empty() => topics.iter().any(|topic| log.topics.get(i) == Some(topic)),
-			_ => true
-		})
+		matches
+			&& self
+				.topics
+				.iter()
+				.enumerate()
+				.all(|(i, topic)| match *topic {
+					Some(ref topics) if !topics.is_empty() => {
+						topics.iter().any(|topic| log.topics.get(i) == Some(topic))
+					}
+					_ => true,
+				})
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use ethereum_types::Bloom;
-	use filter::{Filter, TxFilter, TxEntry};
+	use filter::{Filter, TxEntry, TxFilter};
 	use ids::BlockId;
 	use log_entry::LogEntry;
 
@@ -176,7 +186,9 @@ mod tests {
 			to_block: BlockId::Latest,
 			address: Some(vec!["b372018f3be9e171df0581136b59d2faf73a7d5d".into()]),
 			topics: vec![
-				Some(vec!["ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23f9".into()]),
+				Some(vec![
+					"ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23f9".into(),
+				]),
 				None,
 				None,
 				None,
@@ -195,8 +207,12 @@ mod tests {
 			to_block: BlockId::Latest,
 			address: Some(vec!["b372018f3be9e171df0581136b59d2faf73a7d5d".into()]),
 			topics: vec![
-				Some(vec!["ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23f9".into()]),
-				Some(vec!["ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23f9".into()]),
+				Some(vec![
+					"ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23f9".into(),
+				]),
+				Some(vec![
+					"ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23f9".into(),
+				]),
 				None,
 				None,
 			],
@@ -218,15 +234,17 @@ mod tests {
 			]),
 			topics: vec![
 				Some(vec![
-					 "ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23f9".into(),
-					 "ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23f9".into()
+					"ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23f9".into(),
+					"ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23f9".into(),
 				]),
 				Some(vec![
-					 "ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23f9".into(),
-					 "ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23f9".into()
+					"ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23f9".into(),
+					"ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23f9".into(),
 				]),
-				Some(vec!["ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23f9".into()]),
-				None
+				Some(vec![
+					"ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23f9".into(),
+				]),
+				None,
 			],
 			limit: None,
 		};
@@ -244,8 +262,12 @@ mod tests {
 			to_block: BlockId::Latest,
 			address: Some(vec!["b372018f3be9e171df0581136b59d2faf73a7d5d".into()]),
 			topics: vec![
-				Some(vec!["ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23f9".into()]),
-				Some(vec!["ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23fa".into()]),
+				Some(vec![
+					"ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23f9".into(),
+				]),
+				Some(vec![
+					"ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23fa".into(),
+				]),
 				None,
 				None,
 			],
@@ -259,7 +281,7 @@ mod tests {
 				"ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23fa".into(),
 				"ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23f9".into(),
 			],
-			data: vec![]
+			data: vec![],
 		};
 
 		let entry1 = LogEntry {
@@ -269,15 +291,13 @@ mod tests {
 				"ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23fa".into(),
 				"ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23f9".into(),
 			],
-			data: vec![]
+			data: vec![],
 		};
 
 		let entry2 = LogEntry {
 			address: "b372018f3be9e171df0581136b59d2faf73a7d5d".into(),
-			topics: vec![
-				"ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23f9".into(),
-			],
-			data: vec![]
+			topics: vec!["ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23f9".into()],
+			data: vec![],
 		};
 
 		assert_eq!(filter.matches(&entry0), true);
@@ -287,42 +307,65 @@ mod tests {
 
 	#[test]
 	fn test_tx_filter_transaction_hash_matches() {
-		let filter = TxFilter{
-			transaction_hash: Some("0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into()),
+		let filter = TxFilter {
+			transaction_hash: Some(
+				"0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into(),
+			),
 			from_address: None,
 		};
 
-		assert_eq!(filter.matches(&TxEntry{
-			transaction_hash: "0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into(),
-			from_address: "b372018f3be9e171df0581136b59d2faf73a7d5d".into(),
-		}), true);
-		assert_eq!(filter.matches(&TxEntry{
-			transaction_hash: "0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6e1234".into(),
-			from_address: "b372018f3be9e171df0581136b59d2faf73a7d5d".into(),
-		}), false);
-		assert_eq!(TxFilter{
-			transaction_hash: None,
-			from_address: None
-		}.matches(&TxEntry{
-			transaction_hash: "0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6e1234".into(),
-			from_address: "b372018f3be9e171df0581136b59d2faf73a7d5d".into(),
-		}), false)
+		assert_eq!(
+			filter.matches(&TxEntry {
+				transaction_hash:
+					"0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into(),
+				from_address: "b372018f3be9e171df0581136b59d2faf73a7d5d".into(),
+			}),
+			true
+		);
+		assert_eq!(
+			filter.matches(&TxEntry {
+				transaction_hash:
+					"0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6e1234".into(),
+				from_address: "b372018f3be9e171df0581136b59d2faf73a7d5d".into(),
+			}),
+			false
+		);
+		assert_eq!(
+			TxFilter {
+				transaction_hash: None,
+				from_address: None
+			}
+			.matches(&TxEntry {
+				transaction_hash:
+					"0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6e1234".into(),
+				from_address: "b372018f3be9e171df0581136b59d2faf73a7d5d".into(),
+			}),
+			false
+		)
 	}
 
 	#[test]
 	fn test_tx_filter_transaction_from_address_matches() {
-		let filter = TxFilter{
+		let filter = TxFilter {
 			transaction_hash: None,
 			from_address: Some("b372018f3be9e171df0581136b59d2faf73a7d5d".into()),
 		};
 
-		assert_eq!(filter.matches(&TxEntry{
-			transaction_hash: "0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into(),
-			from_address: "b372018f3be9e171df0581136b59d2faf73a7d5d".into(),
-		}), true);
-		assert_eq!(filter.matches(&TxEntry{
-			transaction_hash: "0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into(),
-			from_address: "b372018f3be9e171df0581136b59d2faf73a1234".into(),
-		}), false);
+		assert_eq!(
+			filter.matches(&TxEntry {
+				transaction_hash:
+					"0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into(),
+				from_address: "b372018f3be9e171df0581136b59d2faf73a7d5d".into(),
+			}),
+			true
+		);
+		assert_eq!(
+			filter.matches(&TxEntry {
+				transaction_hash:
+					"0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into(),
+				from_address: "b372018f3be9e171df0581136b59d2faf73a1234".into(),
+			}),
+			false
+		);
 	}
 }

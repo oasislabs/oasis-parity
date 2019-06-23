@@ -16,12 +16,12 @@
 
 //! Disk-backed `HashDB` implementation.
 
-use std::sync::Arc;
+use bytes::Bytes;
+use error::UtilError;
+use ethereum_types::H256;
 use hashdb::*;
 use kvdb::{self, DBTransaction};
-use ethereum_types::H256;
-use error::UtilError;
-use bytes::Bytes;
+use std::sync::Arc;
 
 /// A `HashDB` which can manage a short-term journal potentially containing many forks of mutually
 /// exclusive actions.
@@ -35,23 +35,37 @@ pub trait JournalDB: HashDB {
 	/// Returns the size of journalled state in memory.
 	/// This function has a considerable speed requirement --
 	/// it must be fast enough to call several times per block imported.
-	fn journal_size(&self) -> usize { 0 }
+	fn journal_size(&self) -> usize {
+		0
+	}
 
 	/// Check if this database has any commits
 	fn is_empty(&self) -> bool;
 
 	/// Get the earliest era in the DB. None if there isn't yet any data in there.
-	fn earliest_era(&self) -> Option<u64> { None }
+	fn earliest_era(&self) -> Option<u64> {
+		None
+	}
 
 	/// Get the latest era in the DB. None if there isn't yet any data in there.
 	fn latest_era(&self) -> Option<u64>;
 
 	/// Journal recent database operations as being associated with a given era and id.
 	// TODO: give the overlay to this function so journaldbs don't manage the overlays themeselves.
-	fn journal_under(&mut self, batch: &mut DBTransaction, now: u64, id: &H256) -> Result<u32, UtilError>;
+	fn journal_under(
+		&mut self,
+		batch: &mut DBTransaction,
+		now: u64,
+		id: &H256,
+	) -> Result<u32, UtilError>;
 
 	/// Mark a given block as canonical, indicating that competing blocks' states may be pruned out.
-	fn mark_canonical(&mut self, batch: &mut DBTransaction, era: u64, id: &H256) -> Result<u32, UtilError>;
+	fn mark_canonical(
+		&mut self,
+		batch: &mut DBTransaction,
+		era: u64,
+		id: &H256,
+	) -> Result<u32, UtilError>;
 
 	/// Commit all queued insert and delete operations without affecting any journalling -- this requires that all insertions
 	/// and deletions are indeed canonical and will likely lead to an invalid database if that assumption is violated.
@@ -66,7 +80,9 @@ pub trait JournalDB: HashDB {
 	fn state(&self, _id: &H256) -> Option<Bytes>;
 
 	/// Whether this database is pruned.
-	fn is_pruned(&self) -> bool { true }
+	fn is_pruned(&self) -> bool {
+		true
+	}
 
 	/// Get backing database.
 	fn backing(&self) -> &Arc<kvdb::KeyValueDB>;
@@ -80,7 +96,12 @@ pub trait JournalDB: HashDB {
 
 	/// Commit all changes in a single batch
 	#[cfg(test)]
-	fn commit_batch(&mut self, now: u64, id: &H256, end: Option<(u64, H256)>) -> Result<u32, UtilError> {
+	fn commit_batch(
+		&mut self,
+		now: u64,
+		id: &H256,
+		end: Option<(u64, H256)>,
+	) -> Result<u32, UtilError> {
 		let mut batch = self.backing().transaction();
 		let mut ops = self.journal_under(&mut batch, now, id)?;
 

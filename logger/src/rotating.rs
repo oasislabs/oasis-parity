@@ -16,10 +16,10 @@
 
 //! Common log helper functions
 
-use std::env;
-use rlog::LogLevelFilter;
-use env_logger::LogBuilder;
 use arrayvec::ArrayVec;
+use env_logger::LogBuilder;
+use rlog::LogLevelFilter;
+use std::env;
 
 use parking_lot::{RwLock, RwLockReadGuard};
 
@@ -43,7 +43,7 @@ pub fn init_log() {
 	*LOG_DUMMY
 }
 
-const LOG_SIZE : usize = 128;
+const LOG_SIZE: usize = 128;
 
 /// Logger implementation that keeps up to `LOG_SIZE` log elements.
 pub struct RotatingLogger {
@@ -54,7 +54,6 @@ pub struct RotatingLogger {
 }
 
 impl RotatingLogger {
-
 	/// Creates new `RotatingLogger` with given levels.
 	/// It does not enforce levels - it's just read only.
 	pub fn new(levels: String) -> Self {
@@ -82,7 +81,6 @@ impl RotatingLogger {
 	pub fn logs(&self) -> RwLockReadGuard<ArrayVec<[String; LOG_SIZE]>> {
 		self.logs.read()
 	}
-
 }
 
 #[cfg(test)]

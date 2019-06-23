@@ -16,8 +16,8 @@
 
 //! Ethereum-like state machine definition.
 
-use std::collections::{BTreeMap, HashMap};
 use std::cmp;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use block::{ExecutedBlock, IsBlock};
@@ -25,19 +25,19 @@ use builtin::Builtin;
 // use client::{BlockInfo, CallContract};
 use error::Error;
 use executive::Executive;
-use header::{BlockNumber, Header, ExtendedHeader};
+use header::{BlockNumber, ExtendedHeader, Header};
 use spec::CommonParams;
 use state::{CleanupMode, Substate};
-use trace::{NoopTracer, NoopVMTracer, Tracer, ExecutiveTracer, RewardType, Tracing};
+use trace::{ExecutiveTracer, NoopTracer, NoopVMTracer, RewardType, Tracer, Tracing};
 use trace_ext::NoopExtTracer;
-use transaction::{self, SYSTEM_ADDRESS, UnverifiedTransaction, SignedTransaction};
+use transaction::{self, SignedTransaction, UnverifiedTransaction, SYSTEM_ADDRESS};
 // use tx_filter::TransactionFilter;
 
-use ethereum_types::{U256, Address};
 use bytes::BytesRef;
+use ethereum_types::{Address, U256};
 use rlp::Rlp;
-use vm::{CallType, ActionParams, ActionValue, ParamsType, OasisContract};
-use vm::{EnvInfo, Schedule, CreateContractAddress};
+use vm::{ActionParams, ActionValue, CallType, OasisContract, ParamsType};
+use vm::{CreateContractAddress, EnvInfo, Schedule};
 
 /// Parity tries to round block.gas_limit to multiple of this constant
 pub const PARITY_GAS_LIMIT_DETERMINANT: U256 = U256([37, 0, 0, 0]);
@@ -59,9 +59,18 @@ impl From<::ethjson::spec::EthashParams> for EthashExtensions {
 	fn from(p: ::ethjson::spec::EthashParams) -> Self {
 		EthashExtensions {
 			homestead_transition: p.homestead_transition.map_or(0, Into::into),
-			dao_hardfork_transition: p.dao_hardfork_transition.map_or(u64::max_value(), Into::into),
-			dao_hardfork_beneficiary: p.dao_hardfork_beneficiary.map_or_else(Address::new, Into::into),
-			dao_hardfork_accounts: p.dao_hardfork_accounts.unwrap_or_else(Vec::new).into_iter().map(Into::into).collect(),
+			dao_hardfork_transition: p
+				.dao_hardfork_transition
+				.map_or(u64::max_value(), Into::into),
+			dao_hardfork_beneficiary: p
+				.dao_hardfork_beneficiary
+				.map_or_else(Address::new, Into::into),
+			dao_hardfork_accounts: p
+				.dao_hardfork_accounts
+				.unwrap_or_else(Vec::new)
+				.into_iter()
+				.map(Into::into)
+				.collect(),
 		}
 	}
 }
@@ -93,7 +102,11 @@ impl EthereumMachine {
 
 	/// Ethereum machine with ethash extensions.
 	// TODO: either unify or specify to mainnet specifically and include other specific-chain HFs?
-	pub fn with_ethash_extensions(params: CommonParams, builtins: BTreeMap<Address, Builtin>, extensions: EthashExtensions) -> EthereumMachine {
+	pub fn with_ethash_extensions(
+		params: CommonParams,
+		builtins: BTreeMap<Address, Builtin>,
+		extensions: EthashExtensions,
+	) -> EthereumMachine {
 		let mut machine = EthereumMachine::regular(params, builtins);
 		machine.ethash_extensions = Some(extensions);
 		machine
@@ -137,8 +150,7 @@ impl EthereumMachine {
 		// Extract contract deployment header, if present.
 		let oasis_contract = if let Some(ref code) = code {
 			OasisContract::from_code(code)?
-		}
-		else {
+		} else {
 			None
 		};
 
@@ -151,7 +163,9 @@ impl EthereumMachine {
 			gas_price: 0.into(),
 			value: ActionValue::Transfer(0.into()),
 			// Code stripped of contract header, if present.
-			code: oasis_contract.as_ref().map_or(code, |c| Some(c.code.clone())),
+			code: oasis_contract
+				.as_ref()
+				.map_or(code, |c| Some(c.code.clone())),
 			code_hash: Some(state.code_hash(&contract_address)?),
 			data: data,
 			call_type: CallType::Call,
@@ -161,7 +175,14 @@ impl EthereumMachine {
 		let mut ex = Executive::new(&mut state, &env_info, self);
 		let mut substate = Substate::new();
 		let mut output = Vec::new();
-		if let Err(e) = ex.call(params, &mut substate, BytesRef::Flexible(&mut output), &mut NoopTracer, &mut NoopVMTracer, &mut NoopExtTracer) {
+		if let Err(e) = ex.call(
+			params,
+			&mut substate,
+			BytesRef::Flexible(&mut output),
+			&mut NoopTracer,
+			&mut NoopVMTracer,
+			&mut NoopExtTracer,
+		) {
 			warn!("Encountered error on making system call: {}", e);
 		}
 
@@ -173,7 +194,10 @@ impl EthereumMachine {
 		let params = self.params();
 		if block.header().number() == params.eip210_transition {
 			let state = block.state_mut();
-			state.init_code(&params.eip210_contract_address, params.eip210_contract_code.clone())?;
+			state.init_code(
+				&params.eip210_contract_address,
+				params.eip210_contract_code.clone(),
+			)?;
 		}
 		if block.header().number() >= params.eip210_transition {
 			let parent_hash = block.header().parent_hash().clone();
@@ -197,8 +221,9 @@ impl EthereumMachine {
 				let state = block.state_mut();
 				for child in &ethash_params.dao_hardfork_accounts {
 					let beneficiary = &ethash_params.dao_hardfork_beneficiary;
-					state.balance(child)
-						.and_then(|b| state.transfer_balance(child, beneficiary, &b, CleanupMode::NoEmpty))?;
+					state.balance(child).and_then(|b| {
+						state.transfer_balance(child, beneficiary, &b, CleanupMode::NoEmpty)
+					})?;
 				}
 			}
 		}
@@ -209,7 +234,13 @@ impl EthereumMachine {
 	/// Populate a header's fields based on its parent's header.
 	/// Usually implements the chain scoring rule based on weight.
 	/// The gas floor target must not be lower than the engine's minimum gas limit.
-	pub fn populate_from_parent(&self, header: &mut Header, parent: &Header, gas_floor_target: U256, gas_ceil_target: U256) {
+	pub fn populate_from_parent(
+		&self,
+		header: &mut Header,
+		parent: &Header,
+		gas_floor_target: U256,
+		gas_ceil_target: U256,
+	) {
 		header.set_difficulty(parent.difficulty().clone());
 		let gas_limit = parent.gas_limit().clone();
 		assert!(!gas_limit.is_zero(), "Gas limit should be > 0");
@@ -228,8 +259,15 @@ impl EthereumMachine {
 				} else {
 					let total_lower_limit = cmp::max(lower_limit, gas_floor_target);
 					let total_upper_limit = cmp::min(upper_limit, gas_ceil_target);
-					let gas_limit = cmp::max(gas_floor_target, cmp::min(total_upper_limit,
-						lower_limit + (header.gas_used().clone() * 6u32 / U256::from(5)) / bound_divisor));
+					let gas_limit = cmp::max(
+						gas_floor_target,
+						cmp::min(
+							total_upper_limit,
+							lower_limit
+								+ (header.gas_used().clone() * 6u32 / U256::from(5))
+									/ bound_divisor,
+						),
+					);
 					round_block_gas_limit(gas_limit, total_lower_limit, total_upper_limit)
 				};
 				// ensure that we are not violating protocol limits
@@ -239,11 +277,12 @@ impl EthereumMachine {
 			};
 
 			header.set_gas_limit(gas_limit);
-			if header.number() >= ethash_params.dao_hardfork_transition &&
-				header.number() <= ethash_params.dao_hardfork_transition + 9 {
+			if header.number() >= ethash_params.dao_hardfork_transition
+				&& header.number() <= ethash_params.dao_hardfork_transition + 9
+			{
 				header.set_extra_data(b"dao-hard-fork"[..].to_owned());
 			}
-			return
+			return;
 		}
 
 		// Don't update gas limit dynamically, as this is specific to Parity's miner.
@@ -293,13 +332,19 @@ impl EthereumMachine {
 	// TODO: builtin contract routing - to do this properly, it will require removing the built-in configuration-reading logic
 	// from Spec into here and removing the Spec::builtins field.
 	pub fn builtin(&self, a: &Address, block_number: BlockNumber) -> Option<&Builtin> {
-		self.builtins()
-			.get(a)
-			.and_then(|b| if b.is_active(block_number) { Some(b) } else { None })
+		self.builtins().get(a).and_then(|b| {
+			if b.is_active(block_number) {
+				Some(b)
+			} else {
+				None
+			}
+		})
 	}
 
 	/// Some intrinsic operation parameters; by default they take their value from the `spec()`'s `engine_params`.
-	pub fn maximum_extra_data_size(&self) -> usize { self.params().maximum_extra_data_size }
+	pub fn maximum_extra_data_size(&self) -> usize {
+		self.params().maximum_extra_data_size
+	}
 
 	/// The nonce with which accounts begin at given block.
 	pub fn account_start_nonce(&self, block: u64) -> U256 {
@@ -333,12 +378,20 @@ impl EthereumMachine {
 	}
 
 	/// Verify a particular transaction is valid, regardless of order.
-	pub fn verify_transaction_unordered(&self, t: UnverifiedTransaction, _header: &Header) -> Result<SignedTransaction, transaction::Error> {
+	pub fn verify_transaction_unordered(
+		&self,
+		t: UnverifiedTransaction,
+		_header: &Header,
+	) -> Result<SignedTransaction, transaction::Error> {
 		Ok(SignedTransaction::new(t)?)
 	}
 
 	/// Does basic verification of the transaction.
-	pub fn verify_transaction_basic(&self, t: &UnverifiedTransaction, header: &Header) -> Result<(), transaction::Error> {
+	pub fn verify_transaction_basic(
+		&self,
+		t: &UnverifiedTransaction,
+		header: &Header,
+	) -> Result<(), transaction::Error> {
 		let check_low_s = match self.ethash_extensions {
 			Some(ref ext) => header.number() >= ext.homestead_transition,
 			None => true,
@@ -365,7 +418,7 @@ impl EthereumMachine {
 	// 			return Err(transaction::Error::NotAllowed.into())
 	// 		}
 	// 	}
-    //
+	//
 	// 	Ok(())
 	// }
 
@@ -377,13 +430,20 @@ impl EthereumMachine {
 	}
 
 	/// Performs pre-validation of RLP decoded transaction before other processing
-	pub fn decode_transaction(&self, transaction: &[u8]) -> Result<UnverifiedTransaction, transaction::Error> {
+	pub fn decode_transaction(
+		&self,
+		transaction: &[u8],
+	) -> Result<UnverifiedTransaction, transaction::Error> {
 		let rlp = Rlp::new(&transaction);
 		if rlp.as_raw().len() > self.params().max_transaction_size {
-			debug!("Rejected oversized transaction of {} bytes", rlp.as_raw().len());
-			return Err(transaction::Error::TooBig)
+			debug!(
+				"Rejected oversized transaction of {} bytes",
+				rlp.as_raw().len()
+			);
+			return Err(transaction::Error::TooBig);
 		}
-		rlp.as_val().map_err(|e| transaction::Error::InvalidRlp(e.to_string()))
+		rlp.as_val()
+			.map_err(|e| transaction::Error::InvalidRlp(e.to_string()))
 	}
 }
 
@@ -434,8 +494,15 @@ impl ::parity_machine::WithBalances for EthereumMachine {
 		live.state().balance(address).map_err(Into::into)
 	}
 
-	fn add_balance(&self, live: &mut ExecutedBlock, address: &Address, amount: &U256) -> Result<(), Error> {
-		live.state_mut().add_balance(address, amount, CleanupMode::NoEmpty).map_err(Into::into)
+	fn add_balance(
+		&self,
+		live: &mut ExecutedBlock,
+		address: &Address,
+		amount: &U256,
+	) -> Result<(), Error> {
+		live.state_mut()
+			.add_balance(address, amount, CleanupMode::NoEmpty)
+			.map_err(Into::into)
 	}
 }
 
@@ -474,7 +541,8 @@ impl WithRewards for EthereumMachine {
 // 1) it will still be in desired range
 // 2) it will be a nearest (with tendency to increase) multiple of PARITY_GAS_LIMIT_DETERMINANT
 fn round_block_gas_limit(gas_limit: U256, lower_limit: U256, upper_limit: U256) -> U256 {
-	let increased_gas_limit = gas_limit + (PARITY_GAS_LIMIT_DETERMINANT - gas_limit % PARITY_GAS_LIMIT_DETERMINANT);
+	let increased_gas_limit =
+		gas_limit + (PARITY_GAS_LIMIT_DETERMINANT - gas_limit % PARITY_GAS_LIMIT_DETERMINANT);
 	if increased_gas_limit > upper_limit {
 		let decreased_gas_limit = increased_gas_limit - PARITY_GAS_LIMIT_DETERMINANT;
 		if decreased_gas_limit < lower_limit {
@@ -503,7 +571,8 @@ mod tests {
 	#[test]
 	fn should_disallow_unsigned_transactions() {
 		let rlp = "ea80843b9aca0083015f90948921ebb5f79e9e3920abe571004d0b1d5119c154865af3107a400080038080";
-		let transaction: UnverifiedTransaction = ::rlp::decode(&::rustc_hex::FromHex::from_hex(rlp).unwrap()).unwrap();
+		let transaction: UnverifiedTransaction =
+			::rlp::decode(&::rustc_hex::FromHex::from_hex(rlp).unwrap()).unwrap();
 		let spec = ::ethereum::new_ropsten_test();
 		let ethparams = get_default_ethash_extensions();
 
@@ -516,7 +585,12 @@ mod tests {
 		header.set_number(15);
 
 		let res = machine.verify_transaction_basic(&transaction, &header);
-		assert_eq!(res, Err(transaction::Error::InvalidSignature("Crypto error (Invalid EC signature)".into())));
+		assert_eq!(
+			res,
+			Err(transaction::Error::InvalidSignature(
+				"Crypto error (Invalid EC signature)".into()
+			))
+		);
 	}
 
 	#[test]
@@ -541,25 +615,45 @@ mod tests {
 
 		// when parent.gas_limit < gas_floor_target:
 		parent.set_gas_limit(U256::from(50_000));
-		machine.populate_from_parent(&mut header, &parent, U256::from(100_000), U256::from(200_000));
+		machine.populate_from_parent(
+			&mut header,
+			&parent,
+			U256::from(100_000),
+			U256::from(200_000),
+		);
 		assert_eq!(*header.gas_limit(), U256::from(50_024));
 
 		// when parent.gas_limit > gas_ceil_target:
 		parent.set_gas_limit(U256::from(250_000));
-		machine.populate_from_parent(&mut header, &parent, U256::from(100_000), U256::from(200_000));
+		machine.populate_from_parent(
+			&mut header,
+			&parent,
+			U256::from(100_000),
+			U256::from(200_000),
+		);
 		assert_eq!(*header.gas_limit(), U256::from(249_787));
 
 		// when parent.gas_limit is in miner's range
 		header.set_gas_used(U256::from(150_000));
 		parent.set_gas_limit(U256::from(150_000));
-		machine.populate_from_parent(&mut header, &parent, U256::from(100_000), U256::from(200_000));
+		machine.populate_from_parent(
+			&mut header,
+			&parent,
+			U256::from(100_000),
+			U256::from(200_000),
+		);
 		assert_eq!(*header.gas_limit(), U256::from(150_035));
 
 		// when parent.gas_limit is in miner's range
 		// && we can NOT increase it to be multiple of constant
 		header.set_gas_used(U256::from(150_000));
 		parent.set_gas_limit(U256::from(150_000));
-		machine.populate_from_parent(&mut header, &parent, U256::from(100_000), U256::from(150_002));
+		machine.populate_from_parent(
+			&mut header,
+			&parent,
+			U256::from(100_000),
+			U256::from(150_002),
+		);
 		assert_eq!(*header.gas_limit(), U256::from(149_998));
 
 		// when parent.gas_limit is in miner's range
@@ -567,7 +661,12 @@ mod tests {
 		// && we can NOT decrease it to be multiple of constant
 		header.set_gas_used(U256::from(150_000));
 		parent.set_gas_limit(U256::from(150_000));
-		machine.populate_from_parent(&mut header, &parent, U256::from(150_000), U256::from(150_002));
+		machine.populate_from_parent(
+			&mut header,
+			&parent,
+			U256::from(150_000),
+			U256::from(150_002),
+		);
 		assert_eq!(*header.gas_limit(), U256::from(150_002));
 	}
 }

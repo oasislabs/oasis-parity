@@ -30,15 +30,15 @@ extern crate lazy_static;
 
 mod rotating;
 
-use std::{env, thread, fs};
-use std::sync::{Weak, Arc};
-use std::io::Write;
-use env_logger::LogBuilder;
-use regex::Regex;
 use ansi_term::Colour;
+use env_logger::LogBuilder;
 use parking_lot::Mutex;
+use regex::Regex;
+use std::io::Write;
+use std::sync::{Arc, Weak};
+use std::{env, fs, thread};
 
-pub use rotating::{RotatingLogger, init_log};
+pub use rotating::{init_log, RotatingLogger};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Config {
@@ -58,7 +58,7 @@ impl Default for Config {
 }
 
 lazy_static! {
-	static ref ROTATING_LOGGER : Mutex<Weak<RotatingLogger>> = Mutex::new(Default::default());
+	static ref ROTATING_LOGGER: Mutex<Weak<RotatingLogger>> = Mutex::new(Default::default());
 }
 
 /// Sets up the logger
@@ -93,9 +93,13 @@ pub fn setup_log(config: &Config) -> Result<Arc<RotatingLogger>, String> {
 	let mut open_options = fs::OpenOptions::new();
 
 	let maybe_file = match config.file.as_ref() {
-		Some(f) => Some(open_options
-			.append(true).create(true).open(f)
-			.map_err(|_| format!("Cannot write to log file given: {}", f))?),
+		Some(f) => Some(
+			open_options
+				.append(true)
+				.create(true)
+				.open(f)
+				.map_err(|_| format!("Cannot write to log file given: {}", f))?,
+		),
 		None => None,
 	};
 
@@ -103,10 +107,23 @@ pub fn setup_log(config: &Config) -> Result<Arc<RotatingLogger>, String> {
 		let timestamp = time::strftime("%Y-%m-%d %H:%M:%S %Z", &time::now()).unwrap();
 
 		let with_color = if max_log_level() <= LogLevelFilter::Info {
-			format!("{} {}", Colour::Black.bold().paint(timestamp), record.args())
+			format!(
+				"{} {}",
+				Colour::Black.bold().paint(timestamp),
+				record.args()
+			)
 		} else {
-			let name = thread::current().name().map_or_else(Default::default, |x| format!("{}", Colour::Blue.bold().paint(x)));
-			format!("{} {} {} {}  {}", Colour::Black.bold().paint(timestamp), name, record.level(), record.target(), record.args())
+			let name = thread::current().name().map_or_else(Default::default, |x| {
+				format!("{}", Colour::Blue.bold().paint(x))
+			});
+			format!(
+				"{} {} {} {}  {}",
+				Colour::Black.bold().paint(timestamp),
+				name,
+				record.level(),
+				record.target(),
+				record.args()
+			)
 		};
 
 		let removed_color = kill_color(with_color.as_ref());
@@ -128,10 +145,11 @@ pub fn setup_log(config: &Config) -> Result<Arc<RotatingLogger>, String> {
 		}
 
 		ret
-    };
+	};
 
 	builder.format(format);
-	builder.init()
+	builder
+		.init()
 		.and_then(|_| {
 			*ROTATING_LOGGER.lock() = Arc::downgrade(&logs);
 			Ok(logs)
@@ -160,7 +178,11 @@ fn should_remove_colour() {
 
 #[test]
 fn should_remove_multiple_colour() {
-	let t = format!("{} {}", Colour::Red.bold().paint("test"), Colour::White.normal().paint("again"));
+	let t = format!(
+		"{} {}",
+		Colour::Red.bold().paint("test"),
+		Colour::White.normal().paint("again")
+	);
 	let after = kill_color(&t);
 	assert_eq!(after, "test again");
 }

@@ -15,8 +15,8 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 //! State test log deserialization.
-use hash::{Address, H256, Bloom};
 use bytes::Bytes;
+use hash::{Address, Bloom, H256};
 
 /// State test log deserialization.
 #[derive(Debug, PartialEq, Deserialize)]

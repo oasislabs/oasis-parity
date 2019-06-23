@@ -25,20 +25,20 @@ pub struct HardcodedSync {
 	/// Hexadecimal of the RLP encoding of the header of the block to start synchronization from.
 	pub header: String,
 	/// Total difficulty including the block of `header`.
-	#[serde(rename="totalDifficulty")]
+	#[serde(rename = "totalDifficulty")]
 	pub total_difficulty: Uint,
 	/// Ordered trie roots of blocks before and including `header`.
-	#[serde(rename="CHTs")]
+	#[serde(rename = "CHTs")]
 	pub chts: Vec<H256>,
 }
 
 #[cfg(test)]
 mod tests {
-	use serde_json;
-	use uint::Uint;
-	use ethereum_types::{U256, H256 as Eth256};
+	use ethereum_types::{H256 as Eth256, U256};
 	use hash::H256;
+	use serde_json;
 	use spec::hardcoded_sync::HardcodedSync;
+	use uint::Uint;
 
 	#[test]
 	fn hardcoded_sync_deserialization() {

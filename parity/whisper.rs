@@ -14,14 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
 use std::io;
+use std::sync::Arc;
 
-use sync::{AttachedProtocol, ManageNetwork};
 use parity_rpc::Metadata;
 use parity_whisper::message::Message;
 use parity_whisper::net::{self as whisper_net, Network as WhisperNetwork};
-use parity_whisper::rpc::{WhisperClient, PoolHandle, FilterManager};
+use parity_whisper::rpc::{FilterManager, PoolHandle, WhisperClient};
+use sync::{AttachedProtocol, ManageNetwork};
 
 /// Whisper config.
 #[derive(Debug, PartialEq, Eq)]
@@ -51,11 +51,12 @@ impl PoolHandle for NetPoolHandle {
 	fn relay(&self, message: Message) -> bool {
 		let mut res = false;
 		let mut message = Some(message);
-		self.net.with_proto_context(whisper_net::PROTOCOL_ID, &mut |ctx| {
-			if let Some(message) = message.take() {
-				res = self.handle.post_message(message, ctx);
-			}
-		});
+		self.net
+			.with_proto_context(whisper_net::PROTOCOL_ID, &mut |ctx| {
+				if let Some(message) = message.take() {
+					res = self.handle.post_message(message, ctx);
+				}
+			});
 		res
 	}
 
@@ -72,7 +73,10 @@ pub struct RpcFactory {
 
 impl RpcFactory {
 	pub fn make_handler(&self, net: Arc<ManageNetwork>) -> WhisperClient<NetPoolHandle, Metadata> {
-		let handle = NetPoolHandle { handle: self.net.clone(), net: net };
+		let handle = NetPoolHandle {
+			handle: self.net.clone(),
+			net: net,
+		};
 		WhisperClient::new(handle, self.manager.clone())
 	}
 }
@@ -81,9 +85,10 @@ impl RpcFactory {
 ///
 /// Will target the given pool size.
 #[cfg(not(feature = "ipc"))]
-pub fn setup(target_pool_size: usize, protos: &mut Vec<AttachedProtocol>)
-	-> io::Result<Option<RpcFactory>>
-{
+pub fn setup(
+	target_pool_size: usize,
+	protos: &mut Vec<AttachedProtocol>,
+) -> io::Result<Option<RpcFactory>> {
 	let manager = Arc::new(FilterManager::new()?);
 	let net = Arc::new(WhisperNetwork::new(target_pool_size, manager.clone()));
 
@@ -100,15 +105,19 @@ pub fn setup(target_pool_size: usize, protos: &mut Vec<AttachedProtocol>)
 		protocol_id: whisper_net::PARITY_PROTOCOL_ID,
 	});
 
-	let factory = RpcFactory { net: net, manager: manager };
+	let factory = RpcFactory {
+		net: net,
+		manager: manager,
+	};
 
 	Ok(Some(factory))
 }
 
 // TODO: make it possible to attach generic protocols in IPC.
 #[cfg(feature = "ipc")]
-pub fn setup(_target_pool_size: usize, _protos: &mut Vec<AttachedProtocol>)
-	-> io::Result<Option<RpcFactory>>
-{
+pub fn setup(
+	_target_pool_size: usize,
+	_protos: &mut Vec<AttachedProtocol>,
+) -> io::Result<Option<RpcFactory>> {
 	Ok(None)
 }

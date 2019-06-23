@@ -16,12 +16,12 @@
 
 //! IPFS utility functions
 
-use multihash;
+use super::errors;
 use cid::{Cid, Codec, Version};
 use crypto::digest;
 use jsonrpc_core::Error;
+use multihash;
 use v1::types::Bytes;
-use super::errors;
 
 /// Compute CIDv0 from protobuf encoded bytes.
 pub fn cid(content: Bytes) -> Result<String, Error> {

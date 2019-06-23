@@ -563,7 +563,7 @@ usage! {
 			"--no-secretstore-http",
 			"Disable Secret Store HTTP API.",
 
- 			FLAG flag_no_secretstore_acl_check: (bool) = false, or |c: &Config| c.secretstore.as_ref()?.disable_acl_check.clone(),
+			 FLAG flag_no_secretstore_acl_check: (bool) = false, or |c: &Config| c.secretstore.as_ref()?.disable_acl_check.clone(),
 			"--no-acl-check",
 			"Disable ACL check (useful for test environments).",
 
@@ -858,7 +858,7 @@ usage! {
 			"--whisper",
 			"Enable the Whisper network.",
 
- 			ARG arg_whisper_pool_size: (usize) = 10usize, or |c: &Config| c.whisper.as_ref()?.pool_size.clone(),
+			 ARG arg_whisper_pool_size: (usize) = 10usize, or |c: &Config| c.whisper.as_ref()?.pool_size.clone(),
 			"--whisper-pool-size=[MB]",
 			"Target size of the whisper message pool in megabytes.",
 
@@ -1076,7 +1076,7 @@ struct Operating {
 	no_persistent_txqueue: Option<bool>,
 	no_hardcoded_sync: Option<bool>,
 
-	#[serde(rename="public_node")]
+	#[serde(rename = "public_node")]
 	_legacy_public_node: Option<bool>,
 }
 
@@ -1108,15 +1108,15 @@ struct PrivateTransactions {
 struct Ui {
 	path: Option<String>,
 
-	#[serde(rename="force")]
+	#[serde(rename = "force")]
 	_legacy_force: Option<bool>,
-	#[serde(rename="disable")]
+	#[serde(rename = "disable")]
 	_legacy_disable: Option<bool>,
-	#[serde(rename="port")]
+	#[serde(rename = "port")]
 	_legacy_port: Option<u16>,
-	#[serde(rename="interface")]
+	#[serde(rename = "interface")]
 	_legacy_interface: Option<String>,
-	#[serde(rename="hosts")]
+	#[serde(rename = "hosts")]
 	_legacy_hosts: Option<Vec<String>>,
 }
 
@@ -1309,12 +1309,11 @@ struct Whisper {
 #[cfg(test)]
 mod tests {
 	use super::{
-		Args, ArgsError,
-		Config, Operating, Account, Ui, Network, Ws, Rpc, Ipc, Dapps, Ipfs, Mining, Footprint,
-		Snapshots, Misc, Whisper, SecretStore,
+		Account, Args, ArgsError, Config, Dapps, Footprint, Ipc, Ipfs, Mining, Misc, Network,
+		Operating, Rpc, SecretStore, Snapshots, Ui, Whisper, Ws,
 	};
+	use clap::ErrorKind as ClapErrorKind;
 	use toml;
-	use clap::{ErrorKind as ClapErrorKind};
 
 	#[test]
 	fn should_accept_any_argument_order() {
@@ -1360,19 +1359,21 @@ mod tests {
 		let args = Args::parse(&["parity", "export", "state", "--no-storage"]).unwrap();
 		assert_eq!(args.flag_export_state_no_storage, true);
 
-		let args = Args::parse(&["parity", "export", "state", "--min-balance","123"]).unwrap();
+		let args = Args::parse(&["parity", "export", "state", "--min-balance", "123"]).unwrap();
 		assert_eq!(args.arg_export_state_min_balance, Some("123".to_string()));
 	}
 
 	#[test]
 	fn should_exit_gracefully_on_unknown_argument() {
 		let result = Args::parse(&["parity", "--please-exit-gracefully"]);
-		assert!(
-			match result {
-				Err(ArgsError::Clap(ref clap_error)) if clap_error.kind == ClapErrorKind::UnknownArgument => true,
-				_ => false
+		assert!(match result {
+			Err(ArgsError::Clap(ref clap_error))
+				if clap_error.kind == ClapErrorKind::UnknownArgument =>
+			{
+				true
 			}
-		);
+			_ => false,
+		});
 	}
 
 	#[test]
@@ -1397,20 +1398,56 @@ mod tests {
 	#[test]
 	fn should_parse_multiple_values() {
 		let args = Args::parse(&["parity", "account", "import", "~/1", "~/2"]).unwrap();
-		assert_eq!(args.arg_account_import_path, Some(vec!["~/1".to_owned(), "~/2".to_owned()]));
+		assert_eq!(
+			args.arg_account_import_path,
+			Some(vec!["~/1".to_owned(), "~/2".to_owned()])
+		);
 
 		let args = Args::parse(&["parity", "account", "import", "~/1,ext"]).unwrap();
-		assert_eq!(args.arg_account_import_path, Some(vec!["~/1,ext".to_owned()]));
+		assert_eq!(
+			args.arg_account_import_path,
+			Some(vec!["~/1,ext".to_owned()])
+		);
 
-		let args = Args::parse(&["parity", "--secretstore-nodes", "abc@127.0.0.1:3333,cde@10.10.10.10:4444"]).unwrap();
-		assert_eq!(args.arg_secretstore_nodes, "abc@127.0.0.1:3333,cde@10.10.10.10:4444");
+		let args = Args::parse(&[
+			"parity",
+			"--secretstore-nodes",
+			"abc@127.0.0.1:3333,cde@10.10.10.10:4444",
+		])
+		.unwrap();
+		assert_eq!(
+			args.arg_secretstore_nodes,
+			"abc@127.0.0.1:3333,cde@10.10.10.10:4444"
+		);
 
-		let args = Args::parse(&["parity", "--password", "~/.safe/1", "--password", "~/.safe/2", "--ui-port", "8123"]).unwrap();
-		assert_eq!(args.arg_password, vec!["~/.safe/1".to_owned(), "~/.safe/2".to_owned()]);
+		let args = Args::parse(&[
+			"parity",
+			"--password",
+			"~/.safe/1",
+			"--password",
+			"~/.safe/2",
+			"--ui-port",
+			"8123",
+		])
+		.unwrap();
+		assert_eq!(
+			args.arg_password,
+			vec!["~/.safe/1".to_owned(), "~/.safe/2".to_owned()]
+		);
 		assert_eq!(args.arg_ui_port, 8123);
 
-		let args = Args::parse(&["parity", "--password", "~/.safe/1,~/.safe/2", "--ui-port", "8123"]).unwrap();
-		assert_eq!(args.arg_password, vec!["~/.safe/1".to_owned(), "~/.safe/2".to_owned()]);
+		let args = Args::parse(&[
+			"parity",
+			"--password",
+			"~/.safe/1,~/.safe/2",
+			"--ui-port",
+			"8123",
+		])
+		.unwrap();
+		assert_eq!(
+			args.arg_password,
+			vec!["~/.safe/1".to_owned(), "~/.safe/2".to_owned()]
+		);
 		assert_eq!(args.arg_ui_port, 8123);
 	}
 
@@ -1777,9 +1814,13 @@ mod tests {
 				Err(ArgsError::Decode(_)),
 				Err(ArgsError::Decode(_)),
 				Err(ArgsError::Decode(_)),
-			) => {},
+			) => {}
 			(a, b, c, d) => {
-				assert!(false, "Got invalid error types: {:?}, {:?}, {:?}, {:?}", a, b, c, d);
+				assert!(
+					false,
+					"Got invalid error types: {:?}, {:?}, {:?}, {:?}",
+					a, b, c, d
+				);
 			}
 		}
 	}
@@ -1788,188 +1829,191 @@ mod tests {
 	fn should_deserialize_toml_file() {
 		let config: Config = toml::from_str(include_str!("./tests/config.toml")).unwrap();
 
-		assert_eq!(config, Config {
-			parity: Some(Operating {
-				mode: Some("dark".into()),
-				mode_timeout: Some(15u64),
-				mode_alarm: Some(10u64),
-				auto_update: None,
-				auto_update_delay: None,
-				auto_update_check_frequency: None,
-				release_track: None,
-				no_download: None,
-				no_consensus: None,
-				chain: Some("./chain.json".into()),
-				base_path: None,
-				db_path: None,
-				keys_path: None,
-				identity: None,
-				light: None,
-				no_hardcoded_sync: None,
-				no_persistent_txqueue: None,
-				_legacy_public_node: None,
-			}),
-			account: Some(Account {
-				unlock: Some(vec!["0x1".into(), "0x2".into(), "0x3".into()]),
-				password: Some(vec!["passwdfile path".into()]),
-				keys_iterations: None,
-				refresh_time: None,
-				disable_hardware: None,
-				fast_unlock: None,
-			}),
-			ui: Some(Ui {
-				path: None,
-				_legacy_force: None,
-				_legacy_disable: Some(true),
-				_legacy_port: None,
-				_legacy_interface: None,
-				_legacy_hosts: None,
-			}),
-			network: Some(Network {
-				warp: Some(false),
-				warp_barrier: None,
-				port: None,
-				interface: None,
-				min_peers: Some(10),
-				max_peers: Some(20),
-				max_pending_peers: Some(30),
-				snapshot_peers: Some(40),
-				allow_ips: Some("public".into()),
-				nat: Some("any".into()),
-				id: None,
-				bootnodes: None,
-				discovery: Some(true),
-				node_key: None,
-				reserved_peers: Some("./path/to/reserved_peers".into()),
-				reserved_only: Some(true),
-				no_serve_light: None,
-			}),
-			websockets: Some(Ws {
-				disable: Some(true),
-				port: None,
-				interface: None,
-				apis: None,
-				origins: Some(vec!["none".into()]),
-				hosts: None,
-				max_connections: None,
-			}),
-			rpc: Some(Rpc {
-				disable: Some(true),
-				port: Some(8180),
-				interface: None,
-				cors: None,
-				apis: None,
-				hosts: None,
-				server_threads: None,
-				processing_threads: None,
-			}),
-			ipc: Some(Ipc {
-				disable: None,
-				path: None,
-				apis: Some(vec!["rpc".into(), "eth".into()]),
-			}),
-			dapps: Some(Dapps {
-				disable: None,
-				port: Some(8080),
-				path: None,
-				interface: None,
-				hosts: None,
-				cors: None,
-				user: Some("username".into()),
-				pass: Some("password".into())
-			}),
-			secretstore: Some(SecretStore {
-				disable: None,
-				disable_http: None,
-				disable_acl_check: None,
-				disable_auto_migrate: None,
-				service_contract: None,
-				service_contract_srv_gen: None,
-				service_contract_srv_retr: None,
-				service_contract_doc_store: None,
-				service_contract_doc_sretr: None,
-				self_secret: None,
-				admin_public: None,
-				nodes: None,
-				interface: None,
-				port: Some(8083),
-				http_interface: None,
-				http_port: Some(8082),
-				path: None,
-			}),
-			private_tx: None,
-			ipfs: Some(Ipfs {
-				enable: Some(false),
-				port: Some(5001),
-				interface: None,
-				cors: None,
-				hosts: None,
-			}),
-			mining: Some(Mining {
-				author: Some("0xdeadbeefcafe0000000000000000000000000001".into()),
-				engine_signer: Some("0xdeadbeefcafe0000000000000000000000000001".into()),
-				force_sealing: Some(true),
-				reseal_on_txs: Some("all".into()),
-				reseal_on_uncle: None,
-				reseal_min_period: Some(4000),
-				reseal_max_period: Some(60000),
-				work_queue_size: None,
-				relay_set: None,
-				min_gas_price: None,
-				gas_price_percentile: None,
-				usd_per_tx: None,
-				usd_per_eth: None,
-				price_update_period: Some("hourly".into()),
-				gas_floor_target: None,
-				gas_cap: None,
-				tx_queue_size: Some(8192),
-				tx_queue_per_sender: None,
-				tx_queue_mem_limit: None,
-				tx_queue_gas: Some("off".into()),
-				tx_queue_strategy: None,
-				tx_queue_ban_count: None,
-				tx_queue_ban_time: None,
-				tx_gas_limit: None,
-				tx_time_limit: None,
-				extra_data: None,
-				remove_solved: None,
-				notify_work: None,
-				refuse_service_transactions: None,
-				infinite_pending_block: None,
-			}),
-			footprint: Some(Footprint {
-				tracing: Some("on".into()),
-				pruning: Some("fast".into()),
-				pruning_history: Some(64),
-				pruning_memory: None,
-				fast_and_loose: None,
-				cache_size: None,
-				cache_size_db: Some(256),
-				cache_size_blocks: Some(16),
-				cache_size_queue: Some(100),
-				cache_size_state: Some(25),
-				db_compaction: Some("ssd".into()),
-				fat_db: Some("off".into()),
-				scale_verifiers: Some(false),
-				num_verifiers: None,
-			}),
-			snapshots: Some(Snapshots {
-				disable_periodic: Some(true),
-			}),
-			misc: Some(Misc {
-				ntp_servers: Some(vec!["0.parity.pool.ntp.org:123".into()]),
-				logging: Some("own_tx=trace".into()),
-				log_file: Some("/var/log/parity.log".into()),
-				color: Some(true),
-				ports_shift: Some(0),
-				unsafe_expose: Some(false),
-			}),
-			whisper: Some(Whisper {
-				enabled: Some(true),
-				pool_size: Some(50),
-			}),
-			stratum: None,
-		});
+		assert_eq!(
+			config,
+			Config {
+				parity: Some(Operating {
+					mode: Some("dark".into()),
+					mode_timeout: Some(15u64),
+					mode_alarm: Some(10u64),
+					auto_update: None,
+					auto_update_delay: None,
+					auto_update_check_frequency: None,
+					release_track: None,
+					no_download: None,
+					no_consensus: None,
+					chain: Some("./chain.json".into()),
+					base_path: None,
+					db_path: None,
+					keys_path: None,
+					identity: None,
+					light: None,
+					no_hardcoded_sync: None,
+					no_persistent_txqueue: None,
+					_legacy_public_node: None,
+				}),
+				account: Some(Account {
+					unlock: Some(vec!["0x1".into(), "0x2".into(), "0x3".into()]),
+					password: Some(vec!["passwdfile path".into()]),
+					keys_iterations: None,
+					refresh_time: None,
+					disable_hardware: None,
+					fast_unlock: None,
+				}),
+				ui: Some(Ui {
+					path: None,
+					_legacy_force: None,
+					_legacy_disable: Some(true),
+					_legacy_port: None,
+					_legacy_interface: None,
+					_legacy_hosts: None,
+				}),
+				network: Some(Network {
+					warp: Some(false),
+					warp_barrier: None,
+					port: None,
+					interface: None,
+					min_peers: Some(10),
+					max_peers: Some(20),
+					max_pending_peers: Some(30),
+					snapshot_peers: Some(40),
+					allow_ips: Some("public".into()),
+					nat: Some("any".into()),
+					id: None,
+					bootnodes: None,
+					discovery: Some(true),
+					node_key: None,
+					reserved_peers: Some("./path/to/reserved_peers".into()),
+					reserved_only: Some(true),
+					no_serve_light: None,
+				}),
+				websockets: Some(Ws {
+					disable: Some(true),
+					port: None,
+					interface: None,
+					apis: None,
+					origins: Some(vec!["none".into()]),
+					hosts: None,
+					max_connections: None,
+				}),
+				rpc: Some(Rpc {
+					disable: Some(true),
+					port: Some(8180),
+					interface: None,
+					cors: None,
+					apis: None,
+					hosts: None,
+					server_threads: None,
+					processing_threads: None,
+				}),
+				ipc: Some(Ipc {
+					disable: None,
+					path: None,
+					apis: Some(vec!["rpc".into(), "eth".into()]),
+				}),
+				dapps: Some(Dapps {
+					disable: None,
+					port: Some(8080),
+					path: None,
+					interface: None,
+					hosts: None,
+					cors: None,
+					user: Some("username".into()),
+					pass: Some("password".into())
+				}),
+				secretstore: Some(SecretStore {
+					disable: None,
+					disable_http: None,
+					disable_acl_check: None,
+					disable_auto_migrate: None,
+					service_contract: None,
+					service_contract_srv_gen: None,
+					service_contract_srv_retr: None,
+					service_contract_doc_store: None,
+					service_contract_doc_sretr: None,
+					self_secret: None,
+					admin_public: None,
+					nodes: None,
+					interface: None,
+					port: Some(8083),
+					http_interface: None,
+					http_port: Some(8082),
+					path: None,
+				}),
+				private_tx: None,
+				ipfs: Some(Ipfs {
+					enable: Some(false),
+					port: Some(5001),
+					interface: None,
+					cors: None,
+					hosts: None,
+				}),
+				mining: Some(Mining {
+					author: Some("0xdeadbeefcafe0000000000000000000000000001".into()),
+					engine_signer: Some("0xdeadbeefcafe0000000000000000000000000001".into()),
+					force_sealing: Some(true),
+					reseal_on_txs: Some("all".into()),
+					reseal_on_uncle: None,
+					reseal_min_period: Some(4000),
+					reseal_max_period: Some(60000),
+					work_queue_size: None,
+					relay_set: None,
+					min_gas_price: None,
+					gas_price_percentile: None,
+					usd_per_tx: None,
+					usd_per_eth: None,
+					price_update_period: Some("hourly".into()),
+					gas_floor_target: None,
+					gas_cap: None,
+					tx_queue_size: Some(8192),
+					tx_queue_per_sender: None,
+					tx_queue_mem_limit: None,
+					tx_queue_gas: Some("off".into()),
+					tx_queue_strategy: None,
+					tx_queue_ban_count: None,
+					tx_queue_ban_time: None,
+					tx_gas_limit: None,
+					tx_time_limit: None,
+					extra_data: None,
+					remove_solved: None,
+					notify_work: None,
+					refuse_service_transactions: None,
+					infinite_pending_block: None,
+				}),
+				footprint: Some(Footprint {
+					tracing: Some("on".into()),
+					pruning: Some("fast".into()),
+					pruning_history: Some(64),
+					pruning_memory: None,
+					fast_and_loose: None,
+					cache_size: None,
+					cache_size_db: Some(256),
+					cache_size_blocks: Some(16),
+					cache_size_queue: Some(100),
+					cache_size_state: Some(25),
+					db_compaction: Some("ssd".into()),
+					fat_db: Some("off".into()),
+					scale_verifiers: Some(false),
+					num_verifiers: None,
+				}),
+				snapshots: Some(Snapshots {
+					disable_periodic: Some(true),
+				}),
+				misc: Some(Misc {
+					ntp_servers: Some(vec!["0.parity.pool.ntp.org:123".into()]),
+					logging: Some("own_tx=trace".into()),
+					log_file: Some("/var/log/parity.log".into()),
+					color: Some(true),
+					ports_shift: Some(0),
+					unsafe_expose: Some(false),
+				}),
+				whisper: Some(Whisper {
+					enabled: Some(true),
+					pool_size: Some(50),
+				}),
+				stratum: None,
+			}
+		);
 	}
 
 	#[test]

@@ -104,7 +104,8 @@ impl LocalTransactionsList {
 			return;
 		}
 
-		let to_remove: Vec<_> = self.transactions
+		let to_remove: Vec<_> = self
+			.transactions
 			.iter()
 			.filter(|&(_, status)| !status.is_pending())
 			.map(|(hash, _)| *hash)
@@ -139,10 +140,13 @@ impl txpool::Listener<Transaction> for LocalTransactionsList {
 
 		if let Some(old) = old {
 			if self.transactions.contains_key(old.hash()) {
-				self.insert(*old.hash(), Status::Replaced {
-					old: old.clone(),
-					new: tx.clone(),
-				});
+				self.insert(
+					*old.hash(),
+					Status::Replaced {
+						old: old.clone(),
+						new: tx.clone(),
+					},
+				);
 			}
 		}
 	}
@@ -153,7 +157,10 @@ impl txpool::Listener<Transaction> for LocalTransactionsList {
 		}
 
 		debug!(target: "own_tx", "Transaction rejected (hash {:?}). {}", tx.hash(), reason);
-		self.insert(*tx.hash(), Status::Rejected(tx.clone(), format!("{}", reason)));
+		self.insert(
+			*tx.hash(),
+			Status::Rejected(tx.clone(), format!("{}", reason)),
+		);
 		self.clear_old();
 	}
 
@@ -163,8 +170,12 @@ impl txpool::Listener<Transaction> for LocalTransactionsList {
 		}
 
 		match new {
-			Some(new) => warn!(target: "own_tx", "Transaction pushed out because of limit (hash {:?}, replacement: {:?})", tx.hash(), new.hash()),
-			None => warn!(target: "own_tx", "Transaction dropped because of limit (hash: {:?})", tx.hash()),
+			Some(new) => {
+				warn!(target: "own_tx", "Transaction pushed out because of limit (hash {:?}, replacement: {:?})", tx.hash(), new.hash())
+			}
+			None => {
+				warn!(target: "own_tx", "Transaction dropped because of limit (hash: {:?})", tx.hash())
+			}
 		}
 		self.insert(*tx.hash(), Status::Dropped(tx.clone()));
 		self.clear_old();
@@ -205,7 +216,7 @@ impl txpool::Listener<Transaction> for LocalTransactionsList {
 mod tests {
 	use super::*;
 	use ethereum_types::U256;
-	use ethkey::{Random, Generator};
+	use ethkey::{Generator, Random};
 	use transaction;
 	use txpool::Listener;
 
@@ -225,7 +236,11 @@ mod tests {
 		// then
 		assert!(list.contains(tx1.hash()));
 		assert!(list.contains(tx2.hash()));
-		let statuses = list.all_transactions().values().cloned().collect::<Vec<Status>>();
+		let statuses = list
+			.all_transactions()
+			.values()
+			.cloned()
+			.collect::<Vec<Status>>();
 		assert_eq!(statuses, vec![Status::Pending(tx1), Status::Pending(tx2)]);
 	}
 
@@ -262,7 +277,8 @@ mod tests {
 			gas: U256::from(10),
 			gas_price: U256::from(1245),
 			nonce: nonce.into(),
-		}.sign(keypair.secret(), None);
+		}
+		.sign(keypair.secret(), None);
 
 		let mut tx = Transaction::from_pending_block_transaction(signed);
 		tx.priority = pool::Priority::Local;

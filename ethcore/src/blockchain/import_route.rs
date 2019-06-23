@@ -16,8 +16,8 @@
 
 //! Import route.
 
-use ethereum_types::H256;
 use blockchain::block_info::{BlockInfo, BlockLocation};
+use ethereum_types::H256;
 
 /// Import route for newly inserted block.
 #[derive(Debug, PartialEq, Clone)]
@@ -67,17 +67,20 @@ impl From<BlockInfo> for ImportRoute {
 
 #[cfg(test)]
 mod tests {
-	use ethereum_types::{H256, U256};
 	use blockchain::block_info::{BlockInfo, BlockLocation, BranchBecomingCanonChainData};
 	use blockchain::ImportRoute;
+	use ethereum_types::{H256, U256};
 
 	#[test]
 	fn import_route_none() {
-		assert_eq!(ImportRoute::none(), ImportRoute {
-			enacted: vec![],
-			retracted: vec![],
-			omitted: vec![],
-		});
+		assert_eq!(
+			ImportRoute::none(),
+			ImportRoute {
+				enacted: vec![],
+				retracted: vec![],
+				omitted: vec![],
+			}
+		);
 	}
 
 	#[test]
@@ -89,11 +92,14 @@ mod tests {
 			location: BlockLocation::Branch,
 		};
 
-		assert_eq!(ImportRoute::from(info), ImportRoute {
-			retracted: vec![],
-			enacted: vec![],
-			omitted: vec![H256::from(U256::from(1))],
-		});
+		assert_eq!(
+			ImportRoute::from(info),
+			ImportRoute {
+				retracted: vec![],
+				enacted: vec![],
+				omitted: vec![H256::from(U256::from(1))],
+			}
+		);
 	}
 
 	#[test]
@@ -105,11 +111,14 @@ mod tests {
 			location: BlockLocation::CanonChain,
 		};
 
-		assert_eq!(ImportRoute::from(info), ImportRoute {
-			retracted: vec![],
-			enacted: vec![H256::from(U256::from(1))],
-			omitted: vec![],
-		});
+		assert_eq!(
+			ImportRoute::from(info),
+			ImportRoute {
+				retracted: vec![],
+				enacted: vec![H256::from(U256::from(1))],
+				omitted: vec![],
+			}
+		);
 	}
 
 	#[test]
@@ -122,13 +131,16 @@ mod tests {
 				ancestor: H256::from(U256::from(0)),
 				enacted: vec![H256::from(U256::from(1))],
 				retracted: vec![H256::from(U256::from(3)), H256::from(U256::from(4))],
-			})
+			}),
 		};
 
-		assert_eq!(ImportRoute::from(info), ImportRoute {
-			retracted: vec![H256::from(U256::from(3)), H256::from(U256::from(4))],
-			enacted: vec![H256::from(U256::from(1)), H256::from(U256::from(2))],
-			omitted: vec![],
-		});
+		assert_eq!(
+			ImportRoute::from(info),
+			ImportRoute {
+				retracted: vec![H256::from(U256::from(3)), H256::from(U256::from(4))],
+				enacted: vec![H256::from(U256::from(1)), H256::from(U256::from(2))],
+				omitted: vec![],
+			}
+		);
 	}
 }

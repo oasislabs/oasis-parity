@@ -14,18 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::io;
-use futures::{Future, Poll};
-use tokio_io::AsyncWrite;
-use tokio_io::io::{WriteAll, write_all};
 use ethkey::KeyPair;
+use futures::{Future, Poll};
+use key_server_cluster::io::{encrypt_message, serialize_message};
 use key_server_cluster::message::Message;
-use key_server_cluster::io::{serialize_message, encrypt_message};
+use std::io;
+use tokio_io::io::{write_all, WriteAll};
+use tokio_io::AsyncWrite;
 
 /// Write plain message to the channel.
-pub fn write_message<A>(a: A, message: Message) -> WriteMessage<A> where A: AsyncWrite {
+pub fn write_message<A>(a: A, message: Message) -> WriteMessage<A>
+where
+	A: AsyncWrite,
+{
 	let (error, future) = match serialize_message(message)
-		.map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string())) {
+		.map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+	{
 		Ok(message) => (None, write_all(a, message.into())),
 		Err(error) => (Some(error), write_all(a, Vec::new())),
 	};
@@ -36,10 +40,14 @@ pub fn write_message<A>(a: A, message: Message) -> WriteMessage<A> where A: Asyn
 }
 
 /// Write encrypted message to the channel.
-pub fn write_encrypted_message<A>(a: A, key: &KeyPair, message: Message) -> WriteMessage<A> where A: AsyncWrite {
+pub fn write_encrypted_message<A>(a: A, key: &KeyPair, message: Message) -> WriteMessage<A>
+where
+	A: AsyncWrite,
+{
 	let (error, future) = match serialize_message(message)
 		.and_then(|message| encrypt_message(key, message))
-		.map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string())) {
+		.map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+	{
 		Ok(message) => (None, write_all(a, message.into())),
 		Err(error) => (Some(error), write_all(a, Vec::new())),
 	};
@@ -56,7 +64,10 @@ pub struct WriteMessage<A> {
 	future: WriteAll<A, Vec<u8>>,
 }
 
-impl<A> Future for WriteMessage<A> where A: AsyncWrite {
+impl<A> Future for WriteMessage<A>
+where
+	A: AsyncWrite,
+{
 	type Item = (A, Vec<u8>);
 	type Error = io::Error;
 

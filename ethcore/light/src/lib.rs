@@ -32,20 +32,20 @@
 
 #![deny(missing_docs)]
 
-pub mod client;
+pub mod cache;
 pub mod cht;
+pub mod client;
 pub mod net;
 pub mod on_demand;
-pub mod transaction_queue;
-pub mod cache;
 pub mod provider;
+pub mod transaction_queue;
 
 mod types;
 
 pub use self::cache::Cache;
 pub use self::provider::Provider;
 pub use self::transaction_queue::TransactionQueue;
-pub use types::request as request;
+pub use types::request;
 
 #[macro_use]
 extern crate serde_derive;
@@ -54,32 +54,32 @@ extern crate serde_derive;
 extern crate log;
 
 extern crate bincode;
+extern crate ethcore;
+extern crate ethcore_bytes as bytes;
 extern crate ethcore_io as io;
 extern crate ethcore_network as network;
-extern crate ethcore_bytes as bytes;
 extern crate ethcore_transaction as transaction;
 extern crate ethereum_types;
-extern crate ethcore;
+extern crate futures;
 extern crate hashdb;
 extern crate heapsize;
-extern crate futures;
 extern crate itertools;
 extern crate memorydb;
+extern crate parking_lot;
 extern crate patricia_trie as trie;
 extern crate plain_hasher;
 extern crate rand;
 extern crate rlp;
-extern crate parking_lot;
 #[macro_use]
 extern crate rlp_derive;
+extern crate keccak_hash as hash;
+extern crate kvdb;
+extern crate memory_cache;
 extern crate serde;
 extern crate smallvec;
 extern crate stats;
-extern crate vm;
-extern crate keccak_hash as hash;
 extern crate triehash;
-extern crate kvdb;
-extern crate memory_cache;
+extern crate vm;
 #[macro_use]
 extern crate error_chain;
 

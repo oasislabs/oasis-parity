@@ -16,10 +16,10 @@
 
 //! I/O and event context generalizations.
 
-use network::{NetworkContext, PeerId, NodeId};
+use network::{NetworkContext, NodeId, PeerId};
 
-use super::{Announcement, LightProtocol, ReqId};
 use super::error::Error;
+use super::{Announcement, LightProtocol, ReqId};
 use request::NetworkRequests as Requests;
 
 /// An I/O context which allows sending and receiving packets as well as
@@ -46,7 +46,10 @@ pub trait IoContext {
 	fn persistent_peer_id(&self, peer: PeerId) -> Option<NodeId>;
 }
 
-impl<T> IoContext for T where T: ?Sized + NetworkContext {
+impl<T> IoContext for T
+where
+	T: ?Sized + NetworkContext,
+{
 	fn send(&self, peer: PeerId, packet_id: u8, packet_body: Vec<u8>) {
 		if let Err(e) = self.send(peer, packet_id, packet_body) {
 			debug!(target: "pip", "Error sending packet to peer {}: {}", peer, e);

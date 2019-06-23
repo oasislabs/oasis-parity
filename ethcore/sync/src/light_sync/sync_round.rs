@@ -26,8 +26,8 @@ use ethcore::header::Header;
 use light::net::ReqId;
 use light::request::CompleteHeadersRequest as HeadersRequest;
 
-use network::PeerId;
 use ethereum_types::H256;
+use network::PeerId;
 
 use super::response;
 
@@ -37,7 +37,7 @@ const SCAFFOLD_ATTEMPTS: usize = 3;
 /// Context for a headers response.
 pub trait ResponseContext {
 	/// Get the peer who sent this response.
-	fn responder(&self) ->	PeerId;
+	fn responder(&self) -> PeerId;
 	/// Get the request ID this response corresponds to.
 	fn req_id(&self) -> &ReqId;
 	/// Get the (unverified) response data.
@@ -71,7 +71,8 @@ struct SubchainRequest {
 // front of the round are dispatched first.
 impl PartialOrd for SubchainRequest {
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-		self.subchain_parent.0
+		self.subchain_parent
+			.0
 			.partial_cmp(&other.subchain_parent.0)
 			.map(Ordering::reverse)
 	}
@@ -79,7 +80,10 @@ impl PartialOrd for SubchainRequest {
 
 impl Ord for SubchainRequest {
 	fn cmp(&self, other: &Self) -> Ordering {
-		self.subchain_parent.0.cmp(&other.subchain_parent.0).reverse()
+		self.subchain_parent
+			.0
+			.cmp(&other.subchain_parent.0)
+			.reverse()
 	}
 }
 
@@ -100,7 +104,11 @@ impl Fetcher {
 	// with a list of peers who helped produce the chain.
 	// The headers must be valid RLP at this point and must have a consistent
 	// non-zero gap between them. Will abort the round if found wrong.
-	fn new(sparse_headers: Vec<Header>, contributors: Vec<PeerId>, target: (u64, H256)) -> SyncRound {
+	fn new(
+		sparse_headers: Vec<Header>,
+		contributors: Vec<PeerId>,
+		target: (u64, H256),
+	) -> SyncRound {
 		let mut requests = BinaryHeap::with_capacity(sparse_headers.len() - 1);
 
 		for pair in sparse_headers.windows(2) {
@@ -111,7 +119,9 @@ impl Fetcher {
 
 			// should never happen as long as we verify the gaps
 			// gotten from SyncRound::Start
-			if diff < 2 { continue }
+			if diff < 2 {
+				continue;
+			}
 
 			let needed_headers = HeadersRequest {
 				start: high_rung.parent_hash().clone().into(),
@@ -130,7 +140,9 @@ impl Fetcher {
 
 		let end = match sparse_headers.last().map(|h| (h.number(), h.hash())) {
 			Some(end) => end,
-			None => return SyncRound::abort(AbortReason::BadScaffold(contributors), VecDeque::new()),
+			None => {
+				return SyncRound::abort(AbortReason::BadScaffold(contributors), VecDeque::new())
+			}
 		};
 
 		SyncRound::Fetch(Fetcher {
@@ -157,7 +169,8 @@ impl Fetcher {
 			match self.complete_requests.remove(&start_hash) {
 				None => break,
 				Some(complete_req) => {
-					self.ready.push_back(self.sparse.pop_front().expect("first known to exist; qed"));
+					self.ready
+						.push_back(self.sparse.pop_front().expect("first known to exist; qed"));
 					self.ready.extend(complete_req.downloaded);
 				}
 			}
@@ -166,7 +179,11 @@ impl Fetcher {
 		// frames are between two sparse headers and keyed by subchain parent, so the last
 		// remaining will be the last header.
 		if self.sparse.len() == 1 {
-			self.ready.push_back(self.sparse.pop_back().expect("sparse known to have one entry; qed"))
+			self.ready.push_back(
+				self.sparse
+					.pop_back()
+					.expect("sparse known to have one entry; qed"),
+			)
 		}
 
 		trace!(target: "sync", "{} headers ready to drain", self.ready.len());
@@ -245,7 +262,7 @@ impl Fetcher {
 
 		for abandoned in abandoned {
 			match self.pending.remove(abandoned) {
-				None => {},
+				None => {}
 				Some(req) => self.requests.push(req),
 			}
 		}
@@ -255,7 +272,8 @@ impl Fetcher {
 	}
 
 	fn dispatch_requests<D>(mut self, mut dispatcher: D) -> SyncRound
-		where D: FnMut(HeadersRequest) -> Option<ReqId>
+	where
+		D: FnMut(HeadersRequest) -> Option<ReqId>,
 	{
 		while let Some(pending_req) = self.requests.pop() {
 			match dispatcher(pending_req.headers_request.clone()) {
@@ -353,7 +371,11 @@ impl RoundStart {
 
 		if self.attempt >= SCAFFOLD_ATTEMPTS {
 			return if self.sparse_headers.len() > 1 {
-				Fetcher::new(self.sparse_headers, self.contributors.into_iter().collect(), self.target)
+				Fetcher::new(
+					self.sparse_headers,
+					self.contributors.into_iter().collect(),
+					self.target,
+				)
 			} else {
 				let fetched_headers = if self.skip == 0 {
 					self.sparse_headers.into()
@@ -362,7 +384,7 @@ impl RoundStart {
 				};
 
 				SyncRound::abort(AbortReason::NoResponses, fetched_headers)
-			}
+			};
 		} else {
 			SyncRound::Start(self)
 		}
@@ -370,7 +392,7 @@ impl RoundStart {
 
 	fn process_response<R: ResponseContext>(mut self, ctx: &R) -> SyncRound {
 		let req = match self.pending_req.take() {
-			Some((id, ref req)) if ctx.req_id() == &id => { req.clone() }
+			Some((id, ref req)) if ctx.req_id() == &id => req.clone(),
 			other => {
 				self.pending_req = other;
 				return SyncRound::Start(self);
@@ -380,7 +402,10 @@ impl RoundStart {
 		match response::verify(ctx.data(), &req) {
 			Ok(headers) => {
 				if self.sparse_headers.len() == 0
-					&& headers.get(0).map_or(false, |x| x.parent_hash() != &self.start_block.1) {
+					&& headers
+						.get(0)
+						.map_or(false, |x| x.parent_hash() != &self.start_block.1)
+				{
 					trace!(target: "sync", "Wrong parent for first header in round");
 					ctx.punish_responder(); // or should we reset?
 				}
@@ -397,9 +422,9 @@ impl RoundStart {
 						Fetcher::new(
 							self.sparse_headers,
 							self.contributors.into_iter().collect(),
-							self.target
+							self.target,
 						)
-					}
+					};
 				}
 			}
 			Err(e) => {
@@ -427,12 +452,13 @@ impl RoundStart {
 	}
 
 	fn dispatch_requests<D>(mut self, mut dispatcher: D) -> SyncRound
-		where D: FnMut(HeadersRequest) -> Option<ReqId>
+	where
+		D: FnMut(HeadersRequest) -> Option<ReqId>,
 	{
 		if self.pending_req.is_none() {
 			// beginning offset + first block expected after last header we have.
-			let start = (self.start_block.0 + 1)
-				+ self.sparse_headers.len() as u64 * (self.skip + 1);
+			let start =
+				(self.start_block.0 + 1) + self.sparse_headers.len() as u64 * (self.skip + 1);
 
 			let max = self.pivots - self.sparse_headers.len() as u64;
 
@@ -504,7 +530,8 @@ impl SyncRound {
 	// TODO: have dispatcher take capabilities argument? and return an error as
 	// to why no suitable peer can be found? (no buffer, no chain heads that high, etc)
 	pub fn dispatch_requests<D>(self, dispatcher: D) -> Self
-		where D: FnMut(HeadersRequest) -> Option<ReqId>
+	where
+		D: FnMut(HeadersRequest) -> Option<ReqId>,
 	{
 		match self {
 			SyncRound::Start(round_start) => round_start.dispatch_requests(dispatcher),
@@ -533,8 +560,9 @@ impl fmt::Debug for SyncRound {
 		match *self {
 			SyncRound::Start(ref state) => write!(f, "Scaffolding from {:?}", state.start_block),
 			SyncRound::Fetch(ref fetcher) => write!(f, "Filling scaffold up to {:?}", fetcher.end),
-			SyncRound::Abort(ref reason, ref remaining) =>
-				write!(f, "Aborted: {:?}, {} remain", reason, remaining.len()),
+			SyncRound::Abort(ref reason, ref remaining) => {
+				write!(f, "Aborted: {:?}, {} remain", reason, remaining.len())
+			}
 		}
 	}
 }

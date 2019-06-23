@@ -16,8 +16,8 @@
 
 //! Content Stream Response
 
-use std::io;
 use hyper::{self, header, mime, StatusCode};
+use std::io;
 
 use handlers::{add_security_headers, Reader};
 

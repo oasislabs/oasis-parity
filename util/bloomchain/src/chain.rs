@@ -14,14 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::{HashMap, HashSet};
-use std::ops::Range;
-use number::Number;
-use position::{Position, Manager as PositionManager};
 use bloom::Bloom;
-use filter::Filter;
 use config::Config;
 use database::BloomDatabase;
+use filter::Filter;
+use number::Number;
+use position::{Manager as PositionManager, Position};
+use std::collections::{HashMap, HashSet};
+use std::ops::Range;
 
 /// Prepares all bloom database operations.
 pub struct BloomChain<'a> {
@@ -41,7 +41,13 @@ impl<'a> BloomChain<'a> {
 	}
 
 	/// Internal function which does bloom search recursively.
-	fn blocks(&self, range: &Range<Number>, bloom: &Bloom, level: usize, offset: usize) -> Option<Vec<usize>> {
+	fn blocks(
+		&self,
+		range: &Range<Number>,
+		bloom: &Bloom,
+		level: usize,
+		offset: usize,
+	) -> Option<Vec<usize>> {
 		let index = self.positioner.position(offset, level);
 
 		match self.db.bloom_at(&index) {
@@ -52,14 +58,17 @@ impl<'a> BloomChain<'a> {
 				// return None if current level doesnt contain given bloom
 				_ if !level_bloom.contains_bloom(bloom) => return None,
 				// continue processing && go down
-				_ => ()
-			}
+				_ => (),
+			},
 		};
 
 		let level_size = self.positioner.level_size(level - 1);
 		let from_position = self.positioner.position(range.start, level - 1);
 		let to_position = self.positioner.position(range.end, level - 1);
-		let res: Vec<usize> = self.positioner.lower_level_positions(&index).into_iter()
+		let res: Vec<usize> = self
+			.positioner
+			.lower_level_positions(&index)
+			.into_iter()
 			// chose only blooms in range
 			.filter(|li| li.index >= from_position.index && li.index <= to_position.index)
 			// map them to offsets
@@ -83,7 +92,7 @@ impl<'a> BloomChain<'a> {
 				Some(mut old_bloom) => {
 					old_bloom.accrue_bloom(&bloom);
 					old_bloom
-				},
+				}
 				None => bloom.clone(),
 			};
 
@@ -111,13 +120,18 @@ impl<'a> BloomChain<'a> {
 
 		for level in 1..self.positioner.levels() {
 			for i in 0..blooms.len() {
-
 				let index = self.positioner.position(range.start + i, level);
 				let new_bloom = {
 					// use new blooms before db blooms where necessary
-					let bloom_at = | index | { result.get(&index).cloned().or_else(|| self.db.bloom_at(&index)) };
+					let bloom_at = |index| {
+						result
+							.get(&index)
+							.cloned()
+							.or_else(|| self.db.bloom_at(&index))
+					};
 
-					self.positioner.lower_level_positions(&index)
+					self.positioner
+						.lower_level_positions(&index)
 						.into_iter()
 						// get blooms
 						// filter existing ones
@@ -161,7 +175,8 @@ impl<'a> BloomChain<'a> {
 	/// Filter the chain returing all numbers matching the filter.
 	pub fn filter(&self, filter: &Filter) -> Vec<Number> {
 		let range = filter.range();
-		let mut blocks = filter.bloom_possibilities()
+		let mut blocks = filter
+			.bloom_possibilities()
 			.into_iter()
 			.flat_map(|ref bloom| self.with_bloom(&range, bloom))
 			.collect::<HashSet<Number>>()

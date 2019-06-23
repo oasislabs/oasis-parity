@@ -16,7 +16,7 @@
 
 use std::collections::BTreeMap;
 
-use {ethkey, bytes, ethereum_types};
+use {bytes, ethereum_types, ethkey};
 
 /// Node id.
 pub type NodeId = ethkey::Public;

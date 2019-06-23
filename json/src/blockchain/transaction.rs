@@ -16,20 +16,20 @@
 
 //! Blockchain test transaction deserialization.
 
-use uint::Uint;
 use bytes::Bytes;
+use uint::Uint;
 
 /// Blockchain test transaction deserialization.
 #[derive(Debug, PartialEq, Deserialize)]
 pub struct Transaction {
 	data: Bytes,
-	#[serde(rename="gasLimit")]
+	#[serde(rename = "gasLimit")]
 	gas_limit: Uint,
-	#[serde(rename="gasPrice")]
+	#[serde(rename = "gasPrice")]
 	gas_price: Uint,
 	nonce: Uint,
 	r: Uint,
 	s: Uint,
 	v: Uint,
-	value: Uint
+	value: Uint,
 }

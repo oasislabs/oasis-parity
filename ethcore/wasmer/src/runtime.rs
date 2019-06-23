@@ -13,17 +13,14 @@
 
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
-use std::mem;
 use std::io::Write;
+use std::mem;
 
-use ethereum_types::{U256, H256, Address};
+use ethereum_types::{Address, H256, U256};
 use hash;
 use vm::{self, CallType};
 
-use wasmer_runtime::{
-	Ctx,
-	memory::Memory,
-};
+use wasmer_runtime::{memory::Memory, Ctx};
 
 use super::panic_payload;
 
@@ -121,7 +118,6 @@ impl ::std::fmt::Display for Error {
 type Result<T> = ::std::result::Result<T, Error>;
 
 impl<'a> Runtime<'a> {
-
 	/// New runtime for wasm contract with specified params
 	pub fn with_params(
 		ext: &mut vm::Ext,
@@ -146,7 +142,7 @@ impl<'a> Runtime<'a> {
 			.collect();
 		buf.write(mem_vec.as_slice());
 		Ok(())
-  }
+	}
 
 	fn memory_get(&self, ctx: &mut Ctx, offset: u32, len: usize) -> Result<Vec<u8>> {
 		let mem_get = ctx.memory(0).view()[offset as usize..(offset as usize + len)]
@@ -154,7 +150,7 @@ impl<'a> Runtime<'a> {
 			.map(|cell| cell.get())
 			.collect();
 		Ok(mem_get)
-  }
+	}
 
 	fn memory_set(&mut self, ctx: &mut Ctx, offset: u32, buf: &[u8]) -> Result<()> {
 		ctx.memory(0).view()[offset as usize..(offset as usize + buf.len())]
@@ -162,7 +158,7 @@ impl<'a> Runtime<'a> {
 			.zip(buf.iter())
 			.for_each(|(cell, v)| cell.set(*v));
 		Ok(())
-  }
+	}
 
 	fn memory_zero(&mut self, ctx: &mut Ctx, offset: usize, len: usize) -> Result<()> {
 		ctx.memory(0).view()[offset as usize..(offset as usize + len)]
@@ -202,19 +198,20 @@ impl<'a> Runtime<'a> {
 	fn charge_gas(&mut self, amount: u64) -> bool {
 		let prev = self.gas_counter;
 		match prev.checked_add(amount) {
-		 	// gas charge overflow protection
-		 	None => false,
-		 	Some(val) if val > self.gas_limit => false,
-		 	Some(_) => {
-		 		self.gas_counter = prev + amount;
-		 		true
+			// gas charge overflow protection
+			None => false,
+			Some(val) if val > self.gas_limit => false,
+			Some(_) => {
+				self.gas_counter = prev + amount;
+				true
 			}
 		}
 	}
 
 	/// Charge gas according to closure
 	pub fn charge<F>(&mut self, f: F) -> Result<()>
-		where F: FnOnce(&vm::Schedule) -> u64
+	where
+		F: FnOnce(&vm::Schedule) -> u64,
 	{
 		let amount = f(self.ext.schedule());
 		if !self.charge_gas(amount as u64) {
@@ -226,20 +223,26 @@ impl<'a> Runtime<'a> {
 
 	/// Adjusted charge of gas which scales actual charge according to the wasm opcode counting coefficient
 	pub fn adjusted_charge<F>(&mut self, f: F) -> Result<()>
-		where F: FnOnce(&vm::Schedule) -> u64
+	where
+		F: FnOnce(&vm::Schedule) -> u64,
 	{
-		self.charge(|schedule| f(schedule) * schedule.wasm().opcodes_div as u64 / schedule.wasm().opcodes_mul as u64)
+		self.charge(|schedule| {
+			f(schedule) * schedule.wasm().opcodes_div as u64 / schedule.wasm().opcodes_mul as u64
+		})
 	}
 
 	/// Charge gas provided by the closure
 	///
 	/// Closure also can return overflowing flag as None in gas cost.
 	pub fn overflow_charge<F>(&mut self, f: F) -> Result<()>
-		where F: FnOnce(&vm::Schedule) -> Option<u64>
+	where
+		F: FnOnce(&vm::Schedule) -> Option<u64>,
 	{
 		let amount = match f(self.ext.schedule()) {
 			Some(amount) => amount,
-			None => { return Err(Error::GasLimit.into()); }
+			None => {
+				return Err(Error::GasLimit.into());
+			}
 		};
 
 		if !self.charge_gas(amount as u64) {
@@ -251,21 +254,24 @@ impl<'a> Runtime<'a> {
 
 	/// Same as overflow_charge, but with amount adjusted by wasm opcodes coeff
 	pub fn adjusted_overflow_charge<F>(&mut self, f: F) -> Result<()>
-		where F: FnOnce(&vm::Schedule) -> Option<u64>
+	where
+		F: FnOnce(&vm::Schedule) -> Option<u64>,
 	{
-		self.overflow_charge(|schedule|
+		self.overflow_charge(|schedule| {
 			f(schedule)
 				.and_then(|x| x.checked_mul(schedule.wasm().opcodes_div as u64))
 				.map(|x| x / schedule.wasm().opcodes_mul as u64)
-		)
+		})
 	}
-	
-		/// Read from the storage to wasm memory
+
+	/// Read from the storage to wasm memory
 	/// All storage read through here *must* be an H256.
-	pub fn storage_read(&mut self, ctx: &mut Ctx, key_ptr: u32, val_ptr: u32) -> Result<()>
-	{
+	pub fn storage_read(&mut self, ctx: &mut Ctx, key_ptr: u32, val_ptr: u32) -> Result<()> {
 		let key = self.h256_at(ctx, key_ptr)?;
-		let val = self.ext.storage_at(&key).map_err(|_| Error::StorageReadError)?;
+		let val = self
+			.ext
+			.storage_at(&key)
+			.map_err(|_| Error::StorageReadError)?;
 
 		self.adjusted_charge(|schedule| schedule.sload_gas as u64)?;
 
@@ -276,19 +282,25 @@ impl<'a> Runtime<'a> {
 
 	/// Write to storage from wasm memory
 	/// All storage written through here *must* be an H256.
-	pub fn storage_write(&mut self, ctx: &mut Ctx, key_ptr: u32, val_ptr: u32) -> Result<()>
-	{
+	pub fn storage_write(&mut self, ctx: &mut Ctx, key_ptr: u32, val_ptr: u32) -> Result<()> {
 		let key = self.h256_at(ctx, key_ptr)?;
 		let val = self.h256_at(ctx, val_ptr)?;
 
-		let former_val = self.ext.storage_at(&key).map_err(|_| Error::StorageUpdateError)?;
+		let former_val = self
+			.ext
+			.storage_at(&key)
+			.map_err(|_| Error::StorageUpdateError)?;
 		let reset = !(former_val == H256::zero() && val != H256::zero());
 		self.storage_bytes_charge(val.len() as u64, reset)?;
 
-		self.ext.set_storage(key, val).map_err(|_| Error::StorageUpdateError)?;
+		self.ext
+			.set_storage(key, val)
+			.map_err(|_| Error::StorageUpdateError)?;
 
 		if former_val != H256::zero() && val == H256::zero() {
-			self.ext.inc_sstore_clears(former_val.len() as u64).map_err(|_| Error::StorageUpdateError)?;
+			self.ext
+				.inc_sstore_clears(former_val.len() as u64)
+				.map_err(|_| Error::StorageUpdateError)?;
 		}
 
 		Ok(())
@@ -296,12 +308,19 @@ impl<'a> Runtime<'a> {
 
 	/// Gas charge prorated based on time until expiry and the number of bytes we're storing.
 	fn storage_bytes_charge(&mut self, bytes_len: u64, reset: bool) -> Result<()> {
-		let duration_secs = self.ext.seconds_until_expiry().map_err(|_| Error::StorageUpdateError)?;
+		let duration_secs = self
+			.ext
+			.seconds_until_expiry()
+			.map_err(|_| Error::StorageUpdateError)?;
 
 		let gas = if !reset {
-			self.ext.schedule().prorated_sstore_set_gas(duration_secs, bytes_len)
+			self.ext
+				.schedule()
+				.prorated_sstore_set_gas(duration_secs, bytes_len)
 		} else {
-			self.ext.schedule().prorated_sstore_reset_gas(duration_secs, bytes_len)
+			self.ext
+				.schedule()
+				.prorated_sstore_reset_gas(duration_secs, bytes_len)
 		};
 
 		// Charge gas after checking for u64 overflow.
@@ -325,7 +344,6 @@ impl<'a> Runtime<'a> {
 	/// * pointer in sandboxed memory where result is
 	/// * the length of the result
 	pub fn ret(&mut self, ctx: &mut Ctx, ptr: u32, len: u32) -> Result<()> {
-		
 		trace!(target: "wasm", "Contract ret: {} bytes @ {}", len, ptr);
 
 		self.result = self.memory_get(ctx, ptr, len as usize)?;
@@ -340,7 +358,9 @@ impl<'a> Runtime<'a> {
 
 	/// Query current gas left for execution
 	pub fn gas_left(&self) -> Result<u64> {
-		if self.gas_counter > self.gas_limit { return Err(Error::InvalidGasState); }
+		if self.gas_counter > self.gas_limit {
+			return Err(Error::InvalidGasState);
+		}
 		Ok(self.gas_limit - self.gas_counter)
 	}
 
@@ -353,14 +373,13 @@ impl<'a> Runtime<'a> {
 		}
 	}
 
-    /// Query the length of the input bytes
+	/// Query the length of the input bytes
 	fn input_length(&mut self, _ctx: &mut Ctx) -> Result<i32> {
 		Ok(self.args.len() as i32)
 	}
 
 	/// Write input bytes to the memory location using the passed pointer
 	fn fetch_input(&mut self, ctx: &mut Ctx, ptr: u32) -> Result<()> {
-
 		let args_len = self.args.len() as u64;
 		self.charge(|s| args_len * s.wasm().memcpy as u64)?;
 
@@ -375,7 +394,6 @@ impl<'a> Runtime<'a> {
 
 	/// Write return bytes to the memory location using the passed pointer
 	fn fetch_return(&mut self, ctx: &mut Ctx, ptr: u32) -> Result<()> {
-
 		let return_length = self.result.len() as u64;
 		self.charge(|s| return_length * s.wasm().memcpy as u64)?;
 
@@ -386,9 +404,7 @@ impl<'a> Runtime<'a> {
 	/// User panic
 	///
 	/// Contract can invoke this when he encounters unrecoverable error.
-	fn panic(&mut self, ctx: &mut Ctx, payload_ptr: u32, payload_len: u32) -> Result<()>
-	{
-
+	fn panic(&mut self, ctx: &mut Ctx, payload_ptr: u32, payload_len: u32) -> Result<()> {
 		let raw_payload = self.memory_get(ctx, payload_ptr, payload_len as usize)?;
 		let payload = panic_payload::decode(&raw_payload);
 		let msg = format!(
@@ -412,17 +428,18 @@ impl<'a> Runtime<'a> {
 	}
 
 	/// Rust syscall
-	fn syscall(&mut self, ctx: &mut Ctx, syscall_id: u32, data_ptr: u32) -> Result<i32>
-	{
-		
+	fn syscall(&mut self, ctx: &mut Ctx, syscall_id: u32, data_ptr: u32) -> Result<i32> {
 		Ok(match syscall_id {
 			// https://github.com/rust-lang/rust/blob/master/src/etc/wasm32-shim.js
 			1 => {
 				let mem_bytes = self.memory_get(ctx, data_ptr, 4 * 3)?; // 3 words
 				let payload = unsafe { mem::transmute::<Vec<u8>, Vec<u32>>(mem_bytes) };
-				let out_str =
-					String::from_utf8(self.memory_get(ctx, payload[1] as u32, payload[2] as usize)?)
-						.map_err(|_| Error::BadUtf8)?;
+				let out_str = String::from_utf8(self.memory_get(
+					ctx,
+					payload[1] as u32,
+					payload[2] as usize,
+				)?)
+				.map_err(|_| Error::BadUtf8)?;
 				match payload.get(0) {
 					Some(1) | Some(2) => {
 						print!("{}", out_str);
@@ -474,7 +491,7 @@ impl<'a> Runtime<'a> {
 		Ok(x.exp())
 	}
 
- 	fn do_call(
+	fn do_call(
 		&mut self,
 		ctx: &mut Ctx,
 		use_val: bool,
@@ -485,9 +502,8 @@ impl<'a> Runtime<'a> {
 		input_ptr: u32,
 		input_len: u32,
 		result_ptr: u32,
-		result_alloc_len: u32
-	) -> Result<i32>
-	{
+		result_alloc_len: u32,
+	) -> Result<i32> {
 		trace!(target: "wasm", "runtime: CALL({:?})", call_type);
 
 		trace!(target: "wasm", "           gas: {:?}", gas);
@@ -495,7 +511,11 @@ impl<'a> Runtime<'a> {
 		let address = self.address_at(ctx, address_ptr)?;
 		trace!(target: "wasm", "       address: {:?}", address);
 
-		let val = if use_val { Some(self.u256_at(ctx, val_ptr)?) } else { None };
+		let val = if use_val {
+			Some(self.u256_at(ctx, val_ptr)?)
+		} else {
+			None
+		};
 		trace!(target: "wasm", "           val: {:?}", val);
 
 		trace!(target: "wasm", "     input_ptr: {:?}", input_ptr);
@@ -504,7 +524,9 @@ impl<'a> Runtime<'a> {
 		trace!(target: "wasm", "    result_len: {:?}", result_alloc_len);
 
 		if let Some(ref val) = val {
-			let address_balance = self.ext.balance(&self.context.address)
+			let address_balance = self
+				.ext
+				.balance(&self.context.address)
 				.map_err(|_| Error::BalanceQueryError)?;
 
 			if &address_balance < val {
@@ -521,22 +543,29 @@ impl<'a> Runtime<'a> {
 		// todo: optimize to use memory views once it's in
 		let payload = self.memory_get(ctx, input_ptr, input_len as usize)?;
 
-		let adjusted_gas = match gas.checked_mul(self.ext.schedule().wasm().opcodes_div as u64)
+		let adjusted_gas = match gas
+			.checked_mul(self.ext.schedule().wasm().opcodes_div as u64)
 			.map(|x| x / self.ext.schedule().wasm().opcodes_mul as u64)
 		{
 			Some(x) => x,
 			None => {
 				trace!("CALL overflowed gas, call aborted with error returned");
-				return Ok(-1)
-			},
+				return Ok(-1);
+			}
 		};
 
 		self.charge(|_| adjusted_gas)?;
 
 		let call_result = self.ext.call(
 			&gas.into(),
-			match call_type { CallType::DelegateCall => &self.context.sender, _ => &self.context.address },
-			match call_type { CallType::Call | CallType::StaticCall => &address, _ => &self.context.address },
+			match call_type {
+				CallType::DelegateCall => &self.context.sender,
+				_ => &self.context.address,
+			},
+			match call_type {
+				CallType::Call | CallType::StaticCall => &address,
+				_ => &self.context.address,
+			},
 			val,
 			&payload,
 			&address,
@@ -547,31 +576,30 @@ impl<'a> Runtime<'a> {
 		match call_result {
 			vm::MessageCallResult::Success(gas_left, _) => {
 				// cannot overflow, before making call gas_counter was incremented with gas, and gas_left < gas
-				self.gas_counter = self.gas_counter -
-					gas_left.low_u64() * self.ext.schedule().wasm().opcodes_div as u64
+				self.gas_counter = self.gas_counter
+					- gas_left.low_u64() * self.ext.schedule().wasm().opcodes_div as u64
 						/ self.ext.schedule().wasm().opcodes_mul as u64;
 
 				self.memory_set(ctx, result_ptr, &result)?;
 				self.result = result;
 				Ok(0)
-			},
+			}
 			vm::MessageCallResult::Reverted(gas_left, _) => {
 				// cannot overflow, before making call gas_counter was incremented with gas, and gas_left < gas
-				self.gas_counter = self.gas_counter -
-					gas_left.low_u64() * self.ext.schedule().wasm().opcodes_div as u64
+				self.gas_counter = self.gas_counter
+					- gas_left.low_u64() * self.ext.schedule().wasm().opcodes_div as u64
 						/ self.ext.schedule().wasm().opcodes_mul as u64;
 
 				self.memory_set(ctx, result_ptr, &result)?;
 				Ok(-1)
-			},
-			vm::MessageCallResult::Failed  => {
-				Ok(-1)
 			}
+			vm::MessageCallResult::Failed => Ok(-1),
 		}
 	}
 
 	/// Message call
-	pub fn ccall(&mut self, 
+	pub fn ccall(
+		&mut self,
 		ctx: &mut Ctx,
 		gas: u64,
 		address_ptr: u32,
@@ -579,39 +607,73 @@ impl<'a> Runtime<'a> {
 		input_ptr: u32,
 		input_len: u32,
 		result_ptr: u32,
-		result_alloc_len: u32
+		result_alloc_len: u32,
 	) -> Result<i32> {
-		self.do_call(ctx, true, CallType::Call, gas, address_ptr, val_ptr, input_ptr, input_len, result_ptr, result_alloc_len)
+		self.do_call(
+			ctx,
+			true,
+			CallType::Call,
+			gas,
+			address_ptr,
+			val_ptr,
+			input_ptr,
+			input_len,
+			result_ptr,
+			result_alloc_len,
+		)
 	}
 
 	/// Delegate call
-	pub fn dcall(&mut self, 
+	pub fn dcall(
+		&mut self,
 		ctx: &mut Ctx,
 		gas: u64,
 		address_ptr: u32,
 		input_ptr: u32,
 		input_len: u32,
 		result_ptr: u32,
-		result_alloc_len: u32
+		result_alloc_len: u32,
 	) -> Result<i32> {
-		self.do_call(ctx, false, CallType::DelegateCall, gas, address_ptr, 0, input_ptr, input_len, result_ptr, result_alloc_len)
+		self.do_call(
+			ctx,
+			false,
+			CallType::DelegateCall,
+			gas,
+			address_ptr,
+			0,
+			input_ptr,
+			input_len,
+			result_ptr,
+			result_alloc_len,
+		)
 	}
 
 	/// Static call
-	pub fn scall(&mut self, 
+	pub fn scall(
+		&mut self,
 		ctx: &mut Ctx,
 		gas: u64,
 		address_ptr: u32,
 		input_ptr: u32,
 		input_len: u32,
 		result_ptr: u32,
-		result_alloc_len: u32
+		result_alloc_len: u32,
 	) -> Result<i32> {
-		self.do_call(ctx, false, CallType::StaticCall, gas, address_ptr, 0, input_ptr, input_len, result_ptr, result_alloc_len)
+		self.do_call(
+			ctx,
+			false,
+			CallType::StaticCall,
+			gas,
+			address_ptr,
+			0,
+			input_ptr,
+			input_len,
+			result_ptr,
+			result_alloc_len,
+		)
 	}
 
-	fn return_address_ptr(&mut self, ctx: &mut Ctx, ptr: u32, val: Address) -> Result<()>
-	{
+	fn return_address_ptr(&mut self, ctx: &mut Ctx, ptr: u32, val: Address) -> Result<()> {
 		self.charge(|schedule| schedule.wasm().static_address as u64)?;
 		self.memory_set(ctx, ptr, &*val)?;
 		Ok(())
@@ -637,28 +699,28 @@ impl<'a> Runtime<'a> {
 	/// * code_ptr - pointer to the code data
 	/// * code_len - lenght of the code data
 	/// * result_ptr - pointer to write an address of the newly created contract
-	pub fn create(&mut self, 
-			ctx: &mut Ctx, 
-			endowment_ptr: u32, 
-			code_ptr: u32, 
-			code_len: u32, 
-			result_ptr: u32
-		) -> Result<i32> 
-	{
+	pub fn create(
+		&mut self,
+		ctx: &mut Ctx,
+		endowment_ptr: u32,
+		code_ptr: u32,
+		code_len: u32,
+		result_ptr: u32,
+	) -> Result<i32> {
 		//
 		// method signature:
 		//   fn create(endowment: *const u8, code_ptr: *const u8, code_len: u32, result_ptr: *mut u8) -> i32;
 		//
- 		trace!(target: "wasm", "runtime: CREATE");
+		trace!(target: "wasm", "runtime: CREATE");
 		let endowment = self.u256_at(ctx, endowment_ptr)?;
-/*		trace!(target: "wasm", "       val: {:?}", endowment);
-		let code_ptr: u32 = args.nth_checked(1)?;
-		trace!(target: "wasm", "  code_ptr: {:?}", code_ptr);
-		let code_len: u32 = args.nth_checked(2)?;
-		trace!(target: "wasm", "  code_len: {:?}", code_len);
-		let result_ptr: u32 = args.nth_checked(3)?;
-		trace!(target: "wasm", "result_ptr: {:?}", result_ptr);
- */
+		/*		trace!(target: "wasm", "       val: {:?}", endowment);
+			   let code_ptr: u32 = args.nth_checked(1)?;
+			   trace!(target: "wasm", "  code_ptr: {:?}", code_ptr);
+			   let code_len: u32 = args.nth_checked(2)?;
+			   trace!(target: "wasm", "  code_len: {:?}", code_len);
+			   let result_ptr: u32 = args.nth_checked(3)?;
+			   trace!(target: "wasm", "result_ptr: {:?}", result_ptr);
+		*/
 		let code = self.memory_get(ctx, code_ptr, code_len as usize)?;
 
 		self.adjusted_charge(|schedule| schedule.create_gas as u64)?;
@@ -668,7 +730,12 @@ impl<'a> Runtime<'a> {
 			* U256::from(self.ext.schedule().wasm().opcodes_mul)
 			/ U256::from(self.ext.schedule().wasm().opcodes_div);
 
-		match self.ext.create(&gas_left, &endowment, &code, vm::CreateContractAddress::FromSenderAndCodeHash) {
+		match self.ext.create(
+			&gas_left,
+			&endowment,
+			&code,
+			vm::CreateContractAddress::FromSenderAndCodeHash,
+		) {
 			vm::ContractCreateResult::Created(address, gas_left) => {
 				self.memory_set(ctx, result_ptr, &*address)?;
 				self.gas_counter = self.gas_limit -
@@ -678,11 +745,11 @@ impl<'a> Runtime<'a> {
 						/ self.ext.schedule().wasm().opcodes_mul as u64;
 				trace!(target: "wasm", "runtime: create contract success (@{:?})", address);
 				Ok(0i32.into())
-			},
+			}
 			vm::ContractCreateResult::Failed => {
 				trace!(target: "wasm", "runtime: create contract fail");
 				Ok((-1i32).into())
-			},
+			}
 			vm::ContractCreateResult::Reverted(gas_left, _) => {
 				trace!(target: "wasm", "runtime: create contract reverted");
 				self.gas_counter = self.gas_limit -
@@ -692,25 +759,31 @@ impl<'a> Runtime<'a> {
 						/ self.ext.schedule().wasm().opcodes_mul as u64;
 
 				Ok((-1i32).into())
-			},
+			}
 		}
 	}
 
 	// This is the schema for runtime + Ctx support
-	fn debug(&mut self, ctx: &mut Ctx, msg_ptr: u32, msg_len: u32) -> Result<()>
-	{
+	fn debug(&mut self, ctx: &mut Ctx, msg_ptr: u32, msg_len: u32) -> Result<()> {
 		let debug_str = String::from_utf8(
-			ctx.memory(0).view()[msg_ptr as usize..(msg_ptr + msg_len) as usize].iter().map(|cell| cell.get()).collect()
-		).unwrap();
+			ctx.memory(0).view()[msg_ptr as usize..(msg_ptr + msg_len) as usize]
+				.iter()
+				.map(|cell| cell.get())
+				.collect(),
+		)
+		.unwrap();
 		Ok(())
 	}
 
 	/// Pass suicide to state runtime
-	pub fn suicide(&mut self, ctx: &mut Ctx, ptr: u32) -> Result<()>
-	{
+	pub fn suicide(&mut self, ctx: &mut Ctx, ptr: u32) -> Result<()> {
 		let refund_address = self.address_at(ctx, ptr)?;
 
-		if self.ext.exists(&refund_address).map_err(|_| Error::SuicideAbort)? {
+		if self
+			.ext
+			.exists(&refund_address)
+			.map_err(|_| Error::SuicideAbort)?
+		{
 			trace!(target: "wasm", "Suicide: refund to existing address {}", refund_address);
 			self.adjusted_charge(|schedule| schedule.suicide_gas as u64)?;
 		} else {
@@ -718,7 +791,9 @@ impl<'a> Runtime<'a> {
 			self.adjusted_charge(|schedule| schedule.suicide_to_new_account_cost as u64)?;
 		}
 
-		self.ext.suicide(&refund_address).map_err(|_| Error::SuicideAbort)?;
+		self.ext
+			.suicide(&refund_address)
+			.map_err(|_| Error::SuicideAbort)?;
 
 		// We send trap to interpreter so it should abort further execution
 		Err(Error::Suicide.into())
@@ -734,7 +809,7 @@ impl<'a> Runtime<'a> {
 	}
 
 	///	Signature: `fn blocknumber() -> i64`
-	pub fn blocknumber(&mut self, _ctx: &mut Ctx,) -> Result<u64> {
+	pub fn blocknumber(&mut self, _ctx: &mut Ctx) -> Result<u64> {
 		Ok(self.ext.env_info().number)
 	}
 
@@ -781,33 +856,42 @@ impl<'a> Runtime<'a> {
 	}
 
 	///	Signature: `fn elog(topic_ptr: *const u8, topic_count: u32, data_ptr: *const u8, data_len: u32)`
-	pub fn elog(&mut self, ctx: &mut Ctx, topic_ptr: u32, topic_count: u32, data_ptr: u32, data_len: u32) -> Result<()>
-	{
-		
+	pub fn elog(
+		&mut self,
+		ctx: &mut Ctx,
+		topic_ptr: u32,
+		topic_count: u32,
+		data_ptr: u32,
+		data_len: u32,
+	) -> Result<()> {
 		if topic_count > 4 {
 			return Err(Error::Log.into());
 		}
 
-		self.adjusted_overflow_charge(|schedule|
-			{
-				let topics_gas = schedule.log_gas as u64 + schedule.log_topic_gas as u64 * topic_count as u64;
-				(schedule.log_data_gas as u64)
-					.checked_mul(schedule.log_data_gas as u64)
-					.and_then(|data_gas| data_gas.checked_add(topics_gas))
-			}
-		)?;
+		self.adjusted_overflow_charge(|schedule| {
+			let topics_gas =
+				schedule.log_gas as u64 + schedule.log_topic_gas as u64 * topic_count as u64;
+			(schedule.log_data_gas as u64)
+				.checked_mul(schedule.log_data_gas as u64)
+				.and_then(|data_gas| data_gas.checked_add(topics_gas))
+		})?;
 
 		let mut topics: Vec<H256> = Vec::with_capacity(topic_count as usize);
 		topics.resize(topic_count as usize, H256::zero());
 		for i in 0..topic_count {
-			let offset = i.checked_mul(32).ok_or(Error::MemoryAccessViolation)?
-				.checked_add(topic_ptr).ok_or(Error::MemoryAccessViolation)?;
+			let offset = i
+				.checked_mul(32)
+				.ok_or(Error::MemoryAccessViolation)?
+				.checked_add(topic_ptr)
+				.ok_or(Error::MemoryAccessViolation)?;
 
 			*topics.get_mut(i as usize)
 				.expect("topics is resized to `topic_count`, i is in 0..topic count iterator, get_mut uses i as an indexer, get_mut cannot fail; qed")
 				= H256::from(&self.memory_get(ctx, offset, 32)?[..]);
 		}
-		self.ext.log(topics, &self.memory_get(ctx, data_ptr, data_len as usize)?).map_err(|_| Error::Log)?;
+		self.ext
+			.log(topics, &self.memory_get(ctx, data_ptr, data_len as usize)?)
+			.map_err(|_| Error::Log)?;
 
 		Ok(())
 	}
@@ -815,7 +899,10 @@ impl<'a> Runtime<'a> {
 	/// Signature: `fn get_bytes(key: *const u8, result: *mut u8)`
 	pub fn get_bytes(&mut self, ctx: &mut Ctx, key_ptr: u32, result_ptr: u32) -> Result<()> {
 		let key = self.storage_bytes_key(self.h256_at(ctx, key_ptr)?);
-		let bytes = self.ext.storage_bytes_at(&key).map_err(|_| Error::StorageReadError)?;
+		let bytes = self
+			.ext
+			.storage_bytes_at(&key)
+			.map_err(|_| Error::StorageReadError)?;
 
 		// Charge sload gas, scaled by number of bytes.
 		let sload_gas = U256::from(self.schedule().sload_gas);
@@ -842,15 +929,27 @@ impl<'a> Runtime<'a> {
 	/// Signature: `fn get_bytes_len(key: *const u8) -> u64`
 	pub fn get_bytes_len(&mut self, ctx: &mut Ctx, key_ptr: u32) -> Result<i64> {
 		let key = self.storage_bytes_key(self.h256_at(ctx, key_ptr)?);
-		let len = self.ext.storage_bytes_len(&key).map_err(|_| Error::StorageReadError)?;
+		let len = self
+			.ext
+			.storage_bytes_len(&key)
+			.map_err(|_| Error::StorageReadError)?;
 		Ok(len as i64)
 	}
 
 	/// Signature: `fn set_bytes(key: *const u8, bytes: *mut u8, len: u64)`
-	pub fn set_bytes(&mut self, ctx: &mut Ctx, key_ptr: u32, bytes_ptr: u32, len: u64) -> Result<()> {
+	pub fn set_bytes(
+		&mut self,
+		ctx: &mut Ctx,
+		key_ptr: u32,
+		bytes_ptr: u32,
+		len: u64,
+	) -> Result<()> {
 		let key = self.storage_bytes_key(self.h256_at(ctx, key_ptr)?);
 
-		let former_bytes = self.ext.storage_bytes_at(&key).map_err(|_| Error::StorageUpdateError)?;
+		let former_bytes = self
+			.ext
+			.storage_bytes_at(&key)
+			.map_err(|_| Error::StorageUpdateError)?;
 
 		let bytes = self.memory_get(ctx, bytes_ptr, len as usize)?;
 		let is_bytes_empty = bytes.is_empty();
@@ -858,10 +957,14 @@ impl<'a> Runtime<'a> {
 		let reset = !(former_bytes.is_empty() && !is_bytes_empty);
 		self.storage_bytes_charge(len, reset)?;
 
-		self.ext.set_storage_bytes(key, bytes).map_err(|_| Error::StorageUpdateError)?;
+		self.ext
+			.set_storage_bytes(key, bytes)
+			.map_err(|_| Error::StorageUpdateError)?;
 
 		if !former_bytes.is_empty() && is_bytes_empty {
-			self.ext.inc_sstore_clears(former_bytes.len() as u64).map_err(|_| Error::StorageUpdateError)?;
+			self.ext
+				.inc_sstore_clears(former_bytes.len() as u64)
+				.map_err(|_| Error::StorageUpdateError)?;
 		}
 
 		Ok(())
@@ -875,10 +978,10 @@ impl<'a> Runtime<'a> {
 }
 
 pub mod imports {
-	
+
+	use super::{Memory, Result, Runtime};
 	use std::ffi::c_void;
 	use wasmer_runtime::{func, Ctx};
-  use super::{Memory, Result, Runtime};
 
 	macro_rules! wrapped_imports {
 		( $( $import_name:expr => $func:ident < [ $( $arg_name:ident : $arg_type:ident ),* ] -> [ $( $returns:ident ),* ] >, )* ) => {

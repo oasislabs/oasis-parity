@@ -20,15 +20,15 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use authcodes;
+use ethereum_types::H256;
 use http_common::HttpMetaExtractor;
 use ipc;
 use jsonrpc_core as core;
 use jsonrpc_pubsub::Session;
 use ws;
-use ethereum_types::H256;
 
-use v1::{Metadata, Origin};
 use v1::informant::RpcStats;
+use v1::{Metadata, Origin};
 
 /// Common HTTP & IPC metadata extractor.
 pub struct RpcExtractor;
@@ -36,9 +36,18 @@ pub struct RpcExtractor;
 impl HttpMetaExtractor for RpcExtractor {
 	type Metadata = Metadata;
 
-	fn read_metadata(&self, origin: Option<String>, user_agent: Option<String>, dapps_origin: Option<String>) -> Metadata {
+	fn read_metadata(
+		&self,
+		origin: Option<String>,
+		user_agent: Option<String>,
+		dapps_origin: Option<String>,
+	) -> Metadata {
 		Metadata {
-			origin: match (origin.as_ref().map(|s| s.as_str()), user_agent, dapps_origin) {
+			origin: match (
+				origin.as_ref().map(|s| s.as_str()),
+				user_agent,
+				dapps_origin,
+			) {
 				(Some("null"), _, Some(dapp)) => Origin::Dapps(dapp.into()),
 				(Some(dapp), _, _) => Origin::Dapps(dapp.to_owned().into()),
 				(None, Some(service), _) => Origin::Rpc(service.into()),
@@ -76,22 +85,35 @@ impl ws::MetaExtractor<Metadata> for WsExtractor {
 	fn extract(&self, req: &ws::RequestContext) -> Metadata {
 		let id = req.session_id as u64;
 
-		let dapp = req.origin.as_ref().map(|origin| (&**origin).into()).unwrap_or_default();
+		let dapp = req
+			.origin
+			.as_ref()
+			.map(|origin| (&**origin).into())
+			.unwrap_or_default();
 		let origin = match self.authcodes_path {
 			Some(ref path) => {
-				let authorization = req.protocols.get(0).and_then(|p| auth_token_hash(&path, p, true));
+				let authorization = req
+					.protocols
+					.get(0)
+					.and_then(|p| auth_token_hash(&path, p, true));
 				match authorization {
-					Some(id) => Origin::Signer { session: id.into(), dapp: dapp },
-					None => Origin::Ws { session: id.into(), dapp: dapp },
+					Some(id) => Origin::Signer {
+						session: id.into(),
+						dapp: dapp,
+					},
+					None => Origin::Ws {
+						session: id.into(),
+						dapp: dapp,
+					},
 				}
+			}
+			None => Origin::Ws {
+				session: id.into(),
+				dapp: dapp,
 			},
-			None => Origin::Ws { session: id.into(), dapp: dapp },
 		};
 		let session = Some(Arc::new(Session::new(req.sender())));
-		Metadata {
-			origin,
-			session,
-		}
+		Metadata { origin, session }
 	}
 }
 
@@ -122,7 +144,9 @@ impl ws::RequestMiddleware for WsExtractor {
 				if authorization.is_none() {
 					warn!(
 						"Blocked connection from {} using invalid token.",
-						req.header("origin").and_then(|e| ::std::str::from_utf8(e).ok()).unwrap_or("Unknown Origin")
+						req.header("origin")
+							.and_then(|e| ::std::str::from_utf8(e).ok())
+							.unwrap_or("Unknown Origin")
 					);
 					let mut response = Response::new(403, "Forbidden");
 					add_security_headers(&mut response);
@@ -141,8 +165,10 @@ fn add_security_headers(res: &mut ws::ws::Response) {
 	headers.push(("X-Frame-Options".into(), b"SAMEORIGIN".to_vec()));
 	headers.push(("X-XSS-Protection".into(), b"1; mode=block".to_vec()));
 	headers.push(("X-Content-Type-Options".into(), b"nosniff".to_vec()));
-	headers.push(("Content-Security-Policy".into(),
-		b"default-src 'self';form-action 'none';block-all-mixed-content;sandbox allow-scripts;".to_vec()
+	headers.push((
+		"Content-Security-Policy".into(),
+		b"default-src 'self';form-action 'none';block-all-mixed-content;sandbox allow-scripts;"
+			.to_vec(),
 	));
 }
 
@@ -173,7 +199,7 @@ fn auth_token_hash(codes_path: &Path, protocol: &str, save_file: bool) -> Option
 				} else {
 					None
 				}
-			})
+			});
 	}
 
 	None
@@ -187,9 +213,7 @@ pub struct WsStats {
 impl WsStats {
 	/// Creates new WS usage tracker.
 	pub fn new(stats: Arc<RpcStats>) -> Self {
-		WsStats {
-			stats: stats,
-		}
+		WsStats { stats: stats }
 	}
 }
 
@@ -218,14 +242,12 @@ impl<M: core::Middleware<Metadata>> WsDispatcher<M> {
 }
 
 impl<M: core::Middleware<Metadata>> core::Middleware<Metadata> for WsDispatcher<M> {
-	type Future = core::futures::future::Either<
-		M::Future,
-		core::FutureResponse,
-	>;
+	type Future = core::futures::future::Either<M::Future, core::FutureResponse>;
 
-	fn on_request<F, X>(&self, request: core::Request, meta: Metadata, process: F) -> Self::Future where
+	fn on_request<F, X>(&self, request: core::Request, meta: Metadata, process: F) -> Self::Future
+	where
 		F: FnOnce(core::Request, Metadata) -> X,
-		X: core::futures::Future<Item=Option<core::Response>, Error=()> + Send + 'static,
+		X: core::futures::Future<Item = Option<core::Response>, Error = ()> + Send + 'static,
 	{
 		use self::core::futures::future::Either::{A, B};
 
@@ -255,7 +277,11 @@ mod tests {
 		// when
 		let meta1 = extractor.read_metadata(None, None, None);
 		let meta2 = extractor.read_metadata(None, Some("http://parity.io".to_owned()), None);
-		let meta3 = extractor.read_metadata(None, Some("http://parity.io".to_owned()), Some("ignored".into()));
+		let meta3 = extractor.read_metadata(
+			None,
+			Some("http://parity.io".to_owned()),
+			Some("ignored".into()),
+		);
 
 		// then
 		assert_eq!(meta1.origin, Origin::Rpc("unknown".into()));

@@ -21,7 +21,7 @@ pub mod share_change_session;
 
 mod sessions_queue;
 
-use key_server_cluster::{SessionId, NodeId, SessionMeta, Error};
+use key_server_cluster::{Error, NodeId, SessionId, SessionMeta};
 
 /// Share change session metadata.
 #[derive(Debug, Clone)]
@@ -45,7 +45,9 @@ impl ShareChangeSessionMeta {
 			id: self.id,
 			master_node_id: self.master_node_id,
 			self_node_id: self.self_node_id,
-			threshold: all_nodes_set_len.checked_sub(1).ok_or(Error::ConsensusUnreachable)?,
+			threshold: all_nodes_set_len
+				.checked_sub(1)
+				.ok_or(Error::ConsensusUnreachable)?,
 			configured_nodes_count: self.configured_nodes_count,
 			connected_nodes_count: self.connected_nodes_count,
 		})

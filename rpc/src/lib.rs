@@ -63,10 +63,10 @@ extern crate vm;
 extern crate node_health;
 extern crate parity_reactor;
 //extern crate parity_updater as updater;
+extern crate keccak_hash as hash;
 extern crate parity_version as version;
 extern crate rlp;
 extern crate stats;
-extern crate keccak_hash as hash;
 //extern crate hardware_wallet;
 extern crate patricia_trie as trie;
 
@@ -106,22 +106,23 @@ pub mod v1;
 
 pub mod tests;
 
-pub use jsonrpc_pubsub::Session as PubSubSession;
-pub use ipc::{Server as IpcServer, MetaExtractor as IpcMetaExtractor, RequestContext as IpcRequestContext};
 pub use http::{
-	hyper,
-	RequestMiddleware, RequestMiddlewareAction,
-	AccessControlAllowOrigin, Host, DomainsValidation
+	hyper, AccessControlAllowOrigin, DomainsValidation, Host, RequestMiddleware,
+	RequestMiddlewareAction,
 };
+pub use ipc::{
+	MetaExtractor as IpcMetaExtractor, RequestContext as IpcRequestContext, Server as IpcServer,
+};
+pub use jsonrpc_pubsub::Session as PubSubSession;
 
-pub use v1::{NetworkSettings, Metadata, Origin, informant, dapps};
+pub use v1::{dapps, informant, Metadata, NetworkSettings, Origin};
 //pub use v1::block_import::is_major_importing;
-pub use v1::extractors::{RpcExtractor, WsExtractor, WsStats, WsDispatcher};
 pub use authcodes::{AuthCodes, TimeProvider};
 pub use http_common::HttpMetaExtractor;
+pub use v1::extractors::{RpcExtractor, WsDispatcher, WsExtractor, WsStats};
 
-use std::net::SocketAddr;
 use http::tokio_core;
+use std::net::SocketAddr;
 
 /// RPC HTTP Server instance
 pub type HttpServer = http::Server;
@@ -136,11 +137,12 @@ pub fn start_http<M, S, H, T, R>(
 	extractor: T,
 	middleware: Option<R>,
 	threads: usize,
-) -> ::std::io::Result<HttpServer> where
+) -> ::std::io::Result<HttpServer>
+where
 	M: jsonrpc_core::Metadata,
 	S: jsonrpc_core::Middleware<M>,
 	H: Into<jsonrpc_core::MetaIoHandler<M, S>>,
-	T: HttpMetaExtractor<Metadata=M>,
+	T: HttpMetaExtractor<Metadata = M>,
 	R: RequestMiddleware,
 {
 	let extractor = http_common::MetaExtractor::new(extractor);
@@ -163,7 +165,8 @@ pub fn start_ipc<M, S, H, T>(
 	handler: H,
 	remote: tokio_core::reactor::Remote,
 	extractor: T,
-) -> ::std::io::Result<ipc::Server> where
+) -> ::std::io::Result<ipc::Server>
+where
 	M: jsonrpc_core::Metadata,
 	S: jsonrpc_core::Middleware<M>,
 	H: Into<jsonrpc_core::MetaIoHandler<M, S>>,
@@ -185,7 +188,8 @@ pub fn start_ws<M, S, H, T, U, V>(
 	extractor: T,
 	middleware: V,
 	stats: U,
-) -> Result<ws::Server, ws::Error> where
+) -> Result<ws::Server, ws::Error>
+where
 	M: jsonrpc_core::Metadata,
 	S: jsonrpc_core::Middleware<M>,
 	H: Into<jsonrpc_core::MetaIoHandler<M, S>>,

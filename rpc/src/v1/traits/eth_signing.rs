@@ -18,7 +18,7 @@
 
 use jsonrpc_core::BoxFuture;
 
-use v1::types::{Bytes, H160, H256, H520, TransactionRequest, RichRawTransaction};
+use v1::types::{Bytes, RichRawTransaction, TransactionRequest, H160, H256, H520};
 
 build_rpc_trait! {
 	/// Signing methods implementation relying on unlocked accounts.

@@ -14,23 +14,23 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
 use ethcore::account_provider::AccountProvider;
-use ethcore::client::{TestBlockChainClient, Executed};
+use ethcore::client::{Executed, TestBlockChainClient};
 use ethcore_logger::RotatingLogger;
-use ethereum_types::{Address, U256, H256};
+use ethereum_types::{Address, H256, U256};
 use ethstore::ethkey::{Generator, Random};
 use miner::pool::local_transactions::Status as LocalTransactionStatus;
 use node_health::{self, NodeHealth};
 use parity_reactor;
+use std::sync::Arc;
 use sync::ManageNetwork;
 
-use jsonrpc_core::IoHandler;
-use v1::{Parity, ParityClient};
-use v1::metadata::Metadata;
-use v1::helpers::{SignerService, NetworkSettings};
-use v1::tests::helpers::{TestSyncProvider, Config, TestMinerService, TestUpdater};
 use super::manage_network::TestManageNetwork;
+use jsonrpc_core::IoHandler;
+use v1::helpers::{NetworkSettings, SignerService};
+use v1::metadata::Metadata;
+use v1::tests::helpers::{Config, TestMinerService, TestSyncProvider, TestUpdater};
+use v1::{Parity, ParityClient};
 use Host;
 
 pub type TestParityClient = ParityClient<TestBlockChainClient, TestMinerService, TestUpdater>;
@@ -113,8 +113,12 @@ impl Dependencies {
 #[derive(Debug)]
 struct FakeSync;
 impl node_health::SyncStatus for FakeSync {
-	fn is_major_importing(&self) -> bool { false }
-	fn peers(&self) -> (usize, usize) { (4, 25) }
+	fn is_major_importing(&self) -> bool {
+		false
+	}
+	fn peers(&self) -> (usize, usize) {
+		(4, 25)
+	}
 }
 
 #[test]
@@ -128,18 +132,30 @@ fn rpc_parity_accounts_info() {
 	let address = accounts[0];
 
 	deps.accounts.set_address_name(1.into(), "XX".into());
-	deps.accounts.set_account_name(address.clone(), "Test".into()).unwrap();
-	deps.accounts.set_account_meta(address.clone(), "{foo: 69}".into()).unwrap();
+	deps.accounts
+		.set_account_name(address.clone(), "Test".into())
+		.unwrap();
+	deps.accounts
+		.set_account_meta(address.clone(), "{foo: 69}".into())
+		.unwrap();
 
 	let request = r#"{"jsonrpc": "2.0", "method": "parity_accountsInfo", "params": [], "id": 1}"#;
-	let response = format!("{{\"jsonrpc\":\"2.0\",\"result\":{{\"0x{:x}\":{{\"name\":\"Test\"}}}},\"id\":1}}", address);
+	let response = format!(
+		"{{\"jsonrpc\":\"2.0\",\"result\":{{\"0x{:x}\":{{\"name\":\"Test\"}}}},\"id\":1}}",
+		address
+	);
 	assert_eq!(io.handle_request_sync(request), Some(response));
 
 	// Change the whitelist
 	let address = Address::from(1);
-	deps.accounts.set_new_dapps_addresses(Some(vec![address.clone()])).unwrap();
+	deps.accounts
+		.set_new_dapps_addresses(Some(vec![address.clone()]))
+		.unwrap();
 	let request = r#"{"jsonrpc": "2.0", "method": "parity_accountsInfo", "params": [], "id": 1}"#;
-	let response = format!("{{\"jsonrpc\":\"2.0\",\"result\":{{\"0x{:x}\":{{\"name\":\"XX\"}}}},\"id\":1}}", address);
+	let response = format!(
+		"{{\"jsonrpc\":\"2.0\",\"result\":{{\"0x{:x}\":{{\"name\":\"XX\"}}}},\"id\":1}}",
+		address
+	);
 	assert_eq!(io.handle_request_sync(request), Some(response));
 }
 
@@ -151,7 +167,10 @@ fn rpc_parity_default_account() {
 	// Check empty
 	let address = Address::default();
 	let request = r#"{"jsonrpc": "2.0", "method": "parity_defaultAccount", "params": [], "id": 1}"#;
-	let response = format!("{{\"jsonrpc\":\"2.0\",\"result\":\"0x{:x}\",\"id\":1}}", address);
+	let response = format!(
+		"{{\"jsonrpc\":\"2.0\",\"result\":\"0x{:x}\",\"id\":1}}",
+		address
+	);
 	assert_eq!(io.handle_request_sync(request), Some(response));
 
 	// With account
@@ -161,7 +180,10 @@ fn rpc_parity_default_account() {
 	let address = accounts[0];
 
 	let request = r#"{"jsonrpc": "2.0", "method": "parity_defaultAccount", "params": [], "id": 1}"#;
-	let response = format!("{{\"jsonrpc\":\"2.0\",\"result\":\"0x{:x}\",\"id\":1}}", address);
+	let response = format!(
+		"{{\"jsonrpc\":\"2.0\",\"result\":\"0x{:x}\",\"id\":1}}",
+		address
+	);
 	assert_eq!(io.handle_request_sync(request), Some(response));
 }
 
@@ -170,19 +192,22 @@ fn rpc_parity_consensus_capability() {
 	let deps = Dependencies::new();
 	let io = deps.default_client();
 
-	let request = r#"{"jsonrpc": "2.0", "method": "parity_consensusCapability", "params": [], "id": 1}"#;
+	let request =
+		r#"{"jsonrpc": "2.0", "method": "parity_consensusCapability", "params": [], "id": 1}"#;
 	let response = r#"{"jsonrpc":"2.0","result":{"capableUntil":15100},"id":1}"#;
 	assert_eq!(io.handle_request_sync(request), Some(response.to_owned()));
 
 	deps.updater.set_current_block(15101);
 
-	let request = r#"{"jsonrpc": "2.0", "method": "parity_consensusCapability", "params": [], "id": 1}"#;
+	let request =
+		r#"{"jsonrpc": "2.0", "method": "parity_consensusCapability", "params": [], "id": 1}"#;
 	let response = r#"{"jsonrpc":"2.0","result":{"incapableSince":15100},"id":1}"#;
 	assert_eq!(io.handle_request_sync(request), Some(response.to_owned()));
 
 	deps.updater.set_updated(true);
 
-	let request = r#"{"jsonrpc": "2.0", "method": "parity_consensusCapability", "params": [], "id": 1}"#;
+	let request =
+		r#"{"jsonrpc": "2.0", "method": "parity_consensusCapability", "params": [], "id": 1}"#;
 	let response = r#"{"jsonrpc":"2.0","result":"capable","id":1}"#;
 	assert_eq!(io.handle_request_sync(request), Some(response.to_owned()));
 }
@@ -231,14 +256,18 @@ fn rpc_parity_chain_id() {
 
 #[test]
 fn rpc_parity_default_extra_data() {
-	use version::version_data;
 	use bytes::ToPretty;
+	use version::version_data;
 
 	let deps = Dependencies::new();
 	let io = deps.default_client();
 
-	let request = r#"{"jsonrpc": "2.0", "method": "parity_defaultExtraData", "params": [], "id": 1}"#;
-	let response = format!(r#"{{"jsonrpc":"2.0","result":"0x{}","id":1}}"#, version_data().to_hex());
+	let request =
+		r#"{"jsonrpc": "2.0", "method": "parity_defaultExtraData", "params": [], "id": 1}"#;
+	let response = format!(
+		r#"{{"jsonrpc":"2.0","result":"0x{}","id":1}}"#,
+		version_data().to_hex()
+	);
 
 	assert_eq!(io.handle_request_sync(request), Some(response));
 }
@@ -295,7 +324,8 @@ fn rpc_parity_transactions_limit() {
 	let deps = Dependencies::new();
 	let io = deps.default_client();
 
-	let request = r#"{"jsonrpc": "2.0", "method": "parity_transactionsLimit", "params":[], "id": 1}"#;
+	let request =
+		r#"{"jsonrpc": "2.0", "method": "parity_transactionsLimit", "params":[], "id": 1}"#;
 	let response = r#"{"jsonrpc":"2.0","result":1024,"id":1}"#;
 
 	assert_eq!(io.handle_request_sync(request), Some(response.to_owned()));
@@ -351,7 +381,8 @@ fn rpc_parity_rpc_settings() {
 	let io = deps.default_client();
 
 	let request = r#"{"jsonrpc": "2.0", "method": "parity_rpcSettings", "params":[], "id": 1}"#;
-	let response = r#"{"jsonrpc":"2.0","result":{"enabled":true,"interface":"all","port":8545},"id":1}"#;
+	let response =
+		r#"{"jsonrpc":"2.0","result":{"enabled":true,"interface":"all","port":8545},"id":1}"#;
 
 	assert_eq!(io.handle_request_sync(request), Some(response.to_owned()));
 }
@@ -372,7 +403,8 @@ fn rpc_parity_unsigned_transactions_count() {
 	let deps = Dependencies::new();
 	let io = deps.with_signer(SignerService::new_test(true));
 
-	let request = r#"{"jsonrpc": "2.0", "method": "parity_unsignedTransactionsCount", "params":[], "id": 1}"#;
+	let request =
+		r#"{"jsonrpc": "2.0", "method": "parity_unsignedTransactionsCount", "params":[], "id": 1}"#;
 	let response = r#"{"jsonrpc":"2.0","result":0,"id":1}"#;
 
 	assert_eq!(io.handle_request_sync(request), Some(response.to_owned()));
@@ -383,7 +415,8 @@ fn rpc_parity_unsigned_transactions_count_when_signer_disabled() {
 	let deps = Dependencies::new();
 	let io = deps.default_client();
 
-	let request = r#"{"jsonrpc": "2.0", "method": "parity_unsignedTransactionsCount", "params":[], "id": 1}"#;
+	let request =
+		r#"{"jsonrpc": "2.0", "method": "parity_unsignedTransactionsCount", "params":[], "id": 1}"#;
 	let response = r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"Trusted Signer is disabled. This API is not available."},"id":1}"#;
 
 	assert_eq!(io.handle_request_sync(request), Some(response.to_owned()));
@@ -394,7 +427,8 @@ fn rpc_parity_pending_transactions() {
 	let deps = Dependencies::new();
 	let io = deps.default_client();
 
-	let request = r#"{"jsonrpc": "2.0", "method": "parity_pendingTransactions", "params":[], "id": 1}"#;
+	let request =
+		r#"{"jsonrpc": "2.0", "method": "parity_pendingTransactions", "params":[], "id": 1}"#;
 	let response = r#"{"jsonrpc":"2.0","result":[],"id":1}"#;
 
 	assert_eq!(io.handle_request_sync(request), Some(response.to_owned()));
@@ -406,8 +440,13 @@ fn rpc_parity_encrypt() {
 	let io = deps.default_client();
 	let key = format!("{:x}", Random.generate().unwrap().public());
 
-	let request = r#"{"jsonrpc": "2.0", "method": "parity_encryptMessage", "params":["0x"#.to_owned() + &key + r#"", "0x01"], "id": 1}"#;
-	assert!(io.handle_request_sync(&request).unwrap().contains("result"), "Should return success.");
+	let request = r#"{"jsonrpc": "2.0", "method": "parity_encryptMessage", "params":["0x"#
+		.to_owned()
+		+ &key + r#"", "0x01"], "id": 1}"#;
+	assert!(
+		io.handle_request_sync(&request).unwrap().contains("result"),
+		"Should return success."
+	);
 }
 
 #[test]
@@ -460,14 +499,23 @@ fn rpc_parity_next_nonce() {
 	let request = r#"{
 		"jsonrpc": "2.0",
 		"method": "parity_nextNonce",
-		"params": [""#.to_owned() + &format!("0x{:x}", address) + r#""],
+		"params": [""#
+		.to_owned()
+		+ &format!("0x{:x}", address)
+		+ r#""],
 		"id": 1
 	}"#;
 	let response1 = r#"{"jsonrpc":"2.0","result":"0x0","id":1}"#;
 	let response2 = r#"{"jsonrpc":"2.0","result":"0x3","id":1}"#;
 
-	assert_eq!(io1.handle_request_sync(&request), Some(response1.to_owned()));
-	assert_eq!(io2.handle_request_sync(&request), Some(response2.to_owned()));
+	assert_eq!(
+		io1.handle_request_sync(&request),
+		Some(response1.to_owned())
+	);
+	assert_eq!(
+		io2.handle_request_sync(&request),
+		Some(response2.to_owned())
+	);
 }
 
 #[test]
@@ -475,7 +523,8 @@ fn rpc_parity_transactions_stats() {
 	let deps = Dependencies::new();
 	let io = deps.default_client();
 
-	let request = r#"{"jsonrpc": "2.0", "method": "parity_pendingTransactionsStats", "params":[], "id": 1}"#;
+	let request =
+		r#"{"jsonrpc": "2.0", "method": "parity_pendingTransactionsStats", "params":[], "id": 1}"#;
 	let response = r#"{"jsonrpc":"2.0","result":{"0x0000000000000000000000000000000000000000000000000000000000000001":{"firstSeen":10,"propagatedTo":{"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080":16}},"0x0000000000000000000000000000000000000000000000000000000000000005":{"firstSeen":16,"propagatedTo":{"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010":1}}},"id":1}"#;
 
 	assert_eq!(io.handle_request_sync(request), Some(response.to_owned()));
@@ -492,12 +541,20 @@ fn rpc_parity_local_transactions() {
 		action: ::transaction::Action::Create,
 		data: vec![1, 2, 3],
 		nonce: 0.into(),
-	}.fake_sign(3.into());
+	}
+	.fake_sign(3.into());
 	let tx = Arc::new(::miner::pool::VerifiedTransaction::from_pending_block_transaction(tx));
-	deps.miner.local_transactions.lock().insert(10.into(), LocalTransactionStatus::Pending(tx.clone()));
-	deps.miner.local_transactions.lock().insert(15.into(), LocalTransactionStatus::Pending(tx.clone()));
+	deps.miner
+		.local_transactions
+		.lock()
+		.insert(10.into(), LocalTransactionStatus::Pending(tx.clone()));
+	deps.miner
+		.local_transactions
+		.lock()
+		.insert(15.into(), LocalTransactionStatus::Pending(tx.clone()));
 
-	let request = r#"{"jsonrpc": "2.0", "method": "parity_localTransactions", "params":[], "id": 1}"#;
+	let request =
+		r#"{"jsonrpc": "2.0", "method": "parity_localTransactions", "params":[], "id": 1}"#;
 	let response = r#"{"jsonrpc":"2.0","result":{"0x000000000000000000000000000000000000000000000000000000000000000a":{"status":"pending"},"0x000000000000000000000000000000000000000000000000000000000000000f":{"status":"pending"}},"id":1}"#;
 
 	assert_eq!(io.handle_request_sync(request), Some(response.to_owned()));
@@ -523,7 +580,8 @@ fn rpc_parity_node_kind() {
 	let io = deps.default_client();
 
 	let request = r#"{"jsonrpc": "2.0", "method": "parity_nodeKind", "params":[], "id": 1}"#;
-	let response = r#"{"jsonrpc":"2.0","result":{"availability":"personal","capability":"full"},"id":1}"#;
+	let response =
+		r#"{"jsonrpc":"2.0","result":{"availability":"personal","capability":"full"},"id":1}"#;
 
 	assert_eq!(io.handle_request_sync(request), Some(response.to_owned()));
 }
@@ -534,7 +592,8 @@ fn rpc_parity_cid() {
 	let io = deps.default_client();
 
 	let request = r#"{"jsonrpc": "2.0", "method": "parity_cidV0", "params":["0x414243"], "id": 1}"#;
-	let response = r#"{"jsonrpc":"2.0","result":"QmSF59MAENc8ZhM4aM1thuAE8w5gDmyfzkAvNoyPea7aDz","id":1}"#;
+	let response =
+		r#"{"jsonrpc":"2.0","result":"QmSF59MAENc8ZhM4aM1thuAE8w5gDmyfzkAvNoyPea7aDz","id":1}"#;
 
 	assert_eq!(io.handle_request_sync(request), Some(response.to_owned()));
 }

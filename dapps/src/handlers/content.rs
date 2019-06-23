@@ -16,8 +16,8 @@
 
 //! Simple Content Handler
 
-use hyper::{self, mime, header};
 use hyper::StatusCode;
+use hyper::{self, header, mime};
 
 use parity_version::version;
 
@@ -39,26 +39,20 @@ impl ContentHandler {
 		Self::new(code, content, mime::TEXT_HTML)
 	}
 
-	pub fn error(
-		code: StatusCode,
-		title: &str,
-		message: &str,
-		details: Option<&str>,
-	) -> Self {
-		Self::html(code, format!(
-			include_str!("../error_tpl.html"),
-			title=title,
-			message=message,
-			details=details.unwrap_or_else(|| ""),
-			version=version(),
-		))
+	pub fn error(code: StatusCode, title: &str, message: &str, details: Option<&str>) -> Self {
+		Self::html(
+			code,
+			format!(
+				include_str!("../error_tpl.html"),
+				title = title,
+				message = message,
+				details = details.unwrap_or_else(|| ""),
+				version = version(),
+			),
+		)
 	}
 
-	pub fn new(
-		code: StatusCode,
-		content: String,
-		mimetype: mime::Mime,
-	) -> Self {
+	pub fn new(code: StatusCode, content: String, mimetype: mime::Mime) -> Self {
 		ContentHandler {
 			code,
 			content,

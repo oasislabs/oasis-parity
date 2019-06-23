@@ -18,22 +18,22 @@
 
 extern crate ethash;
 extern crate fetch;
+extern crate hyper;
 extern crate parity_reactor;
 extern crate url;
-extern crate hyper;
 
-use self::fetch::{Fetch, Request, Client as FetchClient, Method};
-use self::parity_reactor::Remote;
 use self::ethash::SeedHashCompute;
-use self::url::Url;
+use self::fetch::{Client as FetchClient, Fetch, Method, Request};
 use self::hyper::header::ContentType;
+use self::parity_reactor::Remote;
+use self::url::Url;
 
 use ethereum_types::{H256, U256};
-use parking_lot::Mutex;
 use futures::Future;
+use parking_lot::Mutex;
 
 /// Trait for notifying about new mining work
-pub trait NotifyWork : Send + Sync {
+pub trait NotifyWork: Send + Sync {
 	/// Fired when new mining job available
 	fn notify(&self, pow_hash: H256, difficulty: U256, number: u64);
 }
@@ -49,15 +49,16 @@ pub struct WorkPoster {
 impl WorkPoster {
 	/// Create new `WorkPoster`.
 	pub fn new(urls: &[String], fetch: FetchClient, remote: Remote) -> Self {
-		let urls = urls.into_iter().filter_map(|u| {
-			match Url::parse(u) {
+		let urls = urls
+			.into_iter()
+			.filter_map(|u| match Url::parse(u) {
 				Ok(url) => Some(url),
 				Err(e) => {
 					warn!("Error parsing URL {} : {}", u, e);
 					None
 				}
-			}
-		}).collect();
+			})
+			.collect();
 		WorkPoster {
 			client: fetch,
 			remote: remote,
@@ -89,13 +90,19 @@ impl NotifyWork for WorkPoster {
 
 		for u in &self.urls {
 			let u = u.clone();
-			self.remote.spawn(self.client.fetch(
-				Request::new(u.clone(), Method::Post)
-					.with_header(ContentType::json())
-					.with_body(body.clone()), Default::default()
-			).map_err(move |e| {
-				warn!("Error sending HTTP notification to {} : {}, retrying", u, e);
-			}).map(|_| ()));
+			self.remote.spawn(
+				self.client
+					.fetch(
+						Request::new(u.clone(), Method::Post)
+							.with_header(ContentType::json())
+							.with_body(body.clone()),
+						Default::default(),
+					)
+					.map_err(move |e| {
+						warn!("Error sending HTTP notification to {} : {}, retrying", u, e);
+					})
+					.map(|_| ()),
+			);
 		}
 	}
 }

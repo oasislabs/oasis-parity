@@ -22,24 +22,28 @@ extern crate ethereum_types;
 extern crate journaldb;
 
 pub mod helpers;
-use std::{env, fs};
-use std::path::{PathBuf, Path};
-use ethereum_types::{H64, H256};
-use journaldb::Algorithm;
+use app_dirs::{get_app_root, AppDataType, AppInfo};
+use ethereum_types::{H256, H64};
 use helpers::{replace_home, replace_home_and_local};
-use app_dirs::{AppInfo, get_app_root, AppDataType};
+use journaldb::Algorithm;
+use std::path::{Path, PathBuf};
+use std::{env, fs};
 // re-export platform-specific functions
 use platform::*;
 
 /// Platform-specific chains path - Windows only
-#[cfg(target_os = "windows")] pub const CHAINS_PATH: &'static str = "$LOCAL/chains";
+#[cfg(target_os = "windows")]
+pub const CHAINS_PATH: &'static str = "$LOCAL/chains";
 /// Platform-specific chains path
-#[cfg(not(target_os = "windows"))] pub const CHAINS_PATH: &'static str = "$BASE/chains";
+#[cfg(not(target_os = "windows"))]
+pub const CHAINS_PATH: &'static str = "$BASE/chains";
 
 /// Platform-specific cache path - Windows only
-#[cfg(target_os = "windows")] pub const CACHE_PATH: &'static str = "$LOCAL/cache";
+#[cfg(target_os = "windows")]
+pub const CACHE_PATH: &'static str = "$LOCAL/cache";
 /// Platform-specific cache path
-#[cfg(not(target_os = "windows"))] pub const CACHE_PATH: &'static str = "$BASE/cache";
+#[cfg(not(target_os = "windows"))]
+pub const CACHE_PATH: &'static str = "$BASE/cache";
 
 // this const is irrelevent cause we do have migrations now,
 // but we still use it for backwards compatibility
@@ -82,7 +86,12 @@ impl Default for Directories {
 
 impl Directories {
 	/// Create local directories
-	pub fn create_dirs(&self, dapps_enabled: bool, signer_enabled: bool, secretstore_enabled: bool) -> Result<(), String> {
+	pub fn create_dirs(
+		&self,
+		dapps_enabled: bool,
+		signer_enabled: bool,
+		secretstore_enabled: bool,
+	) -> Result<(), String> {
 		fs::create_dir_all(&self.base).map_err(|e| e.to_string())?;
 		fs::create_dir_all(&self.db).map_err(|e| e.to_string())?;
 		fs::create_dir_all(&self.cache).map_err(|e| e.to_string())?;
@@ -100,7 +109,12 @@ impl Directories {
 	}
 
 	/// Database paths.
-	pub fn database(&self, genesis_hash: H256, fork_name: Option<String>, spec_name: String) -> DatabaseDirectories {
+	pub fn database(
+		&self,
+		genesis_hash: H256,
+		fork_name: Option<String>,
+		spec_name: String,
+	) -> DatabaseDirectories {
 		DatabaseDirectories {
 			path: self.db.clone(),
 			legacy_path: self.base.clone(),
@@ -156,7 +170,14 @@ impl DatabaseDirectories {
 	/// Base DB directory for the given fork.
 	// TODO: remove in 1.7
 	pub fn legacy_fork_path(&self) -> PathBuf {
-		Path::new(&self.legacy_path).join(format!("{:x}{}", H64::from(self.genesis_hash), self.fork_name.as_ref().map(|f| format!("-{}", f)).unwrap_or_default()))
+		Path::new(&self.legacy_path).join(format!(
+			"{:x}{}",
+			H64::from(self.genesis_hash),
+			self.fork_name
+				.as_ref()
+				.map(|f| format!("-{}", f))
+				.unwrap_or_default()
+		))
 	}
 
 	/// Spec root directory for the given fork.
@@ -166,12 +187,16 @@ impl DatabaseDirectories {
 
 	/// Generic client path
 	pub fn client_path(&self, pruning: Algorithm) -> PathBuf {
-		self.db_root_path().join(pruning.as_internal_name_str()).join("db")
+		self.db_root_path()
+			.join(pruning.as_internal_name_str())
+			.join("db")
 	}
 
 	/// DB root path, named after genesis hash
 	pub fn db_root_path(&self) -> PathBuf {
-		self.spec_root_path().join("db").join(format!("{:x}", H64::from(self.genesis_hash)))
+		self.spec_root_path()
+			.join("db")
+			.join(format!("{:x}", H64::from(self.genesis_hash)))
 	}
 
 	/// DB path
@@ -182,7 +207,11 @@ impl DatabaseDirectories {
 	/// Get the root path for database
 	// TODO: remove in 1.7
 	pub fn legacy_version_path(&self, pruning: Algorithm) -> PathBuf {
-		self.legacy_fork_path().join(format!("v{}-sec-{}", LEGACY_CLIENT_DB_VER_STR, pruning.as_internal_name_str()))
+		self.legacy_fork_path().join(format!(
+			"v{}-sec-{}",
+			LEGACY_CLIENT_DB_VER_STR,
+			pruning.as_internal_name_str()
+		))
 	}
 
 	/// Get user defaults path, legacy way
@@ -221,20 +250,34 @@ impl DatabaseDirectories {
 
 /// Default data path
 pub fn default_data_path() -> String {
-	let app_info = AppInfo { name: PRODUCT, author: AUTHOR };
-	get_app_root(AppDataType::UserData, &app_info).map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|_| "$HOME/.parity".to_owned())
+	let app_info = AppInfo {
+		name: PRODUCT,
+		author: AUTHOR,
+	};
+	get_app_root(AppDataType::UserData, &app_info)
+		.map(|p| p.to_string_lossy().into_owned())
+		.unwrap_or_else(|_| "$HOME/.parity".to_owned())
 }
 
 /// Default local path
 pub fn default_local_path() -> String {
-	let app_info = AppInfo { name: PRODUCT, author: AUTHOR };
-	get_app_root(AppDataType::UserCache, &app_info).map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|_| "$HOME/.parity".to_owned())
+	let app_info = AppInfo {
+		name: PRODUCT,
+		author: AUTHOR,
+	};
+	get_app_root(AppDataType::UserCache, &app_info)
+		.map(|p| p.to_string_lossy().into_owned())
+		.unwrap_or_else(|_| "$HOME/.parity".to_owned())
 }
 
 /// Default hypervisor path
 pub fn default_hypervisor_path() -> PathBuf {
-	let app_info = AppInfo { name: PRODUCT_HYPERVISOR, author: AUTHOR };
-	get_app_root(AppDataType::UserData, &app_info).unwrap_or_else(|_| "$HOME/.parity-hypervisor".into())
+	let app_info = AppInfo {
+		name: PRODUCT_HYPERVISOR,
+		author: AUTHOR,
+	};
+	get_app_root(AppDataType::UserData, &app_info)
+		.unwrap_or_else(|_| "$HOME/.parity-hypervisor".into())
 }
 
 /// Get home directory.
@@ -343,13 +386,23 @@ mod tests {
 		let local_dir = super::default_local_path();
 		let expected = Directories {
 			base: replace_home(&data_dir, "$BASE"),
-			db: replace_home_and_local(&data_dir, &local_dir,
-				if cfg!(target_os = "windows") { "$LOCAL/chains" }
-				else { "$BASE/chains" }
+			db: replace_home_and_local(
+				&data_dir,
+				&local_dir,
+				if cfg!(target_os = "windows") {
+					"$LOCAL/chains"
+				} else {
+					"$BASE/chains"
+				},
 			),
-			cache: replace_home_and_local(&data_dir, &local_dir,
-				if cfg!(target_os = "windows") { "$LOCAL/cache" }
-				else { "$BASE/cache" }
+			cache: replace_home_and_local(
+				&data_dir,
+				&local_dir,
+				if cfg!(target_os = "windows") {
+					"$LOCAL/cache"
+				} else {
+					"$BASE/cache"
+				},
 			),
 			keys: replace_home(&data_dir, "$BASE/keys"),
 			signer: replace_home(&data_dir, "$BASE/signer"),

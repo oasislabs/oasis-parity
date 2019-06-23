@@ -16,10 +16,13 @@
 
 //! Parity Signer-related rpc interface.
 use jsonrpc_core::{BoxFuture, Result};
-use jsonrpc_pubsub::SubscriptionId;
 use jsonrpc_macros::pubsub::Subscriber;
+use jsonrpc_pubsub::SubscriptionId;
 
-use v1::types::{U256, Bytes, TransactionModification, ConfirmationRequest, ConfirmationResponse, ConfirmationResponseWithToken};
+use v1::types::{
+	Bytes, ConfirmationRequest, ConfirmationResponse, ConfirmationResponseWithToken,
+	TransactionModification, U256,
+};
 
 build_rpc_trait! {
 	/// Signer extension for confirmations rpc interface.

@@ -19,41 +19,41 @@
 //! Unconfirmed sub-states are managed with `checkpoint`s which may be canonicalized
 //! or rolled back.
 
+use hash::{keccak, KECCAK_EMPTY, KECCAK_NULL_RLP};
 use std::cell::{RefCell, RefMut};
-use std::rc::Rc;
 use std::collections::hash_map::Entry;
-use std::collections::{HashMap, BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt;
+use std::rc::Rc;
 use std::sync::Arc;
-use hash::{KECCAK_NULL_RLP, KECCAK_EMPTY, keccak};
 
-use receipt::{Receipt, TransactionOutcome};
-use machine::EthereumMachine as Machine;
-use vm::{ConfidentialCtx, OasisContract, EnvInfo};
 use error::{Error, ErrorKind};
+use executed::{Executed, ExecutionError};
 use executive::{Executive, TransactOptions};
 use factory::Factories;
-use trace::{self, FlatTrace, VMTrace};
-use trace_ext::ExtTracer;
-use pod_account::*;
-use pod_state::{self, PodState};
-use types::basic_account::BasicAccount;
-use executed::{Executed, ExecutionError};
-use types::state_diff::StateDiff;
-use transaction::{self, SignedTransaction};
-use state_db::StateDB;
 use factory::VmFactory;
 use journaldb::overlaydb::OverlayDB;
+use machine::EthereumMachine as Machine;
+use pod_account::*;
+use pod_state::{self, PodState};
+use receipt::{Receipt, TransactionOutcome};
+use state_db::StateDB;
+use trace::{self, FlatTrace, VMTrace};
+use trace_ext::ExtTracer;
+use transaction::{self, SignedTransaction};
+use types::basic_account::BasicAccount;
+use types::state_diff::StateDiff;
+use vm::{ConfidentialCtx, EnvInfo, OasisContract};
 
-use ethereum_types::{H256, U256, Address};
-use hashdb::{HashDB, AsHashDB};
-use kvdb::DBValue;
 use bytes::Bytes;
+use ethereum_types::{Address, H256, U256};
 use failure::Fallible;
+use hashdb::{AsHashDB, HashDB};
+use kvdb::DBValue;
 
 use trie;
-use trie::{Trie, TrieError, TrieDB};
 use trie::recorder::Recorder;
+use trie::{Trie, TrieDB, TrieError};
 
 use crate::mkvs::{PrefixedMKVS, ReadOnlyPrefixedMKVS, MKVS};
 
@@ -75,7 +75,7 @@ pub struct ApplyOutcome<T, V> {
 	/// The trace for the applied transaction, empty if tracing was not produced.
 	pub trace: Vec<T>,
 	/// The VM trace for the applied transaction, None if tracing was not produced.
-	pub vm_trace: Option<V>
+	pub vm_trace: Option<V>,
 }
 
 /// Result type for the execution ("application") of a transaction.
@@ -188,7 +188,7 @@ impl AccountEntry {
 				if let Some(ref mut ours) = self.account {
 					ours.overwrite_with(acc);
 				}
-			},
+			}
 			None => self.account = None,
 		}
 	}
@@ -367,17 +367,29 @@ pub trait StateInfo {
 	/// Get storage expiration timestamp for account 'a'.
 	fn storage_expiry(&self, a: &Address) -> trie::Result<u64>;
 
-    /// Mutate storage of account `address` so that it is `value` for `key`.
+	/// Mutate storage of account `address` so that it is `value` for `key`.
 	fn storage_bytes_at(&self, address: &Address, key: &H256) -> trie::Result<Vec<u8>>;
 }
 
 impl<B: Backend> StateInfo for State<B> {
-	fn nonce(&self, a: &Address) -> trie::Result<U256> { State::nonce(self, a) }
-	fn balance(&self, a: &Address) -> trie::Result<U256> { State::balance(self, a) }
-	fn storage_at(&self, address: &Address, key: &H256) -> trie::Result<H256> { State::storage_at(self, address, key) }
-	fn code(&self, address: &Address) -> trie::Result<Option<Arc<Bytes>>> { State::code(self, address) }
-	fn storage_expiry(&self, address: &Address) -> trie::Result<u64> { State::storage_expiry(self, address) }
-	fn storage_bytes_at(&self, address: &Address, key: &H256) -> trie::Result<Vec<u8>> { State::storage_bytes_at(self, address, key) }
+	fn nonce(&self, a: &Address) -> trie::Result<U256> {
+		State::nonce(self, a)
+	}
+	fn balance(&self, a: &Address) -> trie::Result<U256> {
+		State::balance(self, a)
+	}
+	fn storage_at(&self, address: &Address, key: &H256) -> trie::Result<H256> {
+		State::storage_at(self, address, key)
+	}
+	fn code(&self, address: &Address) -> trie::Result<Option<Arc<Bytes>>> {
+		State::code(self, address)
+	}
+	fn storage_expiry(&self, address: &Address) -> trie::Result<u64> {
+		State::storage_expiry(self, address)
+	}
+	fn storage_bytes_at(&self, address: &Address, key: &H256) -> trie::Result<Vec<u8>> {
+		State::storage_bytes_at(self, address, key)
+	}
 }
 
 const SEC_TRIE_DB_UNWRAP_STR: &'static str = "A state can only be created with valid root. Creating a SecTrieDB with a valid root will not fail. \
@@ -386,7 +398,12 @@ const SEC_TRIE_DB_UNWRAP_STR: &'static str = "A state can only be created with v
 impl<B: Backend> State<B> {
 	/// Creates new state with empty state root
 	/// Used for tests.
-	pub fn new(mkvs: Box<MKVS>, mut db: B, account_start_nonce: U256, factories: Factories) -> State<B> {
+	pub fn new(
+		mkvs: Box<MKVS>,
+		mut db: B,
+		account_start_nonce: U256,
+		factories: Factories,
+	) -> State<B> {
 		State {
 			mkvs: mkvs,
 			db: db,
@@ -399,7 +416,13 @@ impl<B: Backend> State<B> {
 	}
 
 	/// Creates new state with existing state root
-	pub fn from_existing(mkvs: Box<MKVS>, db: B, account_start_nonce: U256, factories: Factories, confidential_ctx: Option<Box<ConfidentialCtx>>) -> Result<State<B>, TrieError> {
+	pub fn from_existing(
+		mkvs: Box<MKVS>,
+		db: B,
+		account_start_nonce: U256,
+		factories: Factories,
+		confidential_ctx: Option<Box<ConfidentialCtx>>,
+	) -> Result<State<B>, TrieError> {
 		let state = State {
 			mkvs: mkvs,
 			db: db,
@@ -451,12 +474,12 @@ impl<B: Backend> State<B> {
 								// Merge checkpointed changes back into the main account
 								// storage preserving the cache.
 								e.get_mut().overwrite_with(v);
-							},
+							}
 							Entry::Vacant(e) => {
 								e.insert(v);
 							}
 						}
-					},
+					}
 					None => {
 						if let Entry::Occupied(e) = self.cache.get_mut().entry(k) {
 							if e.get().is_dirty() {
@@ -486,8 +509,12 @@ impl<B: Backend> State<B> {
 
 	fn note_cache(&self, address: &Address) {
 		if let Some(ref mut checkpoint) = self.checkpoints.borrow_mut().last_mut() {
-			checkpoint.entry(*address)
-				.or_insert_with(|| self.cache.borrow().get(address).map(AccountEntry::clone_dirty));
+			checkpoint.entry(*address).or_insert_with(|| {
+				self.cache
+					.borrow()
+					.get(address)
+					.map(AccountEntry::clone_dirty)
+			});
 		}
 	}
 
@@ -498,7 +525,10 @@ impl<B: Backend> State<B> {
 	}
 
 	/// Destroy the current object and return single account data.
-	pub fn into_account(self, account: &Address) -> trie::Result<(Option<Arc<Bytes>>, HashMap<H256, Vec<u8>>)> {
+	pub fn into_account(
+		self,
+		account: &Address,
+	) -> trie::Result<(Option<Arc<Bytes>>, HashMap<H256, Vec<u8>>)> {
 		// TODO: deconstruct without cloning.
 		let account = self.require(account, true)?;
 		Ok((account.code().clone(), account.storage_changes().clone()))
@@ -506,8 +536,21 @@ impl<B: Backend> State<B> {
 
 	/// Create a new contract at address `contract`. If there is already an account at the address
 	/// it will have its code reset, ready for `init_code()`.
-	pub fn new_contract(&mut self, contract: &Address, balance: U256, nonce_offset: U256, storage_expiry: u64) {
-		self.insert_cache(contract, AccountEntry::new_dirty(Some(Account::new_contract(balance, self.account_start_nonce + nonce_offset, storage_expiry))));
+	pub fn new_contract(
+		&mut self,
+		contract: &Address,
+		balance: U256,
+		nonce_offset: U256,
+		storage_expiry: u64,
+	) {
+		self.insert_cache(
+			contract,
+			AccountEntry::new_dirty(Some(Account::new_contract(
+				balance,
+				self.account_start_nonce + nonce_offset,
+				storage_expiry,
+			))),
+		);
 	}
 
 	/// Remove an existing account.
@@ -524,37 +567,49 @@ impl<B: Backend> State<B> {
 
 	/// Determine whether an account exists and if not empty.
 	pub fn exists_and_not_null(&self, a: &Address) -> trie::Result<bool> {
-		self.ensure_cached(a, RequireCache::None, false, |a| a.map_or(false, |a| !a.is_null()))
+		self.ensure_cached(a, RequireCache::None, false, |a| {
+			a.map_or(false, |a| !a.is_null())
+		})
 	}
 
 	/// Determine whether an account exists and has code or non-zero nonce.
 	pub fn exists_and_has_code_or_nonce(&self, a: &Address) -> trie::Result<bool> {
-		self.ensure_cached(a, RequireCache::CodeSize, false,
-			|a| a.map_or(false, |a| a.code_hash() != KECCAK_EMPTY || *a.nonce() != self.account_start_nonce))
+		self.ensure_cached(a, RequireCache::CodeSize, false, |a| {
+			a.map_or(false, |a| {
+				a.code_hash() != KECCAK_EMPTY || *a.nonce() != self.account_start_nonce
+			})
+		})
 	}
 
 	/// Get the balance of account `a`.
 	pub fn balance(&self, a: &Address) -> trie::Result<U256> {
-		self.ensure_cached(a, RequireCache::None, true,
-			|a| a.as_ref().map_or(U256::zero(), |account| *account.balance()))
+		self.ensure_cached(a, RequireCache::None, true, |a| {
+			a.as_ref()
+				.map_or(U256::zero(), |account| *account.balance())
+		})
 	}
 
 	/// Get the nonce of account `a`.
 	pub fn nonce(&self, a: &Address) -> trie::Result<U256> {
-		self.ensure_cached(a, RequireCache::None, true,
-			|a| a.as_ref().map_or(self.account_start_nonce, |account| *account.nonce()))
+		self.ensure_cached(a, RequireCache::None, true, |a| {
+			a.as_ref()
+				.map_or(self.account_start_nonce, |account| *account.nonce())
+		})
 	}
 
 	/// Get the storage root of account `a`.
 	pub fn storage_root(&self, a: &Address) -> trie::Result<Option<H256>> {
-		self.ensure_cached(a, RequireCache::None, true,
-			|a| a.as_ref().and_then(|account| account.storage_root().cloned()))
+		self.ensure_cached(a, RequireCache::None, true, |a| {
+			a.as_ref()
+				.and_then(|account| account.storage_root().cloned())
+		})
 	}
 
 	/// Get the storage expiration timestamp for account `a`.
 	pub fn storage_expiry(&self, a: &Address) -> trie::Result<u64> {
-		self.ensure_cached(a, RequireCache::None, true,
-			|a| a.as_ref().map_or(0, |account| account.storage_expiry()))
+		self.ensure_cached(a, RequireCache::None, true, |a| {
+			a.as_ref().map_or(0, |account| account.storage_expiry())
+		})
 	}
 
 	/// Contract storage interface mapping H256 -> H256. If no storage is stored
@@ -568,7 +623,9 @@ impl<B: Backend> State<B> {
 		}
 		if storage.len() != 32 {
 			error!("Key collision in the patricia trie! Bulk storage should not share a key with H256 storage.");
-			return Err(Box::new(trie::TrieError::DecoderError(rlp::DecoderError::RlpIsTooBig)));
+			return Err(Box::new(trie::TrieError::DecoderError(
+				rlp::DecoderError::RlpIsTooBig,
+			)));
 		}
 		Ok(H256::from(storage.as_slice()))
 	}
@@ -602,7 +659,7 @@ impl<B: Backend> State<B> {
 						} else {
 							local_account = Some(maybe_acc);
 						}
-					},
+					}
 					_ => return Ok(None),
 				}
 			}
@@ -625,9 +682,9 @@ impl<B: Backend> State<B> {
 				if let Some(ref account) = acc.account {
 					let address_hash = &account.address_hash(address);
 					let account_mkvs = ReadOnlyPrefixedMKVS::new(&self.mkvs, address_hash);
-					return Ok(account.storage_at(&account_mkvs, &key))
+					return Ok(account.storage_at(&account_mkvs, &key));
 				} else {
-					return Ok(None)
+					return Ok(None);
 				}
 			}
 		}
@@ -646,24 +703,32 @@ impl<B: Backend> State<B> {
 
 	/// Get accounts' code.
 	pub fn code(&self, a: &Address) -> trie::Result<Option<Arc<Bytes>>> {
-		self.ensure_cached(a, RequireCache::Code, true,
-			|a| a.as_ref().map_or(None, |a| a.code().clone()))
+		self.ensure_cached(a, RequireCache::Code, true, |a| {
+			a.as_ref().map_or(None, |a| a.code().clone())
+		})
 	}
 
 	/// Get an account's code hash.
 	pub fn code_hash(&self, a: &Address) -> trie::Result<H256> {
-		self.ensure_cached(a, RequireCache::None, true,
-			|a| a.as_ref().map_or(KECCAK_EMPTY, |a| a.code_hash()))
+		self.ensure_cached(a, RequireCache::None, true, |a| {
+			a.as_ref().map_or(KECCAK_EMPTY, |a| a.code_hash())
+		})
 	}
 
 	/// Get accounts' code size.
 	pub fn code_size(&self, a: &Address) -> trie::Result<Option<usize>> {
-		self.ensure_cached(a, RequireCache::CodeSize, true,
-			|a| a.as_ref().and_then(|a| a.code_size()))
+		self.ensure_cached(a, RequireCache::CodeSize, true, |a| {
+			a.as_ref().and_then(|a| a.code_size())
+		})
 	}
 
 	/// Add `incr` to the balance of account `a`.
-	pub fn add_balance(&mut self, a: &Address, incr: &U256, cleanup_mode: CleanupMode) -> trie::Result<()> {
+	pub fn add_balance(
+		&mut self,
+		a: &Address,
+		incr: &U256,
+		cleanup_mode: CleanupMode,
+	) -> trie::Result<()> {
 		trace!(target: "state", "add_balance({}, {}): {}", a, incr, self.balance(a)?);
 		let is_value_transfer = !incr.is_zero();
 		if is_value_transfer || (cleanup_mode == CleanupMode::ForceCreate && !self.exists(a)?) {
@@ -678,7 +743,12 @@ impl<B: Backend> State<B> {
 	}
 
 	/// Subtract `decr` from the balance of account `a`.
-	pub fn sub_balance(&mut self, a: &Address, decr: &U256, cleanup_mode: &mut CleanupMode) -> trie::Result<()> {
+	pub fn sub_balance(
+		&mut self,
+		a: &Address,
+		decr: &U256,
+		cleanup_mode: &mut CleanupMode,
+	) -> trie::Result<()> {
 		trace!(target: "state", "sub_balance({}, {}): {}", a, decr, self.balance(a)?);
 		if !decr.is_zero() || !self.exists(a)? {
 			self.require(a, false)?.sub_balance(decr);
@@ -690,7 +760,13 @@ impl<B: Backend> State<B> {
 	}
 
 	/// Subtracts `by` from the balance of `from` and adds it to that of `to`.
-	pub fn transfer_balance(&mut self, from: &Address, to: &Address, by: &U256, mut cleanup_mode: CleanupMode) -> trie::Result<()> {
+	pub fn transfer_balance(
+		&mut self,
+		from: &Address,
+		to: &Address,
+		by: &U256,
+		mut cleanup_mode: CleanupMode,
+	) -> trie::Result<()> {
 		self.sub_balance(from, by, &mut cleanup_mode)?;
 		self.add_balance(to, by, cleanup_mode)?;
 		Ok(())
@@ -709,7 +785,12 @@ impl<B: Backend> State<B> {
 
 	/// Sets the given key value pair directly into the contract's storage trie. Encrypts
 	/// the value if in a confidential ctx.
-	pub fn set_storage_bytes(&mut self, a: &Address, key: H256, value: Vec<u8>) -> trie::Result<()> {
+	pub fn set_storage_bytes(
+		&mut self,
+		a: &Address,
+		key: H256,
+		value: Vec<u8>,
+	) -> trie::Result<()> {
 		trace!(target: "state", "set_storage({}:{:x} to {:?})", a, key, value);
 		let key = self.to_storage_key(&key);
 		let value = self.to_storage_value(value);
@@ -729,25 +810,60 @@ impl<B: Backend> State<B> {
 	/// Initialise the code of account `a` so that it is `code`.
 	/// NOTE: Account should have been created with `new_contract`.
 	pub fn init_code(&mut self, a: &Address, code: Bytes) -> trie::Result<()> {
-		self.require_or_from(a, true, || Account::new_contract(0.into(), self.account_start_nonce, 0), |_|{})?.init_code(code);
+		self.require_or_from(
+			a,
+			true,
+			|| Account::new_contract(0.into(), self.account_start_nonce, 0),
+			|_| {},
+		)?
+		.init_code(code);
 		Ok(())
 	}
 
 	/// Reset the code of account `a` so that it is `code`.
 	pub fn reset_code(&mut self, a: &Address, code: Bytes) -> trie::Result<()> {
-		self.require_or_from(a, true, || Account::new_contract(0.into(), self.account_start_nonce, 0), |_|{})?.reset_code(code);
+		self.require_or_from(
+			a,
+			true,
+			|| Account::new_contract(0.into(), self.account_start_nonce, 0),
+			|_| {},
+		)?
+		.reset_code(code);
 		Ok(())
 	}
 
 	/// Execute a given transaction, producing a receipt and an optional trace.
 	/// This will change the state accordingly.
-	pub fn apply(&mut self, env_info: &EnvInfo, machine: &Machine, t: &SignedTransaction, tracing: bool, should_return_value: bool) -> ApplyResult<FlatTrace, VMTrace> {
+	pub fn apply(
+		&mut self,
+		env_info: &EnvInfo,
+		machine: &Machine,
+		t: &SignedTransaction,
+		tracing: bool,
+		should_return_value: bool,
+	) -> ApplyResult<FlatTrace, VMTrace> {
 		if tracing {
 			let options = TransactOptions::with_tracing();
-			self.apply_with_tracing(env_info, machine, t, options.tracer, options.vm_tracer, options.ext_tracer, should_return_value)
+			self.apply_with_tracing(
+				env_info,
+				machine,
+				t,
+				options.tracer,
+				options.vm_tracer,
+				options.ext_tracer,
+				should_return_value,
+			)
 		} else {
 			let options = TransactOptions::with_no_tracing();
-			self.apply_with_tracing(env_info, machine, t, options.tracer, options.vm_tracer, options.ext_tracer, should_return_value)
+			self.apply_with_tracing(
+				env_info,
+				machine,
+				t,
+				options.tracer,
+				options.vm_tracer,
+				options.ext_tracer,
+				should_return_value,
+			)
 		}
 	}
 
@@ -756,11 +872,11 @@ impl<B: Backend> State<B> {
 		vm_tracer: V,
 		ext_tracer: X,
 		benchmarking: bool,
-		should_return_value: bool
+		should_return_value: bool,
 	) -> TransactOptions<T, V, X> {
 		let mut options = match benchmarking {
 			true => TransactOptions::new(tracer, vm_tracer, ext_tracer).dont_check_nonce(),
-			false => TransactOptions::new(tracer, vm_tracer, ext_tracer)
+			false => TransactOptions::new(tracer, vm_tracer, ext_tracer),
 		};
 
 		let options = if should_return_value {
@@ -769,7 +885,7 @@ impl<B: Backend> State<B> {
 			options
 		};
 
-		return options
+		return options;
 	}
 
 	/// Execute a given transaction with given tracer and VM tracer producing a receipt and an optional trace.
@@ -782,22 +898,28 @@ impl<B: Backend> State<B> {
 		tracer: T,
 		vm_tracer: V,
 		ext_tracer: X,
-		should_return_value: bool
-	) -> ApplyResult<T::Output, V::Output> where
+		should_return_value: bool,
+	) -> ApplyResult<T::Output, V::Output>
+	where
 		T: trace::Tracer,
 		V: trace::VMTracer,
 		X: ExtTracer,
 	{
-		let options = Self::get_options(tracer, vm_tracer, ext_tracer,
-			machine.params().benchmarking, should_return_value);
+		let options = Self::get_options(
+			tracer,
+			vm_tracer,
+			ext_tracer,
+			machine.params().benchmarking,
+			should_return_value,
+		);
 
 		let e = self.execute(env_info, machine, t, options, false)?;
 		let params = machine.params();
 
 		let eip658 = env_info.number >= params.eip658_transition;
-		let no_intermediate_commits =
-			eip658 ||
-			(env_info.number >= params.eip98_transition && env_info.number >= params.validate_receipts_transition);
+		let no_intermediate_commits = eip658
+			|| (env_info.number >= params.eip98_transition
+				&& env_info.number >= params.validate_receipts_transition);
 
 		let result = if e.exception.is_some() { 0 } else { 1 };
 		info!(target: "state", "call_type: TransactionExecuted, \
@@ -830,8 +952,18 @@ impl<B: Backend> State<B> {
 	//
 	// `virt` signals that we are executing outside of a block set and restrictions like
 	// gas limits and gas costs should be lifted.
-	fn execute<T, V, X>(&mut self, env_info: &EnvInfo, machine: &Machine, t: &SignedTransaction, options: TransactOptions<T, V, X>, virt: bool)
-		-> Result<Executed<T::Output, V::Output>, ExecutionError> where T: trace::Tracer, V: trace::VMTracer, X: ExtTracer,
+	fn execute<T, V, X>(
+		&mut self,
+		env_info: &EnvInfo,
+		machine: &Machine,
+		t: &SignedTransaction,
+		options: TransactOptions<T, V, X>,
+		virt: bool,
+	) -> Result<Executed<T::Output, V::Output>, ExecutionError>
+	where
+		T: trace::Tracer,
+		V: trace::VMTracer,
+		X: ExtTracer,
 	{
 		let mut e = Executive::new(self, env_info, machine);
 
@@ -866,10 +998,10 @@ impl<B: Backend> State<B> {
 				match a.account {
 					Some(ref mut account) => {
 						self.mkvs.insert(address.as_ref(), &account.rlp());
-					},
+					}
 					None => {
 						self.mkvs.remove(address);
-					},
+					}
 				};
 			}
 		}
@@ -881,8 +1013,11 @@ impl<B: Backend> State<B> {
 	fn propagate_to_global_cache(&mut self) {
 		let mut addresses = self.cache.borrow_mut();
 		trace!("Committing cache {:?} entries", addresses.len());
-		for (address, a) in addresses.drain().filter(|&(_, ref a)| a.state == AccountState::Committed || a.state == AccountState::CleanFresh) {
-			self.db.add_to_account_cache(address, a.account, a.state == AccountState::Committed);
+		for (address, a) in addresses.drain().filter(|&(_, ref a)| {
+			a.state == AccountState::Committed || a.state == AccountState::CleanFresh
+		}) {
+			self.db
+				.add_to_account_cache(address, a.account, a.state == AccountState::Committed);
 		}
 	}
 
@@ -892,7 +1027,13 @@ impl<B: Backend> State<B> {
 	}
 
 	/// Remove any touched empty or dust accounts.
-	pub fn kill_garbage(&mut self, touched: &HashSet<Address>, remove_empty_touched: bool, min_balance: &Option<U256>, kill_contracts: bool) -> trie::Result<()> {
+	pub fn kill_garbage(
+		&mut self,
+		touched: &HashSet<Address>,
+		remove_empty_touched: bool,
+		min_balance: &Option<U256>,
+		kill_contracts: bool,
+	) -> trie::Result<()> {
 		let to_kill: HashSet<_> = {
 			self.cache.borrow().iter().filter_map(|(address, ref entry)|
 			if touched.contains(address) && // Check all touched accounts
@@ -915,7 +1056,9 @@ impl<B: Backend> State<B> {
 	pub fn populate_from(&mut self, accounts: PodState) {
 		assert!(self.checkpoints.borrow().is_empty());
 		for (add, acc) in accounts.drain().into_iter() {
-			self.cache.borrow_mut().insert(add, AccountEntry::new_dirty(Some(Account::from_pod(acc))));
+			self.cache
+				.borrow_mut()
+				.insert(add, AccountEntry::new_dirty(Some(Account::from_pod(acc))));
 		}
 	}
 
@@ -924,12 +1067,17 @@ impl<B: Backend> State<B> {
 		assert!(self.checkpoints.borrow().is_empty());
 		// TODO: handle database rather than just the cache.
 		// will need fat db.
-		PodState::from(self.cache.borrow().iter().fold(BTreeMap::new(), |mut m, (add, opt)| {
-			if let Some(ref acc) = opt.account {
-				m.insert(add.clone(), PodAccount::from_account(acc));
-			}
-			m
-		}))
+		PodState::from(
+			self.cache
+				.borrow()
+				.iter()
+				.fold(BTreeMap::new(), |mut m, (add, opt)| {
+					if let Some(ref acc) = opt.account {
+						m.insert(add.clone(), PodAccount::from_account(acc));
+					}
+					m
+				}),
+		)
 	}
 
 	/// Populate a PodAccount map from this state, with another state as the account and storage query.
@@ -937,52 +1085,87 @@ impl<B: Backend> State<B> {
 		assert!(self.checkpoints.borrow().is_empty());
 
 		// Merge PodAccount::to_pod for cache of self and `query`.
-		let all_addresses = self.cache.borrow().keys().cloned()
+		let all_addresses = self
+			.cache
+			.borrow()
+			.keys()
+			.cloned()
 			.chain(query.cache.borrow().keys().cloned())
 			.collect::<BTreeSet<_>>();
 
-		Ok(PodState::from(all_addresses.into_iter().fold(Ok(BTreeMap::new()), |m: trie::Result<_>, address| {
-			let mut m = m?;
+		Ok(PodState::from(all_addresses.into_iter().fold(
+			Ok(BTreeMap::new()),
+			|m: trie::Result<_>, address| {
+				let mut m = m?;
 
-			let account = self.ensure_cached(&address, RequireCache::Code, true, |acc| {
-				acc.map(|acc| {
-					// Merge all modified storage keys.
-					let all_keys = {
-						let self_keys = acc.storage_changes().keys().cloned()
-							.collect::<BTreeSet<_>>();
+				let account = self.ensure_cached(&address, RequireCache::Code, true, |acc| {
+					acc.map(|acc| {
+						// Merge all modified storage keys.
+						let all_keys = {
+							let self_keys = acc
+								.storage_changes()
+								.keys()
+								.cloned()
+								.collect::<BTreeSet<_>>();
 
-						if let Some(ref query_storage) = query.cache.borrow().get(&address)
-							.and_then(|opt| {
-								Some(opt.account.as_ref()?.storage_changes().keys().cloned()
-									 .collect::<BTreeSet<_>>())
-							})
-						{
-							self_keys.union(&query_storage).cloned().collect::<Vec<_>>()
-						} else {
-							self_keys.into_iter().collect::<Vec<_>>()
-						}
-					};
+							if let Some(ref query_storage) =
+								query.cache.borrow().get(&address).and_then(|opt| {
+									Some(
+										opt.account
+											.as_ref()?
+											.storage_changes()
+											.keys()
+											.cloned()
+											.collect::<BTreeSet<_>>(),
+									)
+								}) {
+								self_keys.union(&query_storage).cloned().collect::<Vec<_>>()
+							} else {
+								self_keys.into_iter().collect::<Vec<_>>()
+							}
+						};
 
-					// Storage must be fetched after ensure_cached to avoid borrow problem.
-					(*acc.balance(), *acc.nonce(), all_keys, acc.code().map(|x| x.to_vec()), acc.storage_expiry())
-				})
-			})?;
-
-			if let Some((balance, nonce, storage_keys, code, storage_expiry)) = account {
-				let storage = storage_keys.into_iter().fold(Ok(BTreeMap::new()), |s: trie::Result<_>, key| {
-					let mut s = s?;
-
-					s.insert(key, self._storage_at(&address, &key)?.unwrap_or(H256::zero().to_vec()));
-					Ok(s)
+						// Storage must be fetched after ensure_cached to avoid borrow problem.
+						(
+							*acc.balance(),
+							*acc.nonce(),
+							all_keys,
+							acc.code().map(|x| x.to_vec()),
+							acc.storage_expiry(),
+						)
+					})
 				})?;
 
-				m.insert(address, PodAccount {
-					balance, nonce, storage, code, storage_expiry
-				});
-			}
+				if let Some((balance, nonce, storage_keys, code, storage_expiry)) = account {
+					let storage = storage_keys.into_iter().fold(
+						Ok(BTreeMap::new()),
+						|s: trie::Result<_>, key| {
+							let mut s = s?;
 
-			Ok(m)
-		})?))
+							s.insert(
+								key,
+								self._storage_at(&address, &key)?
+									.unwrap_or(H256::zero().to_vec()),
+							);
+							Ok(s)
+						},
+					)?;
+
+					m.insert(
+						address,
+						PodAccount {
+							balance,
+							nonce,
+							storage,
+							code,
+							storage_expiry,
+						},
+					);
+				}
+
+				Ok(m)
+			},
+		)?))
 	}
 
 	/// Returns a `StateDiff` describing the difference from `orig` to `self`.
@@ -994,7 +1177,12 @@ impl<B: Backend> State<B> {
 	}
 
 	// load required account data from the databases.
-	fn update_account_cache(require: RequireCache, account: &mut Account, state_db: &B, mkvs: &MKVS) {
+	fn update_account_cache(
+		require: RequireCache,
+		account: &mut Account,
+		state_db: &B,
+		mkvs: &MKVS,
+	) {
 		if let RequireCache::None = require {
 			return;
 		}
@@ -1008,26 +1196,34 @@ impl<B: Backend> State<B> {
 		match state_db.get_cached_code(&hash) {
 			Some(code) => account.cache_given_code(code),
 			None => match require {
-				RequireCache::None => {},
+				RequireCache::None => {}
 				RequireCache::Code => {
 					if let Some(code) = account.cache_code(mkvs) {
 						// propagate code loaded from the database to
 						// the global code cache.
 						state_db.cache_code(hash, code)
 					}
-				},
+				}
 				RequireCache::CodeSize => {
 					account.cache_code_size(mkvs);
 				}
-			}
+			},
 		}
 	}
 
 	/// Check caches for required data
 	/// First searches for account in the local, then the shared cache.
 	/// Populates local cache if nothing found.
-	fn ensure_cached<F, U>(&self, a: &Address, require: RequireCache, _check_null: bool, f: F) -> trie::Result<U>
-		where F: Fn(Option<&Account>) -> U {
+	fn ensure_cached<F, U>(
+		&self,
+		a: &Address,
+		require: RequireCache,
+		_check_null: bool,
+		f: F,
+	) -> trie::Result<U>
+	where
+		F: Fn(Option<&Account>) -> U,
+	{
 		// check local cache first
 		if let Some(ref mut maybe_acc) = self.cache.borrow_mut().get_mut(a) {
 			if let Some(ref mut account) = maybe_acc.account {
@@ -1067,20 +1263,34 @@ impl<B: Backend> State<B> {
 
 	/// Pull account `a` in our cache from the trie DB. `require_code` requires that the code be cached, too.
 	fn require<'a>(&'a self, a: &Address, require_code: bool) -> trie::Result<RefMut<'a, Account>> {
-		self.require_or_from(a, require_code, || Account::new_basic(0u8.into(), self.account_start_nonce), |_|{})
+		self.require_or_from(
+			a,
+			require_code,
+			|| Account::new_basic(0u8.into(), self.account_start_nonce),
+			|_| {},
+		)
 	}
 
 	/// Pull account `a` in our cache from the trie DB. `require_code` requires that the code be cached, too.
 	/// If it doesn't exist, make account equal the evaluation of `default`.
-	fn require_or_from<'a, F, G>(&'a self, a: &Address, require_code: bool, default: F, not_default: G) -> trie::Result<RefMut<'a, Account>>
-		where F: FnOnce() -> Account, G: FnOnce(&mut Account),
+	fn require_or_from<'a, F, G>(
+		&'a self,
+		a: &Address,
+		require_code: bool,
+		default: F,
+		not_default: G,
+	) -> trie::Result<RefMut<'a, Account>>
+	where
+		F: FnOnce() -> Account,
+		G: FnOnce(&mut Account),
 	{
 		let contains_key = self.cache.borrow().contains_key(a);
 		if !contains_key {
 			match self.db.get_cached_account(a) {
 				Some(acc) => self.insert_cache(a, AccountEntry::new_clean_cached(acc)),
 				None => {
-					let from_rlp = |b:&[u8]| { Account::from_rlp(b).expect("decoding db value failed") };
+					let from_rlp =
+						|b: &[u8]| Account::from_rlp(b).expect("decoding db value failed");
 					let maybe_acc = self.mkvs.get(&a).map(|value| from_rlp(&value));
 					let maybe_acc = AccountEntry::new_clean(maybe_acc);
 					self.insert_cache(a, maybe_acc);
@@ -1091,7 +1301,9 @@ impl<B: Backend> State<B> {
 
 		// at this point the entry is guaranteed to be in the cache.
 		Ok(RefMut::map(self.cache.borrow_mut(), |c| {
-			let entry = c.get_mut(a).expect("entry known to exist in the cache; qed");
+			let entry = c
+				.get_mut(a)
+				.expect("entry known to exist in the cache; qed");
 
 			match &mut entry.account {
 				&mut Some(ref mut acc) => not_default(acc),
@@ -1105,24 +1317,40 @@ impl<B: Backend> State<B> {
 					if require_code {
 						let address_hash = &account.address_hash(a);
 						let account_mkvs = ReadOnlyPrefixedMKVS::new(&self.mkvs, address_hash);
-						Self::update_account_cache(RequireCache::Code, account, &self.db, &account_mkvs);
+						Self::update_account_cache(
+							RequireCache::Code,
+							account,
+							&self.db,
+							&account_mkvs,
+						);
 					}
 					account
-				},
+				}
 				_ => panic!("Required account must always exist; qed"),
 			}
 		}))
 	}
 
 	/// Replace account code and storage. Creates account if it does not exist.
-	pub fn patch_account(&self, a: &Address, code: Arc<Bytes>, storage: HashMap<H256, Vec<u8>>) -> trie::Result<()> {
-		Ok(self.require(a, false)?.reset_code_and_storage(code, storage))
+	pub fn patch_account(
+		&self,
+		a: &Address,
+		code: Arc<Bytes>,
+		storage: HashMap<H256, Vec<u8>>,
+	) -> trie::Result<()> {
+		Ok(self
+			.require(a, false)?
+			.reset_code_and_storage(code, storage))
 	}
 
 	/// Returns the Oasis contract associated with this transaction's code (or None, if header not present).
-	pub fn oasis_contract(&self, transaction: &SignedTransaction) -> Result<Option<OasisContract>, String> {
+	pub fn oasis_contract(
+		&self,
+		transaction: &SignedTransaction,
+	) -> Result<Option<OasisContract>, String> {
 		let code = self.tx_code(transaction)?;
-		code.as_ref().map_or(Ok(None), |c| OasisContract::from_code(c.as_slice()))
+		code.as_ref()
+			.map_or(Ok(None), |c| OasisContract::from_code(c.as_slice()))
 	}
 
 	pub fn is_confidential_contract(&self, address: &Address) -> Result<bool, String> {
@@ -1135,37 +1363,35 @@ impl<B: Backend> State<B> {
 			}
 		};
 
-		Ok(
-			contract
-				.as_ref()
-				.map_or(false, |c| c.confidential)
-		)
+		Ok(contract.as_ref().map_or(false, |c| c.confidential))
 	}
 
 	pub fn is_encrypting(&self) -> bool {
 		self.confidential_ctx.is_some()
-			&& self.confidential_ctx.as_ref().unwrap().borrow().is_encrypting()
+			&& self
+				.confidential_ctx
+				.as_ref()
+				.unwrap()
+				.borrow()
+				.is_encrypting()
 	}
 
 	/// Returns the code that will be executed as a result of this transaction. For a create this
 	/// is the init code in the transaction's data field. For a call, this is the stored contract
 	/// code.
 	fn tx_code(&self, transaction: &SignedTransaction) -> Result<Option<Vec<u8>>, String> {
-		Ok(Some(
-			match transaction.action {
-				transaction::Action::Create => {
-					transaction.data.clone()
-				},
-				transaction::Action::Call(to_addr) => {
-					let mut code = self.code(&to_addr)
-						.map_err(|_| format!("Failed to get code at address {:?}", to_addr))?;
-					if code.is_none() {
-						return Ok(None);
-					}
-					code.unwrap().to_vec()
+		Ok(Some(match transaction.action {
+			transaction::Action::Create => transaction.data.clone(),
+			transaction::Action::Call(to_addr) => {
+				let mut code = self
+					.code(&to_addr)
+					.map_err(|_| format!("Failed to get code at address {:?}", to_addr))?;
+				if code.is_none() {
+					return Ok(None);
 				}
+				code.unwrap().to_vec()
 			}
-		))
+		}))
 	}
 
 	/// Returns the given key in a format that is suitable for storage.
@@ -1173,7 +1399,8 @@ impl<B: Backend> State<B> {
 	/// Otherwise returns the key as given.
 	pub fn to_storage_key(&self, key: &H256) -> H256 {
 		if self.is_encrypting() {
-			let enc_key = self.confidential_ctx
+			let enc_key = self
+				.confidential_ctx
 				.as_ref()
 				.expect("Cannot encrypt without a confidential context")
 				.borrow()
@@ -1279,28 +1506,27 @@ impl<B: Backend + Clone> Clone for State<B> {
 
 #[cfg(test)]
 mod tests {
-	use std::sync::Arc;
-	use std::str::FromStr;
-	use rustc_hex::FromHex;
-	use hash::keccak;
 	use super::*;
+	use ethereum_types::{Address, H256, U256};
 	use ethkey::Secret;
-	use ethereum_types::{H256, U256, Address};
-	use test_helpers::{get_temp_state, get_temp_state_db};
+	use hash::keccak;
 	use machine::EthereumMachine;
+	use rustc_hex::FromHex;
+	use spec::*;
 	use state::State;
 	use state_db::StateDB;
-	use vm::EnvInfo;
-	use spec::*;
+	use std::str::FromStr;
+	use std::sync::Arc;
+	use test_helpers::{get_temp_state, get_temp_state_db};
 	use transaction::*;
+	use vm::EnvInfo;
 	// use ethcore_logger::init_log;
-	use trace::{FlatTrace, TraceError, trace};
-	use evm::CallType;
 	use crate::mkvs::MemoryMKVS;
+	use evm::CallType;
+	use trace::{trace, FlatTrace, TraceError};
 
 	// TODO: do we need to log?
-	fn init_log() {
-	}
+	fn init_log() {}
 
 	fn secret() -> Secret {
 		keccak("").into()
@@ -1328,10 +1554,14 @@ mod tests {
 			gas: 100_000.into(),
 			action: Action::Create,
 			value: 100.into(),
-			data: FromHex::from_hex("601080600c6000396000f3006000355415600957005b60203560003555").unwrap(),
-		}.sign(&secret(), None);
+			data: FromHex::from_hex("601080600c6000396000f3006000355415600957005b60203560003555")
+				.unwrap(),
+		}
+		.sign(&secret(), None);
 
-		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
+		state
+			.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty)
+			.unwrap();
 		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
@@ -1340,12 +1570,15 @@ mod tests {
 				from: "9cce34f7ab185c7aba1b7c8140d620b4bda941d6".into(),
 				value: 100.into(),
 				gas: 78603.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
-				init: vec![96, 16, 128, 96, 12, 96, 0, 57, 96, 0, 243, 0, 96, 0, 53, 84, 21, 96, 9, 87, 0, 91, 96, 32, 53, 96, 0, 53, 85],
+				init: vec![
+					96, 16, 128, 96, 12, 96, 0, 57, 96, 0, 243, 0, 96, 0, 53, 84, 21, 96, 9, 87, 0,
+					91, 96, 32, 53, 96, 0, 53, 85,
+				],
 			}),
 			result: trace::Res::Create(trace::CreateResult {
 				gas_used: U256::from(40),
 				address: Address::from_str("8988167e088c87cd314df6d3c2b83da5acb93ace").unwrap(),
-				code: vec![96, 0, 53, 84, 21, 96, 9, 87, 0, 91, 96, 32, 53, 96, 0, 53]
+				code: vec![96, 0, 53, 84, 21, 96, 9, 87, 0, 91, 96, 32, 53, 96, 0, 53],
 			}),
 		}];
 
@@ -1387,9 +1620,12 @@ mod tests {
 			action: Action::Create,
 			value: 100.into(),
 			data: FromHex::from_hex("5b600056").unwrap(),
-		}.sign(&secret(), None);
+		}
+		.sign(&secret(), None);
 
-		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
+		state
+			.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty)
+			.unwrap();
 		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
@@ -1400,8 +1636,7 @@ mod tests {
 				init: vec![91, 96, 0, 86],
 			}),
 			result: trace::Res::FailedCreate(TraceError::OutOfGas),
-			subtraces: 0
-
+			subtraces: 0,
 		}];
 
 		assert_eq!(result.trace, expected_trace);
@@ -1424,10 +1659,15 @@ mod tests {
 			action: Action::Call(0xa.into()),
 			value: 100.into(),
 			data: vec![],
-		}.sign(&secret(), None);
+		}
+		.sign(&secret(), None);
 
-		state.init_code(&0xa.into(), FromHex::from_hex("6000").unwrap()).unwrap();
-		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
+		state
+			.init_code(&0xa.into(), FromHex::from_hex("6000").unwrap())
+			.unwrap();
+		state
+			.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty)
+			.unwrap();
 		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
@@ -1441,7 +1681,7 @@ mod tests {
 			}),
 			result: trace::Res::Call(trace::CallResult {
 				gas_used: U256::from(3),
-				output: vec![]
+				output: vec![],
 			}),
 			subtraces: 0,
 		}];
@@ -1466,9 +1706,12 @@ mod tests {
 			action: Action::Call(0xa.into()),
 			value: 100.into(),
 			data: vec![],
-		}.sign(&secret(), None);
+		}
+		.sign(&secret(), None);
 
-		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
+		state
+			.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty)
+			.unwrap();
 		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
@@ -1482,7 +1725,7 @@ mod tests {
 			}),
 			result: trace::Res::Call(trace::CallResult {
 				gas_used: U256::from(0),
-				output: vec![]
+				output: vec![],
 			}),
 			subtraces: 0,
 		}];
@@ -1507,7 +1750,8 @@ mod tests {
 			action: Action::Call(0x1.into()),
 			value: 0.into(),
 			data: vec![],
-		}.sign(&secret(), None);
+		}
+		.sign(&secret(), None);
 
 		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 
@@ -1523,7 +1767,7 @@ mod tests {
 			}),
 			result: trace::Res::Call(trace::CallResult {
 				gas_used: U256::from(3000),
-				output: vec![]
+				output: vec![],
 			}),
 			subtraces: 0,
 		}];
@@ -1548,9 +1792,15 @@ mod tests {
 			action: Action::Call(0xa.into()),
 			value: 0.into(),
 			data: vec![],
-		}.sign(&secret(), None);
+		}
+		.sign(&secret(), None);
 
-		state.init_code(&0xa.into(), FromHex::from_hex("600060006000600060006001610be0f1").unwrap()).unwrap();
+		state
+			.init_code(
+				&0xa.into(),
+				FromHex::from_hex("600060006000600060006001610be0f1").unwrap(),
+			)
+			.unwrap();
 		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 
 		let expected_trace = vec![FlatTrace {
@@ -1565,7 +1815,7 @@ mod tests {
 			}),
 			result: trace::Res::Call(trace::CallResult {
 				gas_used: U256::from(3_721), // in post-eip150
-				output: vec![]
+				output: vec![],
 			}),
 			subtraces: 0,
 		}];
@@ -1590,43 +1840,54 @@ mod tests {
 			action: Action::Call(0xa.into()),
 			value: 0.into(),
 			data: vec![],
-		}.sign(&secret(), None);
+		}
+		.sign(&secret(), None);
 
-		state.init_code(&0xa.into(), FromHex::from_hex("60006000600060006000600b611000f2").unwrap()).unwrap();
-		state.init_code(&0xb.into(), FromHex::from_hex("6000").unwrap()).unwrap();
+		state
+			.init_code(
+				&0xa.into(),
+				FromHex::from_hex("60006000600060006000600b611000f2").unwrap(),
+			)
+			.unwrap();
+		state
+			.init_code(&0xb.into(), FromHex::from_hex("6000").unwrap())
+			.unwrap();
 		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 
-		let expected_trace = vec![FlatTrace {
-			trace_address: Default::default(),
-			subtraces: 1,
-			action: trace::Action::Call(trace::Call {
-				from: "9cce34f7ab185c7aba1b7c8140d620b4bda941d6".into(),
-				to: 0xa.into(),
-				value: 0.into(),
-				gas: 97900.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
-				input: vec![],
-				call_type: CallType::Call,
-			}),
-			result: trace::Res::Call(trace::CallResult {
-				gas_used: 724.into(), // in post-eip150
-				output: vec![]
-			}),
-		}, FlatTrace {
-			trace_address: vec![0].into_iter().collect(),
-			subtraces: 0,
-			action: trace::Action::Call(trace::Call {
-				from: 0xa.into(),
-				to: 0xa.into(),
-				value: 0.into(),
-				gas: 4096.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
-				input: vec![],
-				call_type: CallType::CallCode,
-			}),
-			result: trace::Res::Call(trace::CallResult {
-				gas_used: 3.into(),
-				output: vec![],
-			}),
-		}];
+		let expected_trace = vec![
+			FlatTrace {
+				trace_address: Default::default(),
+				subtraces: 1,
+				action: trace::Action::Call(trace::Call {
+					from: "9cce34f7ab185c7aba1b7c8140d620b4bda941d6".into(),
+					to: 0xa.into(),
+					value: 0.into(),
+					gas: 97900.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
+					input: vec![],
+					call_type: CallType::Call,
+				}),
+				result: trace::Res::Call(trace::CallResult {
+					gas_used: 724.into(), // in post-eip150
+					output: vec![],
+				}),
+			},
+			FlatTrace {
+				trace_address: vec![0].into_iter().collect(),
+				subtraces: 0,
+				action: trace::Action::Call(trace::Call {
+					from: 0xa.into(),
+					to: 0xa.into(),
+					value: 0.into(),
+					gas: 4096.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
+					input: vec![],
+					call_type: CallType::CallCode,
+				}),
+				result: trace::Res::Call(trace::CallResult {
+					gas_used: 3.into(),
+					output: vec![],
+				}),
+			},
+		];
 
 		assert_eq!(result.trace, expected_trace);
 	}
@@ -1649,43 +1910,57 @@ mod tests {
 			action: Action::Call(0xa.into()),
 			value: 0.into(),
 			data: vec![],
-		}.sign(&secret(), None);
+		}
+		.sign(&secret(), None);
 
-		state.init_code(&0xa.into(), FromHex::from_hex("6000600060006000600b618000f4").unwrap()).unwrap();
-		state.init_code(&0xb.into(), FromHex::from_hex("60056000526001601ff3").unwrap()).unwrap();
+		state
+			.init_code(
+				&0xa.into(),
+				FromHex::from_hex("6000600060006000600b618000f4").unwrap(),
+			)
+			.unwrap();
+		state
+			.init_code(
+				&0xb.into(),
+				FromHex::from_hex("60056000526001601ff3").unwrap(),
+			)
+			.unwrap();
 		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 
-		let expected_trace = vec![FlatTrace {
-			trace_address: Default::default(),
-			subtraces: 1,
-			action: trace::Action::Call(trace::Call {
-				from: "9cce34f7ab185c7aba1b7c8140d620b4bda941d6".into(),
-				to: 0xa.into(),
-				value: 0.into(),
-				gas: 97900.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
-				input: vec![],
-				call_type: CallType::Call,
-			}),
-			result: trace::Res::Call(trace::CallResult {
-				gas_used: U256::from(736), // in post-eip150
-				output: vec![]
-			}),
-		}, FlatTrace {
-			trace_address: vec![0].into_iter().collect(),
-			subtraces: 0,
-			action: trace::Action::Call(trace::Call {
-				from: 0xa.into(),
-				to: 0xb.into(),
-				value: 0.into(),
-				gas: 32768.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
-				input: vec![],
-				call_type: CallType::DelegateCall,
-			}),
-			result: trace::Res::Call(trace::CallResult {
-				gas_used: 18.into(),
-				output: vec![5],
-			}),
-		}];
+		let expected_trace = vec![
+			FlatTrace {
+				trace_address: Default::default(),
+				subtraces: 1,
+				action: trace::Action::Call(trace::Call {
+					from: "9cce34f7ab185c7aba1b7c8140d620b4bda941d6".into(),
+					to: 0xa.into(),
+					value: 0.into(),
+					gas: 97900.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
+					input: vec![],
+					call_type: CallType::Call,
+				}),
+				result: trace::Res::Call(trace::CallResult {
+					gas_used: U256::from(736), // in post-eip150
+					output: vec![],
+				}),
+			},
+			FlatTrace {
+				trace_address: vec![0].into_iter().collect(),
+				subtraces: 0,
+				action: trace::Action::Call(trace::Call {
+					from: 0xa.into(),
+					to: 0xb.into(),
+					value: 0.into(),
+					gas: 32768.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
+					input: vec![],
+					call_type: CallType::DelegateCall,
+				}),
+				result: trace::Res::Call(trace::CallResult {
+					gas_used: 18.into(),
+					output: vec![5],
+				}),
+			},
+		];
 
 		assert_eq!(result.trace, expected_trace);
 	}
@@ -1707,10 +1982,15 @@ mod tests {
 			action: Action::Call(0xa.into()),
 			value: 100.into(),
 			data: vec![],
-		}.sign(&secret(), None);
+		}
+		.sign(&secret(), None);
 
-		state.init_code(&0xa.into(), FromHex::from_hex("5b600056").unwrap()).unwrap();
-		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
+		state
+			.init_code(&0xa.into(), FromHex::from_hex("5b600056").unwrap())
+			.unwrap();
+		state
+			.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty)
+			.unwrap();
 		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
@@ -1746,44 +2026,57 @@ mod tests {
 			action: Action::Call(0xa.into()),
 			value: 100.into(),
 			data: vec![],
-		}.sign(&secret(), None);
+		}
+		.sign(&secret(), None);
 
-		state.init_code(&0xa.into(), FromHex::from_hex("60006000600060006000600b602b5a03f1").unwrap()).unwrap();
-		state.init_code(&0xb.into(), FromHex::from_hex("6000").unwrap()).unwrap();
-		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
+		state
+			.init_code(
+				&0xa.into(),
+				FromHex::from_hex("60006000600060006000600b602b5a03f1").unwrap(),
+			)
+			.unwrap();
+		state
+			.init_code(&0xb.into(), FromHex::from_hex("6000").unwrap())
+			.unwrap();
+		state
+			.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty)
+			.unwrap();
 		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 
-		let expected_trace = vec![FlatTrace {
-			trace_address: Default::default(),
-			subtraces: 1,
-			action: trace::Action::Call(trace::Call {
-				from: "9cce34f7ab185c7aba1b7c8140d620b4bda941d6".into(),
-				to: 0xa.into(),
-				value: 100.into(),
-				gas: 79000.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
-				input: vec![],
-				call_type: CallType::Call,
-			}),
-			result: trace::Res::Call(trace::CallResult {
-				gas_used: U256::from(69),
-				output: vec![]
-			}),
-		}, FlatTrace {
-			trace_address: vec![0].into_iter().collect(),
-			subtraces: 0,
-			action: trace::Action::Call(trace::Call {
-				from: 0xa.into(),
-				to: 0xb.into(),
-				value: 0.into(),
-				gas: 78934.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
-				input: vec![],
-				call_type: CallType::Call,
-			}),
-			result: trace::Res::Call(trace::CallResult {
-				gas_used: U256::from(3),
-				output: vec![]
-			}),
-		}];
+		let expected_trace = vec![
+			FlatTrace {
+				trace_address: Default::default(),
+				subtraces: 1,
+				action: trace::Action::Call(trace::Call {
+					from: "9cce34f7ab185c7aba1b7c8140d620b4bda941d6".into(),
+					to: 0xa.into(),
+					value: 100.into(),
+					gas: 79000.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
+					input: vec![],
+					call_type: CallType::Call,
+				}),
+				result: trace::Res::Call(trace::CallResult {
+					gas_used: U256::from(69),
+					output: vec![],
+				}),
+			},
+			FlatTrace {
+				trace_address: vec![0].into_iter().collect(),
+				subtraces: 0,
+				action: trace::Action::Call(trace::Call {
+					from: 0xa.into(),
+					to: 0xb.into(),
+					value: 0.into(),
+					gas: 78934.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
+					input: vec![],
+					call_type: CallType::Call,
+				}),
+				result: trace::Res::Call(trace::CallResult {
+					gas_used: U256::from(3),
+					output: vec![],
+				}),
+			},
+		];
 
 		assert_eq!(result.trace, expected_trace);
 	}
@@ -1805,39 +2098,50 @@ mod tests {
 			action: Action::Call(0xa.into()),
 			value: 100.into(),
 			data: vec![],
-		}.sign(&secret(), None);
+		}
+		.sign(&secret(), None);
 
-		state.init_code(&0xa.into(), FromHex::from_hex("60006000600060006045600b6000f1").unwrap()).unwrap();
-		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
+		state
+			.init_code(
+				&0xa.into(),
+				FromHex::from_hex("60006000600060006045600b6000f1").unwrap(),
+			)
+			.unwrap();
+		state
+			.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty)
+			.unwrap();
 		let result = state.apply(&info, &machine, &t, true, false).unwrap();
-		let expected_trace = vec![FlatTrace {
-			trace_address: Default::default(),
-			subtraces: 1,
-			action: trace::Action::Call(trace::Call {
-				from: "9cce34f7ab185c7aba1b7c8140d620b4bda941d6".into(),
-				to: 0xa.into(),
-				value: 100.into(),
-				gas: 79000.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
-				input: vec![],
-				call_type: CallType::Call,
-			}),
-			result: trace::Res::Call(trace::CallResult {
-				gas_used: U256::from(31761),
-				output: vec![]
-			}),
-		}, FlatTrace {
-			trace_address: vec![0].into_iter().collect(),
-			subtraces: 0,
-			action: trace::Action::Call(trace::Call {
-				from: 0xa.into(),
-				to: 0xb.into(),
-				value: 69.into(),
-				gas: 2300.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
-				input: vec![],
-				call_type: CallType::Call,
-			}),
-			result: trace::Res::Call(trace::CallResult::default()),
-		}];
+		let expected_trace = vec![
+			FlatTrace {
+				trace_address: Default::default(),
+				subtraces: 1,
+				action: trace::Action::Call(trace::Call {
+					from: "9cce34f7ab185c7aba1b7c8140d620b4bda941d6".into(),
+					to: 0xa.into(),
+					value: 100.into(),
+					gas: 79000.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
+					input: vec![],
+					call_type: CallType::Call,
+				}),
+				result: trace::Res::Call(trace::CallResult {
+					gas_used: U256::from(31761),
+					output: vec![],
+				}),
+			},
+			FlatTrace {
+				trace_address: vec![0].into_iter().collect(),
+				subtraces: 0,
+				action: trace::Action::Call(trace::Call {
+					from: 0xa.into(),
+					to: 0xb.into(),
+					value: 69.into(),
+					gas: 2300.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
+					input: vec![],
+					call_type: CallType::Call,
+				}),
+				result: trace::Res::Call(trace::CallResult::default()),
+			},
+		];
 
 		assert_eq!(result.trace, expected_trace);
 	}
@@ -1859,10 +2163,18 @@ mod tests {
 			action: Action::Call(0xa.into()),
 			value: 100.into(),
 			data: vec![],
-		}.sign(&secret(), None);
+		}
+		.sign(&secret(), None);
 
-		state.init_code(&0xa.into(), FromHex::from_hex("600060006000600060ff600b6000f1").unwrap()).unwrap();	// not enough funds.
-		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
+		state
+			.init_code(
+				&0xa.into(),
+				FromHex::from_hex("600060006000600060ff600b6000f1").unwrap(),
+			)
+			.unwrap(); // not enough funds.
+		state
+			.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty)
+			.unwrap();
 		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 		let expected_trace = vec![FlatTrace {
 			trace_address: Default::default(),
@@ -1877,7 +2189,7 @@ mod tests {
 			}),
 			result: trace::Res::Call(trace::CallResult {
 				gas_used: U256::from(31761),
-				output: vec![]
+				output: vec![],
 			}),
 		}];
 
@@ -1900,41 +2212,54 @@ mod tests {
 			gas: 100_000.into(),
 			action: Action::Call(0xa.into()),
 			value: 100.into(),
-			data: vec![],//600480600b6000396000f35b600056
-		}.sign(&secret(), None);
+			data: vec![], //600480600b6000396000f35b600056
+		}
+		.sign(&secret(), None);
 
-		state.init_code(&0xa.into(), FromHex::from_hex("60006000600060006000600b602b5a03f1").unwrap()).unwrap();
-		state.init_code(&0xb.into(), FromHex::from_hex("5b600056").unwrap()).unwrap();
-		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
+		state
+			.init_code(
+				&0xa.into(),
+				FromHex::from_hex("60006000600060006000600b602b5a03f1").unwrap(),
+			)
+			.unwrap();
+		state
+			.init_code(&0xb.into(), FromHex::from_hex("5b600056").unwrap())
+			.unwrap();
+		state
+			.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty)
+			.unwrap();
 		let result = state.apply(&info, &machine, &t, true, false).unwrap();
-		let expected_trace = vec![FlatTrace {
-			trace_address: Default::default(),
-			subtraces: 1,
-			action: trace::Action::Call(trace::Call {
-				from: "9cce34f7ab185c7aba1b7c8140d620b4bda941d6".into(),
-				to: 0xa.into(),
-				value: 100.into(),
-				gas: 79000.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
-				input: vec![],
-				call_type: CallType::Call,
-			}),
-			result: trace::Res::Call(trace::CallResult {
-				gas_used: U256::from(79_000),
-				output: vec![]
-			}),
-		}, FlatTrace {
-			trace_address: vec![0].into_iter().collect(),
-			subtraces: 0,
-			action: trace::Action::Call(trace::Call {
-				from: 0xa.into(),
-				to: 0xb.into(),
-				value: 0.into(),
-				gas: 78934.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
-				input: vec![],
-				call_type: CallType::Call,
-			}),
-			result: trace::Res::FailedCall(TraceError::OutOfGas),
-		}];
+		let expected_trace = vec![
+			FlatTrace {
+				trace_address: Default::default(),
+				subtraces: 1,
+				action: trace::Action::Call(trace::Call {
+					from: "9cce34f7ab185c7aba1b7c8140d620b4bda941d6".into(),
+					to: 0xa.into(),
+					value: 100.into(),
+					gas: 79000.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
+					input: vec![],
+					call_type: CallType::Call,
+				}),
+				result: trace::Res::Call(trace::CallResult {
+					gas_used: U256::from(79_000),
+					output: vec![],
+				}),
+			},
+			FlatTrace {
+				trace_address: vec![0].into_iter().collect(),
+				subtraces: 0,
+				action: trace::Action::Call(trace::Call {
+					from: 0xa.into(),
+					to: 0xb.into(),
+					value: 0.into(),
+					gas: 78934.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
+					input: vec![],
+					call_type: CallType::Call,
+				}),
+				result: trace::Res::FailedCall(TraceError::OutOfGas),
+			},
+		];
 
 		assert_eq!(result.trace, expected_trace);
 	}
@@ -1956,59 +2281,78 @@ mod tests {
 			action: Action::Call(0xa.into()),
 			value: 100.into(),
 			data: vec![],
-		}.sign(&secret(), None);
+		}
+		.sign(&secret(), None);
 
-		state.init_code(&0xa.into(), FromHex::from_hex("60006000600060006000600b602b5a03f1").unwrap()).unwrap();
-		state.init_code(&0xb.into(), FromHex::from_hex("60006000600060006000600c602b5a03f1").unwrap()).unwrap();
-		state.init_code(&0xc.into(), FromHex::from_hex("6000").unwrap()).unwrap();
-		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
+		state
+			.init_code(
+				&0xa.into(),
+				FromHex::from_hex("60006000600060006000600b602b5a03f1").unwrap(),
+			)
+			.unwrap();
+		state
+			.init_code(
+				&0xb.into(),
+				FromHex::from_hex("60006000600060006000600c602b5a03f1").unwrap(),
+			)
+			.unwrap();
+		state
+			.init_code(&0xc.into(), FromHex::from_hex("6000").unwrap())
+			.unwrap();
+		state
+			.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty)
+			.unwrap();
 		let result = state.apply(&info, &machine, &t, true, false).unwrap();
-		let expected_trace = vec![FlatTrace {
-			trace_address: Default::default(),
-			subtraces: 1,
-			action: trace::Action::Call(trace::Call {
-				from: "9cce34f7ab185c7aba1b7c8140d620b4bda941d6".into(),
-				to: 0xa.into(),
-				value: 100.into(),
-				gas: 79000.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
-				input: vec![],
-				call_type: CallType::Call,
-			}),
-			result: trace::Res::Call(trace::CallResult {
-				gas_used: U256::from(135),
-				output: vec![]
-			}),
-		}, FlatTrace {
-			trace_address: vec![0].into_iter().collect(),
-			subtraces: 1,
-			action: trace::Action::Call(trace::Call {
-				from: 0xa.into(),
-				to: 0xb.into(),
-				value: 0.into(),
-				gas: 78934.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
-				input: vec![],
-				call_type: CallType::Call,
-			}),
-			result: trace::Res::Call(trace::CallResult {
-				gas_used: U256::from(69),
-				output: vec![]
-			}),
-		}, FlatTrace {
-			trace_address: vec![0, 0].into_iter().collect(),
-			subtraces: 0,
-			action: trace::Action::Call(trace::Call {
-				from: 0xb.into(),
-				to: 0xc.into(),
-				value: 0.into(),
-				gas: 78868.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
-				input: vec![],
-				call_type: CallType::Call,
-			}),
-			result: trace::Res::Call(trace::CallResult {
-				gas_used: U256::from(3),
-				output: vec![]
-			}),
-		}];
+		let expected_trace = vec![
+			FlatTrace {
+				trace_address: Default::default(),
+				subtraces: 1,
+				action: trace::Action::Call(trace::Call {
+					from: "9cce34f7ab185c7aba1b7c8140d620b4bda941d6".into(),
+					to: 0xa.into(),
+					value: 100.into(),
+					gas: 79000.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
+					input: vec![],
+					call_type: CallType::Call,
+				}),
+				result: trace::Res::Call(trace::CallResult {
+					gas_used: U256::from(135),
+					output: vec![],
+				}),
+			},
+			FlatTrace {
+				trace_address: vec![0].into_iter().collect(),
+				subtraces: 1,
+				action: trace::Action::Call(trace::Call {
+					from: 0xa.into(),
+					to: 0xb.into(),
+					value: 0.into(),
+					gas: 78934.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
+					input: vec![],
+					call_type: CallType::Call,
+				}),
+				result: trace::Res::Call(trace::CallResult {
+					gas_used: U256::from(69),
+					output: vec![],
+				}),
+			},
+			FlatTrace {
+				trace_address: vec![0, 0].into_iter().collect(),
+				subtraces: 0,
+				action: trace::Action::Call(trace::Call {
+					from: 0xb.into(),
+					to: 0xc.into(),
+					value: 0.into(),
+					gas: 78868.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
+					input: vec![],
+					call_type: CallType::Call,
+				}),
+				result: trace::Res::Call(trace::CallResult {
+					gas_used: U256::from(3),
+					output: vec![],
+				}),
+			},
+		];
 
 		assert_eq!(result.trace, expected_trace);
 	}
@@ -2029,58 +2373,77 @@ mod tests {
 			gas: 100_000.into(),
 			action: Action::Call(0xa.into()),
 			value: 100.into(),
-			data: vec![],//600480600b6000396000f35b600056
-		}.sign(&secret(), None);
+			data: vec![], //600480600b6000396000f35b600056
+		}
+		.sign(&secret(), None);
 
-		state.init_code(&0xa.into(), FromHex::from_hex("60006000600060006000600b602b5a03f1").unwrap()).unwrap();
-		state.init_code(&0xb.into(), FromHex::from_hex("60006000600060006000600c602b5a03f1505b601256").unwrap()).unwrap();
-		state.init_code(&0xc.into(), FromHex::from_hex("6000").unwrap()).unwrap();
-		state.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty).unwrap();
+		state
+			.init_code(
+				&0xa.into(),
+				FromHex::from_hex("60006000600060006000600b602b5a03f1").unwrap(),
+			)
+			.unwrap();
+		state
+			.init_code(
+				&0xb.into(),
+				FromHex::from_hex("60006000600060006000600c602b5a03f1505b601256").unwrap(),
+			)
+			.unwrap();
+		state
+			.init_code(&0xc.into(), FromHex::from_hex("6000").unwrap())
+			.unwrap();
+		state
+			.add_balance(&t.sender(), &(100.into()), CleanupMode::NoEmpty)
+			.unwrap();
 		let result = state.apply(&info, &machine, &t, true, false).unwrap();
 
-		let expected_trace = vec![FlatTrace {
-			trace_address: Default::default(),
-			subtraces: 1,
-			action: trace::Action::Call(trace::Call {
-				from: "9cce34f7ab185c7aba1b7c8140d620b4bda941d6".into(),
-				to: 0xa.into(),
-				value: 100.into(),
-				gas: 79000.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
-				input: vec![],
-				call_type: CallType::Call,
-			}),
-			result: trace::Res::Call(trace::CallResult {
-				gas_used: U256::from(79_000),
-				output: vec![]
-			})
-		}, FlatTrace {
-			trace_address: vec![0].into_iter().collect(),
-			subtraces: 1,
+		let expected_trace = vec![
+			FlatTrace {
+				trace_address: Default::default(),
+				subtraces: 1,
 				action: trace::Action::Call(trace::Call {
-				from: 0xa.into(),
-				to: 0xb.into(),
-				value: 0.into(),
-				gas: 78934.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
-				input: vec![],
-				call_type: CallType::Call,
-			}),
-			result: trace::Res::FailedCall(TraceError::OutOfGas),
-		}, FlatTrace {
-			trace_address: vec![0, 0].into_iter().collect(),
-			subtraces: 0,
-			action: trace::Action::Call(trace::Call {
-				from: 0xb.into(),
-				to: 0xc.into(),
-				value: 0.into(),
-				gas: 78868.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
-				call_type: CallType::Call,
-				input: vec![],
-			}),
-			result: trace::Res::Call(trace::CallResult {
-				gas_used: U256::from(3),
-				output: vec![]
-			}),
-		}];
+					from: "9cce34f7ab185c7aba1b7c8140d620b4bda941d6".into(),
+					to: 0xa.into(),
+					value: 100.into(),
+					gas: 79000.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
+					input: vec![],
+					call_type: CallType::Call,
+				}),
+				result: trace::Res::Call(trace::CallResult {
+					gas_used: U256::from(79_000),
+					output: vec![],
+				}),
+			},
+			FlatTrace {
+				trace_address: vec![0].into_iter().collect(),
+				subtraces: 1,
+				action: trace::Action::Call(trace::Call {
+					from: 0xa.into(),
+					to: 0xb.into(),
+					value: 0.into(),
+					gas: 78934.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
+					input: vec![],
+					call_type: CallType::Call,
+				}),
+				result: trace::Res::FailedCall(TraceError::OutOfGas),
+			},
+			FlatTrace {
+				trace_address: vec![0, 0].into_iter().collect(),
+				subtraces: 0,
+				action: trace::Action::Call(trace::Call {
+					from: 0xb.into(),
+					to: 0xc.into(),
+					value: 0.into(),
+					gas: 78868.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
+					call_type: CallType::Call,
+					input: vec![],
+				}),
+				result: trace::Res::Call(trace::CallResult {
+					gas_used: U256::from(3),
+					output: vec![],
+				}),
+			},
+		];
 
 		assert_eq!(result.trace, expected_trace);
 	}
@@ -2102,37 +2465,50 @@ mod tests {
 			action: Action::Call(0xa.into()),
 			value: 100.into(),
 			data: vec![],
-		}.sign(&secret(), None);
+		}
+		.sign(&secret(), None);
 
-		state.init_code(&0xa.into(), FromHex::from_hex("73000000000000000000000000000000000000000bff").unwrap()).unwrap();
-		state.add_balance(&0xa.into(), &50.into(), CleanupMode::NoEmpty).unwrap();
-		state.add_balance(&t.sender(), &100.into(), CleanupMode::NoEmpty).unwrap();
+		state
+			.init_code(
+				&0xa.into(),
+				FromHex::from_hex("73000000000000000000000000000000000000000bff").unwrap(),
+			)
+			.unwrap();
+		state
+			.add_balance(&0xa.into(), &50.into(), CleanupMode::NoEmpty)
+			.unwrap();
+		state
+			.add_balance(&t.sender(), &100.into(), CleanupMode::NoEmpty)
+			.unwrap();
 		let result = state.apply(&info, &machine, &t, true, false).unwrap();
-		let expected_trace = vec![FlatTrace {
-			trace_address: Default::default(),
-			subtraces: 1,
-			action: trace::Action::Call(trace::Call {
-				from: "9cce34f7ab185c7aba1b7c8140d620b4bda941d6".into(),
-				to: 0xa.into(),
-				value: 100.into(),
-				gas: 79000.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
-				input: vec![],
-				call_type: CallType::Call,
-			}),
-			result: trace::Res::Call(trace::CallResult {
-				gas_used: 3.into(),
-				output: vec![]
-			}),
-		}, FlatTrace {
-			trace_address: vec![0].into_iter().collect(),
-			subtraces: 0,
-			action: trace::Action::Suicide(trace::Suicide {
-				address: 0xa.into(),
-				refund_address: 0xb.into(),
-				balance: 150.into(),
-			}),
-			result: trace::Res::None,
-		}];
+		let expected_trace = vec![
+			FlatTrace {
+				trace_address: Default::default(),
+				subtraces: 1,
+				action: trace::Action::Call(trace::Call {
+					from: "9cce34f7ab185c7aba1b7c8140d620b4bda941d6".into(),
+					to: 0xa.into(),
+					value: 100.into(),
+					gas: 79000.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
+					input: vec![],
+					call_type: CallType::Call,
+				}),
+				result: trace::Res::Call(trace::CallResult {
+					gas_used: 3.into(),
+					output: vec![],
+				}),
+			},
+			FlatTrace {
+				trace_address: vec![0].into_iter().collect(),
+				subtraces: 0,
+				action: trace::Action::Suicide(trace::Suicide {
+					address: 0xa.into(),
+					refund_address: 0xb.into(),
+					balance: 150.into(),
+				}),
+				result: trace::Res::None,
+			},
+		];
 
 		assert_eq!(result.trace, expected_trace);
 	}
@@ -2142,7 +2518,14 @@ mod tests {
 		let a = Address::zero();
 		let (db, mkvs) = {
 			let mut state = get_temp_state();
-			state.require_or_from(&a, false, ||Account::new_contract(42.into(), 0.into(), 0), |_|{}).unwrap();
+			state
+				.require_or_from(
+					&a,
+					false,
+					|| Account::new_contract(42.into(), 0.into(), 0),
+					|_| {},
+				)
+				.unwrap();
 			state.init_code(&a, vec![1, 2, 3]).unwrap();
 			assert_eq!(state.code(&a).unwrap(), Some(Arc::new(vec![1u8, 2, 3])));
 			state.commit().unwrap();
@@ -2150,7 +2533,8 @@ mod tests {
 			state.drop()
 		};
 
-		let state = State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
+		let state =
+			State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
 		assert_eq!(state.code(&a).unwrap(), Some(Arc::new(vec![1u8, 2, 3])));
 	}
 
@@ -2159,13 +2543,22 @@ mod tests {
 		let a = Address::zero();
 		let (db, mkvs) = {
 			let mut state = get_temp_state();
-			state.set_storage(&a, H256::from(&U256::from(1u64)), H256::from(&U256::from(69u64))).unwrap();
+			state
+				.set_storage(
+					&a,
+					H256::from(&U256::from(1u64)),
+					H256::from(&U256::from(69u64)),
+				)
+				.unwrap();
 			state.commit().unwrap();
 			state.drop()
 		};
 
 		let s = State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
-		assert_eq!(s.storage_at(&a, &H256::from(&U256::from(1u64))).unwrap(), H256::from(&U256::from(69u64)));
+		assert_eq!(
+			s.storage_at(&a, &H256::from(&U256::from(1u64))).unwrap(),
+			H256::from(&U256::from(69u64))
+		);
 	}
 
 	#[test]
@@ -2174,13 +2567,16 @@ mod tests {
 		let (db, mkvs) = {
 			let mut state = get_temp_state();
 			state.inc_nonce(&a).unwrap();
-			state.add_balance(&a, &U256::from(69u64), CleanupMode::NoEmpty).unwrap();
+			state
+				.add_balance(&a, &U256::from(69u64), CleanupMode::NoEmpty)
+				.unwrap();
 			state.commit().unwrap();
 			assert_eq!(state.balance(&a).unwrap(), U256::from(69u64));
 			state.drop()
 		};
 
-		let state = State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
+		let state =
+			State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
 		assert_eq!(state.balance(&a).unwrap(), U256::from(69u64));
 		assert_eq!(state.nonce(&a).unwrap(), U256::from(1u64));
 	}
@@ -2208,11 +2604,14 @@ mod tests {
 		let mkvs = Box::new(MemoryMKVS::new());
 		let (db, mkvs) = {
 			let mut state = State::new(mkvs, db, U256::from(0), Default::default());
-			state.add_balance(&a, &U256::default(), CleanupMode::NoEmpty).unwrap(); // create an empty account
+			state
+				.add_balance(&a, &U256::default(), CleanupMode::NoEmpty)
+				.unwrap(); // create an empty account
 			state.commit().unwrap();
 			state.drop()
 		};
-		let state = State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
+		let state =
+			State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
 		assert!(!state.exists(&a).unwrap());
 		assert!(!state.exists_and_not_null(&a).unwrap());
 	}
@@ -2224,11 +2623,14 @@ mod tests {
 		let mkvs = Box::new(MemoryMKVS::new());
 		let (db, mkvs) = {
 			let mut state = State::new(mkvs, db, U256::from(0), Default::default());
-			state.add_balance(&a, &U256::default(), CleanupMode::ForceCreate).unwrap(); // create an empty account
+			state
+				.add_balance(&a, &U256::default(), CleanupMode::ForceCreate)
+				.unwrap(); // create an empty account
 			state.commit().unwrap();
 			state.drop()
 		};
-		let state = State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
+		let state =
+			State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
 		assert!(state.exists(&a).unwrap());
 		assert!(!state.exists_and_not_null(&a).unwrap());
 	}
@@ -2247,7 +2649,8 @@ mod tests {
 		};
 
 		let (db, mkvs) = {
-			let mut state = State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
+			let mut state =
+				State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
 			assert_eq!(state.exists(&a).unwrap(), true);
 			assert_eq!(state.nonce(&a).unwrap(), U256::from(1u64));
 			state.kill_account(&a);
@@ -2257,7 +2660,8 @@ mod tests {
 			state.drop()
 		};
 
-		let state = State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
+		let state =
+			State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
 		assert_eq!(state.exists(&a).unwrap(), false);
 		assert_eq!(state.nonce(&a).unwrap(), U256::from(0u64));
 	}
@@ -2267,15 +2671,21 @@ mod tests {
 		let mut state = get_temp_state();
 		let a = Address::zero();
 		let b = 1u64.into();
-		state.add_balance(&a, &U256::from(69u64), CleanupMode::NoEmpty).unwrap();
+		state
+			.add_balance(&a, &U256::from(69u64), CleanupMode::NoEmpty)
+			.unwrap();
 		assert_eq!(state.balance(&a).unwrap(), U256::from(69u64));
 		state.commit().unwrap();
 		assert_eq!(state.balance(&a).unwrap(), U256::from(69u64));
-		state.sub_balance(&a, &U256::from(42u64), &mut CleanupMode::NoEmpty).unwrap();
+		state
+			.sub_balance(&a, &U256::from(42u64), &mut CleanupMode::NoEmpty)
+			.unwrap();
 		assert_eq!(state.balance(&a).unwrap(), U256::from(27u64));
 		state.commit().unwrap();
 		assert_eq!(state.balance(&a).unwrap(), U256::from(27u64));
-		state.transfer_balance(&a, &b, &U256::from(18u64), CleanupMode::NoEmpty).unwrap();
+		state
+			.transfer_balance(&a, &b, &U256::from(18u64), CleanupMode::NoEmpty)
+			.unwrap();
 		assert_eq!(state.balance(&a).unwrap(), U256::from(9u64));
 		assert_eq!(state.balance(&b).unwrap(), U256::from(18u64));
 		state.commit().unwrap();
@@ -2324,12 +2734,16 @@ mod tests {
 		let mut state = get_temp_state();
 		let a = Address::zero();
 		state.checkpoint();
-		state.add_balance(&a, &U256::from(69u64), CleanupMode::NoEmpty).unwrap();
+		state
+			.add_balance(&a, &U256::from(69u64), CleanupMode::NoEmpty)
+			.unwrap();
 		assert_eq!(state.balance(&a).unwrap(), U256::from(69u64));
 		state.discard_checkpoint();
 		assert_eq!(state.balance(&a).unwrap(), U256::from(69u64));
 		state.checkpoint();
-		state.add_balance(&a, &U256::from(1u64), CleanupMode::NoEmpty).unwrap();
+		state
+			.add_balance(&a, &U256::from(1u64), CleanupMode::NoEmpty)
+			.unwrap();
 		assert_eq!(state.balance(&a).unwrap(), U256::from(70u64));
 		state.revert_to_checkpoint();
 		assert_eq!(state.balance(&a).unwrap(), U256::from(69u64));
@@ -2341,7 +2755,9 @@ mod tests {
 		let a = Address::zero();
 		state.checkpoint();
 		state.checkpoint();
-		state.add_balance(&a, &U256::from(69u64), CleanupMode::NoEmpty).unwrap();
+		state
+			.add_balance(&a, &U256::from(69u64), CleanupMode::NoEmpty)
+			.unwrap();
 		assert_eq!(state.balance(&a).unwrap(), U256::from(69u64));
 		state.discard_checkpoint();
 		assert_eq!(state.balance(&a).unwrap(), U256::from(69u64));
@@ -2362,7 +2778,9 @@ mod tests {
 
 		let a: Address = 0xa.into();
 		state.init_code(&a, b"abcdefg".to_vec()).unwrap();;
-		state.add_balance(&a, &256.into(), CleanupMode::NoEmpty).unwrap();
+		state
+			.add_balance(&a, &256.into(), CleanupMode::NoEmpty)
+			.unwrap();
 		state.set_storage(&a, 0xb.into(), 0xc.into()).unwrap();
 
 		let mut new_state = state.clone();
@@ -2383,31 +2801,56 @@ mod tests {
 		let mkvs = Box::new(MemoryMKVS::new());
 		let (db, mkvs) = {
 			let mut state = State::new(mkvs, db, U256::from(0), Default::default());
-			state.add_balance(&a, &U256::default(), CleanupMode::ForceCreate).unwrap(); // create an empty account
-			state.add_balance(&b, &100.into(), CleanupMode::ForceCreate).unwrap(); // create a dust account
-			state.add_balance(&c, &101.into(), CleanupMode::ForceCreate).unwrap(); // create a normal account
-			state.add_balance(&d, &99.into(), CleanupMode::ForceCreate).unwrap(); // create another dust account
+			state
+				.add_balance(&a, &U256::default(), CleanupMode::ForceCreate)
+				.unwrap(); // create an empty account
+			state
+				.add_balance(&b, &100.into(), CleanupMode::ForceCreate)
+				.unwrap(); // create a dust account
+			state
+				.add_balance(&c, &101.into(), CleanupMode::ForceCreate)
+				.unwrap(); // create a normal account
+			state
+				.add_balance(&d, &99.into(), CleanupMode::ForceCreate)
+				.unwrap(); // create another dust account
 			state.new_contract(&e, 100.into(), 1.into(), 0); // create a contract account
 			state.init_code(&e, vec![0x00]).unwrap();
 			state.commit().unwrap();
 			state.drop()
 		};
 
-		let mut state = State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
+		let mut state =
+			State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
 		let mut touched = HashSet::new();
-		state.add_balance(&a, &U256::default(), CleanupMode::TrackTouched(&mut touched)).unwrap(); // touch an account
-		state.transfer_balance(&b, &x, &1.into(), CleanupMode::TrackTouched(&mut touched)).unwrap(); // touch an account decreasing its balance
-		state.transfer_balance(&c, &x, &1.into(), CleanupMode::TrackTouched(&mut touched)).unwrap(); // touch an account decreasing its balance
-		state.transfer_balance(&e, &x, &1.into(), CleanupMode::TrackTouched(&mut touched)).unwrap(); // touch an account decreasing its balance
+		state
+			.add_balance(
+				&a,
+				&U256::default(),
+				CleanupMode::TrackTouched(&mut touched),
+			)
+			.unwrap(); // touch an account
+		state
+			.transfer_balance(&b, &x, &1.into(), CleanupMode::TrackTouched(&mut touched))
+			.unwrap(); // touch an account decreasing its balance
+		state
+			.transfer_balance(&c, &x, &1.into(), CleanupMode::TrackTouched(&mut touched))
+			.unwrap(); // touch an account decreasing its balance
+		state
+			.transfer_balance(&e, &x, &1.into(), CleanupMode::TrackTouched(&mut touched))
+			.unwrap(); // touch an account decreasing its balance
 		state.kill_garbage(&touched, true, &None, false).unwrap();
 		assert!(!state.exists(&a).unwrap());
 		assert!(state.exists(&b).unwrap());
-		state.kill_garbage(&touched, true, &Some(100.into()), false).unwrap();
+		state
+			.kill_garbage(&touched, true, &Some(100.into()), false)
+			.unwrap();
 		assert!(!state.exists(&b).unwrap());
 		assert!(state.exists(&c).unwrap());
 		assert!(state.exists(&d).unwrap());
 		assert!(state.exists(&e).unwrap());
-		state.kill_garbage(&touched, true, &Some(100.into()), true).unwrap();
+		state
+			.kill_garbage(&touched, true, &Some(100.into()), true)
+			.unwrap();
 		assert!(state.exists(&c).unwrap());
 		assert!(state.exists(&d).unwrap());
 		assert!(!state.exists(&e).unwrap());
@@ -2422,12 +2865,15 @@ mod tests {
 		let mkvs = Box::new(MemoryMKVS::new());
 		let (db, mkvs) = {
 			let mut state = State::new(mkvs, db, U256::from(0), Default::default());
-			state.add_balance(&a, &100.into(), CleanupMode::ForceCreate).unwrap();
+			state
+				.add_balance(&a, &100.into(), CleanupMode::ForceCreate)
+				.unwrap();
 			state.commit().unwrap();
 			state.drop()
 		};
 
-		let mut state = State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
+		let mut state =
+			State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
 		let original = state.clone();
 		state.kill_account(&a);
 
@@ -2435,14 +2881,20 @@ mod tests {
 		let diff_map = diff.get();
 		assert_eq!(diff_map.len(), 1);
 		assert!(diff_map.get(&a).is_some());
-		assert_eq!(diff_map.get(&a),
-				pod_account::diff_pod(Some(&PodAccount {
+		assert_eq!(
+			diff_map.get(&a),
+			pod_account::diff_pod(
+				Some(&PodAccount {
 					balance: U256::from(100),
 					nonce: U256::zero(),
 					code: Some(Default::default()),
 					storage_expiry: 0,
 					storage: Default::default()
-				}), None).as_ref());
+				}),
+				None
+			)
+			.as_ref()
+		);
 	}
 
 	#[test]
@@ -2455,51 +2907,88 @@ mod tests {
 
 		let (db, mkvs) = {
 			let mut state = State::new(mkvs, db, U256::from(0), Default::default());
-			state.set_storage(&a, H256::from(&U256::from(1u64)), H256::from(&U256::from(20u64))).unwrap();
+			state
+				.set_storage(
+					&a,
+					H256::from(&U256::from(1u64)),
+					H256::from(&U256::from(20u64)),
+				)
+				.unwrap();
 			state.commit().unwrap();
 			state.drop()
 		};
 
-		let mut state = State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
+		let mut state =
+			State::from_existing(mkvs, db, U256::from(0u8), Default::default(), None).unwrap();
 		let original = state.clone();
-		state.set_storage(&a, H256::from(&U256::from(1u64)), H256::from(&U256::from(100u64))).unwrap();
+		state
+			.set_storage(
+				&a,
+				H256::from(&U256::from(1u64)),
+				H256::from(&U256::from(100u64)),
+			)
+			.unwrap();
 
 		let diff = state.diff_from(original).unwrap();
 		let diff_map = diff.get();
 		assert_eq!(diff_map.len(), 1);
 		assert!(diff_map.get(&a).is_some());
-		assert_eq!(diff_map.get(&a),
-				pod_account::diff_pod(Some(&PodAccount {
+		assert_eq!(
+			diff_map.get(&a),
+			pod_account::diff_pod(
+				Some(&PodAccount {
 					balance: U256::zero(),
 					nonce: U256::zero(),
 					code: Some(Default::default()),
-					storage: vec![(H256::from(&U256::from(1u64)), H256::from(&U256::from(20u64)).to_vec())]
-						.into_iter().collect(),
+					storage: vec![(
+						H256::from(&U256::from(1u64)),
+						H256::from(&U256::from(20u64)).to_vec()
+					)]
+					.into_iter()
+					.collect(),
 					storage_expiry: 0,
-				}), Some(&PodAccount {
+				}),
+				Some(&PodAccount {
 					balance: U256::zero(),
 					nonce: U256::zero(),
 					code: Some(Default::default()),
-					storage: vec![(H256::from(&U256::from(1u64)), H256::from(&U256::from(100u64)).to_vec())]
-						.into_iter().collect(),
+					storage: vec![(
+						H256::from(&U256::from(1u64)),
+						H256::from(&U256::from(100u64)).to_vec()
+					)]
+					.into_iter()
+					.collect(),
 					storage_expiry: 0,
-				})).as_ref());
+				})
+			)
+			.as_ref()
+		);
 	}
 
 	#[test]
 	fn should_have_output_from_init_contract() {
 		let base_options = TransactOptions::with_tracing();
-		let options = State::<StateDB>::get_options(base_options.tracer , base_options.vm_tracer,
-			base_options.ext_tracer, false, true);
+		let options = State::<StateDB>::get_options(
+			base_options.tracer,
+			base_options.vm_tracer,
+			base_options.ext_tracer,
+			false,
+			true,
+		);
 
 		assert_eq!(options.output_from_init_contract, true);
-		}
+	}
 
 	#[test]
 	fn should_not_have_output_from_init_contract() {
 		let base_options = TransactOptions::with_tracing();
-		let options = State::<StateDB>::get_options(base_options.tracer , base_options.vm_tracer,
-			base_options.ext_tracer, false, false);
+		let options = State::<StateDB>::get_options(
+			base_options.tracer,
+			base_options.vm_tracer,
+			base_options.ext_tracer,
+			false,
+			false,
+		);
 
 		assert_eq!(options.output_from_init_contract, false);
 	}

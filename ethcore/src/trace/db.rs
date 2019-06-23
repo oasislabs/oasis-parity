@@ -15,21 +15,23 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Trace database.
-use std::ops::Deref;
-use std::collections::{HashMap, VecDeque};
-use std::sync::Arc;
-use bloomchain::{Number, Config as BloomConfig};
-use bloomchain::group::{BloomGroupDatabase, BloomGroupChain, GroupPosition, BloomGroup};
-use heapsize::HeapSizeOf;
-use ethereum_types::{H256, H264};
-use kvdb::{KeyValueDB, DBTransaction};
-use std::sync::RwLock;
-use header::BlockNumber;
-use trace::{LocalizedTrace, Config, Filter, Database as TraceDatabase, ImportRequest, DatabaseExtras};
-use db::{self, Key, Writable, Readable, CacheUpdatePolicy};
+use super::flat::{FlatBlockTraces, FlatTrace, FlatTransactionTraces};
+use bloomchain::group::{BloomGroup, BloomGroupChain, BloomGroupDatabase, GroupPosition};
+use bloomchain::{Config as BloomConfig, Number};
 use blooms;
-use super::flat::{FlatTrace, FlatBlockTraces, FlatTransactionTraces};
 use cache_manager::CacheManager;
+use db::{self, CacheUpdatePolicy, Key, Readable, Writable};
+use ethereum_types::{H256, H264};
+use header::BlockNumber;
+use heapsize::HeapSizeOf;
+use kvdb::{DBTransaction, KeyValueDB};
+use std::collections::{HashMap, VecDeque};
+use std::ops::Deref;
+use std::sync::Arc;
+use std::sync::RwLock;
+use trace::{
+	Config, Database as TraceDatabase, DatabaseExtras, Filter, ImportRequest, LocalizedTrace,
+};
 
 const TRACE_DB_VER: &'static [u8] = b"1.0";
 
@@ -107,7 +109,10 @@ enum CacheId {
 /// in trace database. Each trace has information, which contracts have been
 /// touched, which have been created during the execution of transaction, and
 /// which calls failed.
-pub struct TraceDB<T> where T: DatabaseExtras {
+pub struct TraceDB<T>
+where
+	T: DatabaseExtras,
+{
 	// cache
 	traces: RwLock<HashMap<H256, FlatBlockTraces>>,
 	blooms: RwLock<HashMap<TraceGroupPosition, blooms::BloomGroup>>,
@@ -122,20 +127,30 @@ pub struct TraceDB<T> where T: DatabaseExtras {
 	extras: Arc<T>,
 }
 
-impl<T> BloomGroupDatabase for TraceDB<T> where T: DatabaseExtras {
+impl<T> BloomGroupDatabase for TraceDB<T>
+where
+	T: DatabaseExtras,
+{
 	fn blooms_at(&self, position: &GroupPosition) -> Option<BloomGroup> {
 		let position = TraceGroupPosition::from(position.clone());
-		let result = self.tracesdb.read_with_cache(db::COL_TRACE, &self.blooms, &position).map(Into::into);
+		let result = self
+			.tracesdb
+			.read_with_cache(db::COL_TRACE, &self.blooms, &position)
+			.map(Into::into);
 		self.note_used(CacheId::Bloom(position));
 		result
 	}
 }
 
-impl<T> TraceDB<T> where T: DatabaseExtras {
+impl<T> TraceDB<T>
+where
+	T: DatabaseExtras,
+{
 	/// Creates new instance of `TraceDB`.
 	pub fn new(config: Config, tracesdb: Arc<KeyValueDB>, extras: Arc<T>) -> Self {
 		let mut batch = DBTransaction::new();
-		let genesis = extras.block_hash(0)
+		let genesis = extras
+			.block_hash(0)
 			.expect("Genesis block is always inserted upon extras db creation qed");
 		batch.write(db::COL_TRACE, &genesis, &FlatBlockTraces::default());
 		batch.put(db::COL_TRACE, b"version", TRACE_DB_VER);
@@ -144,7 +159,11 @@ impl<T> TraceDB<T> where T: DatabaseExtras {
 		TraceDB {
 			traces: RwLock::new(HashMap::new()),
 			blooms: RwLock::new(HashMap::new()),
-			cache_manager: RwLock::new(CacheManager::new(config.pref_cache_size, config.max_cache_size, 10 * 1024)),
+			cache_manager: RwLock::new(CacheManager::new(
+				config.pref_cache_size,
+				config.max_cache_size,
+				10 * 1024,
+			)),
 			tracesdb: tracesdb,
 			bloom_config: config.blooms,
 			enabled: config.enabled,
@@ -188,7 +207,9 @@ impl<T> TraceDB<T> where T: DatabaseExtras {
 
 	/// Returns traces for block with hash.
 	fn traces(&self, block_hash: &H256) -> Option<FlatBlockTraces> {
-		let result = self.tracesdb.read_with_cache(db::COL_TRACE, &self.traces, block_hash);
+		let result = self
+			.tracesdb
+			.read_with_cache(db::COL_TRACE, &self.traces, block_hash);
 		self.note_used(CacheId::Trace(block_hash.clone()));
 		result
 	}
@@ -203,13 +224,20 @@ impl<T> TraceDB<T> where T: DatabaseExtras {
 		filter: &Filter,
 		traces: FlatBlockTraces,
 		block_hash: H256,
-		block_number: BlockNumber
+		block_number: BlockNumber,
 	) -> Vec<LocalizedTrace> {
 		let tx_traces: Vec<FlatTransactionTraces> = traces.into();
-		tx_traces.into_iter()
+		tx_traces
+			.into_iter()
 			.enumerate()
 			.flat_map(|(tx_number, tx_trace)| {
-				self.matching_transaction_traces(filter, tx_trace, block_hash.clone(), block_number, tx_number)
+				self.matching_transaction_traces(
+					filter,
+					tx_trace,
+					block_hash.clone(),
+					block_number,
+					tx_number,
+				)
 			})
 			.collect()
 	}
@@ -220,36 +248,39 @@ impl<T> TraceDB<T> where T: DatabaseExtras {
 		traces: FlatTransactionTraces,
 		block_hash: H256,
 		block_number: BlockNumber,
-		tx_number: usize
+		tx_number: usize,
 	) -> Vec<LocalizedTrace> {
-		let (trace_tx_number, trace_tx_hash) = match self.extras.transaction_hash(block_number, tx_number) {
-			Some(hash) => (Some(tx_number), Some(hash.clone())),
-			//None means trace without transaction (reward)
-			None => (None, None),
-		};
+		let (trace_tx_number, trace_tx_hash) =
+			match self.extras.transaction_hash(block_number, tx_number) {
+				Some(hash) => (Some(tx_number), Some(hash.clone())),
+				//None means trace without transaction (reward)
+				None => (None, None),
+			};
 
 		let flat_traces: Vec<FlatTrace> = traces.into();
-		flat_traces.into_iter()
-			.filter_map(|trace| {
-				match filter.matches(&trace) {
-					true => Some(LocalizedTrace {
-						action: trace.action,
-						result: trace.result,
-						subtraces: trace.subtraces,
-						trace_address: trace.trace_address.into_iter().collect(),
-						transaction_number: trace_tx_number,
-						transaction_hash: trace_tx_hash,
-						block_number: block_number,
-						block_hash: block_hash
-					}),
-					false => None
-				}
+		flat_traces
+			.into_iter()
+			.filter_map(|trace| match filter.matches(&trace) {
+				true => Some(LocalizedTrace {
+					action: trace.action,
+					result: trace.result,
+					subtraces: trace.subtraces,
+					trace_address: trace.trace_address.into_iter().collect(),
+					transaction_number: trace_tx_number,
+					transaction_hash: trace_tx_hash,
+					block_number: block_number,
+					block_hash: block_hash,
+				}),
+				false => None,
 			})
 			.collect()
 	}
 }
 
-impl<T> TraceDatabase for TraceDB<T> where T: DatabaseExtras {
+impl<T> TraceDatabase for TraceDB<T>
+where
+	T: DatabaseExtras,
+{
 	fn tracing_enabled(&self) -> bool {
 		self.enabled
 	}
@@ -274,27 +305,38 @@ impl<T> TraceDatabase for TraceDB<T> where T: DatabaseExtras {
 			let range_start = request.block_number as Number + 1 - request.enacted.len();
 			let range_end = range_start + request.retracted;
 			let replaced_range = range_start..range_end;
-			let enacted_blooms = request.enacted
+			let enacted_blooms = request
+				.enacted
 				.iter()
 				// all traces are expected to be found here. That's why `expect` has been used
 				// instead of `filter_map`. If some traces haven't been found, it meens that
 				// traces database is corrupted or incomplete.
-				.map(|block_hash| if block_hash == &request.block_hash {
-					request.traces.bloom()
-				} else {
-					self.traces(block_hash).expect("Traces database is incomplete.").bloom()
+				.map(|block_hash| {
+					if block_hash == &request.block_hash {
+						request.traces.bloom()
+					} else {
+						self.traces(block_hash)
+							.expect("Traces database is incomplete.")
+							.bloom()
+					}
 				})
 				.collect();
 
 			let chain = BloomGroupChain::new(self.bloom_config, self);
 			let trace_blooms = chain.replace(&replaced_range, enacted_blooms);
-			let blooms_to_insert = trace_blooms.into_iter()
+			let blooms_to_insert = trace_blooms
+				.into_iter()
 				.map(|p| (From::from(p.0), From::from(p.1)))
 				.collect::<HashMap<TraceGroupPosition, blooms::BloomGroup>>();
 
 			let blooms_keys: Vec<_> = blooms_to_insert.keys().cloned().collect();
 			let mut blooms = self.blooms.write().unwrap();
-			batch.extend_with_cache(db::COL_TRACE, &mut *blooms, blooms_to_insert, CacheUpdatePolicy::Remove);
+			batch.extend_with_cache(
+				db::COL_TRACE,
+				&mut *blooms,
+				blooms_to_insert,
+				CacheUpdatePolicy::Remove,
+			);
 			// note_used must be called after locking blooms to avoid cache/traces deadlock on garbage collection
 			for key in blooms_keys {
 				self.note_used(CacheId::Bloom(key));
@@ -306,23 +348,42 @@ impl<T> TraceDatabase for TraceDB<T> where T: DatabaseExtras {
 			let mut traces = self.traces.write().unwrap();
 			// it's important to use overwrite here,
 			// cause this value might be queried by hash later
-			batch.write_with_cache(db::COL_TRACE, &mut *traces, request.block_hash, request.traces, CacheUpdatePolicy::Overwrite);
+			batch.write_with_cache(
+				db::COL_TRACE,
+				&mut *traces,
+				request.block_hash,
+				request.traces,
+				CacheUpdatePolicy::Overwrite,
+			);
 			// note_used must be called after locking traces to avoid cache/traces deadlock on garbage collection
 			self.note_used(CacheId::Trace(request.block_hash.clone()));
 		}
 	}
 
-	fn trace(&self, block_number: BlockNumber, tx_position: usize, trace_position: Vec<usize>) -> Option<LocalizedTrace> {
+	fn trace(
+		&self,
+		block_number: BlockNumber,
+		tx_position: usize,
+		trace_position: Vec<usize>,
+	) -> Option<LocalizedTrace> {
 		let trace_position_deq = VecDeque::from(trace_position);
-		self.extras.block_hash(block_number)
-			.and_then(|block_hash| self.transactions_traces(&block_hash)
+		self.extras.block_hash(block_number).and_then(|block_hash| {
+			self.transactions_traces(&block_hash)
 				.and_then(|traces| traces.into_iter().nth(tx_position))
 				.map(Into::<Vec<FlatTrace>>::into)
 				// this may and should be optimized
-				.and_then(|traces| traces.into_iter().find(|trace| trace.trace_address == trace_position_deq))
+				.and_then(|traces| {
+					traces
+						.into_iter()
+						.find(|trace| trace.trace_address == trace_position_deq)
+				})
 				.map(|trace| {
-					let tx_hash = self.extras.transaction_hash(block_number, tx_position)
-						.expect("Expected to find transaction hash. Database is probably corrupted");
+					let tx_hash = self
+						.extras
+						.transaction_hash(block_number, tx_position)
+						.expect(
+							"Expected to find transaction hash. Database is probably corrupted",
+						);
 
 					LocalizedTrace {
 						action: trace.action,
@@ -335,75 +396,90 @@ impl<T> TraceDatabase for TraceDB<T> where T: DatabaseExtras {
 						block_hash: block_hash,
 					}
 				})
-			)
+		})
 	}
 
-	fn transaction_traces(&self, block_number: BlockNumber, tx_position: usize) -> Option<Vec<LocalizedTrace>> {
-		self.extras.block_hash(block_number)
-			.and_then(|block_hash| self.transactions_traces(&block_hash)
+	fn transaction_traces(
+		&self,
+		block_number: BlockNumber,
+		tx_position: usize,
+	) -> Option<Vec<LocalizedTrace>> {
+		self.extras.block_hash(block_number).and_then(|block_hash| {
+			self.transactions_traces(&block_hash)
 				.and_then(|traces| traces.into_iter().nth(tx_position))
 				.map(Into::<Vec<FlatTrace>>::into)
 				.map(|traces| {
-					let tx_hash = self.extras.transaction_hash(block_number, tx_position)
-						.expect("Expected to find transaction hash. Database is probably corrupted");
+					let tx_hash = self
+						.extras
+						.transaction_hash(block_number, tx_position)
+						.expect(
+							"Expected to find transaction hash. Database is probably corrupted",
+						);
 
-					traces.into_iter()
-					.map(|trace| LocalizedTrace {
-						action: trace.action,
-						result: trace.result,
-						subtraces: trace.subtraces,
-						trace_address: trace.trace_address.into_iter().collect(),
-						transaction_number: Some(tx_position),
-						transaction_hash: Some(tx_hash.clone()),
-						block_number: block_number,
-						block_hash: block_hash
-					})
-					.collect()
+					traces
+						.into_iter()
+						.map(|trace| LocalizedTrace {
+							action: trace.action,
+							result: trace.result,
+							subtraces: trace.subtraces,
+							trace_address: trace.trace_address.into_iter().collect(),
+							transaction_number: Some(tx_position),
+							transaction_hash: Some(tx_hash.clone()),
+							block_number: block_number,
+							block_hash: block_hash,
+						})
+						.collect()
 				})
-			)
+		})
 	}
 
 	fn block_traces(&self, block_number: BlockNumber) -> Option<Vec<LocalizedTrace>> {
-		self.extras.block_hash(block_number)
-			.and_then(|block_hash| self.transactions_traces(&block_hash)
-				.map(|traces| {
-					traces.into_iter()
-						.map(Into::<Vec<FlatTrace>>::into)
-						.enumerate()
-						.flat_map(|(tx_position, traces)| {
-							let (trace_tx_number, trace_tx_hash) = match self.extras.transaction_hash(block_number, tx_position) {
+		self.extras.block_hash(block_number).and_then(|block_hash| {
+			self.transactions_traces(&block_hash).map(|traces| {
+				traces
+					.into_iter()
+					.map(Into::<Vec<FlatTrace>>::into)
+					.enumerate()
+					.flat_map(|(tx_position, traces)| {
+						let (trace_tx_number, trace_tx_hash) =
+							match self.extras.transaction_hash(block_number, tx_position) {
 								Some(hash) => (Some(tx_position), Some(hash.clone())),
 								//None means trace without transaction (reward)
 								None => (None, None),
 							};
 
-							traces.into_iter()
-								.map(|trace| LocalizedTrace {
-									action: trace.action,
-									result: trace.result,
-									subtraces: trace.subtraces,
-									trace_address: trace.trace_address.into_iter().collect(),
-									transaction_number: trace_tx_number,
-									transaction_hash: trace_tx_hash,
-									block_number: block_number,
-									block_hash: block_hash,
-								})
-								.collect::<Vec<LocalizedTrace>>()
-						})
-						.collect::<Vec<LocalizedTrace>>()
-				})
-			)
+						traces
+							.into_iter()
+							.map(|trace| LocalizedTrace {
+								action: trace.action,
+								result: trace.result,
+								subtraces: trace.subtraces,
+								trace_address: trace.trace_address.into_iter().collect(),
+								transaction_number: trace_tx_number,
+								transaction_hash: trace_tx_hash,
+								block_number: block_number,
+								block_hash: block_hash,
+							})
+							.collect::<Vec<LocalizedTrace>>()
+					})
+					.collect::<Vec<LocalizedTrace>>()
+			})
+		})
 	}
 
 	fn filter(&self, filter: &Filter) -> Vec<LocalizedTrace> {
 		let chain = BloomGroupChain::new(self.bloom_config, self);
 		let numbers = chain.filter(filter);
-		numbers.into_iter()
+		numbers
+			.into_iter()
 			.flat_map(|n| {
 				let number = n as BlockNumber;
-				let hash = self.extras.block_hash(number)
+				let hash = self
+					.extras
+					.block_hash(number)
 					.expect("Expected to find block hash. Extras db is probably corrupted");
-				let traces = self.traces(&hash)
+				let traces = self
+					.traces(&hash)
 					.expect("Expected to find a trace. Db is probably corrupted.");
 				self.matching_block_traces(filter, traces, hash, number)
 			})
@@ -413,17 +489,17 @@ impl<T> TraceDatabase for TraceDB<T> where T: DatabaseExtras {
 
 #[cfg(test)]
 mod tests {
-	use std::collections::HashMap;
-	use std::sync::Arc;
-	use ethereum_types::{H256, U256, Address};
+	use ethereum_types::{Address, H256, U256};
+	use evm::CallType;
+	use header::BlockNumber;
 	use kvdb::{DBTransaction, KeyValueDB};
 	use kvdb_memorydb;
-	use header::BlockNumber;
-	use trace::{Config, TraceDB, Database as TraceDatabase, DatabaseExtras, ImportRequest};
-	use trace::{Filter, LocalizedTrace, AddressesFilter, TraceError};
-	use trace::trace::{Call, Action, Res};
-	use trace::flat::{FlatTrace, FlatBlockTraces, FlatTransactionTraces};
-	use evm::CallType;
+	use std::collections::HashMap;
+	use std::sync::Arc;
+	use trace::flat::{FlatBlockTraces, FlatTrace, FlatTransactionTraces};
+	use trace::trace::{Action, Call, Res};
+	use trace::{AddressesFilter, Filter, LocalizedTrace, TraceError};
+	use trace::{Config, Database as TraceDatabase, DatabaseExtras, ImportRequest, TraceDB};
 
 	struct NoopExtras;
 
@@ -436,7 +512,11 @@ mod tests {
 			}
 		}
 
-		fn transaction_hash(&self, _block_number: BlockNumber, _tx_position: usize) -> Option<H256> {
+		fn transaction_hash(
+			&self,
+			_block_number: BlockNumber,
+			_tx_position: usize,
+		) -> Option<H256> {
 			unimplemented!();
 		}
 	}
@@ -462,7 +542,8 @@ mod tests {
 		}
 
 		fn transaction_hash(&self, block_number: BlockNumber, tx_position: usize) -> Option<H256> {
-			self.transaction_hashes.get(&block_number)
+			self.transaction_hashes
+				.get(&block_number)
 				.and_then(|hashes| hashes.iter().cloned().nth(tx_position))
 		}
 	}
@@ -521,7 +602,10 @@ mod tests {
 		}
 	}
 
-	fn create_noncanon_import_request(block_number: BlockNumber, block_hash: H256) -> ImportRequest {
+	fn create_noncanon_import_request(
+		block_number: BlockNumber,
+		block_hash: H256,
+	) -> ImportRequest {
 		ImportRequest {
 			traces: FlatBlockTraces::from(vec![FlatTransactionTraces::from(vec![FlatTrace {
 				trace_address: Default::default(),
@@ -543,7 +627,11 @@ mod tests {
 		}
 	}
 
-	fn create_simple_localized_trace(block_number: BlockNumber, block_hash: H256, tx_hash: H256) -> LocalizedTrace {
+	fn create_simple_localized_trace(
+		block_number: BlockNumber,
+		block_hash: H256,
+		tx_hash: H256,
+	) -> LocalizedTrace {
 		LocalizedTrace {
 			action: Action::Call(Call {
 				from: Address::from(1),
@@ -587,7 +675,10 @@ mod tests {
 		tracedb.import(&mut batch, request);
 		db.write(batch).unwrap();
 
-		assert!(tracedb.traces(&block_0).is_some(), "Traces should be available even if block is non-canon.");
+		assert!(
+			tracedb.traces(&block_0).is_some(),
+			"Traces should be available even if block is non-canon."
+		);
 	}
 
 	#[test]
@@ -624,7 +715,10 @@ mod tests {
 
 		let traces = tracedb.filter(&filter);
 		assert_eq!(traces.len(), 1);
-		assert_eq!(traces[0], create_simple_localized_trace(1, block_1.clone(), tx_1.clone()));
+		assert_eq!(
+			traces[0],
+			create_simple_localized_trace(1, block_1.clone(), tx_1.clone())
+		);
 
 		// import block 2
 		let request = create_simple_import_request(2, block_2.clone());
@@ -640,33 +734,60 @@ mod tests {
 
 		let traces = tracedb.filter(&filter);
 		assert_eq!(traces.len(), 2);
-		assert_eq!(traces[0], create_simple_localized_trace(1, block_1.clone(), tx_1.clone()));
-		assert_eq!(traces[1], create_simple_localized_trace(2, block_2.clone(), tx_2.clone()));
+		assert_eq!(
+			traces[0],
+			create_simple_localized_trace(1, block_1.clone(), tx_1.clone())
+		);
+		assert_eq!(
+			traces[1],
+			create_simple_localized_trace(2, block_2.clone(), tx_2.clone())
+		);
 
-		assert!(tracedb.block_traces(0).is_some(), "Genesis trace should be always present.");
+		assert!(
+			tracedb.block_traces(0).is_some(),
+			"Genesis trace should be always present."
+		);
 
 		let traces = tracedb.block_traces(1).unwrap();
 		assert_eq!(traces.len(), 1);
-		assert_eq!(traces[0], create_simple_localized_trace(1, block_1.clone(), tx_1.clone()));
+		assert_eq!(
+			traces[0],
+			create_simple_localized_trace(1, block_1.clone(), tx_1.clone())
+		);
 
 		let traces = tracedb.block_traces(2).unwrap();
 		assert_eq!(traces.len(), 1);
-		assert_eq!(traces[0], create_simple_localized_trace(2, block_2.clone(), tx_2.clone()));
+		assert_eq!(
+			traces[0],
+			create_simple_localized_trace(2, block_2.clone(), tx_2.clone())
+		);
 
 		assert_eq!(None, tracedb.block_traces(3));
 
 		let traces = tracedb.transaction_traces(1, 0).unwrap();
 		assert_eq!(traces.len(), 1);
-		assert_eq!(traces[0], create_simple_localized_trace(1, block_1.clone(), tx_1.clone()));
+		assert_eq!(
+			traces[0],
+			create_simple_localized_trace(1, block_1.clone(), tx_1.clone())
+		);
 
 		let traces = tracedb.transaction_traces(2, 0).unwrap();
 		assert_eq!(traces.len(), 1);
-		assert_eq!(traces[0], create_simple_localized_trace(2, block_2.clone(), tx_2.clone()));
+		assert_eq!(
+			traces[0],
+			create_simple_localized_trace(2, block_2.clone(), tx_2.clone())
+		);
 
 		assert_eq!(None, tracedb.transaction_traces(2, 1));
 
-		assert_eq!(tracedb.trace(1, 0, vec![]).unwrap(), create_simple_localized_trace(1, block_1.clone(), tx_1.clone()));
-		assert_eq!(tracedb.trace(2, 0, vec![]).unwrap(), create_simple_localized_trace(2, block_2.clone(), tx_2.clone()));
+		assert_eq!(
+			tracedb.trace(1, 0, vec![]).unwrap(),
+			create_simple_localized_trace(1, block_1.clone(), tx_1.clone())
+		);
+		assert_eq!(
+			tracedb.trace(2, 0, vec![]).unwrap(),
+			create_simple_localized_trace(2, block_2.clone(), tx_2.clone())
+		);
 	}
 
 	#[test]
@@ -698,7 +819,10 @@ mod tests {
 		{
 			let tracedb = TraceDB::new(config.clone(), db.clone(), Arc::new(extras));
 			let traces = tracedb.transaction_traces(1, 0);
-			assert_eq!(traces.unwrap(), vec![create_simple_localized_trace(1, block_0, tx_0)]);
+			assert_eq!(
+				traces.unwrap(),
+				vec![create_simple_localized_trace(1, block_0, tx_0)]
+			);
 		}
 	}
 

@@ -23,14 +23,14 @@ use ethcore::machine::EthereumMachine;
 use ethcore::receipt::Receipt;
 use sync::LightSync;
 
-use futures::{future, Future};
 use futures::future::Either;
+use futures::{future, Future};
 
 use light::client::fetch::ChainDataFetcher;
 use light::on_demand::{request, OnDemand};
 
-use parking_lot::RwLock;
 use ethereum_types::H256;
+use parking_lot::RwLock;
 
 const ALL_VALID_BACKREFS: &str = "no back-references, therefore all back-references valid; qed";
 
@@ -46,7 +46,9 @@ pub struct EpochFetch {
 
 impl EpochFetch {
 	fn request<T>(&self, req: T) -> BoxFuture<T::Out, &'static str>
-		where T: Send + request::RequestAdapter + 'static, T::Out: Send + 'static
+	where
+		T: Send + request::RequestAdapter + 'static,
+		T::Out: Send + 'static,
 	{
 		Box::new(match self.sync.read().upgrade() {
 			Some(sync) => {
@@ -82,9 +84,12 @@ impl ChainDataFetcher for EpochFetch {
 	}
 
 	/// Fetch epoch transition proof at given header.
-	fn epoch_transition(&self, hash: H256, engine: Arc<EthEngine>, checker: Arc<StateDependentProof<EthereumMachine>>)
-		-> Self::Transition
-	{
+	fn epoch_transition(
+		&self,
+		hash: H256,
+		engine: Arc<EthEngine>,
+		checker: Arc<StateDependentProof<EthereumMachine>>,
+	) -> Self::Transition {
 		self.request(request::Signal {
 			hash: hash,
 			engine: engine,

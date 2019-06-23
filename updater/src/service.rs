@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use types::{CapState, ReleaseInfo, OperationsInfo, VersionInfo};
+use types::{CapState, OperationsInfo, ReleaseInfo, VersionInfo};
 
 pub trait Service: Send + Sync {
 	/// Is the currently running client capable of supporting the current chain?

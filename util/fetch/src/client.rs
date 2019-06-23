@@ -14,25 +14,25 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+use bytes::Bytes;
 use futures::future::{self, Loop};
 use futures::sync::{mpsc, oneshot};
-use futures::{self, Future, Async, Sink, Stream};
-use hyper::header::{UserAgent, Location, ContentLength, ContentType};
+use futures::{self, Async, Future, Sink, Stream};
+use hyper::header::{ContentLength, ContentType, Location, UserAgent};
 use hyper::mime::Mime;
 use hyper::{self, Method, StatusCode};
 use hyper_tls;
 use std;
 use std::cmp::min;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::RecvTimeoutError;
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use std::{io, fmt};
+use std::{fmt, io};
 use tokio_core::reactor;
 use tokio_timer::{self, Timer};
 use url::{self, Url};
-use bytes::Bytes;
 
 const MAX_SIZE: usize = 64 * 1024 * 1024;
 const MAX_SECS: Duration = Duration::from_secs(5);
@@ -101,24 +101,24 @@ impl Abort {
 
 	/// Set the maximum reponse body size.
 	pub fn with_max_size(self, n: usize) -> Abort {
-		Abort { size: n, .. self }
+		Abort { size: n, ..self }
 	}
 
 	/// Set the maximum duration (including redirects).
 	pub fn with_max_duration(self, d: Duration) -> Abort {
-		Abort { time: d, .. self }
+		Abort { time: d, ..self }
 	}
 
 	/// Set the maximum number of redirects to follow.
 	pub fn with_max_redirects(self, n: usize) -> Abort {
-		Abort { redir: n, .. self }
+		Abort { redir: n, ..self }
 	}
 }
 
 /// Types which retrieve content from some URL.
 pub trait Fetch: Clone + Send + Sync + 'static {
 	/// The result future.
-	type Result: Future<Item=Response, Error=Error> + Send + 'static;
+	type Result: Future<Item = Response, Error = Error> + Send + 'static;
 
 	/// Make a request to given URL
 	fn fetch(&self, request: Request, abort: Abort) -> Self::Result;
@@ -179,15 +179,15 @@ impl Client {
 		match rx_start.recv_timeout(Duration::from_secs(10)) {
 			Err(RecvTimeoutError::Timeout) => {
 				error!(target: "fetch", "timeout starting background thread");
-				return Err(Error::BackgroundThreadDead)
+				return Err(Error::BackgroundThreadDead);
 			}
 			Err(RecvTimeoutError::Disconnected) => {
 				error!(target: "fetch", "background thread gone");
-				return Err(Error::BackgroundThreadDead)
+				return Err(Error::BackgroundThreadDead);
 			}
 			Ok(Err(e)) => {
 				error!(target: "fetch", "error starting background thread: {}", e);
-				return Err(e.into())
+				return Err(e.into());
 			}
 			Ok(Ok(())) => {}
 		}
@@ -199,67 +199,79 @@ impl Client {
 		})
 	}
 
-	fn background_thread(tx_start: TxStartup, rx_proto: mpsc::Receiver<ChanItem>) -> io::Result<thread::JoinHandle<()>> {
+	fn background_thread(
+		tx_start: TxStartup,
+		rx_proto: mpsc::Receiver<ChanItem>,
+	) -> io::Result<thread::JoinHandle<()>> {
 		thread::Builder::new().name("fetch".into()).spawn(move || {
 			let mut core = match reactor::Core::new() {
 				Ok(c) => c,
-				Err(e) => return tx_start.send(Err(e)).unwrap_or(())
+				Err(e) => return tx_start.send(Err(e)).unwrap_or(()),
 			};
 
 			let handle = core.handle();
 			let hyper = hyper::Client::configure()
-				.connector(hyper_tls::HttpsConnector::new(4, &core.handle()).expect("TLS initialization should not fail"))
+				.connector(
+					hyper_tls::HttpsConnector::new(4, &core.handle())
+						.expect("TLS initialization should not fail"),
+				)
 				.build(&core.handle());
 
-			let future = rx_proto.take_while(|item| Ok(item.is_some()))
-				.map(|item| item.expect("`take_while` is only passing on channel items != None; qed"))
-				.for_each(|(request, abort, sender)|
-			{
-				trace!(target: "fetch", "new request to {}", request.url());
-				if abort.is_aborted() {
-					return future::ok(sender.send(Err(Error::Aborted)).unwrap_or(()))
-				}
-				let ini = (hyper.clone(), request, abort, 0);
-				let fut = future::loop_fn(ini, |(client, request, abort, redirects)| {
-					let request2 = request.clone();
-					let url2 = request2.url().clone();
-					let abort2 = abort.clone();
-					client.request(request.into())
-						.map(move |resp| Response::new(url2, resp, abort2))
-						.from_err()
-						.and_then(move |resp| {
-							if abort.is_aborted() {
-								debug!(target: "fetch", "fetch of {} aborted", request2.url());
-								return Err(Error::Aborted)
-							}
-							if let Some((next_url, preserve_method)) = redirect_location(request2.url().clone(), &resp) {
-								if redirects >= abort.max_redirects() {
-									return Err(Error::TooManyRedirects)
+			let future = rx_proto
+				.take_while(|item| Ok(item.is_some()))
+				.map(|item| {
+					item.expect("`take_while` is only passing on channel items != None; qed")
+				})
+				.for_each(|(request, abort, sender)| {
+					trace!(target: "fetch", "new request to {}", request.url());
+					if abort.is_aborted() {
+						return future::ok(sender.send(Err(Error::Aborted)).unwrap_or(()));
+					}
+					let ini = (hyper.clone(), request, abort, 0);
+					let fut = future::loop_fn(ini, |(client, request, abort, redirects)| {
+						let request2 = request.clone();
+						let url2 = request2.url().clone();
+						let abort2 = abort.clone();
+						client
+							.request(request.into())
+							.map(move |resp| Response::new(url2, resp, abort2))
+							.from_err()
+							.and_then(move |resp| {
+								if abort.is_aborted() {
+									debug!(target: "fetch", "fetch of {} aborted", request2.url());
+									return Err(Error::Aborted);
 								}
-								let request = if preserve_method {
-									let mut request2 = request2.clone();
-									request2.set_url(next_url);
-									request2
+								if let Some((next_url, preserve_method)) =
+									redirect_location(request2.url().clone(), &resp)
+								{
+									if redirects >= abort.max_redirects() {
+										return Err(Error::TooManyRedirects);
+									}
+									let request = if preserve_method {
+										let mut request2 = request2.clone();
+										request2.set_url(next_url);
+										request2
+									} else {
+										Request::new(next_url, Method::Get)
+									};
+									Ok(Loop::Continue((client, request, abort, redirects + 1)))
 								} else {
-									Request::new(next_url, Method::Get)
-								};
-								Ok(Loop::Continue((client, request, abort, redirects + 1)))
-							} else {
-								let content_len = resp.headers.get::<ContentLength>().cloned();
-								if content_len.map(|n| *n > abort.max_size() as u64).unwrap_or(false) {
-									return Err(Error::SizeLimit)
+									let content_len = resp.headers.get::<ContentLength>().cloned();
+									if content_len
+										.map(|n| *n > abort.max_size() as u64)
+										.unwrap_or(false)
+									{
+										return Err(Error::SizeLimit);
+									}
+									Ok(Loop::Break(resp))
 								}
-								Ok(Loop::Break(resp))
-							}
-						})
+							})
 					})
-					.then(|result| {
-						future::ok(sender.send(result).unwrap_or(()))
-					});
-				handle.spawn(fut);
-				trace!(target: "fetch", "waiting for next request ...");
-				future::ok(())
-			});
+					.then(|result| future::ok(sender.send(result).unwrap_or(())));
+					handle.spawn(fut);
+					trace!(target: "fetch", "waiting for next request ...");
+					future::ok(())
+				});
 
 			tx_start.send(Ok(())).unwrap_or(());
 
@@ -273,17 +285,18 @@ impl Client {
 }
 
 impl Fetch for Client {
-	type Result = Box<Future<Item=Response, Error=Error> + Send>;
+	type Result = Box<Future<Item = Response, Error = Error> + Send>;
 
 	fn fetch(&self, request: Request, abort: Abort) -> Self::Result {
 		debug!(target: "fetch", "fetching: {:?}", request.url());
 		if abort.is_aborted() {
-			return Box::new(future::err(Error::Aborted))
+			return Box::new(future::err(Error::Aborted));
 		}
 		let (tx_res, rx_res) = oneshot::channel();
 		let maxdur = abort.max_duration();
 		let sender = self.core.clone();
-		let future = sender.send(Some((request, abort, tx_res)))
+		let future = sender
+			.send(Some((request, abort, tx_res)))
 			.map_err(|e| {
 				error!(target: "fetch", "failed to schedule request: {}", e);
 				Error::BackgroundThreadDead
@@ -298,7 +311,7 @@ impl Fetch for Client {
 	fn get(&self, url: &str, abort: Abort) -> Self::Result {
 		let url: Url = match url.parse() {
 			Ok(u) => u,
-			Err(e) => return Box::new(future::err(e.into()))
+			Err(e) => return Box::new(future::err(e.into())),
 		};
 		self.fetch(Request::get(url), abort)
 	}
@@ -307,7 +320,7 @@ impl Fetch for Client {
 	fn post(&self, url: &str, abort: Abort) -> Self::Result {
 		let url: Url = match url.parse() {
 			Ok(u) => u,
-			Err(e) => return Box::new(future::err(e.into()))
+			Err(e) => return Box::new(future::err(e.into())),
 		};
 		self.fetch(Request::post(url), abort)
 	}
@@ -321,18 +334,14 @@ fn redirect_location(u: Url, r: &Response) -> Option<(Url, bool)> {
 		_ => false,
 	};
 	match r.status() {
-		MovedPermanently
-		| PermanentRedirect
-		| TemporaryRedirect
-		| Found
-		| SeeOther => {
+		MovedPermanently | PermanentRedirect | TemporaryRedirect | Found | SeeOther => {
 			if let Some(loc) = r.headers.get::<Location>() {
 				u.join(loc).ok().map(|url| (url, preserve_method))
 			} else {
 				None
 			}
 		}
-		_ => None
+		_ => None,
 	}
 }
 
@@ -349,7 +358,8 @@ impl Request {
 	/// Create a new request, with given url and method.
 	pub fn new(url: Url, method: Method) -> Request {
 		Request {
-			url, method,
+			url,
+			method,
 			headers: hyper::Headers::new(),
 			body: Default::default(),
 		}
@@ -405,7 +415,11 @@ impl Request {
 
 impl Into<hyper::Request> for Request {
 	fn into(mut self) -> hyper::Request {
-		let uri = self.url.as_ref().parse().expect("Every valid URLis also a URI.");
+		let uri = self
+			.url
+			.as_ref()
+			.parse()
+			.expect("Every valid URLis also a URI.");
 		let mut req = hyper::Request::new(self.method, uri);
 
 		self.headers.set(UserAgent::new("Parity Fetch Neo"));
@@ -477,14 +491,14 @@ impl Stream for Response {
 	fn poll(&mut self) -> futures::Poll<Option<Self::Item>, Self::Error> {
 		if self.abort.is_aborted() {
 			debug!(target: "fetch", "fetch of {} aborted", self.url);
-			return Err(Error::Aborted)
+			return Err(Error::Aborted);
 		}
 		match try_ready!(self.body.poll()) {
 			None => Ok(Async::Ready(None)),
 			Some(c) => {
 				if self.nread + c.len() > self.abort.max_size() {
 					debug!(target: "fetch", "size limit {:?} for {} exceeded", self.abort.max_size(), self.url);
-					return Err(Error::SizeLimit)
+					return Err(Error::SizeLimit);
 				}
 				self.nread += c.len();
 				Ok(Async::Ready(Some(c)))
@@ -527,22 +541,32 @@ impl io::Read for BodyReader {
 				let k = min(self.chunk.len() - self.offset, buf.len() - n);
 				if self.count + k > self.abort.max_size() {
 					debug!(target: "fetch", "size limit {:?} exceeded", self.abort.max_size());
-					return Err(io::Error::new(io::ErrorKind::PermissionDenied, "size limit exceeded"))
+					return Err(io::Error::new(
+						io::ErrorKind::PermissionDenied,
+						"size limit exceeded",
+					));
 				}
-				let c = &self.chunk[self.offset .. self.offset + k];
-				(&mut buf[n .. n + k]).copy_from_slice(c);
+				let c = &self.chunk[self.offset..self.offset + k];
+				(&mut buf[n..n + k]).copy_from_slice(c);
 				self.offset += k;
 				self.count += k;
 				n += k;
 				if n == buf.len() {
-					break
+					break;
 				}
 			} else {
-				let body = self.body.take().expect("loop condition ensures `self.body` is always defined; qed");
-				match body.into_future().wait() { // wait for next chunk
+				let body = self
+					.body
+					.take()
+					.expect("loop condition ensures `self.body` is always defined; qed");
+				match body.into_future().wait() {
+					// wait for next chunk
 					Err((e, _)) => {
 						error!(target: "fetch", "failed to read chunk: {}", e);
-						return Err(io::Error::new(io::ErrorKind::Other, "failed to read body chunk"))
+						return Err(io::Error::new(
+							io::ErrorKind::Other,
+							"failed to read body chunk",
+						));
 					}
 					Ok((None, _)) => break, // body is exhausted, break out of the loop
 					Ok((Some(c), b)) => {
@@ -628,12 +652,12 @@ mod test {
 	use super::*;
 	use futures::future;
 	use futures::sync::mpsc;
-	use hyper::StatusCode;
 	use hyper::server::{Http, Request, Response, Service};
-	use tokio_timer::Timer;
+	use hyper::StatusCode;
 	use std;
 	use std::io::Read;
 	use std::net::SocketAddr;
+	use tokio_timer::Timer;
 
 	const ADDRESS: &str = "127.0.0.1:0";
 
@@ -653,9 +677,12 @@ mod test {
 		let server = TestServer::run();
 		let client = Client::new().unwrap();
 		let abort = Abort::default().with_max_duration(Duration::from_secs(1));
-		match client.get(&format!("http://{}/delay?3", server.addr()), abort).wait() {
+		match client
+			.get(&format!("http://{}/delay?3", server.addr()), abort)
+			.wait()
+		{
 			Err(Error::Timeout) => {}
-			other => panic!("expected timeout, got {:?}", other)
+			other => panic!("expected timeout, got {:?}", other),
 		}
 	}
 
@@ -664,7 +691,14 @@ mod test {
 		let server = TestServer::run();
 		let client = Client::new().unwrap();
 		let abort = Abort::default();
-		let future = client.get(&format!("http://{}/redirect?http://{}/", server.addr(), server.addr()), abort);
+		let future = client.get(
+			&format!(
+				"http://{}/redirect?http://{}/",
+				server.addr(),
+				server.addr()
+			),
+			abort,
+		);
 		assert!(future.wait().unwrap().is_success())
 	}
 
@@ -682,9 +716,12 @@ mod test {
 		let server = TestServer::run();
 		let client = Client::new().unwrap();
 		let abort = Abort::default().with_max_redirects(3);
-		match client.get(&format!("http://{}/loop", server.addr()), abort).wait() {
+		match client
+			.get(&format!("http://{}/loop", server.addr()), abort)
+			.wait()
+		{
 			Err(Error::TooManyRedirects) => {}
-			other => panic!("expected too many redirects error, got {:?}", other)
+			other => panic!("expected too many redirects error, got {:?}", other),
 		}
 	}
 
@@ -693,10 +730,16 @@ mod test {
 		let server = TestServer::run();
 		let client = Client::new().unwrap();
 		let abort = Abort::default();
-		let future = client.get(&format!("http://{}?abcdefghijklmnopqrstuvwxyz", server.addr()), abort);
+		let future = client.get(
+			&format!("http://{}?abcdefghijklmnopqrstuvwxyz", server.addr()),
+			abort,
+		);
 		let resp = future.wait().unwrap();
 		assert!(resp.is_success());
-		assert_eq!(&resp.concat2().wait().unwrap()[..], b"abcdefghijklmnopqrstuvwxyz")
+		assert_eq!(
+			&resp.concat2().wait().unwrap()[..],
+			b"abcdefghijklmnopqrstuvwxyz"
+		)
 	}
 
 	#[test]
@@ -704,11 +747,14 @@ mod test {
 		let server = TestServer::run();
 		let client = Client::new().unwrap();
 		let abort = Abort::default().with_max_size(3);
-		let resp = client.get(&format!("http://{}/?1234", server.addr()), abort).wait().unwrap();
+		let resp = client
+			.get(&format!("http://{}/?1234", server.addr()), abort)
+			.wait()
+			.unwrap();
 		assert!(resp.is_success());
 		match resp.concat2().wait() {
 			Err(Error::SizeLimit) => {}
-			other => panic!("expected size limit error, got {:?}", other)
+			other => panic!("expected size limit error, got {:?}", other),
 		}
 	}
 
@@ -717,13 +763,16 @@ mod test {
 		let server = TestServer::run();
 		let client = Client::new().unwrap();
 		let abort = Abort::default().with_max_size(3);
-		let resp = client.get(&format!("http://{}/?1234", server.addr()), abort).wait().unwrap();
+		let resp = client
+			.get(&format!("http://{}/?1234", server.addr()), abort)
+			.wait()
+			.unwrap();
 		assert!(resp.is_success());
 		let mut buffer = Vec::new();
 		let mut reader = BodyReader::new(resp);
 		match reader.read_to_end(&mut buffer) {
 			Err(ref e) if e.kind() == io::ErrorKind::PermissionDenied => {}
-			other => panic!("expected size limit error, got {:?}", other)
+			other => panic!("expected size limit error, got {:?}", other),
 		}
 	}
 
@@ -733,7 +782,7 @@ mod test {
 		type Request = Request;
 		type Response = Response;
 		type Error = hyper::Error;
-		type Future = Box<Future<Item=Self::Response, Error=Self::Error>>;
+		type Future = Box<Future<Item = Self::Response, Error = Self::Error>>;
 
 		fn call(&self, req: Request) -> Self::Future {
 			match req.uri().path() {
@@ -757,12 +806,17 @@ mod test {
 				}
 				"/delay" => {
 					let d = Duration::from_secs(req.uri().query().unwrap_or("0").parse().unwrap());
-					Box::new(self.0.sleep(d)
-							 .map_err(|_| return io::Error::new(io::ErrorKind::Other, "timer error"))
-							 .from_err()
-							 .map(|_| Response::new()))
+					Box::new(
+						self.0
+							.sleep(d)
+							.map_err(|_| return io::Error::new(io::ErrorKind::Other, "timer error"))
+							.from_err()
+							.map(|_| Response::new()),
+					)
 				}
-				_ => Box::new(future::ok(Response::new().with_status(StatusCode::NotFound)))
+				_ => Box::new(future::ok(
+					Response::new().with_status(StatusCode::NotFound),
+				)),
 			}
 		}
 	}
@@ -774,7 +828,9 @@ mod test {
 			let rx_end_fut = rx_end.into_future().map(|_| ()).map_err(|_| ());
 			thread::spawn(move || {
 				let addr = ADDRESS.parse().unwrap();
-				let server = Http::new().bind(&addr, || Ok(TestServer(Timer::default()))).unwrap();
+				let server = Http::new()
+					.bind(&addr, || Ok(TestServer(Timer::default())))
+					.unwrap();
 				tx_start.send(server.local_addr().unwrap()).unwrap_or(());
 				server.run_until(rx_end_fut).unwrap();
 			});

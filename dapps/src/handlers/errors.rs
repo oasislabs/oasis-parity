@@ -51,7 +51,10 @@ pub fn timeout_error() -> ContentHandler {
 	ContentHandler::error(
 		StatusCode::GatewayTimeout,
 		"Download Timeout",
-		&format!("Could not fetch content within {} seconds.", FETCH_TIMEOUT.as_secs()),
+		&format!(
+			"Could not fetch content within {} seconds.",
+			FETCH_TIMEOUT.as_secs()
+		),
 		None,
 	)
 }

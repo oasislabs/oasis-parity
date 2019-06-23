@@ -14,14 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{io, net, fmt};
-use libc::{ENFILE, EMFILE};
 use io::IoError;
-use {rlp, ethkey, crypto, snappy};
+use libc::{EMFILE, ENFILE};
+use std::{fmt, io, net};
+use {crypto, ethkey, rlp, snappy};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum DisconnectReason
-{
+pub enum DisconnectReason {
 	DisconnectRequested,
 	TCPError,
 	BadProtocol,
@@ -167,7 +166,7 @@ impl From<io::Error> for Error {
 		match err.raw_os_error() {
 			Some(ENFILE) => ErrorKind::ProcessTooManyFiles.into(),
 			Some(EMFILE) => ErrorKind::SystemTooManyFiles.into(),
-			_ => Error::from_kind(ErrorKind::Io(err))
+			_ => Error::from_kind(ErrorKind::Io(err)),
 		}
 	}
 }
@@ -197,25 +196,29 @@ impl From<crypto::error::SymmError> for Error {
 }
 
 impl From<net::AddrParseError> for Error {
-	fn from(_err: net::AddrParseError) -> Self { ErrorKind::AddressParse.into() }
+	fn from(_err: net::AddrParseError) -> Self {
+		ErrorKind::AddressParse.into()
+	}
 }
 
 #[test]
 fn test_errors() {
 	assert_eq!(DisconnectReason::ClientQuit, DisconnectReason::from_u8(8));
 	let mut r = DisconnectReason::DisconnectRequested;
-	for i in 0 .. 20 {
+	for i in 0..20 {
 		r = DisconnectReason::from_u8(i);
 	}
 	assert_eq!(DisconnectReason::Unknown, r);
 
 	match *<Error as From<rlp::DecoderError>>::from(rlp::DecoderError::RlpIsTooBig).kind() {
-		ErrorKind::Auth => {},
+		ErrorKind::Auth => {}
 		_ => panic!("Unexpected error"),
 	}
 
-	match *<Error as From<ethkey::crypto::Error>>::from(ethkey::crypto::Error::InvalidMessage).kind() {
-		ErrorKind::Auth => {},
+	match *<Error as From<ethkey::crypto::Error>>::from(ethkey::crypto::Error::InvalidMessage)
+		.kind()
+	{
+		ErrorKind::Auth => {}
 		_ => panic!("Unexpected error"),
 	}
 }
@@ -225,20 +228,17 @@ fn test_io_errors() {
 	use libc::{EMFILE, ENFILE};
 
 	assert_matches!(
-		<Error as From<io::Error>>::from(
-			io::Error::from_raw_os_error(ENFILE)
-			).kind(),
-		ErrorKind::ProcessTooManyFiles);
+		<Error as From<io::Error>>::from(io::Error::from_raw_os_error(ENFILE)).kind(),
+		ErrorKind::ProcessTooManyFiles
+	);
 
 	assert_matches!(
-		<Error as From<io::Error>>::from(
-			io::Error::from_raw_os_error(EMFILE)
-			).kind(),
-		ErrorKind::SystemTooManyFiles);
+		<Error as From<io::Error>>::from(io::Error::from_raw_os_error(EMFILE)).kind(),
+		ErrorKind::SystemTooManyFiles
+	);
 
 	assert_matches!(
-		<Error as From<io::Error>>::from(
-			io::Error::from_raw_os_error(0)
-			).kind(),
-		ErrorKind::Io(_));
+		<Error as From<io::Error>>::from(io::Error::from_raw_os_error(0)).kind(),
+		ErrorKind::Io(_)
+	);
 }

@@ -14,27 +14,29 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::{VecDeque, HashSet, HashMap};
-use std::sync::Arc;
-use std::time::Duration;
-use ethereum_types::H256;
-use parking_lot::{RwLock, Mutex};
+use api::WARP_SYNC_PROTOCOL_ID;
 use bytes::Bytes;
-use network::{self, PeerId, ProtocolId, PacketId, SessionInfo};
-use tests::snapshot::*;
-use ethcore::client::{TestBlockChainClient, BlockChainClient, Client as EthcoreClient,
-	ClientConfig, ChainNotify, ChainRoute, ChainMessageType, ClientIoMessage};
+use chain::{ChainSync, ETH_PROTOCOL_VERSION_63, PAR_PROTOCOL_VERSION_3};
+use ethcore::account_provider::AccountProvider;
+use ethcore::client::{
+	BlockChainClient, ChainMessageType, ChainNotify, ChainRoute, Client as EthcoreClient,
+	ClientConfig, ClientIoMessage, TestBlockChainClient,
+};
 use ethcore::header::BlockNumber;
+use ethcore::miner::Miner;
 use ethcore::snapshot::SnapshotService;
 use ethcore::spec::Spec;
-use ethcore::account_provider::AccountProvider;
-use ethcore::miner::Miner;
-use sync_io::SyncIo;
+use ethereum_types::H256;
 use io::{IoChannel, IoContext, IoHandler};
-use api::WARP_SYNC_PROTOCOL_ID;
-use chain::{ChainSync, ETH_PROTOCOL_VERSION_63, PAR_PROTOCOL_VERSION_3};
-use SyncConfig;
+use network::{self, PacketId, PeerId, ProtocolId, SessionInfo};
+use parking_lot::{Mutex, RwLock};
 use private_tx::SimplePrivateTxHandler;
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::Arc;
+use std::time::Duration;
+use sync_io::SyncIo;
+use tests::snapshot::*;
+use SyncConfig;
 
 pub trait FlushingBlockChainClient: BlockChainClient {
 	fn flush(&self) {}
@@ -48,7 +50,11 @@ impl FlushingBlockChainClient for EthcoreClient {
 
 impl FlushingBlockChainClient for TestBlockChainClient {}
 
-pub struct TestIo<'p, C> where C: FlushingBlockChainClient, C: 'p {
+pub struct TestIo<'p, C>
+where
+	C: FlushingBlockChainClient,
+	C: 'p,
+{
 	pub chain: &'p C,
 	pub snapshot_service: &'p TestSnapshotService,
 	pub queue: &'p RwLock<VecDeque<TestPacket>>,
@@ -59,8 +65,17 @@ pub struct TestIo<'p, C> where C: FlushingBlockChainClient, C: 'p {
 	overlay: RwLock<HashMap<BlockNumber, Bytes>>,
 }
 
-impl<'p, C> TestIo<'p, C> where C: FlushingBlockChainClient, C: 'p {
-	pub fn new(chain: &'p C, ss: &'p TestSnapshotService, queue: &'p RwLock<VecDeque<TestPacket>>, sender: Option<PeerId>) -> TestIo<'p, C> {
+impl<'p, C> TestIo<'p, C>
+where
+	C: FlushingBlockChainClient,
+	C: 'p,
+{
+	pub fn new(
+		chain: &'p C,
+		ss: &'p TestSnapshotService,
+		queue: &'p RwLock<VecDeque<TestPacket>>,
+		sender: Option<PeerId>,
+	) -> TestIo<'p, C> {
 		TestIo {
 			chain: chain,
 			snapshot_service: ss,
@@ -74,13 +89,21 @@ impl<'p, C> TestIo<'p, C> where C: FlushingBlockChainClient, C: 'p {
 	}
 }
 
-impl<'p, C> Drop for TestIo<'p, C> where C: FlushingBlockChainClient, C: 'p {
+impl<'p, C> Drop for TestIo<'p, C>
+where
+	C: FlushingBlockChainClient,
+	C: 'p,
+{
 	fn drop(&mut self) {
 		self.queue.write().extend(self.packets.drain(..));
 	}
 }
 
-impl<'p, C> SyncIo for TestIo<'p, C> where C: FlushingBlockChainClient, C: 'p {
+impl<'p, C> SyncIo for TestIo<'p, C>
+where
+	C: FlushingBlockChainClient,
+	C: 'p,
+{
 	fn disable_peer(&mut self, peer_id: PeerId) {
 		self.disconnect_peer(peer_id);
 	}
@@ -97,12 +120,17 @@ impl<'p, C> SyncIo for TestIo<'p, C> where C: FlushingBlockChainClient, C: 'p {
 		self.packets.push(TestPacket {
 			data: data,
 			packet_id: packet_id,
-			recipient: self.sender.unwrap()
+			recipient: self.sender.unwrap(),
 		});
 		Ok(())
 	}
 
-	fn send(&mut self, peer_id: PeerId, packet_id: PacketId, data: Vec<u8>) -> Result<(), network::Error> {
+	fn send(
+		&mut self,
+		peer_id: PeerId,
+		packet_id: PacketId,
+		data: Vec<u8>,
+	) -> Result<(), network::Error> {
 		self.packets.push(TestPacket {
 			data: data,
 			packet_id: packet_id,
@@ -111,7 +139,13 @@ impl<'p, C> SyncIo for TestIo<'p, C> where C: FlushingBlockChainClient, C: 'p {
 		Ok(())
 	}
 
-	fn send_protocol(&mut self, _protocol: ProtocolId, peer_id: PeerId, packet_id: PacketId, data: Vec<u8>) -> Result<(), network::Error> {
+	fn send_protocol(
+		&mut self,
+		_protocol: ProtocolId,
+		peer_id: PeerId,
+		packet_id: PacketId,
+		data: Vec<u8>,
+	) -> Result<(), network::Error> {
 		self.send(peer_id, packet_id, data)
 	}
 
@@ -120,7 +154,8 @@ impl<'p, C> SyncIo for TestIo<'p, C> where C: FlushingBlockChainClient, C: 'p {
 	}
 
 	fn peer_info(&self, peer_id: PeerId) -> String {
-		self.peers_info.get(&peer_id)
+		self.peers_info
+			.get(&peer_id)
 			.cloned()
 			.unwrap_or_else(|| peer_id.to_string())
 	}
@@ -138,7 +173,11 @@ impl<'p, C> SyncIo for TestIo<'p, C> where C: FlushingBlockChainClient, C: 'p {
 	}
 
 	fn protocol_version(&self, protocol: &ProtocolId, peer_id: PeerId) -> u8 {
-		if protocol == &WARP_SYNC_PROTOCOL_ID { PAR_PROTOCOL_VERSION_3.0 } else { self.eth_protocol_version(peer_id) }
+		if protocol == &WARP_SYNC_PROTOCOL_ID {
+			PAR_PROTOCOL_VERSION_3.0
+		} else {
+			self.eth_protocol_version(peer_id)
+		}
 	}
 
 	fn chain_overlay(&self) -> &RwLock<HashMap<BlockNumber, Bytes>> {
@@ -170,7 +209,9 @@ pub struct TestPacket {
 }
 
 impl Message for TestPacket {
-	fn recipient(&self) -> PeerId { self.recipient }
+	fn recipient(&self) -> PeerId {
+		self.recipient
+	}
 }
 
 /// A peer which can be a member of the `TestNet`.
@@ -205,7 +246,10 @@ pub trait Peer {
 	fn process_all_new_block_messages(&self);
 }
 
-pub struct EthPeer<C> where C: FlushingBlockChainClient {
+pub struct EthPeer<C>
+where
+	C: FlushingBlockChainClient,
+{
 	pub chain: Arc<C>,
 	pub miner: Arc<Miner>,
 	pub snapshot_service: Arc<TestSnapshotService>,
@@ -216,7 +260,10 @@ pub struct EthPeer<C> where C: FlushingBlockChainClient {
 	new_blocks_queue: RwLock<VecDeque<NewBlockMessage>>,
 }
 
-impl<C> EthPeer<C> where C: FlushingBlockChainClient {
+impl<C> EthPeer<C>
+where
+	C: FlushingBlockChainClient,
+{
 	fn is_io_queue_empty(&self) -> bool {
 		self.io_queue.read().is_empty()
 	}
@@ -228,9 +275,17 @@ impl<C> EthPeer<C> where C: FlushingBlockChainClient {
 	fn process_io_message(&self, message: ChainMessageType) {
 		let mut io = TestIo::new(&*self.chain, &self.snapshot_service, &self.queue, None);
 		match message {
-			ChainMessageType::Consensus(data) => self.sync.write().propagate_consensus_packet(&mut io, data),
-			ChainMessageType::PrivateTransaction(data) => self.sync.write().propagate_private_transaction(&mut io, data),
-			ChainMessageType::SignedPrivateTransaction(data) => self.sync.write().propagate_signed_private_transaction(&mut io, data),
+			ChainMessageType::Consensus(data) => {
+				self.sync.write().propagate_consensus_packet(&mut io, data)
+			}
+			ChainMessageType::PrivateTransaction(data) => self
+				.sync
+				.write()
+				.propagate_private_transaction(&mut io, data),
+			ChainMessageType::SignedPrivateTransaction(data) => self
+				.sync
+				.write()
+				.propagate_signed_private_transaction(&mut io, data),
 		}
 	}
 
@@ -243,7 +298,7 @@ impl<C> EthPeer<C> where C: FlushingBlockChainClient {
 			&message.enacted,
 			&message.retracted,
 			&message.sealed,
-			&message.proposed
+			&message.proposed,
 		);
 	}
 }
@@ -253,21 +308,34 @@ impl<C: FlushingBlockChainClient> Peer for EthPeer<C> {
 
 	fn on_connect(&self, other: PeerId) {
 		self.sync.write().update_targets(&*self.chain);
-		self.sync.write().on_peer_connected(&mut TestIo::new(
-			&*self.chain,
-			&self.snapshot_service,
-			&self.queue,
-			Some(other)),
-			other);
+		self.sync.write().on_peer_connected(
+			&mut TestIo::new(
+				&*self.chain,
+				&self.snapshot_service,
+				&self.queue,
+				Some(other),
+			),
+			other,
+		);
 	}
 
 	fn on_disconnect(&self, other: PeerId) {
-		let mut io = TestIo::new(&*self.chain, &self.snapshot_service, &self.queue, Some(other));
+		let mut io = TestIo::new(
+			&*self.chain,
+			&self.snapshot_service,
+			&self.queue,
+			Some(other),
+		);
 		self.sync.write().on_peer_aborting(&mut io, other);
 	}
 
 	fn receive_message(&self, from: PeerId, msg: TestPacket) -> HashSet<PeerId> {
-		let mut io = TestIo::new(&*self.chain, &self.snapshot_service, &self.queue, Some(from));
+		let mut io = TestIo::new(
+			&*self.chain,
+			&self.snapshot_service,
+			&self.queue,
+			Some(from),
+		);
 		ChainSync::dispatch_packet(&self.sync, &mut io, from, msg.packet_id, &msg.data);
 		self.chain.flush();
 		io.to_disconnect.clone()
@@ -284,13 +352,35 @@ impl<C: FlushingBlockChainClient> Peer for EthPeer<C> {
 
 	fn sync_step(&self) {
 		self.chain.flush();
-		self.sync.write().maintain_peers(&mut TestIo::new(&*self.chain, &self.snapshot_service, &self.queue, None));
-		self.sync.write().maintain_sync(&mut TestIo::new(&*self.chain, &self.snapshot_service, &self.queue, None));
-		self.sync.write().propagate_new_transactions(&mut TestIo::new(&*self.chain, &self.snapshot_service, &self.queue, None));
+		self.sync.write().maintain_peers(&mut TestIo::new(
+			&*self.chain,
+			&self.snapshot_service,
+			&self.queue,
+			None,
+		));
+		self.sync.write().maintain_sync(&mut TestIo::new(
+			&*self.chain,
+			&self.snapshot_service,
+			&self.queue,
+			None,
+		));
+		self.sync
+			.write()
+			.propagate_new_transactions(&mut TestIo::new(
+				&*self.chain,
+				&self.snapshot_service,
+				&self.queue,
+				None,
+			));
 	}
 
 	fn restart_sync(&self) {
-		self.sync.write().restart(&mut TestIo::new(&*self.chain, &self.snapshot_service, &self.queue, None));
+		self.sync.write().restart(&mut TestIo::new(
+			&*self.chain,
+			&self.snapshot_service,
+			&self.queue,
+			None,
+		));
 	}
 
 	fn process_all_io_messages(&self) {
@@ -363,9 +453,10 @@ impl TestNet<EthPeer<EthcoreClient>> {
 		n: usize,
 		config: SyncConfig,
 		spec_factory: F,
-		accounts: Option<Arc<AccountProvider>>
+		accounts: Option<Arc<AccountProvider>>,
 	) -> Self
-		where F: Fn() -> Spec
+	where
+		F: Fn() -> Spec,
 	{
 		let mut net = TestNet {
 			peers: Vec::new(),
@@ -378,16 +469,24 @@ impl TestNet<EthPeer<EthcoreClient>> {
 		net
 	}
 
-	pub fn add_peer_with_private_config(&mut self, config: SyncConfig, spec: Spec, accounts: Option<Arc<AccountProvider>>) {
+	pub fn add_peer_with_private_config(
+		&mut self,
+		config: SyncConfig,
+		spec: Spec,
+		accounts: Option<Arc<AccountProvider>>,
+	) {
 		let channel = IoChannel::disconnected();
 		let miner = Arc::new(Miner::new_for_tests(&spec, accounts.clone()));
 		let client = EthcoreClient::new(
 			ClientConfig::default(),
 			&spec,
-			Arc::new(::kvdb_memorydb::create(::ethcore::db::NUM_COLUMNS.unwrap_or(0))),
+			Arc::new(::kvdb_memorydb::create(
+				::ethcore::db::NUM_COLUMNS.unwrap_or(0),
+			)),
 			miner.clone(),
-			channel.clone()
-		).unwrap();
+			channel.clone(),
+		)
+		.unwrap();
 
 		let private_tx_handler = Arc::new(SimplePrivateTxHandler::default());
 		let ss = Arc::new(TestSnapshotService::new());
@@ -408,7 +507,10 @@ impl TestNet<EthPeer<EthcoreClient>> {
 	}
 }
 
-impl<P> TestNet<P> where P: Peer {
+impl<P> TestNet<P>
+where
+	P: Peer,
+{
 	pub fn peer(&self, i: usize) -> &P {
 		&self.peers[i]
 	}
@@ -434,7 +536,8 @@ impl<P> TestNet<P> where P: Peer {
 				let disconnecting = {
 					let recipient = packet.recipient();
 					trace!("--- {} -> {} ---", peer, recipient);
-					let to_disconnect = self.peers[recipient].receive_message(peer as PeerId, packet);
+					let to_disconnect =
+						self.peers[recipient].receive_message(peer as PeerId, packet);
 					for d in &to_disconnect {
 						// notify this that disconnecting peers are disconnecting
 						self.peers[recipient].on_disconnect(*d as PeerId);
@@ -499,7 +602,15 @@ impl<P> TestNet<P> where P: Peer {
 impl<C: FlushingBlockChainClient> TestNet<EthPeer<C>> {
 	pub fn trigger_chain_new_blocks(&mut self, peer_id: usize) {
 		let peer = &mut self.peers[peer_id];
-		peer.sync.write().chain_new_blocks(&mut TestIo::new(&*peer.chain, &peer.snapshot_service, &peer.queue, None), &[], &[], &[], &[], &[], &[]);
+		peer.sync.write().chain_new_blocks(
+			&mut TestIo::new(&*peer.chain, &peer.snapshot_service, &peer.queue, None),
+			&[],
+			&[],
+			&[],
+			&[],
+			&[],
+			&[],
+		);
 	}
 }
 
@@ -523,21 +634,22 @@ impl IoHandler<ClientIoMessage> for TestIoHandler {
 			ClientIoMessage::Execute(ref exec) => {
 				*self.private_tx_queued.lock() += 1;
 				(*exec.0)(&self.client);
-			},
+			}
 			_ => {} // ignore other messages
 		}
 	}
 }
 
 impl ChainNotify for EthPeer<EthcoreClient> {
-	fn new_blocks(&self,
+	fn new_blocks(
+		&self,
 		imported: Vec<H256>,
 		invalid: Vec<H256>,
 		route: ChainRoute,
 		sealed: Vec<H256>,
 		proposed: Vec<Bytes>,
-		_duration: Duration)
-	{
+		_duration: Duration,
+	) {
 		let (enacted, retracted) = route.into_enacted_retracted();
 
 		self.new_blocks_queue.write().push_back(NewBlockMessage {

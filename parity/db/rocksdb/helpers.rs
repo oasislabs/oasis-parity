@@ -14,12 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::path::Path;
-use ethcore::db::NUM_COLUMNS;
-use ethcore::client::{ClientConfig, DatabaseCompactionProfile};
 use super::kvdb_rocksdb::{CompactionProfile, DatabaseConfig};
+use ethcore::client::{ClientConfig, DatabaseCompactionProfile};
+use ethcore::db::NUM_COLUMNS;
+use std::path::Path;
 
-pub fn compaction_profile(profile: &DatabaseCompactionProfile, db_path: &Path) -> CompactionProfile {
+pub fn compaction_profile(
+	profile: &DatabaseCompactionProfile,
+	db_path: &Path,
+) -> CompactionProfile {
 	match profile {
 		&DatabaseCompactionProfile::Auto => CompactionProfile::auto(db_path),
 		&DatabaseCompactionProfile::SSD => CompactionProfile::ssd(),

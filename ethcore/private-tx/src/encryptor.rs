@@ -16,24 +16,24 @@
 
 //! Encryption providers.
 
-use std::io::Read;
-use std::str::FromStr;
-use std::iter::repeat;
-use std::time::{Instant, Duration};
-use std::collections::HashMap;
-use std::collections::hash_map::Entry;
-use parking_lot::Mutex;
-use ethcore::account_provider::AccountProvider;
-use ethereum_types::{H128, H256, Address};
-use ethjson;
-use ethkey::{Signature, Public};
-use crypto;
-use futures::Future;
-use fetch::{Fetch, Client as FetchClient, Method, BodyReader, Request};
-use bytes::{Bytes, ToPretty};
-use error::{Error, ErrorKind};
-use url::Url;
 use super::find_account_password;
+use bytes::{Bytes, ToPretty};
+use crypto;
+use error::{Error, ErrorKind};
+use ethcore::account_provider::AccountProvider;
+use ethereum_types::{Address, H128, H256};
+use ethjson;
+use ethkey::{Public, Signature};
+use fetch::{BodyReader, Client as FetchClient, Fetch, Method, Request};
+use futures::Future;
+use parking_lot::Mutex;
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
+use std::io::Read;
+use std::iter::repeat;
+use std::str::FromStr;
+use std::time::{Duration, Instant};
+use url::Url;
 
 /// Initialization vector length.
 const INIT_VEC_LEN: usize = 16;
@@ -109,29 +109,36 @@ impl SecretStoreEncryptor {
 			return Ok(key);
 		}
 		let contract_address_signature = self.sign_contract_address(contract_address, accounts)?;
-		let requester = self.config.key_server_account.ok_or_else(|| ErrorKind::KeyServerAccountNotSet)?;
+		let requester = self
+			.config
+			.key_server_account
+			.ok_or_else(|| ErrorKind::KeyServerAccountNotSet)?;
 
 		// key id in SS is H256 && we have H160 here => expand with assitional zeros
 		let contract_address_extended: H256 = contract_address.into();
-		let base_url = self.config.base_url.clone().ok_or_else(|| ErrorKind::KeyServerNotSet)?;
+		let base_url = self
+			.config
+			.base_url
+			.clone()
+			.ok_or_else(|| ErrorKind::KeyServerNotSet)?;
 
 		// prepare request url
-		let url = format!("{}/{}/{}{}",
-				base_url,
-				contract_address_extended.to_hex(),
-				contract_address_signature,
-				url_suffix,
-			);
+		let url = format!(
+			"{}/{}/{}{}",
+			base_url,
+			contract_address_extended.to_hex(),
+			contract_address_signature,
+			url_suffix,
+		);
 
 		// send HTTP request
-		let method = if use_post {
-			Method::Post
-		} else {
-			Method::Get
-		};
+		let method = if use_post { Method::Post } else { Method::Get };
 
 		let url = Url::from_str(&url).map_err(|e| ErrorKind::Encrypt(e.to_string()))?;
-		let response = self.client.fetch(Request::new(url, method), Default::default()).wait()
+		let response = self
+			.client
+			.fetch(Request::new(url, method), Default::default())
+			.wait()
 			.map_err(|e| ErrorKind::Encrypt(e.to_string()))?;
 
 		if response.is_not_found() {
@@ -139,7 +146,13 @@ impl SecretStoreEncryptor {
 		}
 
 		if !response.is_success() {
-			bail!(ErrorKind::Encrypt(response.status().canonical_reason().unwrap_or("unknown").into()));
+			bail!(ErrorKind::Encrypt(
+				response
+					.status()
+					.canonical_reason()
+					.unwrap_or("unknown")
+					.into()
+			));
 		}
 
 		// read HTTP response
@@ -147,21 +160,28 @@ impl SecretStoreEncryptor {
 		BodyReader::new(response).read_to_string(&mut result)?;
 
 		// response is JSON string (which is, in turn, hex-encoded, encrypted Public)
-		let encrypted_bytes: ethjson::bytes::Bytes = result.trim_matches('\"').parse().map_err(|e| ErrorKind::Encrypt(e))?;
+		let encrypted_bytes: ethjson::bytes::Bytes = result
+			.trim_matches('\"')
+			.parse()
+			.map_err(|e| ErrorKind::Encrypt(e))?;
 		let password = find_account_password(&self.config.passwords, &*accounts, &requester);
 
 		// decrypt Public
-		let decrypted_bytes = accounts.decrypt(requester, password, &crypto::DEFAULT_MAC, &encrypted_bytes)?;
+		let decrypted_bytes =
+			accounts.decrypt(requester, password, &crypto::DEFAULT_MAC, &encrypted_bytes)?;
 		let decrypted_key = Public::from_slice(&decrypted_bytes);
 
 		// and now take x coordinate of Public as a key
 		let key: Bytes = (*decrypted_key)[..INIT_VEC_LEN].into();
 
 		// cache the key in the session and clear expired sessions
-		self.sessions.lock().insert(*contract_address, EncryptionSession{
-			key: key.clone(),
-			end_time: Instant::now() + Duration::from_millis(ENCRYPTION_SESSION_DURATION),
-		});
+		self.sessions.lock().insert(
+			*contract_address,
+			EncryptionSession {
+				key: key.clone(),
+				end_time: Instant::now() + Duration::from_millis(ENCRYPTION_SESSION_DURATION),
+			},
+		);
 		self.clean_expired_sessions();
 		Ok(key)
 	}
@@ -187,12 +207,23 @@ impl SecretStoreEncryptor {
 		}
 	}
 
-	fn sign_contract_address(&self, contract_address: &Address, accounts: &AccountProvider) -> Result<Signature, Error> {
+	fn sign_contract_address(
+		&self,
+		contract_address: &Address,
+		accounts: &AccountProvider,
+	) -> Result<Signature, Error> {
 		// key id in SS is H256 && we have H160 here => expand with assitional zeros
 		let contract_address_extended: H256 = contract_address.into();
-		let key_server_account = self.config.key_server_account.ok_or_else(|| ErrorKind::KeyServerAccountNotSet)?;
+		let key_server_account = self
+			.config
+			.key_server_account
+			.ok_or_else(|| ErrorKind::KeyServerAccountNotSet)?;
 		let password = find_account_password(&self.config.passwords, accounts, &key_server_account);
-		Ok(accounts.sign(key_server_account, password, H256::from_slice(&contract_address_extended))?)
+		Ok(accounts.sign(
+			key_server_account,
+			password,
+			H256::from_slice(&contract_address_extended),
+		)?)
 	}
 }
 
@@ -208,8 +239,16 @@ impl Encryptor for SecretStoreEncryptor {
 		let key = match self.retrieve_key("", false, contract_address, &*accounts) {
 			Ok(key) => Ok(key),
 			Err(Error(ErrorKind::EncryptionKeyNotFound(_), _)) => {
-				trace!("Key for account wasnt found in sstore. Creating. Address: {:?}", contract_address);
-				self.retrieve_key(&format!("/{}", self.config.threshold), true, contract_address, &*accounts)
+				trace!(
+					"Key for account wasnt found in sstore. Creating. Address: {:?}",
+					contract_address
+				);
+				self.retrieve_key(
+					&format!("/{}", self.config.threshold),
+					true,
+					contract_address,
+					&*accounts,
+				)
 			}
 			Err(err) => Err(err),
 		}?;

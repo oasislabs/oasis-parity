@@ -15,37 +15,37 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 extern crate ansi_term;
-use self::ansi_term::Colour::{White, Yellow, Green, Cyan, Blue};
+use self::ansi_term::Colour::{Blue, Cyan, Green, White, Yellow};
 use self::ansi_term::{Colour, Style};
 
-use std::sync::{Arc};
-use std::sync::atomic::{AtomicUsize, AtomicBool, Ordering as AtomicOrdering};
-use std::time::{Instant, Duration};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use atty;
+use bytes::Bytes;
 use ethcore::client::{
-	BlockId, BlockChainClient, ChainInfo, BlockInfo, BlockChainInfo,
-	BlockQueueInfo, ChainNotify, ChainRoute, ClientReport, Client, ClientIoMessage
+	BlockChainClient, BlockChainInfo, BlockId, BlockInfo, BlockQueueInfo, ChainInfo, ChainNotify,
+	ChainRoute, Client, ClientIoMessage, ClientReport,
 };
 use ethcore::header::BlockNumber;
-use ethcore::snapshot::{RestorationStatus, SnapshotService as SS};
 use ethcore::snapshot::service::Service as SnapshotService;
-use ethereum_types::U256;
-use sync::{LightSyncProvider, LightSync, SyncProvider, ManageNetwork};
-use io::{TimerToken, IoContext, IoHandler};
-use light::Cache as LightDataCache;
-use light::client::{LightChainClient, LightChainNotify};
-use number_prefix::{binary_prefix, Standalone, Prefixed};
-use parity_rpc::{is_major_importing};
-use parity_rpc::informant::RpcStats;
+use ethcore::snapshot::{RestorationStatus, SnapshotService as SS};
 use ethereum_types::H256;
-use bytes::Bytes;
-use parking_lot::{RwLock, Mutex};
+use ethereum_types::U256;
+use io::{IoContext, IoHandler, TimerToken};
+use light::client::{LightChainClient, LightChainNotify};
+use light::Cache as LightDataCache;
+use number_prefix::{binary_prefix, Prefixed, Standalone};
+use parity_rpc::informant::RpcStats;
+use parity_rpc::is_major_importing;
+use parking_lot::{Mutex, RwLock};
+use sync::{LightSync, LightSyncProvider, ManageNetwork, SyncProvider};
 
 /// Format byte counts to standard denominations.
 pub fn format_bytes(b: usize) -> String {
 	match binary_prefix(b as f64) {
-		Standalone(bytes)   => format!("{} bytes", bytes),
+		Standalone(bytes) => format!("{} bytes", bytes),
 		Prefixed(prefix, n) => format!("{:.0} {}B", n, prefix),
 	}
 }
@@ -73,13 +73,13 @@ impl CacheSizes {
 	}
 
 	fn display<F>(&self, style: Style, paint: F) -> String
-		where F: Fn(Style, String) -> String
+	where
+		F: Fn(Style, String) -> String,
 	{
 		use std::fmt::Write;
 
 		let mut buf = String::new();
 		for (name, &size) in &self.sizes {
-
 			write!(buf, " {:>8} {}", paint(style, format_bytes(size)), name)
 				.expect("writing to string won't fail unless OOM; qed")
 		}
@@ -125,7 +125,9 @@ pub struct FullNodeInformantData {
 }
 
 impl InformantData for FullNodeInformantData {
-	fn executes_transactions(&self) -> bool { true }
+	fn executes_transactions(&self) -> bool {
+		true
+	}
 
 	fn is_major_importing(&self) -> bool {
 		let state = self.sync.as_ref().map(|sync| sync.status().state);
@@ -133,8 +135,11 @@ impl InformantData for FullNodeInformantData {
 	}
 
 	fn report(&self) -> Report {
-		let (client_report, queue_info, blockchain_cache_info) =
-			(self.client.report(), self.client.queue_info(), self.client.blockchain_cache_info());
+		let (client_report, queue_info, blockchain_cache_info) = (
+			self.client.report(),
+			self.client.queue_info(),
+			self.client.blockchain_cache_info(),
+		);
 
 		let chain_info = self.client.chain_info();
 
@@ -152,15 +157,27 @@ impl InformantData for FullNodeInformantData {
 				cache_sizes.insert("sync", status.mem_used);
 
 				let importing = is_major_importing(Some(status.state), queue_info.clone());
-				(importing, Some(SyncInfo {
-					last_imported_block_number: status.last_imported_block_number.unwrap_or(chain_info.best_block_number),
-					last_imported_old_block_number: status.last_imported_old_block_number,
-					num_peers: status.num_peers,
-					max_peers: status.current_max_peers(num_peers_range.start, num_peers_range.end - 1),
-					snapshot_sync: status.is_snapshot_syncing(),
-				}))
+				(
+					importing,
+					Some(SyncInfo {
+						last_imported_block_number: status
+							.last_imported_block_number
+							.unwrap_or(chain_info.best_block_number),
+						last_imported_old_block_number: status.last_imported_old_block_number,
+						num_peers: status.num_peers,
+						max_peers: status
+							.current_max_peers(num_peers_range.start, num_peers_range.end - 1),
+						snapshot_sync: status.is_snapshot_syncing(),
+					}),
+				)
 			}
-			_ => (is_major_importing(self.sync.as_ref().map(|s| s.status().state), queue_info.clone()), None),
+			_ => (
+				is_major_importing(
+					self.sync.as_ref().map(|s| s.status().state),
+					queue_info.clone(),
+				),
+				None,
+			),
 		};
 
 		Report {
@@ -182,15 +199,20 @@ pub struct LightNodeInformantData {
 }
 
 impl InformantData for LightNodeInformantData {
-	fn executes_transactions(&self) -> bool { false }
+	fn executes_transactions(&self) -> bool {
+		false
+	}
 
 	fn is_major_importing(&self) -> bool {
 		self.sync.is_major_importing()
 	}
 
 	fn report(&self) -> Report {
-		let (client_report, queue_info, chain_info) =
-			(self.client.report(), self.client.queue_info(), self.client.chain_info());
+		let (client_report, queue_info, chain_info) = (
+			self.client.report(),
+			self.client.queue_info(),
+			self.client.chain_info(),
+		);
 
 		let mut cache_sizes = CacheSizes::default();
 		cache_sizes.insert("queue", queue_info.mem_used);
@@ -253,7 +275,8 @@ impl<T: InformantData> Informant<T> {
 
 	/// Signal that we're shutting down; no more output necessary.
 	pub fn shutdown(&self) {
-		self.in_shutdown.store(true, ::std::sync::atomic::Ordering::SeqCst);
+		self.in_shutdown
+			.store(true, ::std::sync::atomic::Ordering::SeqCst);
 	}
 
 	pub fn tick(&self) {
@@ -280,12 +303,11 @@ impl<T: InformantData> Informant<T> {
 		} = full_report;
 
 		let rpc_stats = self.rpc_stats.as_ref();
-		let snapshot_sync = sync_info.as_ref().map_or(false, |s| s.snapshot_sync) && self.snapshot.as_ref().map_or(false, |s|
-			match s.status() {
+		let snapshot_sync = sync_info.as_ref().map_or(false, |s| s.snapshot_sync)
+			&& self.snapshot.as_ref().map_or(false, |s| match s.status() {
 				RestorationStatus::Ongoing { .. } | RestorationStatus::Initializing { .. } => true,
 				_ => false,
-			}
-		);
+			});
 		if !importing && !snapshot_sync && elapsed < Duration::from_secs(30) {
 			return;
 		}
@@ -362,23 +384,38 @@ impl<T: InformantData> Informant<T> {
 }
 
 impl ChainNotify for Informant<FullNodeInformantData> {
-	fn new_blocks(&self, imported: Vec<H256>, _invalid: Vec<H256>, _route: ChainRoute, _sealed: Vec<H256>, _proposed: Vec<Bytes>, duration: Duration) {
+	fn new_blocks(
+		&self,
+		imported: Vec<H256>,
+		_invalid: Vec<H256>,
+		_route: ChainRoute,
+		_sealed: Vec<H256>,
+		_proposed: Vec<Bytes>,
+		duration: Duration,
+	) {
 		let mut last_import = self.last_import.lock();
 		let client = &self.target.client;
 
 		let importing = self.target.is_major_importing();
 		let ripe = Instant::now() > *last_import + Duration::from_secs(1) && !importing;
-		let txs_imported = imported.iter()
+		let txs_imported = imported
+			.iter()
 			.take(imported.len().saturating_sub(if ripe { 1 } else { 0 }))
 			.filter_map(|h| client.block(BlockId::Hash(*h)))
 			.map(|b| b.transactions_count())
 			.sum();
 
 		if ripe {
-			if let Some(block) = imported.last().and_then(|h| client.block(BlockId::Hash(*h))) {
+			if let Some(block) = imported
+				.last()
+				.and_then(|h| client.block(BlockId::Hash(*h)))
+			{
 				let header_view = block.header_view();
 				let size = block.rlp().as_raw().len();
-				let (skipped, skipped_txs) = (self.skipped.load(AtomicOrdering::Relaxed) + imported.len() - 1, self.skipped_txs.load(AtomicOrdering::Relaxed) + txs_imported);
+				let (skipped, skipped_txs) = (
+					self.skipped.load(AtomicOrdering::Relaxed) + imported.len() - 1,
+					self.skipped_txs.load(AtomicOrdering::Relaxed) + txs_imported,
+				);
 				info!(target: "import", "Imported {} {} ({} txs, {} Mgas, {} ms, {} KiB){}",
 					Colour::White.bold().paint(format!("#{}", header_view.number())),
 					Colour::White.bold().paint(format!("{}", header_view.hash())),
@@ -400,8 +437,10 @@ impl ChainNotify for Informant<FullNodeInformantData> {
 				*last_import = Instant::now();
 			}
 		} else {
-			self.skipped.fetch_add(imported.len(), AtomicOrdering::Relaxed);
-			self.skipped_txs.fetch_add(txs_imported, AtomicOrdering::Relaxed);
+			self.skipped
+				.fetch_add(imported.len(), AtomicOrdering::Relaxed);
+			self.skipped_txs
+				.fetch_add(txs_imported, AtomicOrdering::Relaxed);
 		}
 	}
 }
@@ -415,7 +454,10 @@ impl LightChainNotify for Informant<LightNodeInformantData> {
 		let ripe = Instant::now() > *last_import + Duration::from_secs(1) && !importing;
 
 		if ripe {
-			if let Some(header) = good.last().and_then(|h| client.block_header(BlockId::Hash(*h))) {
+			if let Some(header) = good
+				.last()
+				.and_then(|h| client.block_header(BlockId::Hash(*h)))
+			{
 				info!(target: "import", "Imported {} {} ({} Mgas){}",
 					  Colour::White.bold().paint(format!("#{}", header.number())),
 					  Colour::White.bold().paint(format!("{}", header.hash())),
@@ -437,7 +479,8 @@ const INFO_TIMER: TimerToken = 0;
 
 impl<T: InformantData> IoHandler<ClientIoMessage> for Informant<T> {
 	fn initialize(&self, io: &IoContext<ClientIoMessage>) {
-		io.register_timer(INFO_TIMER, Duration::from_secs(5)).expect("Error registering timer");
+		io.register_timer(INFO_TIMER, Duration::from_secs(5))
+			.expect("Error registering timer");
 	}
 
 	fn timeout(&self, _io: &IoContext<ClientIoMessage>, timer: TimerToken) {

@@ -47,7 +47,8 @@ impl Default for CacheConfig {
 			DEFAULT_DB_CACHE_SIZE,
 			DEFAULT_BC_CACHE_SIZE,
 			DEFAULT_BLOCK_QUEUE_SIZE_LIMIT_MB,
-			DEFAULT_STATE_CACHE_SIZE)
+			DEFAULT_STATE_CACHE_SIZE,
+		)
 	}
 }
 
@@ -128,11 +129,14 @@ mod tests {
 
 	#[test]
 	fn test_cache_config_default() {
-		assert_eq!(CacheConfig::default(),
-				   CacheConfig::new(
-					   super::DEFAULT_DB_CACHE_SIZE,
-					   super::DEFAULT_BC_CACHE_SIZE,
-					   super::DEFAULT_BLOCK_QUEUE_SIZE_LIMIT_MB,
-					   super::DEFAULT_STATE_CACHE_SIZE));
+		assert_eq!(
+			CacheConfig::default(),
+			CacheConfig::new(
+				super::DEFAULT_DB_CACHE_SIZE,
+				super::DEFAULT_BC_CACHE_SIZE,
+				super::DEFAULT_BLOCK_QUEUE_SIZE_LIMIT_MB,
+				super::DEFAULT_STATE_CACHE_SIZE
+			)
+		);
 	}
 }

@@ -14,14 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use mime_guess;
-use std::{fs, fmt};
-use std::path::{Path, PathBuf};
-use futures::{future};
-use futures_cpupool::CpuPool;
-use page::handler::{self, PageCache};
 use endpoint::{Endpoint, EndpointInfo, EndpointPath, Request, Response};
+use futures::future;
+use futures_cpupool::CpuPool;
 use hyper::mime::Mime;
+use mime_guess;
+use page::handler::{self, PageCache};
+use std::path::{Path, PathBuf};
+use std::{fmt, fs};
 
 #[derive(Clone)]
 pub struct Dapp {
@@ -91,8 +91,13 @@ impl Dapp {
 		let (reader, response) = handler::PageHandler {
 			file: self.get_file(path),
 			cache: self.cache,
-			allow_js_eval: self.info.as_ref().and_then(|x| x.allow_js_eval).unwrap_or(false),
-		}.into_response();
+			allow_js_eval: self
+				.info
+				.as_ref()
+				.and_then(|x| x.allow_js_eval)
+				.unwrap_or(false),
+		}
+		.into_response();
 
 		self.pool.spawn(reader).forget();
 
@@ -119,12 +124,9 @@ impl LocalFile {
 	fn from_path<P: AsRef<Path>>(path: P, content_type: Mime) -> Option<Self> {
 		trace!(target: "dapps", "Local file: {:?}", path.as_ref());
 		// Check if file exists
-		fs::File::open(&path).ok().map(|file| {
-			LocalFile {
-				content_type,
-				file,
-			}
-		})
+		fs::File::open(&path)
+			.ok()
+			.map(|file| LocalFile { content_type, file })
 	}
 }
 

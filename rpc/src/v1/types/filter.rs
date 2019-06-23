@@ -14,18 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde::de::{Error, DeserializeOwned};
-use serde_json::{Value, from_value};
 use ethcore::filter::Filter as EthFilter;
 use ethcore::filter::TxFilter as EthTxFilter;
 use ethcore::ids::BlockId;
 use ethereum_types::Address;
-use v1::types::{BlockNumber, H160, H256, Log};
+use serde::de::{DeserializeOwned, Error};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_json::{from_value, Value};
+use v1::types::{BlockNumber, Log, H160, H256};
 
 /// Variadic value
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
-pub enum VariadicValue<T> where T: DeserializeOwned {
+pub enum VariadicValue<T>
+where
+	T: DeserializeOwned,
+{
 	/// Single
 	Single(T),
 	/// List
@@ -34,16 +37,22 @@ pub enum VariadicValue<T> where T: DeserializeOwned {
 	Null,
 }
 
-impl<'a, T> Deserialize<'a> for VariadicValue<T> where T: DeserializeOwned {
+impl<'a, T> Deserialize<'a> for VariadicValue<T>
+where
+	T: DeserializeOwned,
+{
 	fn deserialize<D>(deserializer: D) -> Result<VariadicValue<T>, D::Error>
-	where D: Deserializer<'a> {
+	where
+		D: Deserializer<'a>,
+	{
 		let v: Value = Deserialize::deserialize(deserializer)?;
 
 		if v.is_null() {
 			return Ok(VariadicValue::Null);
 		}
 
-		from_value(v.clone()).map(VariadicValue::Single)
+		from_value(v.clone())
+			.map(VariadicValue::Single)
 			.or_else(|_| from_value(v).map(VariadicValue::Multiple))
 			.map_err(|err| D::Error::custom(format!("Invalid variadic value type: {}", err)))
 	}
@@ -59,10 +68,10 @@ pub type Topic = VariadicValue<H256>;
 #[serde(deny_unknown_fields)]
 pub struct Filter {
 	/// From Block
-	#[serde(rename="fromBlock")]
+	#[serde(rename = "fromBlock")]
 	pub from_block: Option<BlockNumber>,
 	/// To Block
-	#[serde(rename="toBlock")]
+	#[serde(rename = "toBlock")]
 	pub to_block: Option<BlockNumber>,
 	/// Address
 	pub address: Option<FilterAddress>,
@@ -86,20 +95,31 @@ impl Into<EthFilter> for Filter {
 			address: self.address.and_then(|address| match address {
 				VariadicValue::Null => None,
 				VariadicValue::Single(a) => Some(vec![a.into()]),
-				VariadicValue::Multiple(a) => Some(a.into_iter().map(Into::into).collect())
+				VariadicValue::Multiple(a) => Some(a.into_iter().map(Into::into).collect()),
 			}),
 			topics: {
-				let mut iter = self.topics.map_or_else(Vec::new, |topics| topics.into_iter().take(4).map(|topic| match topic {
-					VariadicValue::Null => None,
-					VariadicValue::Single(t) => Some(vec![t.into()]),
-					VariadicValue::Multiple(t) => Some(t.into_iter().map(Into::into).collect())
-				}).collect()).into_iter();
+				let mut iter = self
+					.topics
+					.map_or_else(Vec::new, |topics| {
+						topics
+							.into_iter()
+							.take(4)
+							.map(|topic| match topic {
+								VariadicValue::Null => None,
+								VariadicValue::Single(t) => Some(vec![t.into()]),
+								VariadicValue::Multiple(t) => {
+									Some(t.into_iter().map(Into::into).collect())
+								}
+							})
+							.collect()
+					})
+					.into_iter();
 
 				vec![
 					iter.next().unwrap_or(None),
 					iter.next().unwrap_or(None),
 					iter.next().unwrap_or(None),
-					iter.next().unwrap_or(None)
+					iter.next().unwrap_or(None),
 				]
 			},
 			limit: self.limit,
@@ -123,12 +143,12 @@ pub enum FilterChanges {
 #[serde(deny_unknown_fields)]
 pub struct TxFilter {
 	/// Transaction hash.
-	#[serde(rename="transactionHash")]
+	#[serde(rename = "transactionHash")]
 	pub transaction_hash: Option<H256>,
 
 	/// From address
-	#[serde(rename="fromAddress")]
-	pub from_address: Option<Address>
+	#[serde(rename = "fromAddress")]
+	pub from_address: Option<Address>,
 }
 
 impl Into<EthTxFilter> for TxFilter {
@@ -141,13 +161,16 @@ impl Into<EthTxFilter> for TxFilter {
 			from_address: match self.from_address {
 				Some(from_address) => Some(from_address),
 				None => None,
-			}
+			},
 		}
 	}
 }
 
 impl Serialize for FilterChanges {
-	fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error> where S: Serializer {
+	fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
 		match *self {
 			FilterChanges::Logs(ref logs) => logs.serialize(s),
 			FilterChanges::Hashes(ref hashes) => hashes.serialize(s),
@@ -158,39 +181,59 @@ impl Serialize for FilterChanges {
 
 #[cfg(test)]
 mod tests {
+	use super::{Filter, Topic, VariadicValue};
+	use ethcore::client::BlockId;
+	use ethcore::filter::Filter as EthFilter;
+	use ethereum_types::H256;
 	use serde_json;
 	use std::str::FromStr;
-	use ethereum_types::H256;
-	use super::{VariadicValue, Topic, Filter};
 	use v1::types::BlockNumber;
-	use ethcore::filter::Filter as EthFilter;
-	use ethcore::client::BlockId;
 
 	#[test]
 	fn topic_deserialization() {
 		let s = r#"["0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b", null, ["0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b", "0x0000000000000000000000000aff3454fce5edbc8cca8697c15331677e6ebccc"]]"#;
 		let deserialized: Vec<Topic> = serde_json::from_str(s).unwrap();
-		assert_eq!(deserialized, vec![
-				VariadicValue::Single(H256::from_str("000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b").unwrap().into()),
+		assert_eq!(
+			deserialized,
+			vec![
+				VariadicValue::Single(
+					H256::from_str(
+						"000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b"
+					)
+					.unwrap()
+					.into()
+				),
 				VariadicValue::Null,
 				VariadicValue::Multiple(vec![
-								H256::from_str("000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b").unwrap().into(),
-								H256::from_str("0000000000000000000000000aff3454fce5edbc8cca8697c15331677e6ebccc").unwrap().into(),
+					H256::from_str(
+						"000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b"
+					)
+					.unwrap()
+					.into(),
+					H256::from_str(
+						"0000000000000000000000000aff3454fce5edbc8cca8697c15331677e6ebccc"
+					)
+					.unwrap()
+					.into(),
 				])
-		]);
+			]
+		);
 	}
 
 	#[test]
 	fn filter_deserialization() {
 		let s = r#"{"fromBlock":"earliest","toBlock":"latest"}"#;
 		let deserialized: Filter = serde_json::from_str(s).unwrap();
-		assert_eq!(deserialized, Filter {
-			from_block: Some(BlockNumber::Earliest),
-			to_block: Some(BlockNumber::Latest),
-			address: None,
-			topics: None,
-			limit: None,
-		});
+		assert_eq!(
+			deserialized,
+			Filter {
+				from_block: Some(BlockNumber::Earliest),
+				to_block: Some(BlockNumber::Latest),
+				address: None,
+				topics: None,
+				limit: None,
+			}
+		);
 	}
 
 	#[test]
@@ -201,34 +244,45 @@ mod tests {
 			address: Some(VariadicValue::Multiple(vec![])),
 			topics: Some(vec![
 				VariadicValue::Null,
-				VariadicValue::Single("000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into()),
+				VariadicValue::Single(
+					"000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into(),
+				),
 				VariadicValue::Null,
 			]),
 			limit: None,
 		};
 
 		let eth_filter: EthFilter = filter.into();
-		assert_eq!(eth_filter, EthFilter {
-			from_block: BlockId::Earliest,
-			to_block: BlockId::Latest,
-			address: Some(vec![]),
-			topics: vec![
-				None,
-				Some(vec!["000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into()]),
-				None,
-				None,
-			],
-			limit: None,
-		});
+		assert_eq!(
+			eth_filter,
+			EthFilter {
+				from_block: BlockId::Earliest,
+				to_block: BlockId::Latest,
+				address: Some(vec![]),
+				topics: vec![
+					None,
+					Some(vec![
+						"000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b".into()
+					]),
+					None,
+					None,
+				],
+				limit: None,
+			}
+		);
 	}
 
 	#[test]
 	fn tx_filter_deserialization() {
 		let s = r#"{"transactionHash":"0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b"}"#;
 		let deserialized: TxFilter = serde_json::from_str(s).unwrap();
-			assert_eq!(deserialized, TxFilter {
-				transaction_hash: "0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b",
-		});
+		assert_eq!(
+			deserialized,
+			TxFilter {
+				transaction_hash:
+					"0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+			}
+		);
 	}
 
 	#[test]
@@ -239,8 +293,12 @@ mod tests {
 
 		let eth_filter: EthTxFilter = filter.into();
 
-		assert_eq!(eth_filter, EthTxFilter {
-			transactionHash: "0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b"
-		});
+		assert_eq!(
+			eth_filter,
+			EthTxFilter {
+				transactionHash:
+					"0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b"
+			}
+		);
 	}
 }

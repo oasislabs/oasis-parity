@@ -18,17 +18,17 @@
 
 use cache::Cache;
 use ethcore::header::Header;
-use futures::Future;
-use network::{PeerId, NodeId};
-use net::*;
 use ethereum_types::H256;
+use futures::Future;
+use net::*;
+use network::{NodeId, PeerId};
 use parking_lot::Mutex;
+use request::{self as basic_request, Response};
 use std::time::Duration;
-use ::request::{self as basic_request, Response};
 
 use std::sync::Arc;
 
-use super::{request, OnDemand, Peer, HeaderRef};
+use super::{request, HeaderRef, OnDemand, Peer};
 
 // useful contexts to give the service.
 enum Context {
@@ -41,14 +41,14 @@ enum Context {
 impl EventContext for Context {
 	fn peer(&self) -> PeerId {
 		match *self {
-			Context::WithPeer(id)
-			| Context::RequestFrom(id, _)
-			| Context::Punish(id) => id,
+			Context::WithPeer(id) | Context::RequestFrom(id, _) | Context::Punish(id) => id,
 			_ => panic!("didn't expect to have peer queried."),
 		}
 	}
 
-	fn as_basic(&self) -> &BasicContext { self }
+	fn as_basic(&self) -> &BasicContext {
+		self
+	}
 }
 
 impl BasicContext for Context {
@@ -59,7 +59,13 @@ impl BasicContext for Context {
 
 	fn request_from(&self, peer_id: PeerId, _: ::request::NetworkRequests) -> Result<ReqId, Error> {
 		match *self {
-			Context::RequestFrom(id, req_id) => if peer_id == id { Ok(req_id) } else { Err(Error::NoCredits) },
+			Context::RequestFrom(id, req_id) => {
+				if peer_id == id {
+					Ok(req_id)
+				} else {
+					Err(Error::NoCredits)
+				}
+			}
 			_ => panic!("didn't expect to have requests dispatched."),
 		}
 	}
@@ -74,7 +80,7 @@ impl BasicContext for Context {
 
 	fn disable_peer(&self, peer_id: PeerId) {
 		match *self {
-			Context::Punish(id) if id == peer_id => {},
+			Context::Punish(id) if id == peer_id => {}
 			_ => panic!("Unexpectedly punished peer."),
 		}
 	}
@@ -87,7 +93,10 @@ struct Harness {
 
 impl Harness {
 	fn create() -> Self {
-		let cache = Arc::new(Mutex::new(Cache::new(Default::default(), Duration::from_secs(60))));
+		let cache = Arc::new(Mutex::new(Cache::new(
+			Default::default(),
+			Duration::from_secs(60),
+		)));
 		Harness {
 			service: OnDemand::new_test(cache),
 		}
@@ -141,29 +150,39 @@ fn single_request() {
 	let peer_id = 10101;
 	let req_id = ReqId(14426);
 
-	harness.inject_peer(peer_id, Peer {
-		status: dummy_status(),
-		capabilities: dummy_capabilities(),
-	});
+	harness.inject_peer(
+		peer_id,
+		Peer {
+			status: dummy_status(),
+			capabilities: dummy_capabilities(),
+		},
+	);
 
 	let header = Header::default();
 	let encoded = header.encoded();
 
-	let recv = harness.service.request_raw(
-		&Context::NoOp,
-		vec![request::HeaderByHash(header.hash().into()).into()]
-	).unwrap();
+	let recv = harness
+		.service
+		.request_raw(
+			&Context::NoOp,
+			vec![request::HeaderByHash(header.hash().into()).into()],
+		)
+		.unwrap();
 
 	assert_eq!(harness.service.pending.read().len(), 1);
 
-	harness.service.dispatch_pending(&Context::RequestFrom(peer_id, req_id));
+	harness
+		.service
+		.dispatch_pending(&Context::RequestFrom(peer_id, req_id));
 
 	assert_eq!(harness.service.pending.read().len(), 0);
 
 	harness.service.on_responses(
 		&Context::WithPeer(peer_id),
 		req_id,
-		&[Response::Headers(basic_request::HeadersResponse { headers: vec![encoded] })]
+		&[Response::Headers(basic_request::HeadersResponse {
+			headers: vec![encoded],
+		})],
 	);
 
 	assert!(recv.wait().is_ok());
@@ -178,15 +197,21 @@ fn no_capabilities() {
 	let mut capabilities = dummy_capabilities();
 	capabilities.serve_headers = false;
 
-	harness.inject_peer(peer_id, Peer {
-		status: dummy_status(),
-		capabilities: capabilities,
-	});
+	harness.inject_peer(
+		peer_id,
+		Peer {
+			status: dummy_status(),
+			capabilities: capabilities,
+		},
+	);
 
-	let _recv = harness.service.request_raw(
-		&Context::NoOp,
-		vec![request::HeaderByHash(H256::default().into()).into()]
-	).unwrap();
+	let _recv = harness
+		.service
+		.request_raw(
+			&Context::NoOp,
+			vec![request::HeaderByHash(H256::default().into()).into()],
+		)
+		.unwrap();
 
 	assert_eq!(harness.service.pending.read().len(), 1);
 
@@ -202,39 +227,56 @@ fn reassign() {
 	let peer_ids = (10101, 12345);
 	let req_ids = (ReqId(14426), ReqId(555));
 
-	harness.inject_peer(peer_ids.0, Peer {
-		status: dummy_status(),
-		capabilities: dummy_capabilities(),
-	});
+	harness.inject_peer(
+		peer_ids.0,
+		Peer {
+			status: dummy_status(),
+			capabilities: dummy_capabilities(),
+		},
+	);
 
 	let header = Header::default();
 	let encoded = header.encoded();
 
-	let recv = harness.service.request_raw(
-		&Context::NoOp,
-		vec![request::HeaderByHash(header.hash().into()).into()]
-	).unwrap();
+	let recv = harness
+		.service
+		.request_raw(
+			&Context::NoOp,
+			vec![request::HeaderByHash(header.hash().into()).into()],
+		)
+		.unwrap();
 
 	assert_eq!(harness.service.pending.read().len(), 1);
 
-	harness.service.dispatch_pending(&Context::RequestFrom(peer_ids.0, req_ids.0));
+	harness
+		.service
+		.dispatch_pending(&Context::RequestFrom(peer_ids.0, req_ids.0));
 	assert_eq!(harness.service.pending.read().len(), 0);
 
-	harness.service.on_disconnect(&Context::WithPeer(peer_ids.0), &[req_ids.0]);
+	harness
+		.service
+		.on_disconnect(&Context::WithPeer(peer_ids.0), &[req_ids.0]);
 	assert_eq!(harness.service.pending.read().len(), 1);
 
-	harness.inject_peer(peer_ids.1, Peer {
-		status: dummy_status(),
-		capabilities: dummy_capabilities(),
-	});
+	harness.inject_peer(
+		peer_ids.1,
+		Peer {
+			status: dummy_status(),
+			capabilities: dummy_capabilities(),
+		},
+	);
 
-	harness.service.dispatch_pending(&Context::RequestFrom(peer_ids.1, req_ids.1));
+	harness
+		.service
+		.dispatch_pending(&Context::RequestFrom(peer_ids.1, req_ids.1));
 	assert_eq!(harness.service.pending.read().len(), 0);
 
 	harness.service.on_responses(
 		&Context::WithPeer(peer_ids.1),
 		req_ids.1,
-		&[Response::Headers(basic_request::HeadersResponse { headers: vec![encoded] })]
+		&[Response::Headers(basic_request::HeadersResponse {
+			headers: vec![encoded],
+		})],
 	);
 
 	assert!(recv.wait().is_ok());
@@ -247,10 +289,13 @@ fn partial_response() {
 	let peer_id = 111;
 	let req_ids = (ReqId(14426), ReqId(555));
 
-	harness.inject_peer(peer_id, Peer {
-		status: dummy_status(),
-		capabilities: dummy_capabilities(),
-	});
+	harness.inject_peer(
+		peer_id,
+		Peer {
+			status: dummy_status(),
+			capabilities: dummy_capabilities(),
+		},
+	);
 
 	let make = |num| {
 		let mut hdr = Header::default();
@@ -264,36 +309,47 @@ fn partial_response() {
 	let (header2, encoded2) = make(23452);
 
 	// request two headers.
-	let recv = harness.service.request_raw(
-		&Context::NoOp,
-		vec![
-			request::HeaderByHash(header1.hash().into()).into(),
-			request::HeaderByHash(header2.hash().into()).into(),
-		],
-	).unwrap();
+	let recv = harness
+		.service
+		.request_raw(
+			&Context::NoOp,
+			vec![
+				request::HeaderByHash(header1.hash().into()).into(),
+				request::HeaderByHash(header2.hash().into()).into(),
+			],
+		)
+		.unwrap();
 
 	assert_eq!(harness.service.pending.read().len(), 1);
 
-	harness.service.dispatch_pending(&Context::RequestFrom(peer_id, req_ids.0));
+	harness
+		.service
+		.dispatch_pending(&Context::RequestFrom(peer_id, req_ids.0));
 	assert_eq!(harness.service.pending.read().len(), 0);
 
 	// supply only the first one.
 	harness.service.on_responses(
 		&Context::WithPeer(peer_id),
 		req_ids.0,
-		&[Response::Headers(basic_request::HeadersResponse { headers: vec![encoded1] })]
+		&[Response::Headers(basic_request::HeadersResponse {
+			headers: vec![encoded1],
+		})],
 	);
 
 	assert_eq!(harness.service.pending.read().len(), 1);
 
-	harness.service.dispatch_pending(&Context::RequestFrom(peer_id, req_ids.1));
+	harness
+		.service
+		.dispatch_pending(&Context::RequestFrom(peer_id, req_ids.1));
 	assert_eq!(harness.service.pending.read().len(), 0);
 
 	// supply the next one.
 	harness.service.on_responses(
 		&Context::WithPeer(peer_id),
 		req_ids.1,
-		&[Response::Headers(basic_request::HeadersResponse { headers: vec![encoded2] })]
+		&[Response::Headers(basic_request::HeadersResponse {
+			headers: vec![encoded2],
+		})],
 	);
 
 	assert!(recv.wait().is_ok());
@@ -306,10 +362,13 @@ fn part_bad_part_good() {
 	let peer_id = 111;
 	let req_ids = (ReqId(14426), ReqId(555));
 
-	harness.inject_peer(peer_id, Peer {
-		status: dummy_status(),
-		capabilities: dummy_capabilities(),
-	});
+	harness.inject_peer(
+		peer_id,
+		Peer {
+			status: dummy_status(),
+			capabilities: dummy_capabilities(),
+		},
+	);
 
 	let make = |num| {
 		let mut hdr = Header::default();
@@ -323,17 +382,22 @@ fn part_bad_part_good() {
 	let (header2, encoded2) = make(23452);
 
 	// request two headers.
-	let recv = harness.service.request_raw(
-		&Context::NoOp,
-		vec![
-			request::HeaderByHash(header1.hash().into()).into(),
-			request::HeaderByHash(header2.hash().into()).into(),
-		],
-	).unwrap();
+	let recv = harness
+		.service
+		.request_raw(
+			&Context::NoOp,
+			vec![
+				request::HeaderByHash(header1.hash().into()).into(),
+				request::HeaderByHash(header2.hash().into()).into(),
+			],
+		)
+		.unwrap();
 
 	assert_eq!(harness.service.pending.read().len(), 1);
 
-	harness.service.dispatch_pending(&Context::RequestFrom(peer_id, req_ids.0));
+	harness
+		.service
+		.dispatch_pending(&Context::RequestFrom(peer_id, req_ids.0));
 	assert_eq!(harness.service.pending.read().len(), 0);
 
 	// supply only the first one, but followed by the wrong kind of response.
@@ -342,26 +406,35 @@ fn part_bad_part_good() {
 		&Context::Punish(peer_id),
 		req_ids.0,
 		&[
-			Response::Headers(basic_request::HeadersResponse { headers: vec![encoded1] }),
-			Response::Receipts(basic_request::ReceiptsResponse { receipts: vec![] } ),
-		]
+			Response::Headers(basic_request::HeadersResponse {
+				headers: vec![encoded1],
+			}),
+			Response::Receipts(basic_request::ReceiptsResponse { receipts: vec![] }),
+		],
 	);
 
 	assert_eq!(harness.service.pending.read().len(), 1);
 
-	harness.inject_peer(peer_id, Peer {
-		status: dummy_status(),
-		capabilities: dummy_capabilities(),
-	});
+	harness.inject_peer(
+		peer_id,
+		Peer {
+			status: dummy_status(),
+			capabilities: dummy_capabilities(),
+		},
+	);
 
-	harness.service.dispatch_pending(&Context::RequestFrom(peer_id, req_ids.1));
+	harness
+		.service
+		.dispatch_pending(&Context::RequestFrom(peer_id, req_ids.1));
 	assert_eq!(harness.service.pending.read().len(), 0);
 
 	// supply the next one.
 	harness.service.on_responses(
 		&Context::WithPeer(peer_id),
 		req_ids.1,
-		&[Response::Headers(basic_request::HeadersResponse { headers: vec![encoded2] })]
+		&[Response::Headers(basic_request::HeadersResponse {
+			headers: vec![encoded2],
+		})],
 	);
 
 	assert!(recv.wait().is_ok());
@@ -374,26 +447,36 @@ fn wrong_kind() {
 	let peer_id = 10101;
 	let req_id = ReqId(14426);
 
-	harness.inject_peer(peer_id, Peer {
-		status: dummy_status(),
-		capabilities: dummy_capabilities(),
-	});
+	harness.inject_peer(
+		peer_id,
+		Peer {
+			status: dummy_status(),
+			capabilities: dummy_capabilities(),
+		},
+	);
 
-	let _recv = harness.service.request_raw(
-		&Context::NoOp,
-		vec![request::HeaderByHash(H256::default().into()).into()]
-	).unwrap();
+	let _recv = harness
+		.service
+		.request_raw(
+			&Context::NoOp,
+			vec![request::HeaderByHash(H256::default().into()).into()],
+		)
+		.unwrap();
 
 	assert_eq!(harness.service.pending.read().len(), 1);
 
-	harness.service.dispatch_pending(&Context::RequestFrom(peer_id, req_id));
+	harness
+		.service
+		.dispatch_pending(&Context::RequestFrom(peer_id, req_id));
 
 	assert_eq!(harness.service.pending.read().len(), 0);
 
 	harness.service.on_responses(
 		&Context::Punish(peer_id),
 		req_id,
-		&[Response::Receipts(basic_request::ReceiptsResponse { receipts: vec![] })]
+		&[Response::Receipts(basic_request::ReceiptsResponse {
+			receipts: vec![],
+		})],
 	);
 
 	assert_eq!(harness.service.pending.read().len(), 1);
@@ -406,25 +489,33 @@ fn back_references() {
 	let peer_id = 10101;
 	let req_id = ReqId(14426);
 
-	harness.inject_peer(peer_id, Peer {
-		status: dummy_status(),
-		capabilities: dummy_capabilities(),
-	});
+	harness.inject_peer(
+		peer_id,
+		Peer {
+			status: dummy_status(),
+			capabilities: dummy_capabilities(),
+		},
+	);
 
 	let header = Header::default();
 	let encoded = header.encoded();
 
-	let recv = harness.service.request_raw(
-		&Context::NoOp,
-		vec![
-			request::HeaderByHash(header.hash().into()).into(),
-			request::BlockReceipts(HeaderRef::Unresolved(0, header.hash().into())).into(),
-		]
-	).unwrap();
+	let recv = harness
+		.service
+		.request_raw(
+			&Context::NoOp,
+			vec![
+				request::HeaderByHash(header.hash().into()).into(),
+				request::BlockReceipts(HeaderRef::Unresolved(0, header.hash().into())).into(),
+			],
+		)
+		.unwrap();
 
 	assert_eq!(harness.service.pending.read().len(), 1);
 
-	harness.service.dispatch_pending(&Context::RequestFrom(peer_id, req_id));
+	harness
+		.service
+		.dispatch_pending(&Context::RequestFrom(peer_id, req_id));
 
 	assert_eq!(harness.service.pending.read().len(), 0);
 
@@ -432,9 +523,11 @@ fn back_references() {
 		&Context::WithPeer(peer_id),
 		req_id,
 		&[
-			Response::Headers(basic_request::HeadersResponse { headers: vec![encoded] }),
+			Response::Headers(basic_request::HeadersResponse {
+				headers: vec![encoded],
+			}),
 			Response::Receipts(basic_request::ReceiptsResponse { receipts: vec![] }),
-		]
+		],
 	);
 
 	assert!(recv.wait().is_ok());
@@ -447,13 +540,16 @@ fn bad_back_reference() {
 
 	let header = Header::default();
 
-	let _ = harness.service.request_raw(
-		&Context::NoOp,
-		vec![
-			request::HeaderByHash(header.hash().into()).into(),
-			request::BlockReceipts(HeaderRef::Unresolved(1, header.hash().into())).into(),
-		]
-	).unwrap();
+	let _ = harness
+		.service
+		.request_raw(
+			&Context::NoOp,
+			vec![
+				request::HeaderByHash(header.hash().into()).into(),
+				request::BlockReceipts(HeaderRef::Unresolved(1, header.hash().into())).into(),
+			],
+		)
+		.unwrap();
 }
 
 #[test]
@@ -463,34 +559,42 @@ fn fill_from_cache() {
 	let peer_id = 10101;
 	let req_id = ReqId(14426);
 
-	harness.inject_peer(peer_id, Peer {
-		status: dummy_status(),
-		capabilities: dummy_capabilities(),
-	});
+	harness.inject_peer(
+		peer_id,
+		Peer {
+			status: dummy_status(),
+			capabilities: dummy_capabilities(),
+		},
+	);
 
 	let header = Header::default();
 	let encoded = header.encoded();
 
-	let recv = harness.service.request_raw(
-		&Context::NoOp,
-		vec![
-			request::HeaderByHash(header.hash().into()).into(),
-			request::BlockReceipts(HeaderRef::Unresolved(0, header.hash().into())).into(),
-		]
-	).unwrap();
+	let recv = harness
+		.service
+		.request_raw(
+			&Context::NoOp,
+			vec![
+				request::HeaderByHash(header.hash().into()).into(),
+				request::BlockReceipts(HeaderRef::Unresolved(0, header.hash().into())).into(),
+			],
+		)
+		.unwrap();
 
 	assert_eq!(harness.service.pending.read().len(), 1);
 
-	harness.service.dispatch_pending(&Context::RequestFrom(peer_id, req_id));
+	harness
+		.service
+		.dispatch_pending(&Context::RequestFrom(peer_id, req_id));
 
 	assert_eq!(harness.service.pending.read().len(), 0);
 
 	harness.service.on_responses(
 		&Context::WithPeer(peer_id),
 		req_id,
-		&[
-			Response::Headers(basic_request::HeadersResponse { headers: vec![encoded] }),
-		]
+		&[Response::Headers(basic_request::HeadersResponse {
+			headers: vec![encoded],
+		})],
 	);
 
 	assert!(recv.wait().is_ok());

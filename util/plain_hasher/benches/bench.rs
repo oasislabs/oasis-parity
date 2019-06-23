@@ -16,13 +16,13 @@
 
 #![feature(test)]
 
-extern crate test;
 extern crate plain_hasher;
+extern crate test;
 
-use std::hash::Hasher;
-use std::collections::hash_map::DefaultHasher;
-use test::{Bencher, black_box};
 use plain_hasher::PlainHasher;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hasher;
+use test::{black_box, Bencher};
 
 #[bench]
 fn write_plain_hasher(b: &mut Bencher) {

@@ -37,14 +37,14 @@ pub trait Memory {
 	/// Retrieve part of the memory between offset and offset + size
 	fn read_slice(&self, offset: U256, size: U256) -> &[u8];
 	/// Retrieve writeable part of memory
-	fn writeable_slice(&mut self, offset: U256, size: U256) -> &mut[u8];
+	fn writeable_slice(&mut self, offset: U256, size: U256) -> &mut [u8];
 	fn dump(&self);
 	/// Convert memory into return data.
 	fn into_return_data(self, offset: U256, size: U256) -> ReturnData;
 }
 
 /// Checks whether offset and size is valid memory range
-pub fn is_valid_range(off: usize, size: usize)  -> bool {
+pub fn is_valid_range(off: usize, size: usize) -> bool {
 	// When size is zero we haven't actually expanded the memory
 	let overflow = off.overflowing_add(size).1;
 	size > 0 && !overflow
@@ -69,13 +69,13 @@ impl Memory for Vec<u8> {
 		if !is_valid_range(off, size) {
 			&self[0..0]
 		} else {
-			&self[off..off+size]
+			&self[off..off + size]
 		}
 	}
 
 	fn read(&self, offset: U256) -> U256 {
 		let off = offset.low_u64() as usize;
-		U256::from(&self[off..off+32])
+		U256::from(&self[off..off + 32])
 	}
 
 	fn writeable_slice(&mut self, offset: U256, size: U256) -> &mut [u8] {
@@ -84,20 +84,20 @@ impl Memory for Vec<u8> {
 		if !is_valid_range(off, s) {
 			&mut self[0..0]
 		} else {
-			&mut self[off..off+s]
+			&mut self[off..off + s]
 		}
 	}
 
 	fn write_slice(&mut self, offset: U256, slice: &[u8]) {
 		if !slice.is_empty() {
 			let off = offset.low_u64() as usize;
-			self[off..off+slice.len()].copy_from_slice(slice);
+			self[off..off + slice.len()].copy_from_slice(slice);
 		}
 	}
 
 	fn write(&mut self, offset: U256, value: U256) {
 		let off = offset.low_u64() as usize;
-		value.to_big_endian(&mut self[off..off+32]);
+		value.to_big_endian(&mut self[off..off + 32]);
 	}
 
 	fn write_byte(&mut self, offset: U256, value: U256) {
@@ -120,10 +120,12 @@ impl Memory for Vec<u8> {
 		let mut offset = offset.low_u64() as usize;
 		let size = size.low_u64() as usize;
 		if !is_valid_range(offset, size) {
-			return ReturnData::empty()
+			return ReturnData::empty();
 		}
 		if self.len() - size > MAX_RETURN_WASTE_BYTES {
-			{ let _ =  self.drain(..offset); }
+			{
+				let _ = self.drain(..offset);
+			}
 			self.truncate(size);
 			self.shrink_to_fit();
 			offset = 0;
@@ -134,8 +136,8 @@ impl Memory for Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-	use ethereum_types::U256;
 	use super::Memory;
+	use ethereum_types::U256;
 
 	#[test]
 	fn test_memory_read_and_write() {
@@ -182,7 +184,10 @@ mod tests {
 			let slice = "67890".as_bytes();
 			mem.write_slice(U256::from(0x1), slice);
 
-			assert_eq!(mem.read_slice(U256::from(0), U256::from(7)), "a67890g".as_bytes());
+			assert_eq!(
+				mem.read_slice(U256::from(0), U256::from(7)),
+				"a67890g".as_bytes()
+			);
 		}
 
 		// write empty slice out of bounds

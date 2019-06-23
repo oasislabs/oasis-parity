@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use ethereum_types::{H256, Address};
+use ethereum_types::{Address, H256};
 
 /// Interface used to trace activities at the Ext interface.  This essentially mirrors the Ext
 /// interface, except no results are returned.

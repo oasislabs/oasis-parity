@@ -17,9 +17,9 @@
 //! Trie test deserialization.
 
 mod input;
-mod trie;
 mod test;
+mod trie;
 
 pub use self::input::Input;
-pub use self::trie::Trie;
 pub use self::test::Test;
+pub use self::trie::Trie;

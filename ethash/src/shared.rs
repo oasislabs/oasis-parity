@@ -57,7 +57,8 @@ pub fn get_cache_size(block_number: u64) -> usize {
 
 pub fn get_data_size(block_number: u64) -> usize {
 	// TODO: Memoise
-	let mut sz: u64 = DATASET_BYTES_INIT + DATASET_BYTES_GROWTH * (block_number / ETHASH_EPOCH_LENGTH);
+	let mut sz: u64 =
+		DATASET_BYTES_INIT + DATASET_BYTES_GROWTH * (block_number / ETHASH_EPOCH_LENGTH);
 	sz = sz - ETHASH_MIX_BYTES as u64;
 	while !is_prime(sz / ETHASH_MIX_BYTES as u64) {
 		sz = sz - 2 * ETHASH_MIX_BYTES as u64;
@@ -107,7 +108,11 @@ pub union Node {
 
 impl Clone for Node {
 	fn clone(&self) -> Self {
-		unsafe { Node { bytes: *&self.bytes } }
+		unsafe {
+			Node {
+				bytes: *&self.bytes,
+			}
+		}
 	}
 }
 

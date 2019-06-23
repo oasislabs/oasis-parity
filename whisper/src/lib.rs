@@ -52,7 +52,7 @@ extern crate serde_derive;
 extern crate serde_json;
 
 pub use self::message::Message;
-pub use self::net::{Network, MessageHandler};
+pub use self::net::{MessageHandler, Network};
 
 pub mod message;
 pub mod net;

@@ -14,17 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::borrow::Cow;
-use ethjson::uint::Uint;
-use ethjson::hash::{Address, H256};
 use ethjson::bytes::Bytes;
+use ethjson::hash::{Address, H256};
+use ethjson::uint::Uint;
+use std::borrow::Cow;
 
 #[derive(Deserialize)]
 #[serde(untagged)]
 pub enum Source {
 	Raw(Cow<'static, String>),
 	Constructor {
-		#[serde(rename="constructor")]
+		#[serde(rename = "constructor")]
 		source: Cow<'static, String>,
 		arguments: Bytes,
 		sender: Address,
@@ -48,7 +48,7 @@ pub struct Fixture {
 	pub address: Option<Address>,
 	pub sender: Option<Address>,
 	pub value: Option<Uint>,
-	#[serde(rename="gasLimit")]
+	#[serde(rename = "gasLimit")]
 	pub gas_limit: Option<u64>,
 	pub payload: Option<Bytes>,
 	pub storage: Option<Vec<StorageEntry>>,
@@ -67,7 +67,7 @@ pub struct CallLocator {
 	pub receiver: Option<Address>,
 	pub value: Option<Uint>,
 	pub data: Option<Bytes>,
-	#[serde(rename="codeAddress")]
+	#[serde(rename = "codeAddress")]
 	pub code_address: Option<Address>,
 }
 

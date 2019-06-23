@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-extern crate serde_json;
-extern crate serde_ignored;
 extern crate ethjson;
+extern crate serde_ignored;
+extern crate serde_json;
 
-use std::collections::BTreeSet;
-use std::{fs, env, process};
 use ethjson::spec::Spec;
+use std::collections::BTreeSet;
+use std::{env, fs, process};
 
 fn quit(s: &str) -> ! {
 	println!("{}", s);
@@ -30,9 +30,11 @@ fn quit(s: &str) -> ! {
 fn main() {
 	let mut args = env::args();
 	if args.len() != 2 {
-		quit("You need to specify chainspec.json\n\
-		\n\
-		./chainspec <chainspec.json>");
+		quit(
+			"You need to specify chainspec.json\n\
+			 \n\
+			 ./chainspec <chainspec.json>",
+		);
 	}
 
 	let path = args.nth(1).expect("args.len() == 2; qed");
@@ -53,7 +55,8 @@ fn main() {
 	}
 
 	if !unused.is_empty() {
-		let err = unused.into_iter()
+		let err = unused
+			.into_iter()
 			.map(|field| format!("{} unexpected field `{}`", path, field))
 			.collect::<Vec<_>>()
 			.join("\n");

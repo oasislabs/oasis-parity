@@ -14,11 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
-use ethkey::crypto::ecdh::agree;
-use ethkey::{KeyPair, Public, Signature, Error as EthKeyError, sign, public_to_address};
 use ethcore::account_provider::AccountProvider;
-use ethereum_types::{H256, Address};
+use ethereum_types::{Address, H256};
+use ethkey::crypto::ecdh::agree;
+use ethkey::{public_to_address, sign, Error as EthKeyError, KeyPair, Public, Signature};
+use std::sync::Arc;
 use traits::NodeKeyPair;
 
 pub struct PlainNodeKeyPair {
@@ -34,9 +34,7 @@ pub struct KeyStoreNodeKeyPair {
 
 impl PlainNodeKeyPair {
 	pub fn new(key_pair: KeyPair) -> Self {
-		PlainNodeKeyPair {
-			key_pair: key_pair,
-		}
+		PlainNodeKeyPair { key_pair: key_pair }
 	}
 }
 
@@ -61,8 +59,14 @@ impl NodeKeyPair for PlainNodeKeyPair {
 }
 
 impl KeyStoreNodeKeyPair {
-	pub fn new(account_provider: Arc<AccountProvider>, address: Address, password: String) -> Result<Self, EthKeyError> {
-		let public = account_provider.account_public(address.clone(), &password).map_err(|e| EthKeyError::Custom(format!("{}", e)))?;
+	pub fn new(
+		account_provider: Arc<AccountProvider>,
+		address: Address,
+		password: String,
+	) -> Result<Self, EthKeyError> {
+		let public = account_provider
+			.account_public(address.clone(), &password)
+			.map_err(|e| EthKeyError::Custom(format!("{}", e)))?;
 		Ok(KeyStoreNodeKeyPair {
 			account_provider: account_provider,
 			address: address,
@@ -82,12 +86,24 @@ impl NodeKeyPair for KeyStoreNodeKeyPair {
 	}
 
 	fn sign(&self, data: &H256) -> Result<Signature, EthKeyError> {
-		self.account_provider.sign(self.address.clone(), Some(self.password.clone()), data.clone())
+		self.account_provider
+			.sign(
+				self.address.clone(),
+				Some(self.password.clone()),
+				data.clone(),
+			)
 			.map_err(|e| EthKeyError::Custom(format!("{}", e)))
 	}
 
 	fn compute_shared_key(&self, peer_public: &Public) -> Result<KeyPair, EthKeyError> {
-		KeyPair::from_secret(self.account_provider.agree(self.address.clone(), Some(self.password.clone()), peer_public)
-			.map_err(|e| EthKeyError::Custom(format!("{}", e)))?)
+		KeyPair::from_secret(
+			self.account_provider
+				.agree(
+					self.address.clone(),
+					Some(self.password.clone()),
+					peer_public,
+				)
+				.map_err(|e| EthKeyError::Custom(format!("{}", e)))?,
+		)
 	}
 }

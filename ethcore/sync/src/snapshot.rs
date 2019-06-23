@@ -118,16 +118,20 @@ impl Snapshot {
 	pub fn needed_chunk(&mut self) -> Option<H256> {
 		// Find all random chunks: first blocks, then state
 		let needed_chunks = {
-			let chunk_filter = |h| !self.downloading_chunks.contains(h) && !self.completed_chunks.contains(h);
+			let chunk_filter =
+				|h| !self.downloading_chunks.contains(h) && !self.completed_chunks.contains(h);
 
-			let needed_block_chunks = self.pending_block_chunks.iter()
+			let needed_block_chunks = self
+				.pending_block_chunks
+				.iter()
 				.filter(|&h| chunk_filter(h))
 				.map(|h| *h)
 				.collect::<Vec<H256>>();
 
 			// If no block chunks to download, get the state chunks
 			if needed_block_chunks.len() == 0 {
-				self.pending_state_chunks.iter()
+				self.pending_state_chunks
+					.iter()
 					.filter(|&h| chunk_filter(h))
 					.map(|h| *h)
 					.collect::<Vec<H256>>()
@@ -178,17 +182,17 @@ impl Snapshot {
 
 #[cfg(test)]
 mod test {
-	use hash::keccak;
-	use bytes::Bytes;
 	use super::*;
+	use bytes::Bytes;
 	use ethcore::snapshot::ManifestData;
+	use hash::keccak;
 
 	fn is_empty(snapshot: &Snapshot) -> bool {
-		snapshot.pending_block_chunks.is_empty() &&
-		snapshot.pending_state_chunks.is_empty() &&
-		snapshot.completed_chunks.is_empty() &&
-		snapshot.downloading_chunks.is_empty() &&
-		snapshot.snapshot_hash.is_none()
+		snapshot.pending_block_chunks.is_empty()
+			&& snapshot.pending_state_chunks.is_empty()
+			&& snapshot.completed_chunks.is_empty()
+			&& snapshot.downloading_chunks.is_empty()
+			&& snapshot.snapshot_hash.is_none()
 	}
 
 	fn test_manifest() -> (ManifestData, H256, Vec<Bytes>, Vec<Bytes>) {
@@ -210,7 +214,7 @@ mod test {
 	fn create_clear() {
 		let mut snapshot = Snapshot::new();
 		assert!(is_empty(&snapshot));
-		let (manifest, mhash, _, _,) = test_manifest();
+		let (manifest, mhash, _, _) = test_manifest();
 		snapshot.reset_to(&manifest, &mhash);
 		assert!(!is_empty(&snapshot));
 		snapshot.clear();
@@ -228,21 +232,31 @@ mod test {
 		let requested: Vec<H256> = (0..40).map(|_| snapshot.needed_chunk().unwrap()).collect();
 		assert!(snapshot.needed_chunk().is_none());
 
-		let requested_all_block_chunks = manifest.block_hashes.iter()
+		let requested_all_block_chunks = manifest
+			.block_hashes
+			.iter()
 			.all(|h| requested.iter().any(|rh| rh == h));
 		assert!(requested_all_block_chunks);
 
-		let requested_all_state_chunks = manifest.state_hashes.iter()
+		let requested_all_state_chunks = manifest
+			.state_hashes
+			.iter()
 			.all(|h| requested.iter().any(|rh| rh == h));
 		assert!(requested_all_state_chunks);
 
 		assert_eq!(snapshot.downloading_chunks.len(), 40);
 
-		assert_eq!(snapshot.validate_chunk(&state_chunks[4]), Ok(ChunkType::State(manifest.state_hashes[4].clone())));
+		assert_eq!(
+			snapshot.validate_chunk(&state_chunks[4]),
+			Ok(ChunkType::State(manifest.state_hashes[4].clone()))
+		);
 		assert_eq!(snapshot.completed_chunks.len(), 1);
 		assert_eq!(snapshot.downloading_chunks.len(), 39);
 
-		assert_eq!(snapshot.validate_chunk(&block_chunks[10]), Ok(ChunkType::Block(manifest.block_hashes[10].clone())));
+		assert_eq!(
+			snapshot.validate_chunk(&block_chunks[10]),
+			Ok(ChunkType::Block(manifest.block_hashes[10].clone()))
+		);
 		assert_eq!(snapshot.completed_chunks.len(), 2);
 		assert_eq!(snapshot.downloading_chunks.len(), 38);
 

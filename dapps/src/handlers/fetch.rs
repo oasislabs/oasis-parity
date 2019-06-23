@@ -16,19 +16,19 @@
 
 //! Hyper Server Handler that fetches a file during a request (proxy).
 
-use std::{fmt, mem};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Instant;
 use fetch::{self, Fetch};
 use futures::sync::oneshot;
 use futures::{self, Future};
 use futures_cpupool::CpuPool;
 use hyper;
 use parking_lot::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::Instant;
+use std::{fmt, mem};
 
 use endpoint::{self, EndpointPath};
-use handlers::{ContentHandler, StreamingHandler, FETCH_TIMEOUT, errors};
+use handlers::{errors, ContentHandler, StreamingHandler, FETCH_TIMEOUT};
 use page::local;
 
 pub enum ValidatorResponse {
@@ -93,8 +93,8 @@ impl FetchControl {
 			FetchState::Error(ref handler) => self.notify(|| WaitResult::Error(handler.clone())),
 			FetchState::Done(ref endpoint, _) => self.notify(|| WaitResult::Done(endpoint.clone())),
 			FetchState::Streaming(_) => self.notify(|| WaitResult::NonAwaitable),
-			FetchState::InProgress(_) => {},
-			FetchState::Empty => {},
+			FetchState::InProgress(_) => {}
+			FetchState::Empty => {}
 		}
 	}
 }
@@ -129,18 +129,16 @@ impl Future for WaitingHandler {
 					match result {
 						WaitResult::Error(handler) => {
 							return Ok(futures::Async::Ready(handler.into()));
-						},
+						}
 						WaitResult::NonAwaitable => {
 							return Ok(futures::Async::Ready(errors::streaming().into()));
-						},
+						}
 						WaitResult::Done(endpoint) => {
 							WaitState::Done(endpoint.to_response(&self.path).into())
-						},
+						}
 					}
-				},
-				WaitState::Done(ref mut response) => {
-					return response.poll()
-				},
+				}
+				WaitState::Done(ref mut response) => return response.poll(),
 			};
 
 			self.state = new_state;
@@ -150,7 +148,7 @@ impl Future for WaitingHandler {
 
 enum FetchState {
 	Error(ContentHandler),
-	InProgress(Box<Future<Item=FetchState, Error=()> + Send>),
+	InProgress(Box<Future<Item = FetchState, Error = ()> + Send>),
 	Streaming(hyper::Response),
 	Done(local::Dapp, endpoint::Response),
 	Empty,
@@ -199,14 +197,14 @@ impl ContentFetcherHandler {
 			hyper::Method::Get => {
 				trace!(target: "dapps", "Fetching content from: {:?}", url);
 				FetchState::InProgress(Self::fetch_content(
-						pool,
-						fetch,
-						url,
-						fetch_control.abort.clone(),
-						path,
-						installer,
+					pool,
+					fetch,
+					url,
+					fetch_control.abort.clone(),
+					path,
+					installer,
 				))
-			},
+			}
 			// or return error
 			_ => FetchState::Error(errors::method_not_allowed()),
 		};
@@ -224,7 +222,7 @@ impl ContentFetcherHandler {
 		abort: Arc<AtomicBool>,
 		path: EndpointPath,
 		installer: H,
-	) -> Box<Future<Item=FetchState, Error=()> + Send> {
+	) -> Box<Future<Item = FetchState, Error = ()> + Send> {
 		// Start fetching the content
 		let pool2 = pool.clone();
 		let future = fetch.get(url, abort.into()).then(move |result| {
@@ -235,22 +233,22 @@ impl ContentFetcherHandler {
 						trace!(target: "dapps", "Validation OK. Returning response.");
 						let response = endpoint.to_response(&path);
 						FetchState::Done(endpoint, response)
-					},
+					}
 					Ok(ValidatorResponse::Streaming(stream)) => {
 						trace!(target: "dapps", "Validation OK. Streaming response.");
 						let (reading, response) = stream.into_response();
 						pool.spawn(reading).forget();
 						FetchState::Streaming(response)
-					},
+					}
 					Err(e) => {
 						trace!(target: "dapps", "Error while validating content: {:?}", e);
 						FetchState::Error(errors::invalid_content(e))
-					},
+					}
 				},
 				Err(e) => {
 					warn!(target: "dapps", "Unable to fetch content: {:?}", e);
 					FetchState::Error(errors::download_error(e))
-				},
+				}
 			})
 		});
 
@@ -269,10 +267,10 @@ impl Future for ContentFetcherHandler {
 			self.status = match mem::replace(&mut self.status, FetchState::Empty) {
 				FetchState::Error(error) => {
 					return Ok(futures::Async::Ready(error.into()));
-				},
+				}
 				FetchState::Streaming(response) => {
 					return Ok(futures::Async::Ready(response));
-				},
+				}
 				any => any,
 			};
 
@@ -281,7 +279,7 @@ impl Future for ContentFetcherHandler {
 				FetchState::InProgress(_) if self.fetch_control.is_deadline_reached() => {
 					trace!(target: "dapps", "Fetching dapp failed because of timeout.");
 					FetchState::Error(errors::timeout_error())
-				},
+				}
 				FetchState::InProgress(ref mut receiver) => {
 					// Check if there is a response
 					trace!(target: "dapps", "Polling streaming response.");
@@ -289,10 +287,8 @@ impl Future for ContentFetcherHandler {
 						warn!(target: "dapps", "Error while fetching response: {:?}", err);
 						hyper::Error::Timeout
 					}))
-				},
-				FetchState::Done(_, ref mut response) => {
-					return response.poll()
-				},
+				}
+				FetchState::Done(_, ref mut response) => return response.poll(),
 				FetchState::Empty => panic!("Future polled twice."),
 				_ => unreachable!(),
 			};

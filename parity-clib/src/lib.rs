@@ -19,7 +19,7 @@
 
 extern crate parity;
 
-use std::os::raw::{c_char, c_void, c_int};
+use std::os::raw::{c_char, c_int, c_void};
 use std::panic;
 use std::ptr;
 use std::slice;
@@ -33,7 +33,12 @@ pub struct ParityParams {
 }
 
 #[no_mangle]
-pub extern fn parity_config_from_cli(args: *const *const c_char, args_lens: *const usize, len: usize, output: *mut *mut c_void) -> c_int {
+pub extern "C" fn parity_config_from_cli(
+	args: *const *const c_char,
+	args_lens: *const usize,
+	len: usize,
+	output: *mut *mut c_void,
+) -> c_int {
 	unsafe {
 		panic::catch_unwind(|| {
 			*output = ptr::null_mut();
@@ -64,17 +69,16 @@ pub extern fn parity_config_from_cli(args: *const *const c_char, args_lens: *con
 					let cfg = Box::into_raw(Box::new(cfg));
 					*output = cfg as *mut _;
 					0
-				},
-				Err(_) => {
-					1
-				},
+				}
+				Err(_) => 1,
 			}
-		}).unwrap_or(1)
+		})
+		.unwrap_or(1)
 	}
 }
 
 #[no_mangle]
-pub extern fn parity_config_destroy(cfg: *mut c_void) {
+pub extern "C" fn parity_config_destroy(cfg: *mut c_void) {
 	unsafe {
 		let _ = panic::catch_unwind(|| {
 			let _cfg = Box::from_raw(cfg as *mut parity::Configuration);
@@ -83,7 +87,7 @@ pub extern fn parity_config_destroy(cfg: *mut c_void) {
 }
 
 #[no_mangle]
-pub extern fn parity_start(cfg: *const ParityParams, output: *mut *mut c_void) -> c_int {
+pub extern "C" fn parity_start(cfg: *const ParityParams, output: *mut *mut c_void) -> c_int {
 	unsafe {
 		panic::catch_unwind(|| {
 			*output = ptr::null_mut();
@@ -92,18 +96,27 @@ pub extern fn parity_start(cfg: *const ParityParams, output: *mut *mut c_void) -
 			let config = Box::from_raw(cfg.configuration as *mut parity::Configuration);
 
 			let on_client_restart_cb = {
-				struct Cb(Option<extern "C" fn(*mut c_void, *const c_char, usize)>, *mut c_void);
+				struct Cb(
+					Option<extern "C" fn(*mut c_void, *const c_char, usize)>,
+					*mut c_void,
+				);
 				unsafe impl Send for Cb {}
 				unsafe impl Sync for Cb {}
 				impl Cb {
 					fn call(&self, new_chain: String) {
 						if let Some(ref cb) = self.0 {
-							cb(self.1, new_chain.as_bytes().as_ptr() as *const _, new_chain.len())
+							cb(
+								self.1,
+								new_chain.as_bytes().as_ptr() as *const _,
+								new_chain.len(),
+							)
 						}
 					}
 				}
 				let cb = Cb(cfg.on_client_restart_cb, cfg.on_client_restart_cb_custom);
-				move |new_chain: String| { cb.call(new_chain); }
+				move |new_chain: String| {
+					cb.call(new_chain);
+				}
 			};
 
 			let action = match parity::start(*config, on_client_restart_cb, || {}) {
@@ -112,19 +125,24 @@ pub extern fn parity_start(cfg: *const ParityParams, output: *mut *mut c_void) -
 			};
 
 			match action {
-				parity::ExecutionAction::Instant(Some(s)) => { println!("{}", s); 0 },
+				parity::ExecutionAction::Instant(Some(s)) => {
+					println!("{}", s);
+					0
+				}
 				parity::ExecutionAction::Instant(None) => 0,
 				parity::ExecutionAction::Running(client) => {
-					*output = Box::into_raw(Box::<parity::RunningClient>::new(client)) as *mut c_void;
+					*output =
+						Box::into_raw(Box::<parity::RunningClient>::new(client)) as *mut c_void;
 					0
 				}
 			}
-		}).unwrap_or(1)
+		})
+		.unwrap_or(1)
 	}
 }
 
 #[no_mangle]
-pub extern fn parity_destroy(client: *mut c_void) {
+pub extern "C" fn parity_destroy(client: *mut c_void) {
 	unsafe {
 		let _ = panic::catch_unwind(|| {
 			let client = Box::from_raw(client as *mut parity::RunningClient);
@@ -134,7 +152,13 @@ pub extern fn parity_destroy(client: *mut c_void) {
 }
 
 #[no_mangle]
-pub extern fn parity_rpc(client: *mut c_void, query: *const char, len: usize, out_str: *mut c_char, out_len: *mut usize) -> c_int {
+pub extern "C" fn parity_rpc(
+	client: *mut c_void,
+	query: *const char,
+	len: usize,
+	out_str: *mut c_char,
+	out_len: *mut usize,
+) -> c_int {
 	unsafe {
 		panic::catch_unwind(|| {
 			let client: &mut parity::RunningClient = &mut *(client as *mut parity::RunningClient);
@@ -159,6 +183,7 @@ pub extern fn parity_rpc(client: *mut c_void, query: *const char, len: usize, ou
 			} else {
 				1
 			}
-		}).unwrap_or(1)
+		})
+		.unwrap_or(1)
 	}
 }

@@ -14,14 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use bytes::Bytes;
 use ethcore_miner::pool;
-use ethereum_types::{H256, U256, Address};
+use ethereum_types::{Address, H256, U256};
 use ethkey::Signature;
-use transaction::{UnverifiedTransaction, SignedTransaction};
+use transaction::{SignedTransaction, UnverifiedTransaction};
 
 use error::{Error, ErrorKind};
 
@@ -69,7 +69,7 @@ impl Default for VerificationStore {
 					tx_gas_limit: U256::max_value(),
 				},
 				pool::PrioritizationStrategy::GasPriceOnly,
-			)
+			),
 		}
 	}
 }
@@ -99,38 +99,58 @@ impl VerificationStore {
 		);
 
 		// Verify that transaction was imported
-		results.into_iter()
+		results
+			.into_iter()
 			.next()
 			.expect("One transaction inserted; one result returned; qed")?;
 
-		self.descriptors.insert(transaction_hash, PrivateTransactionDesc {
-			private_hash,
-			contract,
-			validator_account,
-		});
+		self.descriptors.insert(
+			transaction_hash,
+			PrivateTransactionDesc {
+				private_hash,
+				contract,
+				validator_account,
+			},
+		);
 
 		Ok(())
 	}
 
 	/// Returns transactions ready for verification
 	/// Returns only one transaction per sender because several cannot be verified in a row without verification from other peers
-	pub fn ready_transactions<C: pool::client::NonceClient>(&self, client: C) -> Vec<Arc<pool::VerifiedTransaction>> {
+	pub fn ready_transactions<C: pool::client::NonceClient>(
+		&self,
+		client: C,
+	) -> Vec<Arc<pool::VerifiedTransaction>> {
 		// We never store PendingTransactions and we don't use internal cache,
 		// so we don't need to provide real block number of timestamp here
 		let block_number = 0;
 		let timestamp = 0;
 		let nonce_cap = None;
 
-		self.transactions.collect_pending(client, block_number, timestamp, nonce_cap, |transactions| {
-			// take only one transaction per sender
-			let mut senders = HashSet::with_capacity(self.descriptors.len());
-			transactions.filter(move |tx| senders.insert(tx.signed().sender())).collect()
-		})
+		self.transactions.collect_pending(
+			client,
+			block_number,
+			timestamp,
+			nonce_cap,
+			|transactions| {
+				// take only one transaction per sender
+				let mut senders = HashSet::with_capacity(self.descriptors.len());
+				transactions
+					.filter(move |tx| senders.insert(tx.signed().sender()))
+					.collect()
+			},
+		)
 	}
 
 	/// Returns descriptor of the corresponding private transaction
-	pub fn private_transaction_descriptor(&self, transaction_hash: &H256) -> Result<&PrivateTransactionDesc, Error> {
-		self.descriptors.get(transaction_hash).ok_or(ErrorKind::PrivateTransactionNotFound.into())
+	pub fn private_transaction_descriptor(
+		&self,
+		transaction_hash: &H256,
+	) -> Result<&PrivateTransactionDesc, Error> {
+		self.descriptors
+			.get(transaction_hash)
+			.ok_or(ErrorKind::PrivateTransactionNotFound.into())
 	}
 
 	/// Remove transaction from the queue for verification
@@ -176,13 +196,16 @@ impl SigningStore {
 			bail!(ErrorKind::QueueIsFull);
 		}
 
-		self.transactions.insert(private_hash, PrivateTransactionSigningDesc {
-			original_transaction: transaction.clone(),
-			validators: validators.clone(),
-			received_signatures: Vec::new(),
-			state,
-			contract_nonce,
-		});
+		self.transactions.insert(
+			private_hash,
+			PrivateTransactionSigningDesc {
+				original_transaction: transaction.clone(),
+				validators: validators.clone(),
+				received_signatures: Vec::new(),
+				state,
+				contract_nonce,
+			},
+		);
 		Ok(())
 	}
 
@@ -198,8 +221,15 @@ impl SigningStore {
 	}
 
 	/// Adds received signature for the stored private transaction
-	pub fn add_signature(&mut self, private_hash: &H256, signature: Signature) -> Result<(), Error> {
-		let desc = self.transactions.get_mut(private_hash).ok_or_else(|| ErrorKind::PrivateTransactionNotFound)?;
+	pub fn add_signature(
+		&mut self,
+		private_hash: &H256,
+		signature: Signature,
+	) -> Result<(), Error> {
+		let desc = self
+			.transactions
+			.get_mut(private_hash)
+			.ok_or_else(|| ErrorKind::PrivateTransactionNotFound)?;
 		if !desc.received_signatures.contains(&signature) {
 			desc.received_signatures.push(signature);
 		}

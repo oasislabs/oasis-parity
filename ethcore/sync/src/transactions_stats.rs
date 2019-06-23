@@ -15,9 +15,9 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 use api::TransactionStats;
-use std::collections::{HashSet, HashMap};
 use ethereum_types::{H256, H512};
 use plain_hasher::H256FastMap;
+use std::collections::{HashMap, HashSet};
 
 type NodeId = H512;
 type BlockNumber = u64;
@@ -41,7 +41,8 @@ impl<'a> From<&'a Stats> for TransactionStats {
 	fn from(other: &'a Stats) -> Self {
 		TransactionStats {
 			first_seen: other.first_seen,
-			propagated_to: other.propagated_to
+			propagated_to: other
+				.propagated_to
 				.iter()
 				.map(|(hash, size)| (*hash, *size))
 				.collect(),
@@ -56,9 +57,17 @@ pub struct TransactionsStats {
 
 impl TransactionsStats {
 	/// Increases number of propagations to given `enodeid`.
-	pub fn propagated(&mut self, hash: &H256, enode_id: Option<NodeId>, current_block_num: BlockNumber) {
+	pub fn propagated(
+		&mut self,
+		hash: &H256,
+		enode_id: Option<NodeId>,
+		current_block_num: BlockNumber,
+	) {
 		let enode_id = enode_id.unwrap_or_default();
-		let stats = self.pending_transactions.entry(*hash).or_insert_with(|| Stats::new(current_block_num));
+		let stats = self
+			.pending_transactions
+			.entry(*hash)
+			.or_insert_with(|| Stats::new(current_block_num));
 		let count = stats.propagated_to.entry(enode_id).or_insert(0);
 		*count = count.saturating_add(1);
 	}
@@ -75,7 +84,9 @@ impl TransactionsStats {
 
 	/// Retains only transactions present in given `HashSet`.
 	pub fn retain(&mut self, hashes: &HashSet<H256>) {
-		let to_remove = self.pending_transactions.keys()
+		let to_remove = self
+			.pending_transactions
+			.keys()
 			.filter(|hash| !hashes.contains(hash))
 			.cloned()
 			.collect::<Vec<_>>();
@@ -89,8 +100,8 @@ impl TransactionsStats {
 #[cfg(test)]
 mod tests {
 
-	use std::collections::{HashMap, HashSet};
 	use super::{Stats, TransactionsStats};
+	use std::collections::{HashMap, HashSet};
 
 	#[test]
 	fn should_keep_track_of_propagations() {
@@ -107,13 +118,16 @@ mod tests {
 
 		// then
 		let stats = stats.get(&hash);
-		assert_eq!(stats, Some(&Stats {
-			first_seen: 5,
-			propagated_to: hash_map![
-				enodeid1 => 2,
-				enodeid2 => 1
-			],
-		}));
+		assert_eq!(
+			stats,
+			Some(&Stats {
+				first_seen: 5,
+				propagated_to: hash_map![
+					enodeid1 => 2,
+					enodeid2 => 1
+				],
+			})
+		);
 	}
 
 	#[test]

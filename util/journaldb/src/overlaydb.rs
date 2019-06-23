@@ -16,15 +16,15 @@
 
 //! Disk-backed `HashDB` implementation.
 
-use std::sync::Arc;
-use std::collections::HashMap;
-use std::collections::hash_map::Entry;
-use error::{Result, BaseDataError};
+use error::{BaseDataError, Result};
 use ethereum_types::H256;
-use rlp::{Rlp, RlpStream, Encodable, DecoderError, Decodable, encode, decode};
 use hashdb::*;
+use kvdb::{DBTransaction, KeyValueDB};
 use memorydb::*;
-use kvdb::{KeyValueDB, DBTransaction};
+use rlp::{decode, encode, Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Implementation of the `HashDB` trait for a disk-backed database with a memory overlay.
 ///
@@ -48,10 +48,7 @@ struct Payload {
 
 impl Payload {
 	fn new(count: u32, value: DBValue) -> Self {
-		Payload {
-			count,
-			value,
-		}
+		Payload { count, value }
 	}
 }
 
@@ -77,7 +74,11 @@ impl Decodable for Payload {
 impl OverlayDB {
 	/// Create a new instance of OverlayDB given a `backing` database.
 	pub fn new(backing: Arc<KeyValueDB>, col: Option<u32>) -> OverlayDB {
-		OverlayDB{ overlay: MemoryDB::new(), backing: backing, column: col }
+		OverlayDB {
+			overlay: MemoryDB::new(),
+			backing: backing,
+			column: col,
+		}
 	}
 
 	/// Create a new instance of OverlayDB with an anonymous temporary database.
@@ -108,7 +109,11 @@ impl OverlayDB {
 							return Err(From::from(BaseDataError::NegativelyReferencedHash(key)));
 						}
 						let payload = Payload::new(total_rc as u32, x.value);
-						deletes += if self.put_payload_in_batch(batch, &key, &payload) {1} else {0};
+						deletes += if self.put_payload_in_batch(batch, &key, &payload) {
+							1
+						} else {
+							0
+						};
 					}
 					None => {
 						if rc < 0 {
@@ -127,20 +132,30 @@ impl OverlayDB {
 
 	/// Revert all operations on this object (i.e. `insert()`s and `remove()`s) since the
 	/// last `commit()`.
-	pub fn revert(&mut self) { self.overlay.clear(); }
+	pub fn revert(&mut self) {
+		self.overlay.clear();
+	}
 
 	/// Get the number of references that would be committed.
-	pub fn commit_refs(&self, key: &H256) -> i32 { self.overlay.raw(key).map_or(0, |(_, refs)| refs) }
+	pub fn commit_refs(&self, key: &H256) -> i32 {
+		self.overlay.raw(key).map_or(0, |(_, refs)| refs)
+	}
 
 	/// Get the refs and value of the given key.
 	fn payload(&self, key: &H256) -> Option<Payload> {
-		self.backing.get(self.column, key)
+		self.backing
+			.get(self.column, key)
 			.expect("Low-level database error. Some issue with your hard disk?")
 			.map(|d| decode(&d).expect("decoding db value failed"))
 	}
 
 	/// Put the refs and value of the given key, possibly deleting it from the db.
-	fn put_payload_in_batch(&self, batch: &mut DBTransaction, key: &H256, payload: &Payload) -> bool {
+	fn put_payload_in_batch(
+		&self,
+		batch: &mut DBTransaction,
+		key: &H256,
+		payload: &Payload,
+	) -> bool {
 		if payload.count > 0 {
 			batch.put(self.column, key, &encode(payload));
 			false
@@ -153,7 +168,9 @@ impl OverlayDB {
 
 impl HashDB for OverlayDB {
 	fn keys(&self) -> HashMap<H256, i32> {
-		let mut ret: HashMap<H256, i32> = self.backing.iter(self.column)
+		let mut ret: HashMap<H256, i32> = self
+			.backing
+			.iter(self.column)
 			.map(|(key, _)| {
 				let h = H256::from_slice(&*key);
 				let r = self.payload(&h).unwrap().count;
@@ -165,7 +182,7 @@ impl HashDB for OverlayDB {
 			match ret.entry(key) {
 				Entry::Occupied(mut entry) => {
 					*entry.get_mut() += refs;
-				},
+				}
 				Entry::Vacant(entry) => {
 					entry.insert(refs);
 				}
@@ -180,7 +197,9 @@ impl HashDB for OverlayDB {
 		let k = self.overlay.raw(key);
 		let memrc = {
 			if let Some((d, rc)) = k {
-				if rc > 0 { return Some(d); }
+				if rc > 0 {
+					return Some(d);
+				}
 				rc
 			} else {
 				0
@@ -190,8 +209,7 @@ impl HashDB for OverlayDB {
 			Some(x) => {
 				if x.count as i32 + memrc > 0 {
 					Some(x.value)
-				}
-				else {
+				} else {
 					None
 				}
 			}
@@ -210,9 +228,7 @@ impl HashDB for OverlayDB {
 			_ => {
 				let memrc = k.map_or(0, |(_, rc)| rc);
 				match self.payload(key) {
-					Some(x) => {
-						x.count as i32 + memrc > 0
-					}
+					Some(x) => x.count as i32 + memrc > 0,
 					// Replace above match arm with this once https://github.com/rust-lang/rust/issues/15287 is done.
 					//Some((d, rc)) if rc + memrc > 0 => true,
 					_ => false,
@@ -221,25 +237,31 @@ impl HashDB for OverlayDB {
 		}
 	}
 
-	fn insert(&mut self, value: &[u8]) -> H256 { self.overlay.insert(value) }
-	fn emplace(&mut self, key: H256, value: DBValue) { self.overlay.emplace(key, value); }
-	fn remove(&mut self, key: &H256) { self.overlay.remove(key); }
+	fn insert(&mut self, value: &[u8]) -> H256 {
+		self.overlay.insert(value)
+	}
+	fn emplace(&mut self, key: H256, value: DBValue) {
+		self.overlay.emplace(key, value);
+	}
+	fn remove(&mut self, key: &H256) {
+		self.overlay.remove(key);
+	}
 }
 
 #[test]
 fn overlaydb_revert() {
 	let mut m = OverlayDB::new_temp();
-	let foo = m.insert(b"foo");          // insert foo.
+	let foo = m.insert(b"foo"); // insert foo.
 	let mut batch = m.backing.transaction();
-	m.commit_to_batch(&mut batch).unwrap();  // commit - new operations begin here...
+	m.commit_to_batch(&mut batch).unwrap(); // commit - new operations begin here...
 	m.backing.write(batch).unwrap();
-	let bar = m.insert(b"bar");          // insert bar.
-	m.remove(&foo);                      // remove foo.
-	assert!(!m.contains(&foo));          // foo is gone.
-	assert!(m.contains(&bar));           // bar is here.
-	m.revert();                          // revert the last two operations.
-	assert!(m.contains(&foo));           // foo is here.
-	assert!(!m.contains(&bar));          // bar is gone.
+	let bar = m.insert(b"bar"); // insert bar.
+	m.remove(&foo); // remove foo.
+	assert!(!m.contains(&foo)); // foo is gone.
+	assert!(m.contains(&bar)); // bar is here.
+	m.revert(); // revert the last two operations.
+	assert!(m.contains(&foo)); // foo is here.
+	assert!(!m.contains(&bar)); // bar is gone.
 }
 
 #[test]
@@ -292,7 +314,7 @@ fn overlaydb_negative() {
 	let h = trie.insert(b"hello world");
 	trie.commit().unwrap();
 	trie.remove(&h);
-	trie.remove(&h);	//bad - sends us into negative refs.
+	trie.remove(&h); //bad - sends us into negative refs.
 	assert_eq!(trie.get(&h), None);
 	assert!(trie.commit().is_err());
 }
@@ -307,25 +329,25 @@ fn overlaydb_complex() {
 	trie.commit().unwrap();
 	assert_eq!(trie.get(&hfoo).unwrap(), DBValue::from_slice(b"foo"));
 	assert_eq!(trie.get(&hbar).unwrap(), DBValue::from_slice(b"bar"));
-	trie.insert(b"foo");	// two refs
+	trie.insert(b"foo"); // two refs
 	assert_eq!(trie.get(&hfoo).unwrap(), DBValue::from_slice(b"foo"));
 	trie.commit().unwrap();
 	assert_eq!(trie.get(&hfoo).unwrap(), DBValue::from_slice(b"foo"));
 	assert_eq!(trie.get(&hbar).unwrap(), DBValue::from_slice(b"bar"));
-	trie.remove(&hbar);		// zero refs - delete
+	trie.remove(&hbar); // zero refs - delete
 	assert_eq!(trie.get(&hbar), None);
-	trie.remove(&hfoo);		// one ref - keep
+	trie.remove(&hfoo); // one ref - keep
 	assert_eq!(trie.get(&hfoo).unwrap(), DBValue::from_slice(b"foo"));
 	trie.commit().unwrap();
 	assert_eq!(trie.get(&hfoo).unwrap(), DBValue::from_slice(b"foo"));
-	trie.remove(&hfoo);		// zero ref - would delete, but...
+	trie.remove(&hfoo); // zero ref - would delete, but...
 	assert_eq!(trie.get(&hfoo), None);
-	trie.insert(b"foo");	// one ref - keep after all.
+	trie.insert(b"foo"); // one ref - keep after all.
 	assert_eq!(trie.get(&hfoo).unwrap(), DBValue::from_slice(b"foo"));
 	trie.commit().unwrap();
 	assert_eq!(trie.get(&hfoo).unwrap(), DBValue::from_slice(b"foo"));
-	trie.remove(&hfoo);		// zero ref - delete
+	trie.remove(&hfoo); // zero ref - delete
 	assert_eq!(trie.get(&hfoo), None);
-	trie.commit().unwrap();	//
+	trie.commit().unwrap(); //
 	assert_eq!(trie.get(&hfoo), None);
 }

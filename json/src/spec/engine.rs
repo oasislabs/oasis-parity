@@ -16,28 +16,28 @@
 
 //! Engine deserialization.
 
-use super::{Ethash, BasicAuthority, AuthorityRound, Tendermint, NullEngine};
+use super::{AuthorityRound, BasicAuthority, Ethash, NullEngine, Tendermint};
 
 /// Engine deserialization.
 #[derive(Debug, PartialEq, Deserialize)]
 pub enum Engine {
 	/// Null engine.
-	#[serde(rename="null")]
+	#[serde(rename = "null")]
 	Null(NullEngine),
 	/// Instantly sealing engine.
-	#[serde(rename="instantSeal")]
+	#[serde(rename = "instantSeal")]
 	InstantSeal,
 	/// Ethash engine.
 	Ethash(Ethash),
 	/// BasicAuthority engine.
-	#[serde(rename="basicAuthority")]
+	#[serde(rename = "basicAuthority")]
 	BasicAuthority(BasicAuthority),
 	/// AuthorityRound engine.
-	#[serde(rename="authorityRound")]
+	#[serde(rename = "authorityRound")]
 	AuthorityRound(AuthorityRound),
 	/// Tendermint engine.
-	#[serde(rename="tendermint")]
-	Tendermint(Tendermint)
+	#[serde(rename = "tendermint")]
+	Tendermint(Tendermint),
 }
 
 #[cfg(test)]
@@ -57,7 +57,7 @@ mod tests {
 
 		let deserialized: Engine = serde_json::from_str(s).unwrap();
 		match deserialized {
-			Engine::Null(_) => {}, // unit test in its own file.
+			Engine::Null(_) => {} // unit test in its own file.
 			_ => panic!(),
 		}
 
@@ -67,7 +67,7 @@ mod tests {
 
 		let deserialized: Engine = serde_json::from_str(s).unwrap();
 		match deserialized {
-			Engine::InstantSeal => {},	// instant seal is unit tested in its own file.
+			Engine::InstantSeal => {} // instant seal is unit tested in its own file.
 			_ => panic!(),
 		};
 
@@ -88,7 +88,7 @@ mod tests {
 
 		let deserialized: Engine = serde_json::from_str(s).unwrap();
 		match deserialized {
-			Engine::Ethash(_) => {},	// ethash is unit tested in its own file.
+			Engine::Ethash(_) => {} // ethash is unit tested in its own file.
 			_ => panic!(),
 		};
 
@@ -104,7 +104,7 @@ mod tests {
 		}"#;
 		let deserialized: Engine = serde_json::from_str(s).unwrap();
 		match deserialized {
-			Engine::BasicAuthority(_) => {}, // basicAuthority is unit tested in its own file.
+			Engine::BasicAuthority(_) => {} // basicAuthority is unit tested in its own file.
 			_ => panic!(),
 		};
 
@@ -122,7 +122,7 @@ mod tests {
 		}"#;
 		let deserialized: Engine = serde_json::from_str(s).unwrap();
 		match deserialized {
-			Engine::AuthorityRound(_) => {}, // AuthorityRound is unit tested in its own file.
+			Engine::AuthorityRound(_) => {} // AuthorityRound is unit tested in its own file.
 			_ => panic!(),
 		};
 
@@ -137,7 +137,7 @@ mod tests {
 		}"#;
 		let deserialized: Engine = serde_json::from_str(s).unwrap();
 		match deserialized {
-			Engine::Tendermint(_) => {}, // Tendermint is unit tested in its own file.
+			Engine::Tendermint(_) => {} // Tendermint is unit tested in its own file.
 			_ => panic!(),
 		};
 	}

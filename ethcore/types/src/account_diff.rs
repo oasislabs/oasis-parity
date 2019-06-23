@@ -16,15 +16,18 @@
 
 //! Diff between two accounts.
 
-use std::cmp::*;
-use std::fmt;
-use std::collections::BTreeMap;
-use ethereum_types::{H256, U256};
 use bytes::Bytes;
+use ethereum_types::{H256, U256};
+use std::cmp::*;
+use std::collections::BTreeMap;
+use std::fmt;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 /// Diff type for specifying a change (or not).
-pub enum Diff<T> where T: Eq {
+pub enum Diff<T>
+where
+	T: Eq,
+{
 	/// Both sides are the same.
 	Same,
 	/// Left (pre, source) side doesn't include value, right side (post, destination) does.
@@ -35,18 +38,42 @@ pub enum Diff<T> where T: Eq {
 	Died(T),
 }
 
-impl<T> Diff<T> where T: Eq {
+impl<T> Diff<T>
+where
+	T: Eq,
+{
 	/// Construct new object with given `pre` and `post`.
-	pub fn new(pre: T, post: T) -> Self { if pre == post { Diff::Same } else { Diff::Changed(pre, post) } }
+	pub fn new(pre: T, post: T) -> Self {
+		if pre == post {
+			Diff::Same
+		} else {
+			Diff::Changed(pre, post)
+		}
+	}
 
 	/// Get the before value, if there is one.
-	pub fn pre(&self) -> Option<&T> { match *self { Diff::Died(ref x) | Diff::Changed(ref x, _) => Some(x), _ => None } }
+	pub fn pre(&self) -> Option<&T> {
+		match *self {
+			Diff::Died(ref x) | Diff::Changed(ref x, _) => Some(x),
+			_ => None,
+		}
+	}
 
 	/// Get the after value, if there is one.
-	pub fn post(&self) -> Option<&T> { match *self { Diff::Born(ref x) | Diff::Changed(_, ref x) => Some(x), _ => None } }
+	pub fn post(&self) -> Option<&T> {
+		match *self {
+			Diff::Born(ref x) | Diff::Changed(_, ref x) => Some(x),
+			_ => None,
+		}
+	}
 
 	/// Determine whether there was a change or not.
-	pub fn is_same(&self) -> bool { match *self { Diff::Same => true, _ => false }}
+	pub fn is_same(&self) -> bool {
+		match *self {
+			Diff::Same => true,
+			_ => false,
+		}
+	}
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -55,9 +82,9 @@ pub struct AccountDiff {
 	/// Change in balance, allowed to be `Diff::Same`.
 	pub balance: Diff<U256>,
 	/// Change in nonce, allowed to be `Diff::Same`.
-	pub nonce: Diff<U256>,					// Allowed to be Same
+	pub nonce: Diff<U256>, // Allowed to be Same
 	/// Change in code, allowed to be `Diff::Same`.
-	pub code: Diff<Bytes>,					// Allowed to be Same
+	pub code: Diff<Bytes>, // Allowed to be Same
 	/// Change in storage, values are not allowed to be `Diff::Same`.
 	pub storage: BTreeMap<H256, Diff<Vec<u8>>>,
 	/// Change in storage_expiry, allowed to be `Diff::Same`.
@@ -101,23 +128,31 @@ impl AccountDiff {
 // TODO: refactor into something nicer.
 fn interpreted_hash(u: &H256) -> String {
 	if u <= &H256::from(0xffffffff) {
-		format!("{} = 0x{:x}", U256::from(&**u).low_u32(), U256::from(&**u).low_u32())
+		format!(
+			"{} = 0x{:x}",
+			U256::from(&**u).low_u32(),
+			U256::from(&**u).low_u32()
+		)
 	} else if u <= &H256::from(u64::max_value()) {
-		format!("{} = 0x{:x}", U256::from(&**u).low_u64(), U256::from(&**u).low_u64())
-//	} else if u <= &H256::from("0xffffffffffffffffffffffffffffffffffffffff") {
-//		format!("@{}", Address::from(u))
+		format!(
+			"{} = 0x{:x}",
+			U256::from(&**u).low_u64(),
+			U256::from(&**u).low_u64()
+		)
+	//	} else if u <= &H256::from("0xffffffffffffffffffffffffffffffffffffffff") {
+	//		format!("@{}", Address::from(u))
 	} else {
 		format!("#{}", u)
 	}
 }
 
 fn interpreted_storage(v: Vec<u8>) -> String {
-    if v.len() == 32 {
-        interpreted_hash(&H256::from_slice(&v[..]))
-    } else {
-        // Data is encrypted so just return the raw bytes.
-        format!("{:?}", v)
-    }
+	if v.len() == 32 {
+		interpreted_hash(&H256::from_slice(&v[..]))
+	} else {
+		// Data is encrypted so just return the raw bytes.
+		format!("{:?}", v)
+	}
 }
 
 impl fmt::Display for AccountDiff {
@@ -126,29 +161,61 @@ impl fmt::Display for AccountDiff {
 
 		match self.nonce {
 			Diff::Born(ref x) => write!(f, "  non {}", x)?,
-			Diff::Changed(ref pre, ref post) => write!(f, "#{} ({} {} {})", post, pre, if pre > post {"-"} else {"+"}, *max(pre, post) - *	min(pre, post))?,
-			_ => {},
+			Diff::Changed(ref pre, ref post) => write!(
+				f,
+				"#{} ({} {} {})",
+				post,
+				pre,
+				if pre > post { "-" } else { "+" },
+				*max(pre, post) - *min(pre, post)
+			)?,
+			_ => {}
 		}
 		match self.balance {
 			Diff::Born(ref x) => write!(f, "  bal {}", x)?,
-			Diff::Changed(ref pre, ref post) => write!(f, "${} ({} {} {})", post, pre, if pre > post {"-"} else {"+"}, *max(pre, post) - *min(pre, post))?,
-			_ => {},
+			Diff::Changed(ref pre, ref post) => write!(
+				f,
+				"${} ({} {} {})",
+				post,
+				pre,
+				if pre > post { "-" } else { "+" },
+				*max(pre, post) - *min(pre, post)
+			)?,
+			_ => {}
 		}
 		if let Diff::Born(ref x) = self.code {
 			write!(f, "  code {}", x.pretty())?;
 		}
 		match self.storage_expiry {
 			Diff::Born(ref x) => write!(f, "  exp {}", x)?,
-			Diff::Changed(ref pre, ref post) => write!(f, "${} ({} {} {})", post, pre, if pre > post {"-"} else {"+"}, *max(pre, post) - *min(pre, post))?,
-			_ => {},
+			Diff::Changed(ref pre, ref post) => write!(
+				f,
+				"${} ({} {} {})",
+				post,
+				pre,
+				if pre > post { "-" } else { "+" },
+				*max(pre, post) - *min(pre, post)
+			)?,
+			_ => {}
 		}
 		write!(f, "\n")?;
 		for (k, dv) in &self.storage {
 			match *dv {
-				Diff::Born(ref v) => write!(f, "    +  {} => {}\n", interpreted_hash(k), interpreted_storage(v.to_vec()))?,
-				Diff::Changed(ref pre, ref post) => write!(f, "    *  {} => {} (was {})\n", interpreted_hash(k), interpreted_storage(post.to_vec()), interpreted_storage(pre.to_vec()))?,
+				Diff::Born(ref v) => write!(
+					f,
+					"    +  {} => {}\n",
+					interpreted_hash(k),
+					interpreted_storage(v.to_vec())
+				)?,
+				Diff::Changed(ref pre, ref post) => write!(
+					f,
+					"    *  {} => {} (was {})\n",
+					interpreted_hash(k),
+					interpreted_storage(post.to_vec()),
+					interpreted_storage(pre.to_vec())
+				)?,
 				Diff::Died(_) => write!(f, "    X  {}\n", interpreted_hash(k))?,
-				_ => {},
+				_ => {}
 			}
 		}
 		Ok(())

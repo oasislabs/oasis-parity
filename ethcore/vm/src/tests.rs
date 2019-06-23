@@ -14,25 +14,25 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
-use ethereum_types::{U256, H256, Address};
 use bytes::Bytes;
+use ethereum_types::{Address, H256, U256};
 use {
-	CallType, Schedule, EnvInfo,
-	ReturnData, Ext, ContractCreateResult, MessageCallResult,
-	CreateContractAddress, Result, GasLeft,
+	CallType, ContractCreateResult, CreateContractAddress, EnvInfo, Ext, GasLeft,
+	MessageCallResult, Result, ReturnData, Schedule,
 };
 
 pub struct FakeLogEntry {
 	pub topics: Vec<H256>,
-	pub data: Bytes
+	pub data: Bytes,
 }
 
 #[derive(PartialEq, Eq, Hash, Debug)]
 pub enum FakeCallType {
-	Call, Create
+	Call,
+	Create,
 }
 
 #[derive(PartialEq, Eq, Hash, Debug)]
@@ -70,7 +70,7 @@ pub struct FakeExt {
 pub fn test_finalize(res: Result<GasLeft>) -> Result<U256> {
 	match res {
 		Ok(GasLeft::Known(gas)) => Ok(gas),
-		Ok(GasLeft::NeedsReturn{..}) => unimplemented!(), // since ret is unimplemented.
+		Ok(GasLeft::NeedsReturn { .. }) => unimplemented!(), // since ret is unimplemented.
 		Err(e) => Err(e),
 	}
 }
@@ -103,7 +103,6 @@ impl FakeExt {
 }
 
 impl Ext for FakeExt {
-
 	fn storage_at(&self, key: &H256) -> Result<H256> {
 		Ok(self.store.get(key).unwrap_or(&H256::new()).clone())
 	}
@@ -123,7 +122,7 @@ impl Ext for FakeExt {
 
 	fn set_storage_bytes(&mut self, key: H256, value: Vec<u8>) -> Result<()> {
 		Ok(())
-  }
+	}
 	fn storage_expiry(&self) -> Result<u64> {
 		// TODO: implement?
 		unimplemented!()
@@ -154,7 +153,13 @@ impl Ext for FakeExt {
 		self.blockhashes.get(number).unwrap_or(&H256::new()).clone()
 	}
 
-	fn create(&mut self, gas: &U256, value: &U256, code: &[u8], _address: CreateContractAddress) -> ContractCreateResult {
+	fn create(
+		&mut self,
+		gas: &U256,
+		value: &U256,
+		code: &[u8],
+		_address: CreateContractAddress,
+	) -> ContractCreateResult {
 		self.calls.insert(FakeCall {
 			call_type: FakeCallType::Create,
 			gas: *gas,
@@ -162,22 +167,22 @@ impl Ext for FakeExt {
 			receive_address: None,
 			value: Some(*value),
 			data: code.to_vec(),
-			code_address: None
+			code_address: None,
 		});
 		ContractCreateResult::Failed
 	}
 
-	fn call(&mut self,
-			gas: &U256,
-			sender_address: &Address,
-			receive_address: &Address,
-			value: Option<U256>,
-			data: &[u8],
-			code_address: &Address,
-			_output: &mut [u8],
-			_call_type: CallType
-		) -> MessageCallResult {
-
+	fn call(
+		&mut self,
+		gas: &U256,
+		sender_address: &Address,
+		receive_address: &Address,
+		value: Option<U256>,
+		data: &[u8],
+		code_address: &Address,
+		_output: &mut [u8],
+		_call_type: CallType,
+	) -> MessageCallResult {
 		self.calls.insert(FakeCall {
 			call_type: FakeCallType::Call,
 			gas: *gas,
@@ -185,13 +190,17 @@ impl Ext for FakeExt {
 			receive_address: Some(receive_address.clone()),
 			value: value,
 			data: data.to_vec(),
-			code_address: Some(code_address.clone())
+			code_address: Some(code_address.clone()),
 		});
 		MessageCallResult::Success(*gas, ReturnData::empty())
 	}
 
 	fn extcode(&self, address: &Address) -> Result<Arc<Bytes>> {
-		Ok(self.codes.get(address).unwrap_or(&Arc::new(Bytes::new())).clone())
+		Ok(self
+			.codes
+			.get(address)
+			.unwrap_or(&Arc::new(Bytes::new()))
+			.clone())
 	}
 
 	fn extcodesize(&self, address: &Address) -> Result<usize> {
@@ -201,7 +210,7 @@ impl Ext for FakeExt {
 	fn log(&mut self, topics: Vec<H256>, data: &[u8]) -> Result<()> {
 		self.logs.push(FakeLogEntry {
 			topics: topics,
-			data: data.to_vec()
+			data: data.to_vec(),
 		});
 		Ok(())
 	}

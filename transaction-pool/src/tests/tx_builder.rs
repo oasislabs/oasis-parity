@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use super::{Transaction, U256, Address};
+use super::{Address, Transaction, U256};
 
 #[derive(Debug, Default, Clone)]
 pub struct TransactionBuilder {
@@ -51,7 +51,9 @@ impl TransactionBuilder {
 	}
 
 	pub fn new(self) -> Transaction {
-		let hash = self.nonce ^ (U256::from(100) * self.gas_price) ^ (U256::from(100_000) * U256::from(self.sender.low_u64()));
+		let hash = self.nonce
+			^ (U256::from(100) * self.gas_price)
+			^ (U256::from(100_000) * U256::from(self.sender.low_u64()));
 		Transaction {
 			hash: hash.into(),
 			nonce: self.nonce,

@@ -16,21 +16,21 @@
 
 //! `JournalDB` over in-memory overlay
 
-use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock;
 // use heapsize::HeapSizeOf;
-use rlp::{Rlp, RlpStream, encode, decode, DecoderError, Decodable, Encodable};
-use hashdb::*;
-use memorydb::*;
-use super::{DB_PREFIX_LEN, LATEST_ERA_KEY};
-use kvdb::{KeyValueDB, DBTransaction};
 use super::JournalDB;
-use ethereum_types::H256;
-use plain_hasher::H256FastMap;
-use error::{BaseDataError, UtilError};
+use super::{DB_PREFIX_LEN, LATEST_ERA_KEY};
 use bytes::Bytes;
+use error::{BaseDataError, UtilError};
+use ethereum_types::H256;
+use hashdb::*;
+use kvdb::{DBTransaction, KeyValueDB};
+use memorydb::*;
+use plain_hasher::H256FastMap;
+use rlp::{decode, encode, Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use util::DatabaseKey;
 
 /// Implementation of the `JournalDB` trait for a disk-backed database with a memory overlay
@@ -80,11 +80,15 @@ struct DatabaseValue {
 impl Decodable for DatabaseValue {
 	fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
 		let id = rlp.val_at(0)?;
-		let inserts = rlp.at(1)?.iter().map(|r| {
-			let k = r.val_at(0)?;
-			let v = DBValue::from_slice(r.at(1)?.data()?);
-			Ok((k, v))
-		}).collect::<Result<Vec<_>, _>>()?;
+		let inserts = rlp
+			.at(1)?
+			.iter()
+			.map(|r| {
+				let k = r.val_at(0)?;
+				let v = DBValue::from_slice(r.at(1)?.data()?);
+				Ok((k, v))
+			})
+			.collect::<Result<Vec<_>, _>>()?;
 		let deletes = rlp.list_at(2)?;
 
 		let value = DatabaseValue {
@@ -119,7 +123,7 @@ impl<'a> Encodable for DatabaseValueRef<'a> {
 
 #[derive(PartialEq)]
 struct JournalOverlay {
-	backing_overlay: MemoryDB, // Nodes added in the history period
+	backing_overlay: MemoryDB,             // Nodes added in the history period
 	pending_overlay: H256FastMap<DBValue>, // Nodes being transfered from backing_overlay to backing db
 	journal: HashMap<u64, Vec<JournalEntry>>,
 	latest_era: Option<u64>,
@@ -167,15 +171,17 @@ impl OverlayRecentDB {
 	fn can_reconstruct_refs(&self) -> bool {
 		let reconstructed = Self::read_overlay(&*self.backing, self.column);
 		let journal_overlay = self.journal_overlay.read().unwrap();
-		journal_overlay.backing_overlay == reconstructed.backing_overlay &&
-		journal_overlay.pending_overlay == reconstructed.pending_overlay &&
-		journal_overlay.journal == reconstructed.journal &&
-		journal_overlay.latest_era == reconstructed.latest_era &&
-		journal_overlay.cumulative_size == reconstructed.cumulative_size
+		journal_overlay.backing_overlay == reconstructed.backing_overlay
+			&& journal_overlay.pending_overlay == reconstructed.pending_overlay
+			&& journal_overlay.journal == reconstructed.journal
+			&& journal_overlay.latest_era == reconstructed.latest_era
+			&& journal_overlay.cumulative_size == reconstructed.cumulative_size
 	}
 
 	fn payload(&self, key: &H256) -> Option<DBValue> {
-		self.backing.get(self.column, key).expect("Low-level database error. Some issue with your hard disk?")
+		self.backing
+			.get(self.column, key)
+			.expect("Low-level database error. Some issue with your hard disk?")
 	}
 
 	fn read_overlay(db: &KeyValueDB, col: Option<u32>) -> JournalOverlay {
@@ -185,17 +191,23 @@ impl OverlayRecentDB {
 		let mut latest_era = None;
 		let mut earliest_era = None;
 		let mut cumulative_size = 0;
-		if let Some(val) = db.get(col, &LATEST_ERA_KEY).expect("Low-level database error.") {
+		if let Some(val) = db
+			.get(col, &LATEST_ERA_KEY)
+			.expect("Low-level database error.")
+		{
 			let mut era = decode::<u64>(&val).expect("decoding db value failed");
 			latest_era = Some(era);
 			loop {
-				let mut db_key = DatabaseKey {
-					era,
-					index: 0usize,
-				};
-				while let Some(rlp_data) = db.get(col, &encode(&db_key)).expect("Low-level database error.") {
+				let mut db_key = DatabaseKey { era, index: 0usize };
+				while let Some(rlp_data) = db
+					.get(col, &encode(&db_key))
+					.expect("Low-level database error.")
+				{
 					trace!("read_overlay: era={}, index={}", era, db_key.index);
-					let value = decode::<DatabaseValue>(&rlp_data).expect(&format!("read_overlay: Error decoding DatabaseValue era={}, index{}", era, db_key.index));
+					let value = decode::<DatabaseValue>(&rlp_data).expect(&format!(
+						"read_overlay: Error decoding DatabaseValue era={}, index{}",
+						era, db_key.index
+					));
 					count += value.inserts.len();
 					let mut inserted_keys = Vec::new();
 					for (k, v) in value.inserts {
@@ -208,21 +220,28 @@ impl OverlayRecentDB {
 						overlay.emplace(short_key, v);
 						inserted_keys.push(k);
 					}
-					journal.entry(era).or_insert_with(Vec::new).push(JournalEntry {
-						id: value.id,
-						insertions: inserted_keys,
-						deletions: value.deletes,
-					});
+					journal
+						.entry(era)
+						.or_insert_with(Vec::new)
+						.push(JournalEntry {
+							id: value.id,
+							insertions: inserted_keys,
+							deletions: value.deletes,
+						});
 					db_key.index += 1;
 					earliest_era = Some(era);
-				};
+				}
 				if db_key.index == 0 || era == 0 {
 					break;
 				}
 				era -= 1;
 			}
 		}
-		trace!("Recovered {} overlay entries, {} journal entries", count, journal.len());
+		trace!(
+			"Recovered {} overlay entries, {} journal entries",
+			count,
+			journal.len()
+		);
 		JournalOverlay {
 			backing_overlay: overlay,
 			pending_overlay: HashMap::default(),
@@ -259,30 +278,53 @@ impl JournalDB for OverlayRecentDB {
 
 	fn journal_size(&self) -> usize {
 		self.journal_overlay.read().unwrap().cumulative_size
-
 	}
 
 	fn is_empty(&self) -> bool {
-		self.backing.get(self.column, &LATEST_ERA_KEY).expect("Low level database error").is_none()
+		self.backing
+			.get(self.column, &LATEST_ERA_KEY)
+			.expect("Low level database error")
+			.is_none()
 	}
 
 	fn backing(&self) -> &Arc<KeyValueDB> {
 		&self.backing
 	}
 
-	fn latest_era(&self) -> Option<u64> { self.journal_overlay.read().unwrap().latest_era }
+	fn latest_era(&self) -> Option<u64> {
+		self.journal_overlay.read().unwrap().latest_era
+	}
 
-	fn earliest_era(&self) -> Option<u64> { self.journal_overlay.read().unwrap().earliest_era }
+	fn earliest_era(&self) -> Option<u64> {
+		self.journal_overlay.read().unwrap().earliest_era
+	}
 
 	fn state(&self, key: &H256) -> Option<Bytes> {
 		let journal_overlay = self.journal_overlay.read().unwrap();
 		let key = to_short_key(key);
-		journal_overlay.backing_overlay.get(&key).map(|v| v.into_vec())
-		.or_else(|| journal_overlay.pending_overlay.get(&key).map(|d| d.clone().into_vec()))
-		.or_else(|| self.backing.get_by_prefix(self.column, &key[0..DB_PREFIX_LEN]).map(|b| b.into_vec()))
+		journal_overlay
+			.backing_overlay
+			.get(&key)
+			.map(|v| v.into_vec())
+			.or_else(|| {
+				journal_overlay
+					.pending_overlay
+					.get(&key)
+					.map(|d| d.clone().into_vec())
+			})
+			.or_else(|| {
+				self.backing
+					.get_by_prefix(self.column, &key[0..DB_PREFIX_LEN])
+					.map(|b| b.into_vec())
+			})
 	}
 
-	fn journal_under(&mut self, batch: &mut DBTransaction, now: u64, id: &H256) -> Result<u32, UtilError> {
+	fn journal_under(
+		&mut self,
+		batch: &mut DBTransaction,
+		now: u64,
+		id: &H256,
+	) -> Result<u32, UtilError> {
 		trace!(target: "journaldb", "entry: #{} ({})", now, id);
 
 		let mut journal_overlay = self.journal_overlay.write().unwrap();
@@ -291,12 +333,21 @@ impl JournalDB for OverlayRecentDB {
 		journal_overlay.pending_overlay.clear();
 
 		let mut tx = self.transaction_overlay.drain();
-		let inserted_keys: Vec<_> = tx.iter().filter_map(|(k, &(_, c))| if c > 0 { Some(k.clone()) } else { None }).collect();
-		let removed_keys: Vec<_> = tx.iter().filter_map(|(k, &(_, c))| if c < 0 { Some(k.clone()) } else { None }).collect();
+		let inserted_keys: Vec<_> = tx
+			.iter()
+			.filter_map(|(k, &(_, c))| if c > 0 { Some(k.clone()) } else { None })
+			.collect();
+		let removed_keys: Vec<_> = tx
+			.iter()
+			.filter_map(|(k, &(_, c))| if c < 0 { Some(k.clone()) } else { None })
+			.collect();
 		let ops = inserted_keys.len() + removed_keys.len();
 
 		// Increase counter for each inserted key no matter if the block is canonical or not.
-		let insertions: Vec<_> = tx.drain().filter_map(|(k, (v, c))| if c > 0 { Some((k, v)) } else { None }).collect();
+		let insertions: Vec<_> = tx
+			.drain()
+			.filter_map(|(k, (v, c))| if c > 0 { Some((k, v)) } else { None })
+			.collect();
 
 		let encoded_value = {
 			let value_ref = DatabaseValueRef {
@@ -317,10 +368,7 @@ impl JournalDB for OverlayRecentDB {
 		}
 
 		let index = journal_overlay.journal.get(&now).map_or(0, |j| j.len());
-		let db_key = DatabaseKey {
-			era: now,
-			index,
-		};
+		let db_key = DatabaseKey { era: now, index };
 
 		batch.put_vec(self.column, &encode(&db_key), encoded_value.into_vec());
 		if journal_overlay.latest_era.map_or(true, |e| now > e) {
@@ -334,11 +382,24 @@ impl JournalDB for OverlayRecentDB {
 			journal_overlay.earliest_era = Some(now);
 		}
 
-		journal_overlay.journal.entry(now).or_insert_with(Vec::new).push(JournalEntry { id: id.clone(), insertions: inserted_keys, deletions: removed_keys });
+		journal_overlay
+			.journal
+			.entry(now)
+			.or_insert_with(Vec::new)
+			.push(JournalEntry {
+				id: id.clone(),
+				insertions: inserted_keys,
+				deletions: removed_keys,
+			});
 		Ok(ops as u32)
 	}
 
-	fn mark_canonical(&mut self, batch: &mut DBTransaction, end_era: u64, canon_id: &H256) -> Result<u32, UtilError> {
+	fn mark_canonical(
+		&mut self,
+		batch: &mut DBTransaction,
+		end_era: u64,
+		canon_id: &H256,
+	) -> Result<u32, UtilError> {
 		trace!(target: "journaldb", "canonical: #{} ({})", end_era, canon_id);
 
 		let mut journal_overlay = self.journal_overlay.write().unwrap();
@@ -362,7 +423,9 @@ impl JournalDB for OverlayRecentDB {
 				{
 					if *canon_id == journal.id {
 						for h in &journal.insertions {
-							if let Some((d, rc)) = journal_overlay.backing_overlay.raw(&to_short_key(h)) {
+							if let Some((d, rc)) =
+								journal_overlay.backing_overlay.raw(&to_short_key(h))
+							{
 								if rc > 0 {
 									canon_insertions.push((h.clone(), d)); //TODO: optimize this to avoid data copy
 								}
@@ -385,7 +448,10 @@ impl JournalDB for OverlayRecentDB {
 			}
 			// update the overlay
 			for k in overlay_deletions {
-				if let Some(val) = journal_overlay.backing_overlay.remove_and_purge(&to_short_key(&k)) {
+				if let Some(val) = journal_overlay
+					.backing_overlay
+					.remove_and_purge(&to_short_key(&k))
+				{
 					journal_overlay.cumulative_size -= val.len();
 				}
 			}
@@ -407,19 +473,23 @@ impl JournalDB for OverlayRecentDB {
 	}
 
 	fn flush(&self) {
-		self.journal_overlay.write().unwrap().pending_overlay.clear();
+		self.journal_overlay
+			.write()
+			.unwrap()
+			.pending_overlay
+			.clear();
 	}
 
 	fn inject(&mut self, batch: &mut DBTransaction) -> Result<u32, UtilError> {
 		let mut ops = 0;
 		for (key, (value, rc)) in self.transaction_overlay.drain() {
-			if rc != 0 { ops += 1 }
+			if rc != 0 {
+				ops += 1
+			}
 
 			match rc {
 				0 => {}
-				_ if rc > 0 => {
-					batch.put(self.column, &key, &value)
-				}
+				_ if rc > 0 => batch.put(self.column, &key, &value),
 				-1 => {
 					if cfg!(debug_assertions) && self.backing.get(self.column, &key)?.is_none() {
 						return Err(BaseDataError::NegativelyReferencedHash(key).into());
@@ -440,7 +510,9 @@ impl JournalDB for OverlayRecentDB {
 
 impl HashDB for OverlayRecentDB {
 	fn keys(&self) -> HashMap<H256, i32> {
-		let mut ret: HashMap<H256, i32> = self.backing.iter(self.column)
+		let mut ret: HashMap<H256, i32> = self
+			.backing
+			.iter(self.column)
 			.map(|(key, _)| (H256::from_slice(&*key), 1))
 			.collect();
 
@@ -448,7 +520,7 @@ impl HashDB for OverlayRecentDB {
 			match ret.entry(key) {
 				Entry::Occupied(mut entry) => {
 					*entry.get_mut() += refs;
-				},
+				}
 				Entry::Vacant(entry) => {
 					entry.insert(refs);
 				}
@@ -460,13 +532,15 @@ impl HashDB for OverlayRecentDB {
 	fn get(&self, key: &H256) -> Option<DBValue> {
 		if let Some((d, rc)) = self.transaction_overlay.raw(key) {
 			if rc > 0 {
-				return Some(d)
+				return Some(d);
 			}
 		}
 		let v = {
 			let journal_overlay = self.journal_overlay.read().unwrap();
 			let key = to_short_key(key);
-			journal_overlay.backing_overlay.get(&key)
+			journal_overlay
+				.backing_overlay
+				.get(&key)
 				.or_else(|| journal_overlay.pending_overlay.get(&key).cloned())
 		};
 		v.or_else(|| self.payload(key))
@@ -490,10 +564,10 @@ impl HashDB for OverlayRecentDB {
 #[cfg(test)]
 mod tests {
 
-	use keccak::keccak;
 	use super::*;
-	use hashdb::{HashDB, DBValue};
 	use ethcore_logger::init_log;
+	use hashdb::{DBValue, HashDB};
+	use keccak::keccak;
 	use {kvdb_memorydb, JournalDB};
 
 	fn new_db() -> OverlayRecentDB {
@@ -511,21 +585,27 @@ mod tests {
 		assert!(jdb.can_reconstruct_refs());
 		jdb.commit_batch(2, &keccak(b"2"), None).unwrap();
 		assert!(jdb.can_reconstruct_refs());
-		jdb.commit_batch(3, &keccak(b"1002a"), Some((1, keccak(b"1")))).unwrap();
+		jdb.commit_batch(3, &keccak(b"1002a"), Some((1, keccak(b"1"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
-		jdb.commit_batch(4, &keccak(b"1003a"), Some((2, keccak(b"2")))).unwrap();
+		jdb.commit_batch(4, &keccak(b"1003a"), Some((2, keccak(b"2"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 
 		jdb.remove(&x);
-		jdb.commit_batch(3, &keccak(b"1002b"), Some((1, keccak(b"1")))).unwrap();
+		jdb.commit_batch(3, &keccak(b"1002b"), Some((1, keccak(b"1"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 		let x = jdb.insert(b"X");
-		jdb.commit_batch(4, &keccak(b"1003b"), Some((2, keccak(b"2")))).unwrap();
+		jdb.commit_batch(4, &keccak(b"1003b"), Some((2, keccak(b"2"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 
-		jdb.commit_batch(5, &keccak(b"1004a"), Some((3, keccak(b"1002a")))).unwrap();
+		jdb.commit_batch(5, &keccak(b"1004a"), Some((3, keccak(b"1002a"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
-		jdb.commit_batch(6, &keccak(b"1005a"), Some((4, keccak(b"1003a")))).unwrap();
+		jdb.commit_batch(6, &keccak(b"1005a"), Some((4, keccak(b"1003a"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 
 		assert!(jdb.contains(&x));
@@ -546,10 +626,12 @@ mod tests {
 		jdb.commit_batch(2, &keccak(b"2"), None).unwrap();
 		assert!(jdb.can_reconstruct_refs());
 		assert!(jdb.contains(&h));
-		jdb.commit_batch(3, &keccak(b"3"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(3, &keccak(b"3"), Some((0, keccak(b"0"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 		assert!(jdb.contains(&h));
-		jdb.commit_batch(4, &keccak(b"4"), Some((1, keccak(b"1")))).unwrap();
+		jdb.commit_batch(4, &keccak(b"4"), Some((1, keccak(b"1"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 		assert!(!jdb.contains(&h));
 	}
@@ -569,7 +651,8 @@ mod tests {
 		jdb.remove(&foo);
 		jdb.remove(&bar);
 		let baz = jdb.insert(b"baz");
-		jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 		assert!(jdb.contains(&foo));
 		assert!(jdb.contains(&bar));
@@ -577,20 +660,23 @@ mod tests {
 
 		let foo = jdb.insert(b"foo");
 		jdb.remove(&baz);
-		jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1")))).unwrap();
+		jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 		assert!(jdb.contains(&foo));
 		assert!(!jdb.contains(&bar));
 		assert!(jdb.contains(&baz));
 
 		jdb.remove(&foo);
-		jdb.commit_batch(3, &keccak(b"3"), Some((2, keccak(b"2")))).unwrap();
+		jdb.commit_batch(3, &keccak(b"3"), Some((2, keccak(b"2"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 		assert!(jdb.contains(&foo));
 		assert!(!jdb.contains(&bar));
 		assert!(!jdb.contains(&baz));
 
-		jdb.commit_batch(4, &keccak(b"4"), Some((3, keccak(b"3")))).unwrap();
+		jdb.commit_batch(4, &keccak(b"4"), Some((3, keccak(b"3"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 		assert!(!jdb.contains(&foo));
 		assert!(!jdb.contains(&bar));
@@ -611,18 +697,21 @@ mod tests {
 
 		jdb.remove(&foo);
 		let baz = jdb.insert(b"baz");
-		jdb.commit_batch(1, &keccak(b"1a"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(1, &keccak(b"1a"), Some((0, keccak(b"0"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 
 		jdb.remove(&bar);
-		jdb.commit_batch(1, &keccak(b"1b"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(1, &keccak(b"1b"), Some((0, keccak(b"0"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 
 		assert!(jdb.contains(&foo));
 		assert!(jdb.contains(&bar));
 		assert!(jdb.contains(&baz));
 
-		jdb.commit_batch(2, &keccak(b"2b"), Some((1, keccak(b"1b")))).unwrap();
+		jdb.commit_batch(2, &keccak(b"2b"), Some((1, keccak(b"1b"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 		assert!(jdb.contains(&foo));
 		assert!(!jdb.contains(&baz));
@@ -640,14 +729,17 @@ mod tests {
 		assert!(jdb.contains(&foo));
 
 		jdb.remove(&foo);
-		jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 		jdb.insert(b"foo");
 		assert!(jdb.contains(&foo));
-		jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1")))).unwrap();
+		jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 		assert!(jdb.contains(&foo));
-		jdb.commit_batch(3, &keccak(b"2"), Some((0, keccak(b"2")))).unwrap();
+		jdb.commit_batch(3, &keccak(b"2"), Some((0, keccak(b"2"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 		assert!(jdb.contains(&foo));
 	}
@@ -659,20 +751,24 @@ mod tests {
 		assert!(jdb.can_reconstruct_refs());
 
 		let foo = jdb.insert(b"foo");
-		jdb.commit_batch(1, &keccak(b"1a"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(1, &keccak(b"1a"), Some((0, keccak(b"0"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 
 		jdb.insert(b"foo");
-		jdb.commit_batch(1, &keccak(b"1b"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(1, &keccak(b"1b"), Some((0, keccak(b"0"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 
 		jdb.insert(b"foo");
-		jdb.commit_batch(1, &keccak(b"1c"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(1, &keccak(b"1c"), Some((0, keccak(b"0"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 
 		assert!(jdb.contains(&foo));
 
-		jdb.commit_batch(2, &keccak(b"2a"), Some((1, keccak(b"1a")))).unwrap();
+		jdb.commit_batch(2, &keccak(b"2a"), Some((1, keccak(b"1a"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 		assert!(jdb.contains(&foo));
 	}
@@ -685,20 +781,24 @@ mod tests {
 		assert!(jdb.can_reconstruct_refs());
 
 		let foo = jdb.insert(b"foo");
-		jdb.commit_batch(1, &keccak(b"1a"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(1, &keccak(b"1a"), Some((0, keccak(b"0"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 
 		jdb.insert(b"foo");
-		jdb.commit_batch(1, &keccak(b"1b"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(1, &keccak(b"1b"), Some((0, keccak(b"0"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 
 		jdb.insert(b"foo");
-		jdb.commit_batch(1, &keccak(b"1c"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(1, &keccak(b"1c"), Some((0, keccak(b"0"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 
 		assert!(jdb.contains(&foo));
 
-		jdb.commit_batch(2, &keccak(b"2b"), Some((1, keccak(b"1b")))).unwrap();
+		jdb.commit_batch(2, &keccak(b"2b"), Some((1, keccak(b"1b"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 		assert!(jdb.contains(&foo));
 	}
@@ -715,25 +815,31 @@ mod tests {
 		assert!(jdb.can_reconstruct_refs());
 
 		jdb.remove(&foo);
-		jdb.commit_batch(2, &keccak(b"2a"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(2, &keccak(b"2a"), Some((0, keccak(b"0"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 
 		jdb.remove(&foo);
-		jdb.commit_batch(2, &keccak(b"2b"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(2, &keccak(b"2b"), Some((0, keccak(b"0"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 
 		jdb.insert(b"foo");
-		jdb.commit_batch(3, &keccak(b"3a"), Some((1, keccak(b"1")))).unwrap();
+		jdb.commit_batch(3, &keccak(b"3a"), Some((1, keccak(b"1"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 
 		jdb.insert(b"foo");
-		jdb.commit_batch(3, &keccak(b"3b"), Some((1, keccak(b"1")))).unwrap();
+		jdb.commit_batch(3, &keccak(b"3b"), Some((1, keccak(b"1"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 
-		jdb.commit_batch(4, &keccak(b"4a"), Some((2, keccak(b"2a")))).unwrap();
+		jdb.commit_batch(4, &keccak(b"4a"), Some((2, keccak(b"2a"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 
-		jdb.commit_batch(5, &keccak(b"5a"), Some((3, keccak(b"3a")))).unwrap();
+		jdb.commit_batch(5, &keccak(b"5a"), Some((3, keccak(b"3a"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 	}
 
@@ -755,7 +861,8 @@ mod tests {
 		{
 			let mut jdb = OverlayRecentDB::new(shared_db.clone(), None);
 			jdb.remove(&foo);
-			jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0")))).unwrap();
+			jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0"))))
+				.unwrap();
 			assert!(jdb.can_reconstruct_refs());
 		}
 
@@ -763,7 +870,8 @@ mod tests {
 			let mut jdb = OverlayRecentDB::new(shared_db.clone(), None);
 			assert!(jdb.contains(&foo));
 			assert!(jdb.contains(&bar));
-			jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1")))).unwrap();
+			jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1"))))
+				.unwrap();
 			assert!(jdb.can_reconstruct_refs());
 			assert!(!jdb.contains(&foo));
 		}
@@ -788,10 +896,12 @@ mod tests {
 		jdb.commit_batch(3, &keccak(b"3"), None).unwrap();
 		assert!(jdb.can_reconstruct_refs());
 		jdb.insert(b"foo");
-		jdb.commit_batch(4, &keccak(b"4"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(4, &keccak(b"4"), Some((0, keccak(b"0"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 		// expunge foo
-		jdb.commit_batch(5, &keccak(b"5"), Some((1, keccak(b"1")))).unwrap();
+		jdb.commit_batch(5, &keccak(b"5"), Some((1, keccak(b"1"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 	}
 
@@ -830,15 +940,18 @@ mod tests {
 		assert!(jdb.can_reconstruct_refs());
 
 		jdb.insert(b"foo");
-		jdb.commit_batch(4, &keccak(b"4a"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(4, &keccak(b"4a"), Some((0, keccak(b"0"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 
 		jdb.insert(b"foo");
-		jdb.commit_batch(4, &keccak(b"4b"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(4, &keccak(b"4b"), Some((0, keccak(b"0"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 
 		// expunge foo
-		jdb.commit_batch(5, &keccak(b"5"), Some((1, keccak(b"1a")))).unwrap();
+		jdb.commit_batch(5, &keccak(b"5"), Some((1, keccak(b"1a"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 	}
 
@@ -847,25 +960,30 @@ mod tests {
 		let mut jdb = new_db();
 
 		let foo = jdb.insert(b"foo");
-		jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 
 		// foo is ancient history.
 
 		jdb.remove(&foo);
-		jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1")))).unwrap();
+		jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 
 		jdb.insert(b"foo");
-		jdb.commit_batch(3, &keccak(b"3"), Some((2, keccak(b"2")))).unwrap();	// BROKEN
+		jdb.commit_batch(3, &keccak(b"3"), Some((2, keccak(b"2"))))
+			.unwrap(); // BROKEN
 		assert!(jdb.can_reconstruct_refs());
 		assert!(jdb.contains(&foo));
 
 		jdb.remove(&foo);
-		jdb.commit_batch(4, &keccak(b"4"), Some((3, keccak(b"3")))).unwrap();
+		jdb.commit_batch(4, &keccak(b"4"), Some((3, keccak(b"3"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 
-		jdb.commit_batch(5, &keccak(b"5"), Some((4, keccak(b"4")))).unwrap();
+		jdb.commit_batch(5, &keccak(b"5"), Some((4, keccak(b"4"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 		assert!(!jdb.contains(&foo));
 	}
@@ -883,22 +1001,26 @@ mod tests {
 		assert!(jdb.can_reconstruct_refs());
 		jdb.commit_batch(3, &keccak(b"3"), None).unwrap();
 		assert!(jdb.can_reconstruct_refs());
-		jdb.commit_batch(4, &keccak(b"4"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(4, &keccak(b"4"), Some((0, keccak(b"0"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 
 		// foo is ancient history.
 
 		jdb.insert(b"foo");
 		let bar = jdb.insert(b"bar");
-		jdb.commit_batch(5, &keccak(b"5"), Some((1, keccak(b"1")))).unwrap();
+		jdb.commit_batch(5, &keccak(b"5"), Some((1, keccak(b"1"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 		jdb.remove(&foo);
 		jdb.remove(&bar);
-		jdb.commit_batch(6, &keccak(b"6"), Some((2, keccak(b"2")))).unwrap();
+		jdb.commit_batch(6, &keccak(b"6"), Some((2, keccak(b"2"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 		jdb.insert(b"foo");
 		jdb.insert(b"bar");
-		jdb.commit_batch(7, &keccak(b"7"), Some((3, keccak(b"3")))).unwrap();
+		jdb.commit_batch(7, &keccak(b"7"), Some((3, keccak(b"3"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 	}
 
@@ -921,37 +1043,45 @@ mod tests {
 			// foo is ancient history.
 
 			jdb.remove(&foo);
-			jdb.commit_batch(2, &keccak(b"2"), Some((0, keccak(b"0")))).unwrap();
+			jdb.commit_batch(2, &keccak(b"2"), Some((0, keccak(b"0"))))
+				.unwrap();
 			assert!(jdb.can_reconstruct_refs());
 			assert!(jdb.contains(&foo));
 
 			jdb.insert(b"foo");
-			jdb.commit_batch(3, &keccak(b"3"), Some((1, keccak(b"1")))).unwrap();
+			jdb.commit_batch(3, &keccak(b"3"), Some((1, keccak(b"1"))))
+				.unwrap();
 			assert!(jdb.can_reconstruct_refs());
 			assert!(jdb.contains(&foo));
 
-		// incantation to reopen the db
-		}; {
+			// incantation to reopen the db
+		};
+		{
 			let mut jdb = OverlayRecentDB::new(shared_db.clone(), None);
 
 			jdb.remove(&foo);
-			jdb.commit_batch(4, &keccak(b"4"), Some((2, keccak(b"2")))).unwrap();
+			jdb.commit_batch(4, &keccak(b"4"), Some((2, keccak(b"2"))))
+				.unwrap();
 			assert!(jdb.can_reconstruct_refs());
 			assert!(jdb.contains(&foo));
 
-		// incantation to reopen the db
-		}; {
+			// incantation to reopen the db
+		};
+		{
 			let mut jdb = OverlayRecentDB::new(shared_db.clone(), None);
 
-			jdb.commit_batch(5, &keccak(b"5"), Some((3, keccak(b"3")))).unwrap();
+			jdb.commit_batch(5, &keccak(b"5"), Some((3, keccak(b"3"))))
+				.unwrap();
 			assert!(jdb.can_reconstruct_refs());
 			assert!(jdb.contains(&foo));
 
-		// incantation to reopen the db
-		}; {
+			// incantation to reopen the db
+		};
+		{
 			let mut jdb = OverlayRecentDB::new(shared_db, None);
 
-			jdb.commit_batch(6, &keccak(b"6"), Some((4, keccak(b"4")))).unwrap();
+			jdb.commit_batch(6, &keccak(b"6"), Some((4, keccak(b"4"))))
+				.unwrap();
 			assert!(jdb.can_reconstruct_refs());
 			assert!(!jdb.contains(&foo));
 		}
@@ -970,18 +1100,21 @@ mod tests {
 			assert!(jdb.can_reconstruct_refs());
 			jdb.remove(&foo);
 			let baz = jdb.insert(b"baz");
-			jdb.commit_batch(1, &keccak(b"1a"), Some((0, keccak(b"0")))).unwrap();
+			jdb.commit_batch(1, &keccak(b"1a"), Some((0, keccak(b"0"))))
+				.unwrap();
 			assert!(jdb.can_reconstruct_refs());
 
 			jdb.remove(&bar);
-			jdb.commit_batch(1, &keccak(b"1b"), Some((0, keccak(b"0")))).unwrap();
+			jdb.commit_batch(1, &keccak(b"1b"), Some((0, keccak(b"0"))))
+				.unwrap();
 			assert!(jdb.can_reconstruct_refs());
 			(foo, bar, baz)
 		};
 
 		{
 			let mut jdb = OverlayRecentDB::new(shared_db, None);
-			jdb.commit_batch(2, &keccak(b"2b"), Some((1, keccak(b"1b")))).unwrap();
+			jdb.commit_batch(2, &keccak(b"2b"), Some((1, keccak(b"1b"))))
+				.unwrap();
 			assert!(jdb.can_reconstruct_refs());
 			assert!(jdb.contains(&foo));
 			assert!(!jdb.contains(&baz));
@@ -997,13 +1130,15 @@ mod tests {
 		assert!(jdb.can_reconstruct_refs());
 
 		let bar = jdb.insert(b"bar");
-		jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0a")))).unwrap();
+		jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0a"))))
+			.unwrap();
 		assert!(jdb.can_reconstruct_refs());
 
 		jdb.remove(&bar);
 		jdb.commit_batch(0, &keccak(b"0b"), None).unwrap();
 		assert!(jdb.can_reconstruct_refs());
-		jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1")))).unwrap();
+		jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1"))))
+			.unwrap();
 
 		assert!(jdb.contains(&foo));
 		assert!(jdb.contains(&bar));

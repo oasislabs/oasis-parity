@@ -24,22 +24,23 @@ use ethcore::engines::{EthEngine, StateDependentProof};
 use ethcore::machine::EthereumMachine;
 use ethcore::receipt::Receipt;
 use ethcore::state::{self, ProvedExecution};
+use hash::{keccak, KECCAK_EMPTY, KECCAK_EMPTY_LIST_RLP, KECCAK_NULL_RLP};
 use transaction::SignedTransaction;
 use vm::EnvInfo;
-use hash::{KECCAK_NULL_RLP, KECCAK_EMPTY, KECCAK_EMPTY_LIST_RLP, keccak};
 
-use request::{self as net_request, IncompleteRequest, CompleteRequest, Output, OutputKind, Field};
+use request::{self as net_request, CompleteRequest, Field, IncompleteRequest, Output, OutputKind};
 
-use rlp::{RlpStream, Rlp};
-use ethereum_types::{H256, U256, Address};
-use parking_lot::Mutex;
+use bytes::Bytes;
+use ethereum_types::{Address, H256, U256};
 use hashdb::HashDB;
 use kvdb::DBValue;
-use bytes::Bytes;
 use memorydb::MemoryDB;
+use parking_lot::Mutex;
+use rlp::{Rlp, RlpStream};
 use trie::{Trie, TrieDB, TrieError};
 
-const SUPPLIED_MATCHES: &'static str = "supplied responses always match produced requests; enforced by `check_response`; qed";
+const SUPPLIED_MATCHES: &'static str =
+	"supplied responses always match produced requests; enforced by `check_response`; qed";
 
 /// Core unit of the API: submit batches of these to be answered with `Response`s.
 #[derive(Clone)]
@@ -131,13 +132,17 @@ macro_rules! impl_single {
 				Request::$variant(me)
 			}
 		}
-	}
+	};
 }
 
 // implement traits for each kind of request.
 impl_single!(HeaderProof, HeaderProof, (H256, U256));
 impl_single!(HeaderByHash, HeaderByHash, encoded::Header);
-impl_single!(TransactionIndex, TransactionIndex, net_request::TransactionIndexResponse);
+impl_single!(
+	TransactionIndex,
+	TransactionIndex,
+	net_request::TransactionIndexResponse
+);
 impl_single!(Receipts, BlockReceipts, Vec<Receipt>);
 impl_single!(Body, Body, encoded::Block);
 impl_single!(Account, Account, Option<BasicAccount>);
@@ -191,7 +196,7 @@ macro_rules! impl_args {
 mod impls {
 	#![allow(non_snake_case)]
 
-	use super::{RequestAdapter, RequestArg, Request, Response, SUPPLIED_MATCHES};
+	use super::{Request, RequestAdapter, RequestArg, Response, SUPPLIED_MATCHES};
 
 	impl_args!(A, B, C, D, E, F, G, H, I, J, K, L,);
 }
@@ -247,13 +252,16 @@ impl From<encoded::Header> for HeaderRef {
 pub enum CheckedRequest {
 	HeaderProof(HeaderProof, net_request::IncompleteHeaderProofRequest),
 	HeaderByHash(HeaderByHash, net_request::IncompleteHeadersRequest),
-	TransactionIndex(TransactionIndex, net_request::IncompleteTransactionIndexRequest),
+	TransactionIndex(
+		TransactionIndex,
+		net_request::IncompleteTransactionIndexRequest,
+	),
 	Receipts(BlockReceipts, net_request::IncompleteReceiptsRequest),
 	Body(Body, net_request::IncompleteBodyRequest),
 	Account(Account, net_request::IncompleteAccountRequest),
 	Code(Code, net_request::IncompleteCodeRequest),
 	Execution(TransactionProof, net_request::IncompleteExecutionRequest),
-	Signal(Signal, net_request::IncompleteSignalRequest)
+	Signal(Signal, net_request::IncompleteSignalRequest),
 }
 
 impl From<Request> for CheckedRequest {
@@ -280,7 +288,7 @@ impl From<Request> for CheckedRequest {
 				};
 				CheckedRequest::TransactionIndex(req, net_req)
 			}
-			Request::Body(req) =>  {
+			Request::Body(req) => {
 				let net_req = net_request::IncompleteBodyRequest {
 					hash: req.0.field(),
 				};
@@ -331,7 +339,7 @@ impl From<Request> for CheckedRequest {
 impl CheckedRequest {
 	/// Convert this into a network request.
 	pub fn into_net_request(self) -> net_request::Request {
-		use ::request::Request as NetRequest;
+		use request::Request as NetRequest;
 
 		match self {
 			CheckedRequest::HeaderProof(_, req) => NetRequest::HeaderProof(req),
@@ -371,7 +379,7 @@ impl CheckedRequest {
 			CheckedRequest::Account(ref mut x, _) => x.header = HeaderRef::Stored(header),
 			CheckedRequest::Code(ref mut x, _) => x.header = HeaderRef::Stored(header),
 			CheckedRequest::Execution(ref mut x, _) => x.header = HeaderRef::Stored(header),
-			_ => {},
+			_ => {}
 		}
 	}
 
@@ -380,7 +388,8 @@ impl CheckedRequest {
 		match *self {
 			CheckedRequest::HeaderProof(ref check, _) => {
 				let mut cache = cache.lock();
-				cache.block_hash(&check.num)
+				cache
+					.block_hash(&check.num)
 					.and_then(|h| cache.chain_score(&h).map(|s| (h, s)))
 					.map(|(h, s)| Response::HeaderProof((h, s)))
 			}
@@ -393,18 +402,26 @@ impl CheckedRequest {
 			}
 			CheckedRequest::Receipts(ref check, ref req) => {
 				// empty transactions -> no receipts
-				if check.0.as_ref().ok().map_or(false, |hdr| hdr.receipts_root() == KECCAK_NULL_RLP) {
+				if check
+					.0
+					.as_ref()
+					.ok()
+					.map_or(false, |hdr| hdr.receipts_root() == KECCAK_NULL_RLP)
+				{
 					return Some(Response::Receipts(Vec::new()));
 				}
 
-				req.hash.as_ref()
+				req.hash
+					.as_ref()
 					.and_then(|hash| cache.lock().block_receipts(hash))
 					.map(Response::Receipts)
 			}
 			CheckedRequest::Body(ref check, ref req) => {
 				// check for empty body.
 				if let Some(hdr) = check.0.as_ref().ok() {
-					if hdr.transactions_root() == KECCAK_NULL_RLP && hdr.uncles_hash() == KECCAK_EMPTY_LIST_RLP {
+					if hdr.transactions_root() == KECCAK_NULL_RLP
+						&& hdr.uncles_hash() == KECCAK_EMPTY_LIST_RLP
+					{
 						let mut stream = RlpStream::new_list(3);
 						stream.append_raw(hdr.rlp().as_raw(), 1);
 						stream.begin_list(0);
@@ -415,7 +432,9 @@ impl CheckedRequest {
 				}
 
 				// otherwise, check for cached body and header.
-				let block_hash = req.hash.as_ref()
+				let block_hash = req
+					.hash
+					.as_ref()
 					.cloned()
 					.or_else(|| check.0.as_ref().ok().map(|hdr| hdr.hash()));
 				let block_hash = match block_hash {
@@ -439,7 +458,10 @@ impl CheckedRequest {
 				block_header
 					.and_then(|hdr| cache.block_body(&block_hash).map(|b| (hdr, b)))
 					.map(|(hdr, body)| {
-						Response::Body(encoded::Block::new_from_header_and_body(&hdr.view(), &body.view()))
+						Response::Body(encoded::Block::new_from_header_and_body(
+							&hdr.view(),
+							&body.view(),
+						))
 					})
 			}
 			CheckedRequest::Code(_, ref req) => {
@@ -466,8 +488,8 @@ macro_rules! match_me {
 			CheckedRequest::Code($check, $req) => $e,
 			CheckedRequest::Execution($check, $req) => $e,
 			CheckedRequest::Signal($check, $req) => $e,
-		}
-	}
+			}
+	};
 }
 
 impl IncompleteRequest for CheckedRequest {
@@ -475,7 +497,8 @@ impl IncompleteRequest for CheckedRequest {
 	type Response = net_request::Response;
 
 	fn check_outputs<F>(&self, mut f: F) -> Result<(), net_request::NoSuchOutput>
-		where F: FnMut(usize, usize, OutputKind) -> Result<(), net_request::NoSuchOutput>
+	where
+		F: FnMut(usize, usize, OutputKind) -> Result<(), net_request::NoSuchOutput>,
 	{
 		match *self {
 			CheckedRequest::HeaderProof(_, ref req) => req.check_outputs(f),
@@ -498,11 +521,17 @@ impl IncompleteRequest for CheckedRequest {
 		}
 	}
 
-	fn note_outputs<F>(&self, f: F) where F: FnMut(usize, OutputKind) {
+	fn note_outputs<F>(&self, f: F)
+	where
+		F: FnMut(usize, OutputKind),
+	{
 		match_me!(*self, (_, ref req) => req.note_outputs(f))
 	}
 
-	fn fill<F>(&mut self, f: F) where F: Fn(usize, usize) -> Result<Output, net_request::NoSuchOutput> {
+	fn fill<F>(&mut self, f: F)
+	where
+		F: Fn(usize, usize) -> Result<Output, net_request::NoSuchOutput>,
+	{
 		match_me!(*self, (_, ref mut req) => req.fill(f))
 	}
 
@@ -510,7 +539,9 @@ impl IncompleteRequest for CheckedRequest {
 		match self {
 			CheckedRequest::HeaderProof(_, req) => req.complete().map(CompleteRequest::HeaderProof),
 			CheckedRequest::HeaderByHash(_, req) => req.complete().map(CompleteRequest::Headers),
-			CheckedRequest::TransactionIndex(_, req) => req.complete().map(CompleteRequest::TransactionIndex),
+			CheckedRequest::TransactionIndex(_, req) => {
+				req.complete().map(CompleteRequest::TransactionIndex)
+			}
 			CheckedRequest::Receipts(_, req) => req.complete().map(CompleteRequest::Receipts),
 			CheckedRequest::Body(_, req) => req.complete().map(CompleteRequest::Body),
 			CheckedRequest::Account(_, req) => req.complete().map(CompleteRequest::Account),
@@ -520,7 +551,10 @@ impl IncompleteRequest for CheckedRequest {
 		}
 	}
 
-	fn adjust_refs<F>(&mut self, mapping: F) where F: FnMut(usize) -> usize {
+	fn adjust_refs<F>(&mut self, mapping: F)
+	where
+		F: FnMut(usize) -> usize,
+	{
 		match_me!(*self, (_, ref mut req) => req.adjust_refs(mapping))
 	}
 }
@@ -531,8 +565,13 @@ impl net_request::CheckedRequest for CheckedRequest {
 	type Environment = Mutex<::cache::Cache>;
 
 	/// Check whether the response matches (beyond the type).
-	fn check_response(&self, complete: &Self::Complete, cache: &Mutex<::cache::Cache>, response: &Self::Response) -> Result<Response, Error> {
-		use ::request::Response as NetResponse;
+	fn check_response(
+		&self,
+		complete: &Self::Complete,
+		cache: &Mutex<::cache::Cache>,
+		response: &Self::Response,
+	) -> Result<Response, Error> {
+		use request::Response as NetResponse;
 
 		// helper for expecting a specific response for a given request.
 		macro_rules! expect {
@@ -540,41 +579,46 @@ impl net_request::CheckedRequest for CheckedRequest {
 				match (response, complete) {
 					$res => $e,
 					_ => Err(Error::WrongKind),
-				}
-			}}
+					}
+				}};
 		}
 
 		// check response against contained prover.
 		match *self {
-			CheckedRequest::HeaderProof(ref prover, _) =>
+			CheckedRequest::HeaderProof(ref prover, _) => {
 				expect!((&NetResponse::HeaderProof(ref res), _) =>
-					prover.check_response(cache, &res.proof).map(Response::HeaderProof)),
-			CheckedRequest::HeaderByHash(ref prover, _) =>
+					prover.check_response(cache, &res.proof).map(Response::HeaderProof))
+			}
+			CheckedRequest::HeaderByHash(ref prover, _) => {
 				expect!((&NetResponse::Headers(ref res), &CompleteRequest::Headers(ref req)) =>
-					prover.check_response(cache, &req.start, &res.headers).map(Response::HeaderByHash)),
-			CheckedRequest::TransactionIndex(ref prover, _) =>
+					prover.check_response(cache, &req.start, &res.headers).map(Response::HeaderByHash))
+			}
+			CheckedRequest::TransactionIndex(ref prover, _) => {
 				expect!((&NetResponse::TransactionIndex(ref res), _) =>
-					prover.check_response(cache, res).map(Response::TransactionIndex)),
-			CheckedRequest::Receipts(ref prover, _) =>
+					prover.check_response(cache, res).map(Response::TransactionIndex))
+			}
+			CheckedRequest::Receipts(ref prover, _) => {
 				expect!((&NetResponse::Receipts(ref res), _) =>
-					prover.check_response(cache, &res.receipts).map(Response::Receipts)),
-			CheckedRequest::Body(ref prover, _) =>
-				expect!((&NetResponse::Body(ref res), _) =>
+					prover.check_response(cache, &res.receipts).map(Response::Receipts))
+			}
+			CheckedRequest::Body(ref prover, _) => expect!((&NetResponse::Body(ref res), _) =>
 					prover.check_response(cache, &res.body).map(Response::Body)),
-			CheckedRequest::Account(ref prover, _) =>
+			CheckedRequest::Account(ref prover, _) => {
 				expect!((&NetResponse::Account(ref res), _) =>
-					prover.check_response(cache, &res.proof).map(Response::Account)),
-			CheckedRequest::Code(ref prover, _) =>
+					prover.check_response(cache, &res.proof).map(Response::Account))
+			}
+			CheckedRequest::Code(ref prover, _) => {
 				expect!((&NetResponse::Code(ref res), &CompleteRequest::Code(ref req)) =>
-					prover.check_response(cache, &req.code_hash, &res.code).map(Response::Code)),
-			CheckedRequest::Execution(ref prover, _) =>
+					prover.check_response(cache, &req.code_hash, &res.code).map(Response::Code))
+			}
+			CheckedRequest::Execution(ref prover, _) => {
 				expect!((&NetResponse::Execution(ref res), _) =>
-					prover.check_response(cache, &res.items).map(Response::Execution)),
-			CheckedRequest::Signal(ref prover, _) =>
-				expect!((&NetResponse::Signal(ref res), _) =>
+					prover.check_response(cache, &res.items).map(Response::Execution))
+			}
+			CheckedRequest::Signal(ref prover, _) => expect!((&NetResponse::Signal(ref res), _) =>
 					prover.check_response(cache, &res.signal).map(Response::Signal)),
 		}
-	 }
+	}
 }
 
 /// Responses to on-demand requests.
@@ -603,7 +647,10 @@ pub enum Response {
 }
 
 impl net_request::ResponseLike for Response {
-	fn fill_outputs<F>(&self, mut f: F) where F: FnMut(usize, Output) {
+	fn fill_outputs<F>(&self, mut f: F)
+	where
+		F: FnMut(usize, Output),
+	{
 		match *self {
 			Response::HeaderProof((ref hash, _)) => f(0, Output::Hash(*hash)),
 			Response::Account(None) => {
@@ -679,16 +726,26 @@ impl HeaderProof {
 	}
 
 	/// Access the requested block number.
-	pub fn num(&self) -> u64 { self.num }
+	pub fn num(&self) -> u64 {
+		self.num
+	}
 
 	/// Access the CHT number.
-	pub fn cht_num(&self) -> u64 { self.cht_num }
+	pub fn cht_num(&self) -> u64 {
+		self.cht_num
+	}
 
 	/// Access the expected CHT root.
-	pub fn cht_root(&self) -> H256 { self.cht_root }
+	pub fn cht_root(&self) -> H256 {
+		self.cht_root
+	}
 
 	/// Check a response with a CHT proof, get a hash and total difficulty back.
-	pub fn check_response(&self, cache: &Mutex<::cache::Cache>, proof: &[Bytes]) -> Result<(H256, U256), Error> {
+	pub fn check_response(
+		&self,
+		cache: &Mutex<::cache::Cache>,
+		proof: &[Bytes],
+	) -> Result<(H256, U256), Error> {
 		match ::cht::check_proof(proof, self.num, self.cht_root) {
 			Some((expected_hash, td)) => {
 				let mut cache = cache.lock();
@@ -712,11 +769,13 @@ impl HeaderByHash {
 		&self,
 		cache: &Mutex<::cache::Cache>,
 		start: &net_request::HashOrNumber,
-		headers: &[encoded::Header]
+		headers: &[encoded::Header],
 	) -> Result<encoded::Header, Error> {
 		let expected_hash = match (self.0, start) {
 			(Field::Scalar(ref h), &net_request::HashOrNumber::Hash(ref h2)) => {
-				if h != h2 { return Err(Error::WrongHash(*h, *h2)) }
+				if h != h2 {
+					return Err(Error::WrongHash(*h, *h2));
+				}
 				*h
 			}
 			(_, &net_request::HashOrNumber::Hash(h2)) => h2,
@@ -768,10 +827,15 @@ pub struct Body(pub HeaderRef);
 
 impl Body {
 	/// Check a response for this block body.
-	pub fn check_response(&self, cache: &Mutex<::cache::Cache>, body: &encoded::Body) -> Result<encoded::Block, Error> {
+	pub fn check_response(
+		&self,
+		cache: &Mutex<::cache::Cache>,
+		body: &encoded::Body,
+	) -> Result<encoded::Block, Error> {
 		// check the integrity of the the body against the header
 		let header = self.0.as_ref()?;
-		let tx_root = ::triehash::ordered_trie_root(body.transactions_rlp().iter().map(|r| r.as_raw()));
+		let tx_root =
+			::triehash::ordered_trie_root(body.transactions_rlp().iter().map(|r| r.as_raw()));
 		if tx_root != header.transactions_root() {
 			return Err(Error::WrongTrieRoot(header.transactions_root(), tx_root));
 		}
@@ -796,13 +860,19 @@ pub struct BlockReceipts(pub HeaderRef);
 
 impl BlockReceipts {
 	/// Check a response with receipts against the stored header.
-	pub fn check_response(&self, cache: &Mutex<::cache::Cache>, receipts: &[Receipt]) -> Result<Vec<Receipt>, Error> {
+	pub fn check_response(
+		&self,
+		cache: &Mutex<::cache::Cache>,
+		receipts: &[Receipt],
+	) -> Result<Vec<Receipt>, Error> {
 		let receipts_root = self.0.as_ref()?.receipts_root();
 		let found_root = ::triehash::ordered_trie_root(receipts.iter().map(|r| ::rlp::encode(r)));
 
 		match receipts_root == found_root {
 			true => {
-				cache.lock().insert_block_receipts(receipts_root, receipts.to_vec());
+				cache
+					.lock()
+					.insert_block_receipts(receipts_root, receipts.to_vec());
 				Ok(receipts.to_vec())
 			}
 			false => Err(Error::WrongTrieRoot(receipts_root, found_root)),
@@ -821,12 +891,18 @@ pub struct Account {
 
 impl Account {
 	/// Check a response with an account against the stored header.
-	pub fn check_response(&self, _: &Mutex<::cache::Cache>, proof: &[Bytes]) -> Result<Option<BasicAccount>, Error> {
+	pub fn check_response(
+		&self,
+		_: &Mutex<::cache::Cache>,
+		proof: &[Bytes],
+	) -> Result<Option<BasicAccount>, Error> {
 		let header = self.header.as_ref()?;
 		let state_root = header.state_root();
 
 		let mut db = MemoryDB::new();
-		for node in proof { db.insert(&node[..]); }
+		for node in proof {
+			db.insert(&node[..]);
+		}
 
 		match TrieDB::new(&db, &state_root).and_then(|t| t.get(&keccak(&self.address)))? {
 			Some(val) => {
@@ -837,7 +913,7 @@ impl Account {
 					storage_root: rlp.val_at(2)?,
 					code_hash: rlp.val_at(3)?,
 				}))
-			},
+			}
 			None => Ok(None),
 		}
 	}
@@ -858,7 +934,7 @@ impl Code {
 		&self,
 		_: &Mutex<::cache::Cache>,
 		code_hash: &H256,
-		code: &[u8]
+		code: &[u8],
 	) -> Result<Vec<u8>, Error> {
 		let found_hash = keccak(code);
 		if &found_hash == code_hash {
@@ -885,7 +961,11 @@ pub struct TransactionProof {
 
 impl TransactionProof {
 	/// Check the proof, returning the proved execution or indicate that the proof was bad.
-	pub fn check_response(&self, _: &Mutex<::cache::Cache>, state_items: &[DBValue]) -> Result<super::ExecutionResult, Error> {
+	pub fn check_response(
+		&self,
+		_: &Mutex<::cache::Cache>,
+		state_items: &[DBValue],
+	) -> Result<super::ExecutionResult, Error> {
 		let root = self.header.as_ref()?.state_root();
 
 		let mut env_info = self.env_info.clone();
@@ -921,8 +1001,13 @@ pub struct Signal {
 
 impl Signal {
 	/// Check the signal, returning the signal or indicate that it's bad.
-	pub fn check_response(&self, _: &Mutex<::cache::Cache>, signal: &[u8]) -> Result<Vec<u8>, Error> {
-		self.proof_check.check_proof(self.engine.machine(), signal)
+	pub fn check_response(
+		&self,
+		_: &Mutex<::cache::Cache>,
+		signal: &[u8],
+	) -> Result<Vec<u8>, Error> {
+		self.proof_check
+			.check_proof(self.engine.machine(), signal)
 			.map(|_| signal.to_owned())
 			.map_err(|_| Error::BadProof)
 	}
@@ -931,17 +1016,17 @@ impl Signal {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::time::Duration;
-	use ethereum_types::{H256, Address};
+	use ethereum_types::{Address, H256};
+	use hash::keccak;
 	use memorydb::MemoryDB;
 	use parking_lot::Mutex;
-	use trie::{Trie, TrieMut, SecTrieDB, SecTrieDBMut};
+	use std::time::Duration;
 	use trie::recorder::Recorder;
-	use hash::keccak;
+	use trie::{SecTrieDB, SecTrieDBMut, Trie, TrieMut};
 
-	use ethcore::client::{BlockChainClient, BlockInfo, TestBlockChainClient, EachBlockWith};
-	use ethcore::header::Header;
+	use ethcore::client::{BlockChainClient, BlockInfo, EachBlockWith, TestBlockChainClient};
 	use ethcore::encoded;
+	use ethcore::header::Header;
 	use ethcore::receipt::{Receipt, TransactionOutcome};
 
 	fn make_cache() -> ::cache::Cache {
@@ -955,7 +1040,7 @@ mod tests {
 
 	#[test]
 	fn check_header_proof() {
-		use ::cht;
+		use cht;
 
 		let test_client = TestBlockChainClient::new();
 		test_client.add_blocks(10500, EachBlockWith::Nothing);
@@ -990,7 +1075,9 @@ mod tests {
 		let raw_header = encoded::Header::new(::rlp::encode(&header).into_vec());
 
 		let cache = Mutex::new(make_cache());
-		assert!(HeaderByHash(hash.into()).check_response(&cache, &hash.into(), &[raw_header]).is_ok())
+		assert!(HeaderByHash(hash.into())
+			.check_response(&cache, &hash.into(), &[raw_header])
+			.is_ok())
 	}
 
 	#[test]
@@ -1010,17 +1097,18 @@ mod tests {
 
 	#[test]
 	fn check_receipts() {
-		let receipts = (0..5).map(|_| Receipt {
-			outcome: TransactionOutcome::StateRoot(H256::random()),
-			gas_used: 21_000u64.into(),
-			log_bloom: Default::default(),
-			logs: Vec::new(),
-		}).collect::<Vec<_>>();
+		let receipts = (0..5)
+			.map(|_| Receipt {
+				outcome: TransactionOutcome::StateRoot(H256::random()),
+				gas_used: 21_000u64.into(),
+				log_bloom: Default::default(),
+				logs: Vec::new(),
+			})
+			.collect::<Vec<_>>();
 
 		let mut header = Header::new();
-		let receipts_root = ::triehash::ordered_trie_root(
-			receipts.iter().map(|x| ::rlp::encode(x))
-		);
+		let receipts_root =
+			::triehash::ordered_trie_root(receipts.iter().map(|x| ::rlp::encode(x)));
 
 		header.set_receipts_root(receipts_root);
 
@@ -1043,7 +1131,8 @@ mod tests {
 		let addr = Address::random();
 		let rand_acc = || {
 			let mut stream = RlpStream::new_list(4);
-			stream.append(&2u64)
+			stream
+				.append(&2u64)
 				.append(&100_000_000u64)
 				.append(&H256::random())
 				.append(&H256::random());
@@ -1066,7 +1155,11 @@ mod tests {
 
 			trie.get_with(&*addr, &mut recorder).unwrap().unwrap();
 
-			recorder.drain().into_iter().map(|r| r.data).collect::<Vec<_>>()
+			recorder
+				.drain()
+				.into_iter()
+				.map(|r| r.data)
+				.collect::<Vec<_>>()
 		};
 
 		header.set_state_root(root.clone());

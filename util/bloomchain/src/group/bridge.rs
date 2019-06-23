@@ -14,16 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+use super::BloomGroupDatabase;
 use bloom::Bloom;
 use config::Config;
 use database::BloomDatabase;
-use position::Position;
 use group::position::Manager as PositionManager;
-use super::BloomGroupDatabase;
+use position::Position;
 
 /// Bridge between `BloomDatabase` and `BloomGroupDatabase`.
 pub struct GroupDatabaseBridge<'a> {
-	positioner: PositionManager,	
+	positioner: PositionManager,
 	db: &'a BloomGroupDatabase,
 }
 
@@ -41,7 +41,8 @@ impl<'a> GroupDatabaseBridge<'a> {
 impl<'a> BloomDatabase for GroupDatabaseBridge<'a> {
 	fn bloom_at(&self, position: &Position) -> Option<Bloom> {
 		let position = self.positioner.position(position);
-		self.db.blooms_at(&position.group)
+		self.db
+			.blooms_at(&position.group)
 			.and_then(|group| group.blooms.into_iter().nth(position.number))
 	}
 }

@@ -18,15 +18,15 @@ use std::sync::Arc;
 
 use crypto::DEFAULT_MAC;
 use ethcore::account_provider::AccountProvider;
-use ethkey::{KeyPair, Signature, verify_public};
+use ethkey::{verify_public, KeyPair, Signature};
 
-use serde_json;
 use jsonrpc_core::{IoHandler, Success};
-use v1::metadata::Metadata;
-use v1::SecretStoreClient;
-use v1::traits::secretstore::SecretStore;
+use serde_json;
 use v1::helpers::secretstore::ordered_servers_keccak;
-use v1::types::{H256, EncryptedDocumentKey};
+use v1::metadata::Metadata;
+use v1::traits::secretstore::SecretStore;
+use v1::types::{EncryptedDocumentKey, H256};
+use v1::SecretStoreClient;
 
 struct Dependencies {
 	pub accounts: Arc<AccountProvider>,
@@ -56,7 +56,9 @@ fn rpc_secretstore_encrypt_and_decrypt() {
 	let io = deps.default_client();
 
 	// insert new account
-	let secret = "c1f1cfe279a5c350d13795bce162941967340c8a228e6ba175489afc564a5bef".parse().unwrap();
+	let secret = "c1f1cfe279a5c350d13795bce162941967340c8a228e6ba175489afc564a5bef"
+		.parse()
+		.unwrap();
 	deps.accounts.insert_account(secret, "password").unwrap();
 
 	// execute encryption request
@@ -75,9 +77,13 @@ fn rpc_secretstore_encrypt_and_decrypt() {
 	let decryption_request_mid = encryption_response.result.as_str().unwrap();
 	let decryption_request_right = r#""
 		], "id": 2}"#;
-	let decryption_request = decryption_request_left.to_owned() + decryption_request_mid + decryption_request_right;
+	let decryption_request =
+		decryption_request_left.to_owned() + decryption_request_mid + decryption_request_right;
 	let decryption_response = io.handle_request_sync(&decryption_request).unwrap();
-	assert_eq!(decryption_response, r#"{"jsonrpc":"2.0","result":"0xdeadbeef","id":2}"#);
+	assert_eq!(
+		decryption_response,
+		r#"{"jsonrpc":"2.0","result":"0xdeadbeef","id":2}"#
+	);
 }
 
 #[test]
@@ -86,7 +92,9 @@ fn rpc_secretstore_shadow_decrypt() {
 	let io = deps.default_client();
 
 	// insert new account
-	let secret = "82758356bf46b42710d3946a8efa612b7bf5e125e4d49f28facf1139db4a46f4".parse().unwrap();
+	let secret = "82758356bf46b42710d3946a8efa612b7bf5e125e4d49f28facf1139db4a46f4"
+		.parse()
+		.unwrap();
 	deps.accounts.insert_account(secret, "password").unwrap();
 
 	// execute decryption request
@@ -98,7 +106,10 @@ fn rpc_secretstore_shadow_decrypt() {
 		"0x2ddec1f96229efa2916988d8b2a82a47ef36f71c"
 	], "id": 1}"#;
 	let decryption_response = io.handle_request_sync(&decryption_request).unwrap();
-	assert_eq!(decryption_response, r#"{"jsonrpc":"2.0","result":"0xdeadbeef","id":1}"#);
+	assert_eq!(
+		decryption_response,
+		r#"{"jsonrpc":"2.0","result":"0xdeadbeef","id":1}"#
+	);
 }
 
 #[test]
@@ -129,9 +140,13 @@ fn rpc_secretstore_sign_raw_hash() {
 	let io = deps.default_client();
 
 	// insert new account
-	let secret = "82758356bf46b42710d3946a8efa612b7bf5e125e4d49f28facf1139db4a46f4".parse().unwrap();
+	let secret = "82758356bf46b42710d3946a8efa612b7bf5e125e4d49f28facf1139db4a46f4"
+		.parse()
+		.unwrap();
 	let key_pair = KeyPair::from_secret(secret).unwrap();
-	deps.accounts.insert_account(key_pair.secret().clone(), "password").unwrap();
+	deps.accounts
+		.insert_account(key_pair.secret().clone(), "password")
+		.unwrap();
 
 	// execute signing request
 	let signing_request = r#"{"jsonrpc": "2.0", "method": "secretstore_signRawHash", "params":[
@@ -142,7 +157,9 @@ fn rpc_secretstore_sign_raw_hash() {
 	let signing_response = signing_response.replace(r#"","id":1}"#, "");
 	let signature: Signature = signing_response.parse().unwrap();
 
-	let hash = "0000000000000000000000000000000000000000000000000000000000000001".parse().unwrap();
+	let hash = "0000000000000000000000000000000000000000000000000000000000000001"
+		.parse()
+		.unwrap();
 	assert!(verify_public(key_pair.public(), &signature, &hash).unwrap());
 }
 
@@ -152,9 +169,13 @@ fn rpc_secretstore_generate_document_key() {
 	let io = deps.default_client();
 
 	// insert new account
-	let secret = "82758356bf46b42710d3946a8efa612b7bf5e125e4d49f28facf1139db4a46f4".parse().unwrap();
+	let secret = "82758356bf46b42710d3946a8efa612b7bf5e125e4d49f28facf1139db4a46f4"
+		.parse()
+		.unwrap();
 	let key_pair = KeyPair::from_secret(secret).unwrap();
-	deps.accounts.insert_account(key_pair.secret().clone(), "password").unwrap();
+	deps.accounts
+		.insert_account(key_pair.secret().clone(), "password")
+		.unwrap();
 
 	// execute generation request
 	let generation_request = r#"{"jsonrpc": "2.0", "method": "secretstore_generateDocumentKey", "params":[
@@ -164,12 +185,17 @@ fn rpc_secretstore_generate_document_key() {
 	let generation_response = io.handle_request_sync(&generation_request).unwrap();
 	let generation_response = generation_response.replace(r#"{"jsonrpc":"2.0","result":"#, "");
 	let generation_response = generation_response.replace(r#","id":1}"#, "");
-	let generation_response: EncryptedDocumentKey = serde_json::from_str(&generation_response).unwrap();
+	let generation_response: EncryptedDocumentKey =
+		serde_json::from_str(&generation_response).unwrap();
 
 	// the only thing we can check is that 'encrypted_key' can be decrypted by passed account
-	assert!(deps.accounts.decrypt(
-		"00dfE63B22312ab4329aD0d28CaD8Af987A01932".parse().unwrap(),
-		Some("password".into()),
-		&DEFAULT_MAC,
-		&generation_response.encrypted_key.0).is_ok());
+	assert!(deps
+		.accounts
+		.decrypt(
+			"00dfE63B22312ab4329aD0d28CaD8Af987A01932".parse().unwrap(),
+			Some("password".into()),
+			&DEFAULT_MAC,
+			&generation_response.encrypted_key.0
+		)
+		.is_ok());
 }

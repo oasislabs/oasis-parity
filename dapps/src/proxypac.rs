@@ -17,7 +17,7 @@
 //! Serving ProxyPac file
 
 use apps::HOME_PAGE;
-use endpoint::{Endpoint, Request, Response, EndpointPath};
+use endpoint::{Endpoint, EndpointPath, Request, Response};
 use futures::future;
 use handlers::ContentHandler;
 use hyper::mime;
@@ -37,7 +37,7 @@ impl Endpoint for ProxyPac {
 		let ui = format!("{}:{}", path.host, path.port);
 
 		let content = format!(
-r#"
+			r#"
 function FindProxyForURL(url, host) {{
 	if (shExpMatch(host, "{0}.{1}"))
 	{{
@@ -52,10 +52,11 @@ function FindProxyForURL(url, host) {{
 	return "DIRECT";
 }}
 "#,
-		HOME_PAGE, self.dapps_domain, path.host, path.port, ui);
+			HOME_PAGE, self.dapps_domain, path.host, path.port, ui
+		);
 
 		Box::new(future::ok(
-			ContentHandler::ok(content, mime::TEXT_JAVASCRIPT).into()
+			ContentHandler::ok(content, mime::TEXT_JAVASCRIPT).into(),
 		))
 	}
 }

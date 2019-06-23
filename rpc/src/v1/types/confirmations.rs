@@ -16,13 +16,16 @@
 
 //! Types used in Confirmations queue (Trusted Signer)
 
-use std::fmt;
-use serde::{Serialize, Serializer};
 use ansi_term::Colour;
 use bytes::ToPretty;
+use serde::{Serialize, Serializer};
+use std::fmt;
 
-use v1::types::{U256, TransactionRequest, RichRawTransaction, H160, H256, H520, Bytes, TransactionCondition, Origin};
 use v1::helpers;
+use v1::types::{
+	Bytes, Origin, RichRawTransaction, TransactionCondition, TransactionRequest, H160, H256, H520,
+	U256,
+};
 
 /// Confirmation waiting in a queue
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -48,7 +51,11 @@ impl From<helpers::ConfirmationRequest> for ConfirmationRequest {
 
 impl fmt::Display for ConfirmationRequest {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "#{}: {} coming from {}", self.id, self.payload, self.origin)
+		write!(
+			f,
+			"#{}: {} coming from {}",
+			self.id, self.payload, self.origin
+		)
 	}
 }
 
@@ -56,7 +63,9 @@ impl fmt::Display for ConfirmationPayload {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match *self {
 			ConfirmationPayload::SendTransaction(ref transaction) => write!(f, "{}", transaction),
-			ConfirmationPayload::SignTransaction(ref transaction) => write!(f, "(Sign only) {}", transaction),
+			ConfirmationPayload::SignTransaction(ref transaction) => {
+				write!(f, "(Sign only) {}", transaction)
+			}
 			ConfirmationPayload::EthSignMessage(ref sign) => write!(f, "{}", sign),
 			ConfirmationPayload::Decrypt(ref decrypt) => write!(f, "{}", decrypt),
 		}
@@ -137,7 +146,8 @@ pub enum ConfirmationResponse {
 
 impl Serialize for ConfirmationResponse {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-		where S: Serializer
+	where
+		S: Serializer,
 	{
 		match *self {
 			ConfirmationResponse::SendTransaction(ref hash) => hash.serialize(serializer),
@@ -162,32 +172,40 @@ pub struct ConfirmationResponseWithToken {
 #[serde(deny_unknown_fields)]
 pub enum ConfirmationPayload {
 	/// Send Transaction
-	#[serde(rename="sendTransaction")]
+	#[serde(rename = "sendTransaction")]
 	SendTransaction(TransactionRequest),
 	/// Sign Transaction
-	#[serde(rename="signTransaction")]
+	#[serde(rename = "signTransaction")]
 	SignTransaction(TransactionRequest),
 	/// Signature
-	#[serde(rename="sign")]
+	#[serde(rename = "sign")]
 	EthSignMessage(SignRequest),
 	/// Decryption
-	#[serde(rename="decrypt")]
+	#[serde(rename = "decrypt")]
 	Decrypt(DecryptRequest),
 }
 
 impl From<helpers::ConfirmationPayload> for ConfirmationPayload {
 	fn from(c: helpers::ConfirmationPayload) -> Self {
 		match c {
-			helpers::ConfirmationPayload::SendTransaction(t) => ConfirmationPayload::SendTransaction(t.into()),
-			helpers::ConfirmationPayload::SignTransaction(t) => ConfirmationPayload::SignTransaction(t.into()),
-			helpers::ConfirmationPayload::EthSignMessage(address, data) => ConfirmationPayload::EthSignMessage(SignRequest {
-				address: address.into(),
-				data: data.into(),
-			}),
-			helpers::ConfirmationPayload::Decrypt(address, msg) => ConfirmationPayload::Decrypt(DecryptRequest {
-				address: address.into(),
-				msg: msg.into(),
-			}),
+			helpers::ConfirmationPayload::SendTransaction(t) => {
+				ConfirmationPayload::SendTransaction(t.into())
+			}
+			helpers::ConfirmationPayload::SignTransaction(t) => {
+				ConfirmationPayload::SignTransaction(t.into())
+			}
+			helpers::ConfirmationPayload::EthSignMessage(address, data) => {
+				ConfirmationPayload::EthSignMessage(SignRequest {
+					address: address.into(),
+					data: data.into(),
+				})
+			}
+			helpers::ConfirmationPayload::Decrypt(address, msg) => {
+				ConfirmationPayload::Decrypt(DecryptRequest {
+					address: address.into(),
+					msg: msg.into(),
+				})
+			}
 		}
 	}
 }
@@ -199,7 +217,7 @@ pub struct TransactionModification {
 	/// Modified transaction sender
 	pub sender: Option<H160>,
 	/// Modified gas price
-	#[serde(rename="gasPrice")]
+	#[serde(rename = "gasPrice")]
 	pub gas_price: Option<U256>,
 	/// Modified gas
 	pub gas: Option<U256>,
@@ -209,7 +227,8 @@ pub struct TransactionModification {
 
 /// Represents two possible return values.
 #[derive(Debug, Clone)]
-pub enum Either<A, B> where
+pub enum Either<A, B>
+where
 	A: fmt::Debug + Clone,
 	B: fmt::Debug + Clone,
 {
@@ -219,7 +238,8 @@ pub enum Either<A, B> where
 	Or(B),
 }
 
-impl<A, B> From<A> for Either<A, B> where
+impl<A, B> From<A> for Either<A, B>
+where
 	A: fmt::Debug + Clone,
 	B: fmt::Debug + Clone,
 {
@@ -228,12 +248,14 @@ impl<A, B> From<A> for Either<A, B> where
 	}
 }
 
-impl<A, B> Serialize for Either<A, B>  where
+impl<A, B> Serialize for Either<A, B>
+where
 	A: Serialize + fmt::Debug + Clone,
 	B: Serialize + fmt::Debug + Clone,
 {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-		where S: Serializer
+	where
+		S: Serializer,
 	{
 		match *self {
 			Either::Either(ref a) => a.serialize(serializer),
@@ -244,11 +266,11 @@ impl<A, B> Serialize for Either<A, B>  where
 
 #[cfg(test)]
 mod tests {
-	use std::str::FromStr;
-	use serde_json;
-	use v1::types::{U256, H256, TransactionCondition};
-	use v1::helpers;
 	use super::*;
+	use serde_json;
+	use std::str::FromStr;
+	use v1::helpers;
+	use v1::types::{TransactionCondition, H256, U256};
 
 	#[test]
 	fn should_serialize_sign_confirmation() {
@@ -272,21 +294,23 @@ mod tests {
 		// given
 		let request = helpers::ConfirmationRequest {
 			id: 15.into(),
-			payload: helpers::ConfirmationPayload::SendTransaction(helpers::FilledTransactionRequest {
-				from: 0.into(),
-				used_default_from: false,
-				to: None,
-				gas: 15_000.into(),
-				gas_price: 10_000.into(),
-				value: 100_000.into(),
-				data: vec![1, 2, 3],
-				nonce: Some(1.into()),
-				condition: None,
-			}),
+			payload: helpers::ConfirmationPayload::SendTransaction(
+				helpers::FilledTransactionRequest {
+					from: 0.into(),
+					used_default_from: false,
+					to: None,
+					gas: 15_000.into(),
+					gas_price: 10_000.into(),
+					value: 100_000.into(),
+					data: vec![1, 2, 3],
+					nonce: Some(1.into()),
+					condition: None,
+				},
+			),
 			origin: Origin::Signer {
 				dapp: "http://parity.io".into(),
 				session: 5.into(),
-			}
+			},
 		};
 
 		// when
@@ -302,17 +326,19 @@ mod tests {
 		// given
 		let request = helpers::ConfirmationRequest {
 			id: 15.into(),
-			payload: helpers::ConfirmationPayload::SignTransaction(helpers::FilledTransactionRequest {
-				from: 0.into(),
-				used_default_from: false,
-				to: None,
-				gas: 15_000.into(),
-				gas_price: 10_000.into(),
-				value: 100_000.into(),
-				data: vec![1, 2, 3],
-				nonce: Some(1.into()),
-				condition: None,
-			}),
+			payload: helpers::ConfirmationPayload::SignTransaction(
+				helpers::FilledTransactionRequest {
+					from: 0.into(),
+					used_default_from: false,
+					to: None,
+					gas: 15_000.into(),
+					gas_price: 10_000.into(),
+					value: 100_000.into(),
+					data: vec![1, 2, 3],
+					nonce: Some(1.into()),
+					condition: None,
+				},
+			),
 			origin: Origin::Dapps("http://parity.io".into()),
 		};
 
@@ -329,9 +355,7 @@ mod tests {
 		// given
 		let request = helpers::ConfirmationRequest {
 			id: 15.into(),
-			payload: helpers::ConfirmationPayload::Decrypt(
-				10.into(), vec![1, 2, 3].into(),
-			),
+			payload: helpers::ConfirmationPayload::Decrypt(10.into(), vec![1, 2, 3].into()),
 			origin: Default::default(),
 		};
 
@@ -360,24 +384,33 @@ mod tests {
 		let res3: TransactionModification = serde_json::from_str(s3).unwrap();
 
 		// then
-		assert_eq!(res1, TransactionModification {
-			sender: Some(10.into()),
-			gas_price: Some(U256::from_str("0ba43b7400").unwrap()),
-			gas: None,
-			condition: Some(Some(TransactionCondition::Number(0x42))),
-		});
-		assert_eq!(res2, TransactionModification {
-			sender: None,
-			gas_price: None,
-			gas: Some(U256::from_str("1233").unwrap()),
-			condition: None,
-		});
-		assert_eq!(res3, TransactionModification {
-			sender: None,
-			gas_price: None,
-			gas: None,
-			condition: None,
-		});
+		assert_eq!(
+			res1,
+			TransactionModification {
+				sender: Some(10.into()),
+				gas_price: Some(U256::from_str("0ba43b7400").unwrap()),
+				gas: None,
+				condition: Some(Some(TransactionCondition::Number(0x42))),
+			}
+		);
+		assert_eq!(
+			res2,
+			TransactionModification {
+				sender: None,
+				gas_price: None,
+				gas: Some(U256::from_str("1233").unwrap()),
+				condition: None,
+			}
+		);
+		assert_eq!(
+			res3,
+			TransactionModification {
+				sender: None,
+				gas_price: None,
+				gas: None,
+				condition: None,
+			}
+		);
 	}
 
 	#[test]

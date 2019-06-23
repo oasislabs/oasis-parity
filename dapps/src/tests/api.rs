@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use tests::helpers::{serve, serve_with_registrar, request, assert_security_headers};
+use tests::helpers::{assert_security_headers, request, serve, serve_with_registrar};
 
 #[test]
 fn should_return_error() {
@@ -22,14 +22,15 @@ fn should_return_error() {
 	let server = serve();
 
 	// when
-	let response = request(server,
+	let response = request(
+		server,
 		"\
 			GET /api/empty HTTP/1.1\r\n\
 			Host: 127.0.0.1:8080\r\n\
 			Connection: close\r\n\
 			\r\n\
 			{}
-		"
+		",
 	);
 
 	// then
@@ -45,7 +46,8 @@ fn should_handle_ping() {
 	let server = serve();
 
 	// when
-	let response = request(server,
+	let response = request(
+		server,
 		"\
 			POST /api/ping HTTP/1.1\r\n\
 			Host: home.parity\r\n\
@@ -53,7 +55,7 @@ fn should_handle_ping() {
 			Connection: close\r\n\
 			\r\n\
 			{}
-		"
+		",
 	);
 
 	// then
@@ -69,13 +71,14 @@ fn should_try_to_resolve_dapp() {
 	let (server, registrar) = serve_with_registrar();
 
 	// when
-	let response = request(server,
+	let response = request(
+		server,
 		"\
-			GET /api/content/1472a9e190620cdf6b31f383373e45efcfe869a820c91f9ccd7eb9fb45e4985d HTTP/1.1\r\n\
-			Host: home.parity\r\n\
-			Connection: close\r\n\
-			\r\n\
-		"
+		 GET /api/content/1472a9e190620cdf6b31f383373e45efcfe869a820c91f9ccd7eb9fb45e4985d HTTP/1.1\r\n\
+		 Host: home.parity\r\n\
+		 Connection: close\r\n\
+		 \r\n\
+		 ",
 	);
 
 	// then

@@ -17,7 +17,9 @@
 //! Personal rpc interface.
 use jsonrpc_core::{BoxFuture, Result};
 
-use v1::types::{Bytes, U128, H160, H256, H520, TransactionRequest, RichRawTransaction as RpcRichRawTransaction};
+use v1::types::{
+	Bytes, RichRawTransaction as RpcRichRawTransaction, TransactionRequest, H160, H256, H520, U128,
+};
 
 build_rpc_trait! {
 	/// Personal rpc interface. Safe (read-only) functions.

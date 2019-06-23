@@ -20,23 +20,23 @@
 
 mod installers;
 
-use std::{fs, env};
-use std::path::PathBuf;
-use std::sync::Arc;
+use fetch::{Client as FetchClient, Fetch};
 use futures::{future, Future};
 use futures_cpupool::CpuPool;
-use fetch::{Client as FetchClient, Fetch};
-use hash_fetch::urlhint::{URLHintContract, URLHint, URLHintResult};
+use hash_fetch::urlhint::{URLHint, URLHintContract, URLHintResult};
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::{env, fs};
 
 use hyper::StatusCode;
 
-use ethereum_types::H256;
-use {SyncStatus, random_filename};
-use parking_lot::Mutex;
-use page::local;
-use handlers::{ContentHandler, ContentFetcherHandler};
-use endpoint::{self, Endpoint, EndpointPath};
 use apps::cache::{ContentCache, ContentStatus};
+use endpoint::{self, Endpoint, EndpointPath};
+use ethereum_types::H256;
+use handlers::{ContentFetcherHandler, ContentHandler};
+use page::local;
+use parking_lot::Mutex;
+use {random_filename, SyncStatus};
 
 /// Limit of cached dapps/content
 const MAX_CACHED_DAPPS: usize = 20;
@@ -63,12 +63,7 @@ impl<R: URLHint + 'static, F: Fetch> Drop for ContentFetcher<F, R> {
 }
 
 impl<R: URLHint + 'static, F: Fetch> ContentFetcher<F, R> {
-	pub fn new(
-		resolver: R,
-		sync: Arc<SyncStatus>,
-		fetch: F,
-		pool: CpuPool,
-	) -> Self {
+	pub fn new(resolver: R, sync: Arc<SyncStatus>, fetch: F, pool: CpuPool) -> Self {
 		let mut cache_path = env::temp_dir();
 		cache_path.push(random_filename());
 
@@ -89,12 +84,15 @@ impl<R: URLHint + 'static, F: Fetch> ContentFetcher<F, R> {
 	}
 
 	fn not_found() -> endpoint::Response {
-		Box::new(future::ok(ContentHandler::error(
-			StatusCode::NotFound,
-			"Resource Not Found",
-			"Requested resource was not found.",
-			None,
-		).into()))
+		Box::new(future::ok(
+			ContentHandler::error(
+				StatusCode::NotFound,
+				"Resource Not Found",
+				"Requested resource was not found.",
+				None,
+			)
+			.into(),
+		))
 	}
 
 	fn still_syncing() -> endpoint::Response {
@@ -107,12 +105,15 @@ impl<R: URLHint + 'static, F: Fetch> ContentFetcher<F, R> {
 	}
 
 	fn dapps_disabled() -> endpoint::Response {
-		Box::new(future::ok(ContentHandler::error(
-			StatusCode::ServiceUnavailable,
-			"Network Dapps Not Available",
-			"This interface doesn't support network dapps for security reasons.",
-			None,
-		).into()))
+		Box::new(future::ok(
+			ContentHandler::error(
+				StatusCode::ServiceUnavailable,
+				"Network Dapps Not Available",
+				"This interface doesn't support network dapps for security reasons.",
+				None,
+			)
+			.into(),
+		))
 	}
 
 	#[cfg(test)]
@@ -123,9 +124,13 @@ impl<R: URLHint + 'static, F: Fetch> ContentFetcher<F, R> {
 	// resolve contract call synchronously.
 	// TODO: port to futures-based hyper and make it all async.
 	fn resolve(&self, content_id: H256) -> Option<URLHintResult> {
-		self.resolver.resolve(content_id)
+		self.resolver
+			.resolve(content_id)
 			.wait()
-			.unwrap_or_else(|e| { warn!("Error resolving content-id: {}", e); None })
+			.unwrap_or_else(|e| {
+				warn!("Error resolving content-id: {}", e);
+				None
+			})
 	}
 }
 
@@ -159,16 +164,20 @@ impl<R: URLHint + 'static, F: Fetch> Endpoint for ContentFetcher<F, R> {
 				// Just serve the content
 				Some(&mut ContentStatus::Ready(ref endpoint)) => {
 					(None, endpoint.to_response(&path))
-				},
+				}
 				// Content is already being fetched
-				Some(&mut ContentStatus::Fetching(ref fetch_control)) if !fetch_control.is_deadline_reached() => {
+				Some(&mut ContentStatus::Fetching(ref fetch_control))
+					if !fetch_control.is_deadline_reached() =>
+				{
 					trace!(target: "dapps", "Content fetching in progress. Waiting...");
 					(None, fetch_control.to_response(path))
-				},
+				}
 				// We need to start fetching the content
 				_ => {
 					trace!(target: "dapps", "Content unavailable. Fetching... {:?}", content_id);
-					let content_hex = content_id.parse().expect("to_handler is called only when `contains` returns true.");
+					let content_hex = content_id
+						.parse()
+						.expect("to_handler is called only when `contains` returns true.");
 					let content = self.resolve(content_hex);
 
 					let cache = self.cache.clone();
@@ -176,7 +185,9 @@ impl<R: URLHint + 'static, F: Fetch> Endpoint for ContentFetcher<F, R> {
 					let on_done = move |result: Option<local::Dapp>| {
 						let mut cache = cache.lock();
 						match result {
-							Some(endpoint) => cache.insert(id.clone(), ContentStatus::Ready(endpoint)),
+							Some(endpoint) => {
+								cache.insert(id.clone(), ContentStatus::Ready(endpoint))
+							}
 							// In case of error
 							None => cache.remove(&id),
 						};
@@ -186,72 +197,67 @@ impl<R: URLHint + 'static, F: Fetch> Endpoint for ContentFetcher<F, R> {
 						// Don't serve dapps if we are still syncing (but serve content)
 						Some(URLHintResult::Dapp(_)) if self.sync.is_major_importing() => {
 							(None, Self::still_syncing())
-						},
+						}
 						Some(URLHintResult::Dapp(_)) if self.only_content => {
 							(None, Self::dapps_disabled())
-						},
+						}
 						Some(content) => {
 							let handler = match content {
-								URLHintResult::Dapp(dapp) => {
-									ContentFetcherHandler::new(
-										req.method(),
-										&dapp.url(),
-										path,
-										installers::Dapp::new(
-											content_id.clone(),
-											self.cache_path.clone(),
-											Box::new(on_done),
-											self.pool.clone(),
-										),
-										self.fetch.clone(),
+								URLHintResult::Dapp(dapp) => ContentFetcherHandler::new(
+									req.method(),
+									&dapp.url(),
+									path,
+									installers::Dapp::new(
+										content_id.clone(),
+										self.cache_path.clone(),
+										Box::new(on_done),
 										self.pool.clone(),
-									)
-								},
-							    URLHintResult::GithubDapp(content) => {
-									ContentFetcherHandler::new(
-										req.method(),
-										&content.url,
-										path,
-										installers::Dapp::new(
-											content_id.clone(),
-											self.cache_path.clone(),
-											Box::new(on_done),
-											self.pool.clone(),
-										),
-										self.fetch.clone(),
+									),
+									self.fetch.clone(),
+									self.pool.clone(),
+								),
+								URLHintResult::GithubDapp(content) => ContentFetcherHandler::new(
+									req.method(),
+									&content.url,
+									path,
+									installers::Dapp::new(
+										content_id.clone(),
+										self.cache_path.clone(),
+										Box::new(on_done),
 										self.pool.clone(),
-									)
-							    },
-								URLHintResult::Content(content) => {
-									ContentFetcherHandler::new(
-										req.method(),
-										&content.url,
-										path,
-										installers::Content::new(
-											content_id.clone(),
-											content.mime,
-											self.cache_path.clone(),
-											Box::new(on_done),
-											self.pool.clone(),
-										),
-										self.fetch.clone(),
+									),
+									self.fetch.clone(),
+									self.pool.clone(),
+								),
+								URLHintResult::Content(content) => ContentFetcherHandler::new(
+									req.method(),
+									&content.url,
+									path,
+									installers::Content::new(
+										content_id.clone(),
+										content.mime,
+										self.cache_path.clone(),
+										Box::new(on_done),
 										self.pool.clone(),
-									)
-								},
+									),
+									self.fetch.clone(),
+									self.pool.clone(),
+								),
 							};
 
-							(Some(ContentStatus::Fetching(handler.fetch_control())), Box::new(handler) as endpoint::Response)
-						},
-						None if self.sync.is_major_importing() => {
-							(None, Self::still_syncing())
-						},
+							(
+								Some(ContentStatus::Fetching(handler.fetch_control())),
+								Box::new(handler) as endpoint::Response,
+							)
+						}
+						None if self.sync.is_major_importing() => (None, Self::still_syncing()),
 						None => {
 							// This may happen when sync status changes in between
 							// `contains` and `to_handler`
 							(None, Self::not_found())
-						},
+						}
 					}
-				},
+				}
 			}
 		};
 
@@ -266,23 +272,26 @@ impl<R: URLHint + 'static, F: Fetch> Endpoint for ContentFetcher<F, R> {
 
 #[cfg(test)]
 mod tests {
-	use std::env;
-	use std::sync::Arc;
+	use ethereum_types::H256;
 	use fetch::Client;
 	use futures::{future, Future};
 	use hash_fetch::urlhint::{URLHint, URLHintResult};
-	use ethereum_types::H256;
+	use std::env;
+	use std::sync::Arc;
 
+	use super::{ContentFetcher, Fetcher};
 	use apps::cache::ContentStatus;
 	use endpoint::EndpointInfo;
 	use page::local;
-	use super::{ContentFetcher, Fetcher};
-	use {SyncStatus};
+	use SyncStatus;
 
 	#[derive(Clone)]
 	struct FakeResolver;
 	impl URLHint for FakeResolver {
-		fn resolve(&self, _id: H256) -> Box<Future<Item = Option<URLHintResult>, Error = String> + Send> {
+		fn resolve(
+			&self,
+			_id: H256,
+		) -> Box<Future<Item = Option<URLHintResult>, Error = String> + Send> {
 			Box::new(future::ok(None))
 		}
 	}
@@ -290,8 +299,12 @@ mod tests {
 	#[derive(Debug)]
 	struct FakeSync(bool);
 	impl SyncStatus for FakeSync {
-		fn is_major_importing(&self) -> bool { self.0 }
-		fn peers(&self) -> (usize, usize) { (0, 5) }
+		fn is_major_importing(&self) -> bool {
+			self.0
+		}
+		fn peers(&self) -> (usize, usize) {
+			(0, 5)
+		}
 	}
 
 	#[test]
@@ -304,18 +317,24 @@ mod tests {
 			Arc::new(FakeSync(false)),
 			Client::new().unwrap(),
 			pool.clone(),
-		).allow_dapps(true);
+		)
+		.allow_dapps(true);
 
-		let handler = local::Dapp::new(pool, path, EndpointInfo {
-			id: None,
-			name: "fake".into(),
-			description: "".into(),
-			version: "".into(),
-			author: "".into(),
-			icon_url: "".into(),
-			local_url: Some("".into()),
-			allow_js_eval: None,
-		}, Default::default());
+		let handler = local::Dapp::new(
+			pool,
+			path,
+			EndpointInfo {
+				id: None,
+				name: "fake".into(),
+				description: "".into(),
+				version: "".into(),
+				author: "".into(),
+				icon_url: "".into(),
+				local_url: Some("".into()),
+				allow_js_eval: None,
+			},
+			Default::default(),
+		);
 
 		// when
 		fetcher.set_status("test", ContentStatus::Ready(handler));

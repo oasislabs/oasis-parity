@@ -15,11 +15,11 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Execution environment substate.
-use std::collections::HashSet;
-use ethereum_types::{U256, Address};
-use log_entry::LogEntry;
-use evm::{Schedule, CleanDustMode};
 use super::CleanupMode;
+use ethereum_types::{Address, U256};
+use evm::{CleanDustMode, Schedule};
+use log_entry::LogEntry;
+use std::collections::HashSet;
 
 /// State changes which should be applied in finalize,
 /// after transaction is fully executed.
@@ -58,10 +58,14 @@ impl Substate {
 
 	/// Get the cleanup mode object from this.
 	pub fn to_cleanup_mode(&mut self, schedule: &Schedule) -> CleanupMode {
-		match (schedule.kill_dust != CleanDustMode::Off, schedule.no_empty, schedule.kill_empty) {
+		match (
+			schedule.kill_dust != CleanDustMode::Off,
+			schedule.no_empty,
+			schedule.kill_empty,
+		) {
 			(false, false, _) => CleanupMode::ForceCreate,
 			(false, true, false) => CleanupMode::NoEmpty,
-			(false, true, true) | (true, _, _,) => CleanupMode::TrackTouched(&mut self.touched),
+			(false, true, true) | (true, _, _) => CleanupMode::TrackTouched(&mut self.touched),
 		}
 	}
 }
@@ -84,7 +88,7 @@ mod tests {
 		sub_state.logs.push(LogEntry {
 			address: 1u64.into(),
 			topics: vec![],
-			data: vec![]
+			data: vec![],
 		});
 		sub_state.sstore_clears_refund = 5.into();
 		sub_state.suicides.insert(10u64.into());
@@ -94,7 +98,7 @@ mod tests {
 		sub_state_2.logs.push(LogEntry {
 			address: 1u64.into(),
 			topics: vec![],
-			data: vec![]
+			data: vec![],
 		});
 		sub_state_2.sstore_clears_refund = 7.into();
 

@@ -14,15 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{cmp, mem};
 use std::collections::HashMap;
-use std::sync::{atomic, Arc};
 use std::sync::atomic::{AtomicBool, AtomicUsize};
+use std::sync::{atomic, Arc};
+use std::{cmp, mem};
 
-use ethereum_types::{U256, Address};
-use futures::{Future, future, Poll, Async};
+use ethereum_types::{Address, U256};
 use futures::future::Either;
 use futures::sync::oneshot;
+use futures::{future, Async, Future, Poll};
 use futures_cpupool::CpuPool;
 
 /// Manages currently reserved and prospective nonces
@@ -60,7 +60,8 @@ impl Reservations {
 		}
 
 		let pool = &self.pool;
-		self.nonces.entry(sender)
+		self.nonces
+			.entry(sender)
 			.or_insert_with(move || SenderReservations::with_pool(pool.clone()))
 			.reserve_nonce(minimal)
 	}
@@ -144,10 +145,7 @@ impl SenderReservations {
 /// Represents a future nonce.
 #[derive(Debug)]
 pub struct Reserved {
-	previous: Either<
-		oneshot::Receiver<U256>,
-		future::FutureResult<U256, oneshot::Canceled>,
-	>,
+	previous: Either<oneshot::Receiver<U256>, future::FutureResult<U256, oneshot::Canceled>>,
 	next: Option<oneshot::Sender<U256>>,
 	next_sent: Arc<AtomicBool>,
 	minimal: U256,
@@ -166,10 +164,10 @@ impl Reserved {
 }
 
 impl Future for Reserved {
-    type Item = Ready;
-    type Error = ();
+	type Item = Ready;
+	type Error = ();
 
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
 		let mut value = try_ready!(self.previous.poll().map_err(|e| {
 			warn!("Unexpected nonce cancellation: {}", e);
 		}));
@@ -196,10 +194,12 @@ impl Drop for Reserved {
 			self.dropped.fetch_add(1, atomic::Ordering::SeqCst);
 			// If Reserved is dropped just pipe previous and next together.
 			let previous = mem::replace(&mut self.previous, Either::B(future::ok(U256::default())));
-			self.pool.spawn(previous.map(move |nonce| {
-				next_sent.store(true, atomic::Ordering::SeqCst);
-				next.send(nonce).expect(Ready::RECV_PROOF)
-			})).forget()
+			self.pool
+				.spawn(previous.map(move |nonce| {
+					next_sent.store(true, atomic::Ordering::SeqCst);
+					next.send(nonce).expect(Ready::RECV_PROOF)
+				}))
+				.forget()
 		}
 	}
 }
@@ -234,7 +234,10 @@ impl Ready {
 	/// Marks this nonce as used.
 	/// Make sure to call that method after this nonce has been consumed.
 	pub fn mark_used(mut self) {
-		let next = self.next.take().expect("Nonce can be marked as used only once; qed");
+		let next = self
+			.next
+			.take()
+			.expect("Nonce can be marked as used only once; qed");
 		self.next_sent.store(true, atomic::Ordering::SeqCst);
 		next.send(self.value + U256::one()).expect(Self::RECV_PROOF);
 	}
@@ -252,7 +255,7 @@ impl Drop for Ready {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+	use super::*;
 
 	#[test]
 	fn should_reserve_a_set_of_nonces_and_resolve_them() {

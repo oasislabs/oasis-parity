@@ -23,10 +23,10 @@
 //! stalled transactions.
 
 use std::cmp;
-use std::sync::Arc;
 use std::sync::atomic::{self, AtomicUsize};
+use std::sync::Arc;
 
-use ethereum_types::{U256, H256};
+use ethereum_types::{H256, U256};
 use rlp::Encodable;
 use transaction;
 use txpool;
@@ -147,7 +147,10 @@ impl<C: Client> txpool::Verifier<Transaction> for Verifier<C> {
 	type Error = transaction::Error;
 	type VerifiedTransaction = VerifiedTransaction;
 
-	fn verify_transaction(&self, tx: Transaction) -> Result<Self::VerifiedTransaction, Self::Error> {
+	fn verify_transaction(
+		&self,
+		tx: Transaction,
+	) -> Result<Self::VerifiedTransaction, Self::Error> {
 		// The checks here should be ordered by cost/complexity.
 		// Cheap checks should be done as early as possible to discard unneeded transactions early.
 
@@ -191,9 +194,7 @@ impl<C: Client> txpool::Verifier<Transaction> for Verifier<C> {
 
 		let is_own = tx.is_local();
 		// Quick exit for non-service transactions
-		if tx.gas_price() < &self.options.minimal_gas_price
-			&& !tx.gas_price().is_zero()
-			&& !is_own
+		if tx.gas_price() < &self.options.minimal_gas_price && !tx.gas_price().is_zero() && !is_own
 		{
 			trace!(
 				target: "txqueue",
@@ -212,13 +213,15 @@ impl<C: Client> txpool::Verifier<Transaction> for Verifier<C> {
 		// Actually recover sender and verify that transaction
 		let is_retracted = tx.is_retracted();
 		let transaction = match tx {
-			Transaction::Retracted(tx) | Transaction::Unverified(tx) => match self.client.verify_transaction(tx) {
-				Ok(signed) => signed.into(),
-				Err(err) => {
-					debug!(target: "txqueue", "[{:?}] Rejected tx {:?}", hash, err);
-					bail!(err)
-				},
-			},
+			Transaction::Retracted(tx) | Transaction::Unverified(tx) => {
+				match self.client.verify_transaction(tx) {
+					Ok(signed) => signed.into(),
+					Err(err) => {
+						debug!(target: "txqueue", "[{:?}] Rejected tx {:?}", hash, err);
+						bail!(err)
+					}
+				}
+			}
 			Transaction::Local(tx) => tx,
 		};
 

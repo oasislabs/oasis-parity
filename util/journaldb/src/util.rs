@@ -15,9 +15,9 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 use ethereum_types::H256;
-use rlp::{RlpStream, Encodable, Rlp, DecoderError};
+use rlp::{DecoderError, Encodable, Rlp, RlpStream};
 
-const PADDING : [u8; 10] = [ 0u8; 10 ];
+const PADDING: [u8; 10] = [0u8; 10];
 
 pub struct DatabaseKey {
 	pub era: u64,

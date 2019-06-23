@@ -16,8 +16,8 @@
 
 #[cfg(feature = "with-syntex")]
 mod inner {
-	extern crate syntex;
 	extern crate quasi_codegen;
+	extern crate syntex;
 
 	use std::env;
 	use std::path::Path;

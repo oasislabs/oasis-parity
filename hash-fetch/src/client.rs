@@ -16,19 +16,19 @@
 
 //! Hash-addressed content resolver & fetcher.
 
-use std::{io, fs};
 use std::io::Write;
-use std::sync::Arc;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::{fs, io};
 
-use hash::keccak_buffer;
-use fetch::{self, Fetch};
-use futures_cpupool::CpuPool;
-use futures::{Future, IntoFuture};
-use parity_reactor::Remote;
-use urlhint::{URLHintContract, URLHint, URLHintResult};
-use registrar::{RegistrarClient, Asynchronous};
 use ethereum_types::H256;
+use fetch::{self, Fetch};
+use futures::{Future, IntoFuture};
+use futures_cpupool::CpuPool;
+use hash::keccak_buffer;
+use parity_reactor::Remote;
+use registrar::{Asynchronous, RegistrarClient};
+use urlhint::{URLHint, URLHintContract, URLHintResult};
 
 /// API for fetching by hash.
 pub trait HashFetch: Send + Sync + 'static {
@@ -38,7 +38,12 @@ pub trait HashFetch: Send + Sync + 'static {
 	/// 2. `on_done` - callback function invoked when the content is ready (or there was error during fetch)
 	///
 	/// This function may fail immediately when fetch cannot be initialized or content cannot be resolved.
-	fn fetch(&self, hash: H256, abort: fetch::Abort, on_done: Box<Fn(Result<PathBuf, Error>) + Send>);
+	fn fetch(
+		&self,
+		hash: H256,
+		abort: fetch::Abort,
+		on_done: Box<Fn(Result<PathBuf, Error>) + Send>,
+	);
 }
 
 /// Hash-fetching error.
@@ -65,10 +70,14 @@ pub enum Error {
 impl PartialEq for Error {
 	fn eq(&self, other: &Self) -> bool {
 		use Error::*;
-		match (self, other)  {
-			(&HashMismatch { expected, got }, &HashMismatch { expected: e, got: g }) => {
-				expected == e && got == g
-			},
+		match (self, other) {
+			(
+				&HashMismatch { expected, got },
+				&HashMismatch {
+					expected: e,
+					got: g,
+				},
+			) => expected == e && got == g,
 			(&NoResolution, &NoResolution) => true,
 			(&InvalidStatus, &InvalidStatus) => true,
 			(&IO(_), &IO(_)) => true,
@@ -101,7 +110,10 @@ fn validate_hash(path: PathBuf, hash: H256, body: fetch::BodyReader) -> Result<P
 	let mut file_reader = io::BufReader::new(fs::File::open(&path)?);
 	let content_hash = keccak_buffer(&mut file_reader)?;
 	if content_hash != hash {
-		Err(Error::HashMismatch{ got: content_hash, expected: hash })
+		Err(Error::HashMismatch {
+			got: content_hash,
+			expected: hash,
+		})
 	} else {
 		Ok(path)
 	}
@@ -118,7 +130,12 @@ pub struct Client<F: Fetch + 'static = fetch::Client> {
 
 impl<F: Fetch + 'static> Client<F> {
 	/// Creates new instance of the `Client` given on-chain contract client, fetch service and task runner.
-	pub fn with_fetch(contract: Arc<RegistrarClient<Call=Asynchronous>>, pool: CpuPool, fetch: F, remote: Remote) -> Self {
+	pub fn with_fetch(
+		contract: Arc<RegistrarClient<Call = Asynchronous>>,
+		pool: CpuPool,
+		fetch: F,
+		remote: Remote,
+	) -> Self {
 		Client {
 			pool,
 			contract: URLHintContract::new(contract),
@@ -130,25 +147,29 @@ impl<F: Fetch + 'static> Client<F> {
 }
 
 impl<F: Fetch + 'static> HashFetch for Client<F> {
-	fn fetch(&self, hash: H256, abort: fetch::Abort, on_done: Box<Fn(Result<PathBuf, Error>) + Send>) {
+	fn fetch(
+		&self,
+		hash: H256,
+		abort: fetch::Abort,
+		on_done: Box<Fn(Result<PathBuf, Error>) + Send>,
+	) {
 		debug!(target: "fetch", "Fetching: {:?}", hash);
 
 		let random_path = self.random_path.clone();
 		let remote_fetch = self.fetch.clone();
 		let pool = self.pool.clone();
-		let future = self.contract.resolve(hash)
-			.map_err(|e| { warn!("Error resolving URL: {}", e); Error::NoResolution })
+		let future = self
+			.contract
+			.resolve(hash)
+			.map_err(|e| {
+				warn!("Error resolving URL: {}", e);
+				Error::NoResolution
+			})
 			.and_then(|maybe_url| maybe_url.ok_or(Error::NoResolution))
 			.map(|content| match content {
-					URLHintResult::Dapp(dapp) => {
-						dapp.url()
-					},
-					URLHintResult::GithubDapp(content) => {
-						content.url
-					},
-					URLHintResult::Content(content) => {
-						content.url
-					},
+				URLHintResult::Dapp(dapp) => dapp.url(),
+				URLHintResult::GithubDapp(content) => content.url,
+				URLHintResult::Content(content) => content.url,
 			})
 			.into_future()
 			.and_then(move |url| {
@@ -162,26 +183,31 @@ impl<F: Fetch + 'static> HashFetch for Client<F> {
 					Ok(response)
 				}
 			})
-			.and_then(move |response| pool.spawn_fn(move || {
-				debug!(target: "fetch", "Content fetched, validating hash ({:?})", hash);
-				let path = random_path();
-				let res = validate_hash(path.clone(), hash, fetch::BodyReader::new(response));
-				if let Err(ref err) = res {
-					trace!(target: "fetch", "Error: {:?}", err);
-					// Remove temporary file in case of error
-					let _ = fs::remove_file(&path);
-				}
-				res
-			}))
-			.then(move |res| { on_done(res); Ok(()) as Result<(), ()> });
+			.and_then(move |response| {
+				pool.spawn_fn(move || {
+					debug!(target: "fetch", "Content fetched, validating hash ({:?})", hash);
+					let path = random_path();
+					let res = validate_hash(path.clone(), hash, fetch::BodyReader::new(response));
+					if let Err(ref err) = res {
+						trace!(target: "fetch", "Error: {:?}", err);
+						// Remove temporary file in case of error
+						let _ = fs::remove_file(&path);
+					}
+					res
+				})
+			})
+			.then(move |res| {
+				on_done(res);
+				Ok(()) as Result<(), ()>
+			});
 
 		self.remote.spawn(future);
 	}
 }
 
 fn random_temp_path() -> PathBuf {
-	use ::rand::Rng;
-	use ::std::env;
+	use rand::Rng;
+	use std::env;
 
 	let mut rng = ::rand::OsRng::new().expect("Reliable random source is required to work.");
 	let file: String = rng.gen_ascii_chars().take(12).collect();
@@ -193,14 +219,14 @@ fn random_temp_path() -> PathBuf {
 
 #[cfg(test)]
 mod tests {
+	use super::{random_temp_path, Client, Error, HashFetch};
 	use fake_fetch::FakeFetch;
-	use rustc_hex::FromHex;
-	use std::sync::{Arc, mpsc};
-	use parking_lot::Mutex;
 	use futures_cpupool::CpuPool;
 	use parity_reactor::Remote;
+	use parking_lot::Mutex;
+	use rustc_hex::FromHex;
+	use std::sync::{mpsc, Arc};
 	use urlhint::tests::{FakeRegistrar, URLHINT};
-	use super::{Error, Client, HashFetch, random_temp_path};
 
 	fn registrar() -> FakeRegistrar {
 		let mut registrar = FakeRegistrar::new();
@@ -216,13 +242,18 @@ mod tests {
 		// given
 		let contract = Arc::new(FakeRegistrar::new());
 		let fetch = FakeFetch::new(None::<usize>);
-		let client = Client::with_fetch(contract.clone(), CpuPool::new(1), fetch, Remote::new_sync());
+		let client =
+			Client::with_fetch(contract.clone(), CpuPool::new(1), fetch, Remote::new_sync());
 
 		// when
 		let (tx, rx) = mpsc::channel();
-		client.fetch(2.into(), Default::default(), Box::new(move |result| {
-			tx.send(result).unwrap();
-		}));
+		client.fetch(
+			2.into(),
+			Default::default(),
+			Box::new(move |result| {
+				tx.send(result).unwrap();
+			}),
+		);
 
 		// then
 		let result = rx.recv().unwrap();
@@ -234,13 +265,22 @@ mod tests {
 		// given
 		let registrar = Arc::new(registrar());
 		let fetch = FakeFetch::new(None::<usize>);
-		let client = Client::with_fetch(registrar.clone(), CpuPool::new(1), fetch, Remote::new_sync());
+		let client = Client::with_fetch(
+			registrar.clone(),
+			CpuPool::new(1),
+			fetch,
+			Remote::new_sync(),
+		);
 
 		// when
 		let (tx, rx) = mpsc::channel();
-		client.fetch(2.into(), Default::default(), Box::new(move |result| {
-			tx.send(result).unwrap();
-		}));
+		client.fetch(
+			2.into(),
+			Default::default(),
+			Box::new(move |result| {
+				tx.send(result).unwrap();
+			}),
+		);
 
 		// then
 		let result = rx.recv().unwrap();
@@ -252,21 +292,36 @@ mod tests {
 		// given
 		let registrar = Arc::new(registrar());
 		let fetch = FakeFetch::new(Some(1));
-		let mut client = Client::with_fetch(registrar.clone(), CpuPool::new(1), fetch, Remote::new_sync());
+		let mut client = Client::with_fetch(
+			registrar.clone(),
+			CpuPool::new(1),
+			fetch,
+			Remote::new_sync(),
+		);
 		let path = random_temp_path();
 		let path2 = path.clone();
 		client.random_path = Arc::new(move || path2.clone());
 
 		// when
 		let (tx, rx) = mpsc::channel();
-		client.fetch(2.into(), Default::default(), Box::new(move |result| {
-			tx.send(result).unwrap();
-		}));
+		client.fetch(
+			2.into(),
+			Default::default(),
+			Box::new(move |result| {
+				tx.send(result).unwrap();
+			}),
+		);
 
 		// then
 		let result = rx.recv().unwrap();
 		let hash = "0x2be00befcf008bc0e7d9cdefc194db9c75352e8632f48498b5a6bfce9f02c88e".into();
-		assert_eq!(result.unwrap_err(), Error::HashMismatch { expected: 2.into(), got: hash });
+		assert_eq!(
+			result.unwrap_err(),
+			Error::HashMismatch {
+				expected: 2.into(),
+				got: hash
+			}
+		);
 		assert!(!path.exists(), "Temporary file should be removed.");
 	}
 
@@ -275,13 +330,22 @@ mod tests {
 		// given
 		let registrar = Arc::new(registrar());
 		let fetch = FakeFetch::new(Some(1));
-		let client = Client::with_fetch(registrar.clone(), CpuPool::new(1), fetch, Remote::new_sync());
+		let client = Client::with_fetch(
+			registrar.clone(),
+			CpuPool::new(1),
+			fetch,
+			Remote::new_sync(),
+		);
 
 		// when
 		let (tx, rx) = mpsc::channel();
-		client.fetch("0x2be00befcf008bc0e7d9cdefc194db9c75352e8632f48498b5a6bfce9f02c88e".into(),
+		client.fetch(
+			"0x2be00befcf008bc0e7d9cdefc194db9c75352e8632f48498b5a6bfce9f02c88e".into(),
 			Default::default(),
-			Box::new(move |result| { tx.send(result).unwrap(); }));
+			Box::new(move |result| {
+				tx.send(result).unwrap();
+			}),
+		);
 
 		// then
 		let result = rx.recv().unwrap();

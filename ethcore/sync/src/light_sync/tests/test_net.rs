@@ -20,20 +20,20 @@ use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 
 use light_sync::*;
-use tests::helpers::{TestNet, Peer as PeerLike, TestPacket};
+use tests::helpers::{Peer as PeerLike, TestNet, TestPacket};
 
 use ethcore::client::TestBlockChainClient;
 use ethcore::spec::Spec;
 use io::IoChannel;
 use kvdb_memorydb;
 use light::client::fetch::{self, Unavailable};
-use light::net::{LightProtocol, IoContext, Capabilities, Params as LightParams};
+use light::net::{Capabilities, IoContext, LightProtocol, Params as LightParams};
 use light::provider::LightProvider;
 use network::{NodeId, PeerId};
 use parking_lot::RwLock;
 
-use std::time::Duration;
 use light::cache::Cache;
+use std::time::Duration;
 
 const NETWORK_ID: u64 = 0xcafebabe;
 
@@ -64,16 +64,22 @@ impl<'a> IoContext for TestIoContext<'a> {
 		self.to_disconnect.write().insert(peer);
 	}
 
-	fn disable_peer(&self, peer: PeerId) { self.disconnect_peer(peer) }
-	fn protocol_version(&self, _peer: PeerId) -> Option<u8> { Some(::light::net::MAX_PROTOCOL_VERSION) }
+	fn disable_peer(&self, peer: PeerId) {
+		self.disconnect_peer(peer)
+	}
+	fn protocol_version(&self, _peer: PeerId) -> Option<u8> {
+		Some(::light::net::MAX_PROTOCOL_VERSION)
+	}
 
-	fn persistent_peer_id(&self, _peer: PeerId) -> Option<NodeId> { unimplemented!() }
+	fn persistent_peer_id(&self, _peer: PeerId) -> Option<NodeId> {
+		unimplemented!()
+	}
 }
 
 // peer-specific data.
 enum PeerData {
 	Light(Arc<LightSync<LightClient>>, Arc<LightClient>),
-	Full(Arc<TestBlockChainClient>)
+	Full(Arc<TestBlockChainClient>),
 }
 
 // test peer type.
@@ -167,14 +173,15 @@ impl PeerLike for Peer {
 		self.proto.on_connect(&other, &io);
 	}
 
-	fn on_disconnect(&self, other: PeerId){
+	fn on_disconnect(&self, other: PeerId) {
 		let io = self.io(Some(other));
 		self.proto.on_disconnect(other, &io);
 	}
 
 	fn receive_message(&self, from: PeerId, msg: TestPacket) -> HashSet<PeerId> {
 		let io = self.io(Some(from));
-		self.proto.handle_packet(&io, &from, msg.packet_id, &msg.data);
+		self.proto
+			.handle_packet(&io, &from, msg.packet_id, &msg.data);
 		io.to_disconnect.into_inner()
 	}
 
@@ -183,15 +190,16 @@ impl PeerLike for Peer {
 	}
 
 	fn is_done(&self) -> bool {
-		self.queue.read().is_empty() && match self.data {
-			PeerData::Light(_, ref client) => {
-				// should create a test light client which just imports
-				// headers directly and doesn't have a queue to drain.
-				client.import_verified();
-				client.queue_info().is_empty()
+		self.queue.read().is_empty()
+			&& match self.data {
+				PeerData::Light(_, ref client) => {
+					// should create a test light client which just imports
+					// headers directly and doesn't have a queue to drain.
+					client.import_verified();
+					client.queue_info().is_empty()
+				}
+				_ => true,
 			}
-			_ => true,
-		}
 	}
 
 	fn sync_step(&self) {
@@ -204,11 +212,11 @@ impl PeerLike for Peer {
 		}
 	}
 
-	fn restart_sync(&self) { }
+	fn restart_sync(&self) {}
 
-	fn process_all_io_messages(&self) { }
+	fn process_all_io_messages(&self) {}
 
-	fn process_all_new_block_messages(&self) { }
+	fn process_all_new_block_messages(&self) {}
 }
 
 impl TestNet<Peer> {
@@ -222,7 +230,10 @@ impl TestNet<Peer> {
 
 			// skip full verification because the blocks are bad.
 			config.verify_full = false;
-			let cache = Arc::new(Mutex::new(Cache::new(Default::default(), Duration::from_secs(6 * 3600))));
+			let cache = Arc::new(Mutex::new(Cache::new(
+				Default::default(),
+				Duration::from_secs(6 * 3600),
+			)));
 			let db = kvdb_memorydb::create(0);
 			let client = LightClient::new(
 				config,
@@ -231,14 +242,17 @@ impl TestNet<Peer> {
 				&Spec::new_test(),
 				fetch::unavailable(), // TODO: allow fetch from full nodes.
 				IoChannel::disconnected(),
-				cache
-			).expect("New DB creation infallible; qed");
+				cache,
+			)
+			.expect("New DB creation infallible; qed");
 
 			peers.push(Arc::new(Peer::new_light(Arc::new(client))))
 		}
 
 		for _ in 0..n_full {
-			peers.push(Arc::new(Peer::new_full(Arc::new(TestBlockChainClient::new()))))
+			peers.push(Arc::new(Peer::new_full(Arc::new(
+				TestBlockChainClient::new(),
+			))))
 		}
 
 		TestNet {

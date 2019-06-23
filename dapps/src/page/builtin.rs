@@ -14,12 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::io;
 use futures::future;
 use futures_cpupool::CpuPool;
 use hyper::mime::{self, Mime};
 use itertools::Itertools;
-use parity_dapps::{WebApp, Info};
+use parity_dapps::{Info, WebApp};
+use std::io;
 
 use endpoint::{Endpoint, EndpointInfo, EndpointPath, Request, Response};
 use page::{handler, PageCache};
@@ -74,24 +74,29 @@ impl<T: WebApp> Endpoint for Dapp<T> {
 		let file_path = if path.has_no_params() {
 			"index.html".to_owned()
 		} else {
-			path.app_params.into_iter().filter(|x| !x.is_empty()).join("/")
+			path.app_params
+				.into_iter()
+				.filter(|x| !x.is_empty())
+				.join("/")
 		};
 		trace!(target: "dapps", "Builtin file: {:?}", file_path);
 
 		let file = {
-			let file = |path| self.app.file(path).map(|file| {
-				let content_type = match file.content_type.parse() {
-					Ok(mime) => mime,
-					Err(_) => {
-						warn!(target: "dapps", "invalid MIME type: {}", file.content_type);
-						mime::TEXT_HTML
-					},
-				};
-				BuiltinFile {
-					content_type,
-					content: io::Cursor::new(file.content),
-				}
-			});
+			let file = |path| {
+				self.app.file(path).map(|file| {
+					let content_type = match file.content_type.parse() {
+						Ok(mime) => mime,
+						Err(_) => {
+							warn!(target: "dapps", "invalid MIME type: {}", file.content_type);
+							mime::TEXT_HTML
+						}
+					};
+					BuiltinFile {
+						content_type,
+						content: io::Cursor::new(file.content),
+					}
+				})
+			};
 			let res = file(&file_path);
 			if self.fallback_to_index_html {
 				res.or_else(|| file("index.html"))
@@ -104,7 +109,8 @@ impl<T: WebApp> Endpoint for Dapp<T> {
 			file,
 			cache: PageCache::Disabled,
 			allow_js_eval: self.info.allow_js_eval.clone().unwrap_or(false),
-		}.into_response();
+		}
+		.into_response();
 
 		self.pool.spawn(reader).forget();
 

@@ -16,10 +16,10 @@
 
 //! Blockchain DB extras.
 
-use std::ops;
-use std::io::Write;
-use blooms::{GroupPosition, BloomGroup};
+use blooms::{BloomGroup, GroupPosition};
 use db::Key;
+use std::io::Write;
+use std::ops;
 // use engines::epoch::{Transition as EpochTransition};
 use header::BlockNumber;
 use receipt::Receipt;
@@ -142,7 +142,18 @@ pub const EPOCH_KEY_LEN: usize = DB_PREFIX_LEN + 16;
 /// epoch key prefix.
 /// used to iterate over all epoch transitions in order from genesis.
 pub const EPOCH_KEY_PREFIX: &'static [u8; DB_PREFIX_LEN] = &[
-	ExtrasIndex::EpochTransitions as u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	ExtrasIndex::EpochTransitions as u8,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
 ];
 
 pub struct EpochTransitionsKey([u8; EPOCH_KEY_LEN]);
@@ -150,7 +161,9 @@ pub struct EpochTransitionsKey([u8; EPOCH_KEY_LEN]);
 impl ops::Deref for EpochTransitionsKey {
 	type Target = [u8];
 
-	fn deref(&self) -> &[u8] { &self.0[..] }
+	fn deref(&self) -> &[u8] {
+		&self.0[..]
+	}
 }
 
 // impl Key<EpochTransitions> for u64 {
@@ -189,8 +202,12 @@ impl rlp::Encodable for BlockDetails {
 		let use_short_version = self.metadata.is_none() && !self.is_finalized;
 
 		match use_short_version {
-			true => { stream.begin_list(4); },
-			false => { stream.begin_list(6); },
+			true => {
+				stream.begin_list(4);
+			}
+			false => {
+				stream.begin_list(6);
+			}
 		}
 
 		stream.append(&self.number);
@@ -243,7 +260,7 @@ pub struct TransactionAddress {
 	/// Block hash
 	pub block_hash: H256,
 	/// Transaction index within the block
-	pub index: usize
+	pub index: usize,
 }
 
 // impl HeapSizeOf for TransactionAddress {
@@ -258,9 +275,7 @@ pub struct BlockReceipts {
 
 impl BlockReceipts {
 	pub fn new(receipts: Vec<Receipt>) -> Self {
-		BlockReceipts {
-			receipts: receipts
-		}
+		BlockReceipts { receipts: receipts }
 	}
 }
 
@@ -279,8 +294,8 @@ impl BlockReceipts {
 
 #[cfg(test)]
 mod tests {
-	use rlp::*;
 	use super::BlockReceipts;
+	use rlp::*;
 
 	#[test]
 	fn encode_block_receipts() {

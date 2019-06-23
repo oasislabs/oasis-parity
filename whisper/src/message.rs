@@ -17,10 +17,10 @@
 //! Whisper message parsing, handlers, and construction.
 
 use std::fmt;
-use std::time::{self, SystemTime, Duration, Instant};
+use std::time::{self, Duration, Instant, SystemTime};
 
 use ethereum_types::{H256, H512};
-use rlp::{self, DecoderError, RlpStream, Rlp};
+use rlp::{self, DecoderError, Rlp, RlpStream};
 use smallvec::SmallVec;
 use tiny_keccak::{keccak256, Keccak};
 
@@ -33,7 +33,10 @@ pub fn work_factor_proved(size: u64, ttl: u64, hash: H256) -> f64 {
 
 	let leading_zeros = {
 		let leading_zeros = hash.iter().take_while(|&&x| x == 0).count();
-		(leading_zeros * 8) + hash.get(leading_zeros + 1).map_or(0, |b| b.leading_zeros() as usize)
+		(leading_zeros * 8)
+			+ hash
+				.get(leading_zeros + 1)
+				.map_or(0, |b| b.leading_zeros() as usize)
 	};
 	let spacetime = size as f64 * ttl as f64;
 
@@ -56,7 +59,6 @@ impl Topic {
 	/// this takes 3 sets of 9 bits, treating each as an index in the range
 	/// 0..512 into the bloom and setting the corresponding bit in the bloom to 1.
 	pub fn bloom_into(&self, bloom: &mut H512) {
-
 		let data = &self.0;
 		for i in 0..3 {
 			let mut idx = data[i] as usize;
@@ -88,15 +90,16 @@ impl rlp::Decodable for Topic {
 	fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
 		use std::cmp;
 
-		rlp.decoder().decode_value(|bytes| match bytes.len().cmp(&4) {
-			cmp::Ordering::Less => Err(DecoderError::RlpIsTooShort),
-			cmp::Ordering::Greater => Err(DecoderError::RlpIsTooBig),
-			cmp::Ordering::Equal => {
-				let mut t = [0u8; 4];
-				t.copy_from_slice(bytes);
-				Ok(Topic(t))
-			}
-		})
+		rlp.decoder()
+			.decode_value(|bytes| match bytes.len().cmp(&4) {
+				cmp::Ordering::Less => Err(DecoderError::RlpIsTooShort),
+				cmp::Ordering::Greater => Err(DecoderError::RlpIsTooBig),
+				cmp::Ordering::Equal => {
+					let mut t = [0u8; 4];
+					t.copy_from_slice(bytes);
+					Ok(Topic(t))
+				}
+			})
 	}
 }
 
@@ -182,8 +185,7 @@ impl Envelope {
 		let mut stream = RlpStream::new_list(4);
 		stream.append(&self.expiry).append(&self.ttl);
 
-		append_topics(&mut stream, &self.topics)
-			.append(&self.data);
+		append_topics(&mut stream, &self.topics).append(&self.data);
 
 		let mut digest = Keccak::new_keccak256();
 		digest.update(&*stream.drain());
@@ -201,9 +203,7 @@ impl Envelope {
 
 impl rlp::Encodable for Envelope {
 	fn rlp_append(&self, s: &mut RlpStream) {
-		s.begin_list(5)
-			.append(&self.expiry)
-			.append(&self.ttl);
+		s.begin_list(5).append(&self.expiry).append(&self.ttl);
 
 		append_topics(s, &self.topics)
 			.append(&self.data)
@@ -213,7 +213,9 @@ impl rlp::Encodable for Envelope {
 
 impl rlp::Decodable for Envelope {
 	fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-		if rlp.item_count()? != 5 { return Err(DecoderError::RlpIncorrectListLen) }
+		if rlp.item_count()? != 5 {
+			return Err(DecoderError::RlpIncorrectListLen);
+		}
 
 		Ok(Envelope {
 			expiry: rlp.val_at(0)?,
@@ -258,7 +260,9 @@ impl Message {
 		use byteorder::{BigEndian, ByteOrder};
 		use rand::{Rng, SeedableRng, XorShiftRng};
 
-		if params.topics.is_empty() { return Err(EmptyTopics) }
+		if params.topics.is_empty() {
+			return Err(EmptyTopics);
+		}
 
 		let mut rng = {
 			let mut thread_rng = ::rand::thread_rng();
@@ -270,11 +274,17 @@ impl Message {
 
 		let expiry = {
 			let after_mining = SystemTime::now() + Duration::from_millis(params.work);
-			let since_epoch = after_mining.duration_since(time::UNIX_EPOCH)
+			let since_epoch = after_mining
+				.duration_since(time::UNIX_EPOCH)
 				.expect("time after now is after unix epoch; qed");
 
 			// round up the sub-second to next whole second.
-			since_epoch.as_secs() + if since_epoch.subsec_nanos() == 0 { 0 } else { 1 }
+			since_epoch.as_secs()
+				+ if since_epoch.subsec_nanos() == 0 {
+					0
+				} else {
+					1
+				}
 		};
 
 		let start_digest = {
@@ -328,7 +338,8 @@ impl Message {
 			encoded.len(),
 			H256(keccak256(&encoded)),
 			SystemTime::now(),
-		).expect("Message generated here known to be valid; qed"))
+		)
+		.expect("Message generated here known to be valid; qed"))
 	}
 
 	/// Decode message from RLP and check for validity against system time.
@@ -342,19 +353,27 @@ impl Message {
 
 	// create message from envelope, hash, and encoded size.
 	// does checks for validity.
-	fn from_components(envelope: Envelope, size: usize, hash: H256, now: SystemTime)
-		-> Result<Self, Error>
-	{
+	fn from_components(
+		envelope: Envelope,
+		size: usize,
+		hash: H256,
+		now: SystemTime,
+	) -> Result<Self, Error> {
 		const LEEWAY_SECONDS: u64 = 2;
 
-		if envelope.expiry <= envelope.ttl { return Err(Error::LivesTooLong) }
-		if envelope.ttl == 0 { return Err(Error::ZeroTTL) }
+		if envelope.expiry <= envelope.ttl {
+			return Err(Error::LivesTooLong);
+		}
+		if envelope.ttl == 0 {
+			return Err(Error::ZeroTTL);
+		}
 
-		if envelope.topics.is_empty() { return Err(Error::EmptyTopics) }
+		if envelope.topics.is_empty() {
+			return Err(Error::EmptyTopics);
+		}
 
-		let issue_time_adjusted = Duration::from_secs(
-			(envelope.expiry - envelope.ttl).saturating_sub(LEEWAY_SECONDS)
-		);
+		let issue_time_adjusted =
+			Duration::from_secs((envelope.expiry - envelope.ttl).saturating_sub(LEEWAY_SECONDS));
 
 		if time::UNIX_EPOCH + issue_time_adjusted > now {
 			return Err(Error::IssuedInFuture);
@@ -417,9 +436,9 @@ impl Message {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::time::{self, Duration, SystemTime};
 	use rlp::Rlp;
 	use smallvec::SmallVec;
+	use std::time::{self, Duration, SystemTime};
 
 	fn unix_time(x: u64) -> SystemTime {
 		time::UNIX_EPOCH + Duration::from_secs(x)
@@ -432,7 +451,8 @@ mod tests {
 			payload: vec![1, 2, 3, 4],
 			topics: vec![Topic([1, 2, 1, 2])],
 			work: 50,
-		}).is_ok());
+		})
+		.is_ok());
 	}
 
 	#[test]

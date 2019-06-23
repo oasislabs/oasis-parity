@@ -16,11 +16,11 @@
 
 //! VM runner.
 
-use std::time::{Instant, Duration};
-use ethereum_types::{H256, U256};
 use ethcore::client::{self, EvmTestClient, EvmTestError, TransactResult};
-use ethcore::{trace, spec, pod_state};
+use ethcore::{pod_state, spec, trace};
+use ethereum_types::{H256, U256};
 use ethjson;
+use std::time::{Duration, Instant};
 use transaction;
 use vm::ActionParams;
 
@@ -96,11 +96,14 @@ pub fn run_transaction<T: Informant>(
 		Some(spec) => {
 			informant.before_test(&format!("{}:{}:{}", name, spec_name, idx), "starting");
 			spec
-		},
+		}
 		None => {
-			informant.before_test(&format!("{}:{}:{}", name, spec_name, idx), "skipping because of missing spec");
+			informant.before_test(
+				&format!("{}:{}:{}", name, spec_name, idx),
+				"skipping because of missing spec",
+			);
 			return;
-		},
+		}
 	};
 
 	informant.set_gas(env_info.gas_limit);
@@ -108,21 +111,27 @@ pub fn run_transaction<T: Informant>(
 	let result = run(spec, env_info.gas_limit, pre_state, |mut client| {
 		let result = client.transact(env_info, transaction, trace::NoopTracer, informant);
 		match result {
-			TransactResult::Ok { state_root, .. } if state_root != post_root => {
-				(Err(EvmTestError::PostCondition(format!(
+			TransactResult::Ok { state_root, .. } if state_root != post_root => (
+				Err(EvmTestError::PostCondition(format!(
 					"State root mismatch (got: {}, expected: {})",
-					state_root,
-					post_root,
-				))), None)
-			},
-			TransactResult::Ok { state_root, gas_left, output, vm_trace, .. } => {
-				(Ok((state_root, gas_left, output)), vm_trace)
-			},
-			TransactResult::Err { error, .. } => {
-				(Err(EvmTestError::PostCondition(format!(
-					"Unexpected execution error: {:?}", error
-				))), None)
-			},
+					state_root, post_root,
+				))),
+				None,
+			),
+			TransactResult::Ok {
+				state_root,
+				gas_left,
+				output,
+				vm_trace,
+				..
+			} => (Ok((state_root, gas_left, output)), vm_trace),
+			TransactResult::Err { error, .. } => (
+				Err(EvmTestError::PostCondition(format!(
+					"Unexpected execution error: {:?}",
+					error
+				))),
+				None,
+			),
 		}
 	});
 
@@ -135,14 +144,16 @@ pub fn run<'a, F, T, X>(
 	initial_gas: U256,
 	pre_state: T,
 	run: F,
-) -> RunResult<X> where
+) -> RunResult<X>
+where
 	F: FnOnce(EvmTestClient) -> (Result<(H256, U256, Vec<u8>), EvmTestError>, Option<X>),
 	T: Into<Option<&'a pod_state::PodState>>,
 {
 	let test_client = match pre_state.into() {
 		Some(pre_state) => EvmTestClient::from_pod_state(spec, pre_state.clone()),
 		None => EvmTestClient::new(spec),
-	}.map_err(|error| Failure {
+	}
+	.map_err(|error| Failure {
 		gas_used: 0.into(),
 		error,
 		time: Duration::from_secs(0),
@@ -172,18 +183,13 @@ pub fn run<'a, F, T, X>(
 
 #[cfg(test)]
 pub mod tests {
-	use std::sync::Arc;
-	use rustc_hex::FromHex;
 	use super::*;
+	use rustc_hex::FromHex;
+	use std::sync::Arc;
 	use tempdir::TempDir;
 
-	pub fn run_test<T, I, F>(
-		informant: I,
-		compare: F,
-		code: &str,
-		gas: T,
-		expected: &str,
-	) where
+	pub fn run_test<T, I, F>(informant: I, compare: F, code: &str, gas: T, expected: &str)
+	where
 		T: Into<U256>,
 		I: Informant,
 		F: FnOnce(Option<I::Output>, &str),
@@ -196,12 +202,8 @@ pub mod tests {
 		let spec = ::ethcore::ethereum::new_foundation(&tempdir.path());
 		let result = run_action(&spec, params, informant);
 		match result {
-			Ok(Success { traces, .. }) => {
-				compare(traces, expected)
-			},
-			Err(Failure { traces, .. }) => {
-				compare(traces, expected)
-			},
+			Ok(Success { traces, .. }) => compare(traces, expected),
+			Err(Failure { traces, .. }) => compare(traces, expected),
 		}
 	}
 }

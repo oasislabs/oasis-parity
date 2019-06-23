@@ -24,9 +24,9 @@ use std::collections::HashMap;
 use ethereum_types::H256;
 use ethkey::{KeyPair, Public, Secret};
 use mem::Memzero;
-use rand::{Rng, OsRng};
+use rand::{OsRng, Rng};
 
-use rpc::crypto::{AES_KEY_LEN, EncryptionInstance, DecryptionInstance};
+use rpc::crypto::{DecryptionInstance, EncryptionInstance, AES_KEY_LEN};
 
 /// A symmetric or asymmetric key used for encryption, decryption, and signing
 /// of payloads.
@@ -79,7 +79,7 @@ impl Key {
 	}
 
 	/// Get a handle to the symmetric key.
-	pub fn symmetric(&self) -> Option<&[u8; AES_KEY_LEN]>  {
+	pub fn symmetric(&self) -> Option<&[u8; AES_KEY_LEN]> {
 		match *self {
 			Key::Asymmetric(_) => None,
 			Key::Symmetric(ref key) => Some(key),
@@ -133,14 +133,15 @@ impl KeyStore {
 
 	/// Get encryption instance for identity.
 	pub fn encryption_instance(&self, id: &H256) -> Result<EncryptionInstance, &'static str> {
-		self.get(id).ok_or("no such identity").and_then(|key| match *key {
-			Key::Asymmetric(ref pair) => EncryptionInstance::ecies(pair.public().clone())
-				.map_err(|_| "could not create encryption instance for id"),
-			Key::Symmetric(ref key) =>
-				 OsRng::new()
+		self.get(id)
+			.ok_or("no such identity")
+			.and_then(|key| match *key {
+				Key::Asymmetric(ref pair) => EncryptionInstance::ecies(pair.public().clone())
+					.map_err(|_| "could not create encryption instance for id"),
+				Key::Symmetric(ref key) => OsRng::new()
 					.map(|mut rng| EncryptionInstance::aes(key.clone(), rng.gen()))
-				 	.map_err(|_| "unable to get secure randomness")
-		})
+					.map_err(|_| "unable to get secure randomness"),
+			})
 	}
 
 	/// Get decryption instance for identity.

@@ -16,7 +16,7 @@
 
 //! EVM call types.
 
-use rlp::{Encodable, Decodable, DecoderError, RlpStream, Rlp};
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 
 /// The type of the call-like instruction.
 #[derive(Debug, PartialEq, Clone)]
@@ -48,21 +48,23 @@ impl Encodable for CallType {
 
 impl Decodable for CallType {
 	fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-		rlp.as_val().and_then(|v| Ok(match v {
-			0u32 => CallType::None,
-			1 => CallType::Call,
-			2 => CallType::CallCode,
-			3 => CallType::DelegateCall,
-			4 => CallType::StaticCall,
-			_ => return Err(DecoderError::Custom("Invalid value of CallType item")),
-		}))
+		rlp.as_val().and_then(|v| {
+			Ok(match v {
+				0u32 => CallType::None,
+				1 => CallType::Call,
+				2 => CallType::CallCode,
+				3 => CallType::DelegateCall,
+				4 => CallType::StaticCall,
+				_ => return Err(DecoderError::Custom("Invalid value of CallType item")),
+			})
+		})
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use rlp::*;
 	use super::CallType;
+	use rlp::*;
 
 	#[test]
 	fn encode_call_type() {

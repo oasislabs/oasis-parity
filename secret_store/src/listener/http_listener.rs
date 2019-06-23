@@ -14,23 +14,30 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::BTreeSet;
-use std::sync::{Arc, Weak};
-use hyper::{self, header, Chunk, Uri, Request as HttpRequest, Response as HttpResponse, Method as HttpMethod, StatusCode as HttpStatusCode};
+use futures::{future, Future, Stream};
 use hyper::server::Http;
+use hyper::{
+	self, header, Chunk, Method as HttpMethod, Request as HttpRequest, Response as HttpResponse,
+	StatusCode as HttpStatusCode, Uri,
+};
 use serde::Serialize;
 use serde_json;
+use std::collections::BTreeSet;
+use std::sync::{Arc, Weak};
 use tokio;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tokio_service::Service;
-use futures::{future, Future, Stream};
 use url::percent_encoding::percent_decode;
 
+use serialization::{
+	SerializableBytes, SerializableEncryptedDocumentKeyShadow, SerializablePublic,
+};
 use traits::KeyServer;
-use serialization::{SerializableEncryptedDocumentKeyShadow, SerializableBytes, SerializablePublic};
-use types::{Error, Public, MessageHash, NodeAddress, RequestSignature, ServerKeyId,
-	EncryptedDocumentKey, EncryptedDocumentKeyShadow, NodeId};
+use types::{
+	EncryptedDocumentKey, EncryptedDocumentKeyShadow, Error, MessageHash, NodeAddress, NodeId,
+	Public, RequestSignature, ServerKeyId,
+};
 
 /// Key server http-requests listener. Available requests:
 /// To generate server key:							POST		/shadow/{server_key_id}/{signature}/{threshold}
@@ -83,26 +90,37 @@ struct KeyServerSharedHttpHandler {
 
 impl KeyServerHttpListener {
 	/// Start KeyServer http listener
-	pub fn start(listener_address: NodeAddress, key_server: Weak<KeyServer>) -> Result<Self, Error> {
+	pub fn start(
+		listener_address: NodeAddress,
+		key_server: Weak<KeyServer>,
+	) -> Result<Self, Error> {
 		let shared_handler = Arc::new(KeyServerSharedHttpHandler {
 			key_server: key_server,
 		});
 
 		let mut runtime = Runtime::new()?;
-		let listener_address = format!("{}:{}", listener_address.address, listener_address.port).parse()?;
+		let listener_address =
+			format!("{}:{}", listener_address.address, listener_address.port).parse()?;
 		let listener = TcpListener::bind(&listener_address)?;
 
 		let shared_handler2 = shared_handler.clone();
 
-		let server = listener.incoming()
+		let server = listener
+			.incoming()
 			.map_err(|e| warn!("Key server listener error: {:?}", e))
 			.for_each(move |socket| {
 				let http: Http<Chunk> = Http::new();
-				let serve = http.serve_connection(socket, KeyServerHttpHandler {
-					handler: shared_handler2.clone(),
-				}).map(|_| ()).map_err(|e| {
-					warn!("Key server handler error: {:?}", e);
-				});
+				let serve = http
+					.serve_connection(
+						socket,
+						KeyServerHttpHandler {
+							handler: shared_handler2.clone(),
+						},
+					)
+					.map(|_| ())
+					.map_err(|e| {
+						warn!("Key server handler error: {:?}", e);
+					});
 
 				tokio::spawn(serve)
 			});
@@ -119,84 +137,172 @@ impl KeyServerHttpListener {
 }
 
 impl KeyServerHttpHandler {
-	fn process(self, req_method: HttpMethod, req_uri: Uri, path: &str, req_body: &[u8]) -> HttpResponse {
+	fn process(
+		self,
+		req_method: HttpMethod,
+		req_uri: Uri,
+		path: &str,
+		req_body: &[u8],
+	) -> HttpResponse {
 		match parse_request(&req_method, &path, &req_body) {
-			Request::GenerateServerKey(document, signature, threshold) => {
-				return_server_public_key(&req_uri, self.handler.key_server.upgrade()
-					.map(|key_server| key_server.generate_key(&document, &signature.into(), threshold))
-					.unwrap_or(Err(Error::Internal("KeyServer is already destroyed".into())))
+			Request::GenerateServerKey(document, signature, threshold) => return_server_public_key(
+				&req_uri,
+				self.handler
+					.key_server
+					.upgrade()
+					.map(|key_server| {
+						key_server.generate_key(&document, &signature.into(), threshold)
+					})
+					.unwrap_or(Err(Error::Internal(
+						"KeyServer is already destroyed".into(),
+					)))
 					.map_err(|err| {
 						warn!(target: "secretstore", "GenerateServerKey request {} has failed with: {}", req_uri, err);
 						err
-					}))
-			},
-			Request::StoreDocumentKey(document, signature, common_point, encrypted_document_key) => {
-				return_empty(&req_uri, self.handler.key_server.upgrade()
-					.map(|key_server| key_server.store_document_key(&document, &signature.into(), common_point, encrypted_document_key))
-					.unwrap_or(Err(Error::Internal("KeyServer is already destroyed".into())))
+					}),
+			),
+			Request::StoreDocumentKey(
+				document,
+				signature,
+				common_point,
+				encrypted_document_key,
+			) => return_empty(
+				&req_uri,
+				self.handler
+					.key_server
+					.upgrade()
+					.map(|key_server| {
+						key_server.store_document_key(
+							&document,
+							&signature.into(),
+							common_point,
+							encrypted_document_key,
+						)
+					})
+					.unwrap_or(Err(Error::Internal(
+						"KeyServer is already destroyed".into(),
+					)))
 					.map_err(|err| {
 						warn!(target: "secretstore", "StoreDocumentKey request {} has failed with: {}", req_uri, err);
 						err
-					}))
-			},
-			Request::GenerateDocumentKey(document, signature, threshold) => {
-				return_document_key(&req_uri, self.handler.key_server.upgrade()
-					.map(|key_server| key_server.generate_document_key(&document, &signature.into(), threshold))
-					.unwrap_or(Err(Error::Internal("KeyServer is already destroyed".into())))
+					}),
+			),
+			Request::GenerateDocumentKey(document, signature, threshold) => return_document_key(
+				&req_uri,
+				self.handler
+					.key_server
+					.upgrade()
+					.map(|key_server| {
+						key_server.generate_document_key(&document, &signature.into(), threshold)
+					})
+					.unwrap_or(Err(Error::Internal(
+						"KeyServer is already destroyed".into(),
+					)))
 					.map_err(|err| {
 						warn!(target: "secretstore", "GenerateDocumentKey request {} has failed with: {}", req_uri, err);
 						err
-					}))
-			},
-			Request::GetDocumentKey(document, signature) => {
-				return_document_key(&req_uri, self.handler.key_server.upgrade()
+					}),
+			),
+			Request::GetDocumentKey(document, signature) => return_document_key(
+				&req_uri,
+				self.handler
+					.key_server
+					.upgrade()
 					.map(|key_server| key_server.restore_document_key(&document, &signature.into()))
-					.unwrap_or(Err(Error::Internal("KeyServer is already destroyed".into())))
+					.unwrap_or(Err(Error::Internal(
+						"KeyServer is already destroyed".into(),
+					)))
 					.map_err(|err| {
 						warn!(target: "secretstore", "GetDocumentKey request {} has failed with: {}", req_uri, err);
 						err
-					}))
-			},
-			Request::GetDocumentKeyShadow(document, signature) => {
-				return_document_key_shadow(&req_uri, self.handler.key_server.upgrade()
-					.map(|key_server| key_server.restore_document_key_shadow(&document, &signature.into()))
-					.unwrap_or(Err(Error::Internal("KeyServer is already destroyed".into())))
+					}),
+			),
+			Request::GetDocumentKeyShadow(document, signature) => return_document_key_shadow(
+				&req_uri,
+				self.handler
+					.key_server
+					.upgrade()
+					.map(|key_server| {
+						key_server.restore_document_key_shadow(&document, &signature.into())
+					})
+					.unwrap_or(Err(Error::Internal(
+						"KeyServer is already destroyed".into(),
+					)))
 					.map_err(|err| {
 						warn!(target: "secretstore", "GetDocumentKeyShadow request {} has failed with: {}", req_uri, err);
 						err
-					}))
-			},
+					}),
+			),
 			Request::SchnorrSignMessage(document, signature, message_hash) => {
-				return_message_signature(&req_uri, self.handler.key_server.upgrade()
-					.map(|key_server| key_server.sign_message_schnorr(&document, &signature.into(), message_hash))
-					.unwrap_or(Err(Error::Internal("KeyServer is already destroyed".into())))
-					.map_err(|err| {
-						warn!(target: "secretstore", "SchnorrSignMessage request {} has failed with: {}", req_uri, err);
-						err
-					}))
-				},
+				return_message_signature(
+					&req_uri,
+					self.handler
+						.key_server
+						.upgrade()
+						.map(|key_server| {
+							key_server.sign_message_schnorr(
+								&document,
+								&signature.into(),
+								message_hash,
+							)
+						})
+						.unwrap_or(Err(Error::Internal(
+							"KeyServer is already destroyed".into(),
+						)))
+						.map_err(|err| {
+							warn!(target: "secretstore", "SchnorrSignMessage request {} has failed with: {}", req_uri, err);
+							err
+						}),
+				)
+			}
 			Request::EcdsaSignMessage(document, signature, message_hash) => {
-				return_message_signature(&req_uri, self.handler.key_server.upgrade()
-					.map(|key_server| key_server.sign_message_ecdsa(&document, &signature.into(), message_hash))
-					.unwrap_or(Err(Error::Internal("KeyServer is already destroyed".into())))
-					.map_err(|err| {
-						warn!(target: "secretstore", "EcdsaSignMessage request {} has failed with: {}", req_uri, err);
-						err
-					}))
-			},
+				return_message_signature(
+					&req_uri,
+					self.handler
+						.key_server
+						.upgrade()
+						.map(|key_server| {
+							key_server.sign_message_ecdsa(
+								&document,
+								&signature.into(),
+								message_hash,
+							)
+						})
+						.unwrap_or(Err(Error::Internal(
+							"KeyServer is already destroyed".into(),
+						)))
+						.map_err(|err| {
+							warn!(target: "secretstore", "EcdsaSignMessage request {} has failed with: {}", req_uri, err);
+							err
+						}),
+				)
+			}
 			Request::ChangeServersSet(old_set_signature, new_set_signature, new_servers_set) => {
-				return_empty(&req_uri, self.handler.key_server.upgrade()
-					.map(|key_server| key_server.change_servers_set(old_set_signature, new_set_signature, new_servers_set))
-					.unwrap_or(Err(Error::Internal("KeyServer is already destroyed".into())))
-					.map_err(|err| {
-						warn!(target: "secretstore", "ChangeServersSet request {} has failed with: {}", req_uri, err);
-						err
-					}))
-				},
+				return_empty(
+					&req_uri,
+					self.handler
+						.key_server
+						.upgrade()
+						.map(|key_server| {
+							key_server.change_servers_set(
+								old_set_signature,
+								new_set_signature,
+								new_servers_set,
+							)
+						})
+						.unwrap_or(Err(Error::Internal(
+							"KeyServer is already destroyed".into(),
+						)))
+						.map_err(|err| {
+							warn!(target: "secretstore", "ChangeServersSet request {} has failed with: {}", req_uri, err);
+							err
+						}),
+				)
+			}
 			Request::Invalid => {
 				warn!(target: "secretstore", "Ignoring invalid {}-request {}", req_method, req_uri);
 				HttpResponse::new().with_status(HttpStatusCode::BadRequest)
-			},
+			}
 		}
 	}
 }
@@ -205,12 +311,14 @@ impl Service for KeyServerHttpHandler {
 	type Request = HttpRequest;
 	type Response = HttpResponse;
 	type Error = hyper::Error;
-	type Future = Box<Future<Item=Self::Response, Error=Self::Error> + Send>;
+	type Future = Box<Future<Item = Self::Response, Error = Self::Error> + Send>;
 
 	fn call(&self, req: HttpRequest) -> Self::Future {
 		if req.headers().has::<header::Origin>() {
 			warn!(target: "secretstore", "Ignoring {}-request {} with Origin header", req.method(), req.uri());
-			return Box::new(future::ok(HttpResponse::new().with_status(HttpStatusCode::NotFound)));
+			return Box::new(future::ok(
+				HttpResponse::new().with_status(HttpStatusCode::NotFound),
+			));
 		}
 
 		let req_method = req.method().clone();
@@ -238,20 +346,42 @@ fn return_server_public_key(req_uri: &Uri, server_public: Result<Public, Error>)
 	return_bytes(req_uri, server_public.map(|k| Some(SerializablePublic(k))))
 }
 
-fn return_message_signature(req_uri: &Uri, signature: Result<EncryptedDocumentKey, Error>) -> HttpResponse {
+fn return_message_signature(
+	req_uri: &Uri,
+	signature: Result<EncryptedDocumentKey, Error>,
+) -> HttpResponse {
 	return_bytes(req_uri, signature.map(|s| Some(SerializableBytes(s))))
 }
 
-fn return_document_key(req_uri: &Uri, document_key: Result<EncryptedDocumentKey, Error>) -> HttpResponse {
+fn return_document_key(
+	req_uri: &Uri,
+	document_key: Result<EncryptedDocumentKey, Error>,
+) -> HttpResponse {
 	return_bytes(req_uri, document_key.map(|k| Some(SerializableBytes(k))))
 }
 
-fn return_document_key_shadow(req_uri: &Uri, document_key_shadow: Result<EncryptedDocumentKeyShadow, Error>) -> HttpResponse {
-	return_bytes(req_uri, document_key_shadow.map(|k| Some(SerializableEncryptedDocumentKeyShadow {
-		decrypted_secret: k.decrypted_secret.into(),
-		common_point: k.common_point.expect("always filled when requesting document_key_shadow; qed").into(),
-		decrypt_shadows: k.decrypt_shadows.expect("always filled when requesting document_key_shadow; qed").into_iter().map(Into::into).collect(),
-	})))
+fn return_document_key_shadow(
+	req_uri: &Uri,
+	document_key_shadow: Result<EncryptedDocumentKeyShadow, Error>,
+) -> HttpResponse {
+	return_bytes(
+		req_uri,
+		document_key_shadow.map(|k| {
+			Some(SerializableEncryptedDocumentKeyShadow {
+				decrypted_secret: k.decrypted_secret.into(),
+				common_point: k
+					.common_point
+					.expect("always filled when requesting document_key_shadow; qed")
+					.into(),
+				decrypt_shadows: k
+					.decrypt_shadows
+					.expect("always filled when requesting document_key_shadow; qed")
+					.into_iter()
+					.map(Into::into)
+					.collect(),
+			})
+		}),
+	)
 }
 
 fn return_bytes<T: Serialize>(req_uri: &Uri, result: Result<Option<T>, Error>) -> HttpResponse {
@@ -272,13 +402,15 @@ fn return_bytes<T: Serialize>(req_uri: &Uri, result: Result<Option<T>, Error>) -
 
 fn return_error(err: Error) -> HttpResponse {
 	let mut res = HttpResponse::new().with_status(match err {
-		Error::AccessDenied | Error::ConsensusUnreachable | Error::ConsensusTemporaryUnreachable =>
-			HttpStatusCode::Forbidden,
-		Error::ServerKeyIsNotFound | Error::DocumentKeyIsNotFound =>
-			HttpStatusCode::NotFound,
-		Error::InsufficientRequesterData(_) | Error::Hyper(_) | Error::Serde(_)
-			| Error::DocumentKeyAlreadyStored | Error::ServerKeyAlreadyGenerated =>
-			HttpStatusCode::BadRequest,
+		Error::AccessDenied
+		| Error::ConsensusUnreachable
+		| Error::ConsensusTemporaryUnreachable => HttpStatusCode::Forbidden,
+		Error::ServerKeyIsNotFound | Error::DocumentKeyIsNotFound => HttpStatusCode::NotFound,
+		Error::InsufficientRequesterData(_)
+		| Error::Hyper(_)
+		| Error::Serde(_)
+		| Error::DocumentKeyAlreadyStored
+		| Error::ServerKeyAlreadyGenerated => HttpStatusCode::BadRequest,
 		_ => HttpStatusCode::InternalServerError,
 	});
 
@@ -298,7 +430,11 @@ fn parse_request(method: &HttpMethod, uri_path: &str, body: &[u8]) -> Request {
 		Err(_) => return Request::Invalid,
 	};
 
-	let path: Vec<String> = uri_path.trim_left_matches('/').split('/').map(Into::into).collect();
+	let path: Vec<String> = uri_path
+		.trim_left_matches('/')
+		.split('/')
+		.map(Into::into)
+		.collect();
 	if path.len() == 0 {
 		return Request::Invalid;
 	}
@@ -307,8 +443,12 @@ fn parse_request(method: &HttpMethod, uri_path: &str, body: &[u8]) -> Request {
 		return parse_admin_request(method, path, body);
 	}
 
-	let (prefix, args_offset) = if &path[0] == "shadow" || &path[0] == "schnorr" || &path[0] == "ecdsa"
-		{ (&*path[0], 1) } else { ("", 0) };
+	let (prefix, args_offset) =
+		if &path[0] == "shadow" || &path[0] == "schnorr" || &path[0] == "ecdsa" {
+			(&*path[0], 1)
+		} else {
+			("", 0)
+		};
 	let args_count = path.len() - args_offset;
 	if args_count < 2 || path[args_offset].is_empty() || path[args_offset + 1].is_empty() {
 		return Request::Invalid;
@@ -327,21 +467,34 @@ fn parse_request(method: &HttpMethod, uri_path: &str, body: &[u8]) -> Request {
 	let message_hash = path.get(args_offset + 2).map(|v| v.parse());
 	let common_point = path.get(args_offset + 2).map(|v| v.parse());
 	let encrypted_key = path.get(args_offset + 3).map(|v| v.parse());
-	match (prefix, args_count, method, threshold, message_hash, common_point, encrypted_key) {
-		("shadow", 3, &HttpMethod::Post, Some(Ok(threshold)), _, _, _) =>
-			Request::GenerateServerKey(document, signature, threshold),
-		("shadow", 4, &HttpMethod::Post, _, _, Some(Ok(common_point)), Some(Ok(encrypted_key))) =>
-			Request::StoreDocumentKey(document, signature, common_point, encrypted_key),
-		("", 3, &HttpMethod::Post, Some(Ok(threshold)), _, _, _) =>
-			Request::GenerateDocumentKey(document, signature, threshold),
-		("", 2, &HttpMethod::Get, _, _, _, _) =>
-			Request::GetDocumentKey(document, signature),
-		("shadow", 2, &HttpMethod::Get, _, _, _, _) =>
-			Request::GetDocumentKeyShadow(document, signature),
-		("schnorr", 3, &HttpMethod::Get, _, Some(Ok(message_hash)), _, _) =>
-			Request::SchnorrSignMessage(document, signature, message_hash),
-		("ecdsa", 3, &HttpMethod::Get, _, Some(Ok(message_hash)), _, _) =>
-			Request::EcdsaSignMessage(document, signature, message_hash),
+	match (
+		prefix,
+		args_count,
+		method,
+		threshold,
+		message_hash,
+		common_point,
+		encrypted_key,
+	) {
+		("shadow", 3, &HttpMethod::Post, Some(Ok(threshold)), _, _, _) => {
+			Request::GenerateServerKey(document, signature, threshold)
+		}
+		("shadow", 4, &HttpMethod::Post, _, _, Some(Ok(common_point)), Some(Ok(encrypted_key))) => {
+			Request::StoreDocumentKey(document, signature, common_point, encrypted_key)
+		}
+		("", 3, &HttpMethod::Post, Some(Ok(threshold)), _, _, _) => {
+			Request::GenerateDocumentKey(document, signature, threshold)
+		}
+		("", 2, &HttpMethod::Get, _, _, _, _) => Request::GetDocumentKey(document, signature),
+		("shadow", 2, &HttpMethod::Get, _, _, _, _) => {
+			Request::GetDocumentKeyShadow(document, signature)
+		}
+		("schnorr", 3, &HttpMethod::Get, _, Some(Ok(message_hash)), _, _) => {
+			Request::SchnorrSignMessage(document, signature, message_hash)
+		}
+		("ecdsa", 3, &HttpMethod::Get, _, Some(Ok(message_hash)), _, _) => {
+			Request::EcdsaSignMessage(document, signature, message_hash)
+		}
 		_ => Request::Invalid,
 	}
 }
@@ -367,24 +520,30 @@ fn parse_admin_request(method: &HttpMethod, path: Vec<String>, body: &[u8]) -> R
 		_ => return Request::Invalid,
 	};
 
-	Request::ChangeServersSet(old_set_signature, new_set_signature,
-		new_servers_set.into_iter().map(Into::into).collect())
+	Request::ChangeServersSet(
+		old_set_signature,
+		new_set_signature,
+		new_servers_set.into_iter().map(Into::into).collect(),
+	)
 }
 
 #[cfg(test)]
 mod tests {
-	use std::sync::Arc;
-	use hyper::Method as HttpMethod;
+	use super::{parse_request, KeyServerHttpListener, Request};
 	use ethkey::Public;
-	use traits::KeyServer;
+	use hyper::Method as HttpMethod;
 	use key_server::tests::DummyKeyServer;
+	use std::sync::Arc;
+	use traits::KeyServer;
 	use types::NodeAddress;
-	use super::{parse_request, Request, KeyServerHttpListener};
 
 	#[test]
 	fn http_listener_successfully_drops() {
 		let key_server: Arc<KeyServer> = Arc::new(DummyKeyServer::default());
-		let address = NodeAddress { address: "127.0.0.1".into(), port: 9000 };
+		let address = NodeAddress {
+			address: "127.0.0.1".into(),
+			port: 9000,
+		};
 		let listener = KeyServerHttpListener::start(address, Arc::downgrade(&key_server)).unwrap();
 		drop(listener);
 	}
@@ -444,13 +603,42 @@ mod tests {
 
 	#[test]
 	fn parse_request_failed() {
-		assert_eq!(parse_request(&HttpMethod::Get, "", Default::default()), Request::Invalid);
-		assert_eq!(parse_request(&HttpMethod::Get, "/shadow", Default::default()), Request::Invalid);
-		assert_eq!(parse_request(&HttpMethod::Get, "///2", Default::default()), Request::Invalid);
-		assert_eq!(parse_request(&HttpMethod::Get, "/shadow///2", Default::default()), Request::Invalid);
-		assert_eq!(parse_request(&HttpMethod::Get, "/0000000000000000000000000000000000000000000000000000000000000001", Default::default()), Request::Invalid);
-		assert_eq!(parse_request(&HttpMethod::Get, "/0000000000000000000000000000000000000000000000000000000000000001/", Default::default()), Request::Invalid);
-		assert_eq!(parse_request(&HttpMethod::Get, "/a/b", Default::default()), Request::Invalid);
+		assert_eq!(
+			parse_request(&HttpMethod::Get, "", Default::default()),
+			Request::Invalid
+		);
+		assert_eq!(
+			parse_request(&HttpMethod::Get, "/shadow", Default::default()),
+			Request::Invalid
+		);
+		assert_eq!(
+			parse_request(&HttpMethod::Get, "///2", Default::default()),
+			Request::Invalid
+		);
+		assert_eq!(
+			parse_request(&HttpMethod::Get, "/shadow///2", Default::default()),
+			Request::Invalid
+		);
+		assert_eq!(
+			parse_request(
+				&HttpMethod::Get,
+				"/0000000000000000000000000000000000000000000000000000000000000001",
+				Default::default()
+			),
+			Request::Invalid
+		);
+		assert_eq!(
+			parse_request(
+				&HttpMethod::Get,
+				"/0000000000000000000000000000000000000000000000000000000000000001/",
+				Default::default()
+			),
+			Request::Invalid
+		);
+		assert_eq!(
+			parse_request(&HttpMethod::Get, "/a/b", Default::default()),
+			Request::Invalid
+		);
 		assert_eq!(parse_request(&HttpMethod::Get, "/schnorr/0000000000000000000000000000000000000000000000000000000000000001/a199fb39e11eefb61c78a4074a53c0d4424600a3e74aad4fb9d93a26c30d067e1d4d29936de0c73f19827394a1dd049480a0d581aee7ae7546968da7d3d1c2fd01/0000000000000000000000000000000000000000000000000000000000000002/0000000000000000000000000000000000000000000000000000000000000002", Default::default()), Request::Invalid);
 		assert_eq!(parse_request(&HttpMethod::Get, "/ecdsa/0000000000000000000000000000000000000000000000000000000000000001/a199fb39e11eefb61c78a4074a53c0d4424600a3e74aad4fb9d93a26c30d067e1d4d29936de0c73f19827394a1dd049480a0d581aee7ae7546968da7d3d1c2fd01/0000000000000000000000000000000000000000000000000000000000000002/0000000000000000000000000000000000000000000000000000000000000002", Default::default()), Request::Invalid);
 		assert_eq!(parse_request(&HttpMethod::Post, "/admin/servers_set_change/xxx/yyy",

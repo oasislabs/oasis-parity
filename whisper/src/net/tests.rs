@@ -19,11 +19,11 @@
 use std::collections::HashSet;
 use std::sync::mpsc;
 
-use parking_lot::Mutex;
 use network::{NodeId, PeerId};
+use parking_lot::Mutex;
 
-use message::{CreateParams, Message};
 use super::*;
+use message::{CreateParams, Message};
 
 struct TestHandler(Mutex<mpsc::Sender<Message>>);
 
@@ -78,7 +78,9 @@ impl TestNetwork {
 	}
 
 	fn post_message_from(&self, id: PeerId, msg: Message) {
-		self.peers[id].network.post_message(msg, &TestContext::new(&self.peers, id));
+		self.peers[id]
+			.network
+			.post_message(msg, &TestContext::new(&self.peers, id));
 	}
 }
 
@@ -105,11 +107,15 @@ impl<'a> TestContext<'a> {
 
 impl<'a> Context for TestContext<'a> {
 	fn disconnect_peer(&self, id: PeerId) {
-		self.events.lock().push(Event::Disconnect(self.local_id, id));
+		self.events
+			.lock()
+			.push(Event::Disconnect(self.local_id, id));
 	}
 
 	fn disable_peer(&self, id: PeerId) {
-		self.events.lock().push(Event::Disconnect(self.local_id, id));
+		self.events
+			.lock()
+			.push(Event::Disconnect(self.local_id, id));
 	}
 
 	fn node_key(&self, peer: PeerId) -> Option<NodeId> {
@@ -127,7 +133,9 @@ impl<'a> Context for TestContext<'a> {
 	}
 
 	fn send(&self, peer: PeerId, packet: u8, data: Vec<u8>) {
-		self.events.lock().push(Event::Send(self.local_id, peer, packet, data));
+		self.events
+			.lock()
+			.push(Event::Send(self.local_id, peer, packet, data));
 	}
 }
 
@@ -152,16 +160,14 @@ impl<'a> Drop for TestContext<'a> {
 
 						let mut inner_ctx = TestContext::new(self.peers, target);
 
-						self.peers[target].network.on_packet(
-							&inner_ctx,
-							&from,
-							packet,
-							&data[..]
-						);
+						self.peers[target]
+							.network
+							.on_packet(&inner_ctx, &from, packet, &data[..]);
 
 						// don't recursively apply disconnects or new messages
 						// from the receiver's actions yet.
-						let inner_events = ::std::mem::replace(inner_ctx.events.get_mut(), Vec::new());
+						let inner_events =
+							::std::mem::replace(inner_ctx.events.get_mut(), Vec::new());
 						deferred.extend(inner_events);
 					}
 				}
@@ -180,7 +186,8 @@ fn message_gets_relayed() {
 		payload: b"this is my payload, pal".to_vec(),
 		topics: vec![[0, 1, 2, 3].into()],
 		work: 25,
-	}).unwrap();
+	})
+	.unwrap();
 
 	network.post_message_from(0, message.clone());
 

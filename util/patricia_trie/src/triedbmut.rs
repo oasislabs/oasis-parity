@@ -16,23 +16,23 @@
 
 //! In-memory trie representation.
 
-use super::{TrieError, TrieMut};
 use super::lookup::Lookup;
 use super::node::Node as RlpNode;
 use super::node::NodeKey;
+use super::{TrieError, TrieMut};
 
-use hashdb::HashDB;
 use bytes::ToPretty;
+use hashdb::DBValue;
+use hashdb::HashDB;
 use nibbleslice::NibbleSlice;
 use rlp::{Rlp, RlpStream};
-use hashdb::DBValue;
 
+use elastic_array::ElasticArray1024;
+use ethereum_types::H256;
+use keccak::KECCAK_NULL_RLP;
 use std::collections::{HashSet, VecDeque};
 use std::mem;
 use std::ops::Index;
-use ethereum_types::H256;
-use elastic_array::ElasticArray1024;
-use keccak::{KECCAK_NULL_RLP};
 
 // For lookups into the Node storage buffer.
 // This is deliberately non-copyable.
@@ -62,8 +62,8 @@ impl From<H256> for NodeHandle {
 
 fn empty_children() -> Box<[Option<NodeHandle>; 16]> {
 	Box::new([
-		None, None, None, None, None, None, None, None,
-		None, None, None, None, None, None, None, None,
+		None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+		None,
 	])
 }
 
@@ -82,7 +82,7 @@ enum Node {
 	/// The child node is always a branch.
 	Extension(NodeKey, NodeHandle),
 	/// A branch has up to 16 children and an optional value.
-	Branch(Box<[Option<NodeHandle>; 16]>, Option<DBValue>)
+	Branch(Box<[Option<NodeHandle>; 16]>, Option<DBValue>),
 }
 
 impl Node {
@@ -129,10 +129,22 @@ impl Node {
 				};
 
 				let children = Box::new([
-					child(0), child(1), child(2), child(3),
-					child(4), child(5), child(6), child(7),
-					child(8), child(9), child(10), child(11),
-					child(12), child(13), child(14), child(15),
+					child(0),
+					child(1),
+					child(2),
+					child(3),
+					child(4),
+					child(5),
+					child(6),
+					child(7),
+					child(8),
+					child(9),
+					child(10),
+					child(11),
+					child(12),
+					child(13),
+					child(14),
+					child(15),
 				]);
 
 				Node::Branch(children, val.map(DBValue::from_slice))
@@ -143,7 +155,8 @@ impl Node {
 	// encode a node to RLP
 	// TODO: parallelize
 	fn into_rlp<F>(self, mut child_cb: F) -> ElasticArray1024<u8>
-		where F: FnMut(NodeHandle, &mut RlpStream)
+	where
+		F: FnMut(NodeHandle, &mut RlpStream),
 	{
 		match self {
 			Node::Empty => {
@@ -361,7 +374,10 @@ impl<'a> TrieDBMut<'a> {
 
 	// cache a node by hash
 	fn cache(&mut self, hash: H256) -> super::Result<StorageHandle> {
-		let node_rlp = self.db.get(&hash).ok_or_else(|| Box::new(TrieError::IncompleteDatabase(hash)))?;
+		let node_rlp = self
+			.db
+			.get(&hash)
+			.ok_or_else(|| Box::new(TrieError::IncompleteDatabase(hash)))?;
 		// temporary: for logging hash+value on decoding error (oasislabs/runtime-ethereum#393)
 		// let node = Node::from_rlp(&node_rlp, &*self.db, &mut self.storage);
 		let node = Node::from_rlp_with_hash(&node_rlp, &hash, &*self.db, &mut self.storage);
@@ -371,7 +387,9 @@ impl<'a> TrieDBMut<'a> {
 	// inspect a node, choosing either to replace, restore, or delete it.
 	// if restored or replaced, returns the new node along with a flag of whether it was changed.
 	fn inspect<F>(&mut self, stored: Stored, inspector: F) -> super::Result<Option<(Stored, bool)>>
-	where F: FnOnce(&mut Self, Node) -> super::Result<Action> {
+	where
+		F: FnOnce(&mut Self, Node) -> super::Result<Action>,
+	{
 		Ok(match stored {
 			Stored::New(node) => match inspector(self, node)? {
 				Action::Restore(node) => Some((Stored::New(node), false)),
@@ -393,17 +411,25 @@ impl<'a> TrieDBMut<'a> {
 	}
 
 	// walk the trie, attempting to find the key's node.
-	fn lookup<'x, 'key>(&'x self, mut partial: NibbleSlice<'key>, handle: &NodeHandle) -> super::Result<Option<DBValue>>
-		where 'x: 'key
+	fn lookup<'x, 'key>(
+		&'x self,
+		mut partial: NibbleSlice<'key>,
+		handle: &NodeHandle,
+	) -> super::Result<Option<DBValue>>
+	where
+		'x: 'key,
 	{
 		let mut handle = handle;
 		loop {
 			let (mid, child) = match *handle {
-				NodeHandle::Hash(ref hash) => return Lookup {
-					db: &*self.db,
-					query: DBValue::from_slice,
-					hash: hash.clone(),
-				}.look_up(partial),
+				NodeHandle::Hash(ref hash) => {
+					return Lookup {
+						db: &*self.db,
+						query: DBValue::from_slice,
+						hash: hash.clone(),
+					}
+					.look_up(partial)
+				}
 				NodeHandle::InMemory(ref handle) => match self.storage[handle] {
 					Node::Empty => return Ok(None),
 					Node::Leaf(ref key, ref value) => {
@@ -432,7 +458,7 @@ impl<'a> TrieDBMut<'a> {
 							}
 						}
 					}
-				}
+				},
 			};
 
 			partial = partial.mid(mid);
@@ -441,25 +467,36 @@ impl<'a> TrieDBMut<'a> {
 	}
 
 	/// insert a key, value pair into the trie, creating new nodes if necessary.
-	fn insert_at(&mut self, handle: NodeHandle, partial: NibbleSlice, value: DBValue, old_val: &mut Option<DBValue>)
-		-> super::Result<(StorageHandle, bool)>
-	{
+	fn insert_at(
+		&mut self,
+		handle: NodeHandle,
+		partial: NibbleSlice,
+		value: DBValue,
+		old_val: &mut Option<DBValue>,
+	) -> super::Result<(StorageHandle, bool)> {
 		let h = match handle {
 			NodeHandle::InMemory(h) => h,
 			NodeHandle::Hash(h) => self.cache(h)?,
 		};
 		let stored = self.storage.destroy(h);
-		let (new_stored, changed) = self.inspect(stored, move |trie, stored| {
-			trie.insert_inspector(stored, partial, value, old_val).map(|a| a.into_action())
-		})?.expect("Insertion never deletes.");
+		let (new_stored, changed) = self
+			.inspect(stored, move |trie, stored| {
+				trie.insert_inspector(stored, partial, value, old_val)
+					.map(|a| a.into_action())
+			})?
+			.expect("Insertion never deletes.");
 
 		Ok((self.storage.alloc(new_stored), changed))
 	}
 
 	/// the insertion inspector.
-	fn insert_inspector(&mut self, node: Node, partial: NibbleSlice, value: DBValue, old_val: &mut Option<DBValue>)
-		-> super::Result<InsertAction>
-	{
+	fn insert_inspector(
+		&mut self,
+		node: Node,
+		partial: NibbleSlice,
+		value: DBValue,
+		old_val: &mut Option<DBValue>,
+	) -> super::Result<InsertAction> {
 		trace!(target: "trie", "augmented (partial: {:?}, value: {:?})", partial, value.pretty());
 
 		Ok(match node {
@@ -484,7 +521,8 @@ impl<'a> TrieDBMut<'a> {
 					let partial = partial.mid(1);
 					if let Some(child) = children[idx].take() {
 						// original had something there. recurse down into it.
-						let (new_child, changed) = self.insert_at(child, partial, value, old_val)?;
+						let (new_child, changed) =
+							self.insert_at(child, partial, value, old_val)?;
 						children[idx] = Some(new_child.into());
 						if !changed {
 							// the new node we composed didn't change. that means our branch is untouched too.
@@ -492,7 +530,9 @@ impl<'a> TrieDBMut<'a> {
 						}
 					} else {
 						// original had nothing there. compose a leaf.
-						let leaf = self.storage.alloc(Stored::New(Node::Leaf(partial.encoded(true), value)));
+						let leaf = self
+							.storage
+							.alloc(Stored::New(Node::Leaf(partial.encoded(true), value)));
 						children[idx] = Some(leaf.into());
 					}
 
@@ -530,20 +570,27 @@ impl<'a> TrieDBMut<'a> {
 					};
 
 					// always replace because whatever we get out here is not the branch we started with.
-					let branch_action = self.insert_inspector(branch, partial, value, old_val)?.unwrap_node();
+					let branch_action = self
+						.insert_inspector(branch, partial, value, old_val)?
+						.unwrap_node();
 					InsertAction::Replace(branch_action)
 				} else if cp == existing_key.len() {
-				    trace!(target: "trie", "complete-prefix (cp={:?}): AUGMENT-AT-END", cp);
+					trace!(target: "trie", "complete-prefix (cp={:?}): AUGMENT-AT-END", cp);
 
 					// fully-shared prefix for an extension.
 					// make a stub branch and an extension.
 					let branch = Node::Branch(empty_children(), Some(stored_value));
 					// augment the new branch.
-					let branch = self.insert_inspector(branch, partial.mid(cp), value, old_val)?.unwrap_node();
+					let branch = self
+						.insert_inspector(branch, partial.mid(cp), value, old_val)?
+						.unwrap_node();
 
 					// always replace since we took a leaf and made an extension.
 					let branch_handle = self.storage.alloc(Stored::New(branch)).into();
-					InsertAction::Replace(Node::Extension(existing_key.encoded(false), branch_handle))
+					InsertAction::Replace(Node::Extension(
+						existing_key.encoded(false),
+						branch_handle,
+					))
 				} else {
 					trace!(target: "trie", "partially-shared-prefix (exist={:?}; new={:?}; cp={:?}): AUGMENT-AT-END", existing_key.len(), partial.len(), cp);
 
@@ -553,12 +600,14 @@ impl<'a> TrieDBMut<'a> {
 
 					// augment it. this will result in the Leaf -> cp == 0 routine,
 					// which creates a branch.
-					let augmented_low = self.insert_inspector(low, partial.mid(cp), value, old_val)?.unwrap_node();
+					let augmented_low = self
+						.insert_inspector(low, partial.mid(cp), value, old_val)?
+						.unwrap_node();
 
 					// make an extension using it. this is a replacement.
 					InsertAction::Replace(Node::Extension(
 						existing_key.encoded_leftmost(cp, false),
-						self.storage.alloc(Stored::New(augmented_low)).into()
+						self.storage.alloc(Stored::New(augmented_low)).into(),
 					))
 				}
 			}
@@ -584,7 +633,9 @@ impl<'a> TrieDBMut<'a> {
 					};
 
 					// continue inserting.
-					let branch_action = self.insert_inspector(Node::Branch(children, None), partial, value, old_val)?.unwrap_node();
+					let branch_action = self
+						.insert_inspector(Node::Branch(children, None), partial, value, old_val)?
+						.unwrap_node();
 					InsertAction::Replace(branch_action)
 				} else if cp == existing_key.len() {
 					trace!(target: "trie", "complete-prefix (cp={:?}): AUGMENT-AT-END", cp);
@@ -592,7 +643,8 @@ impl<'a> TrieDBMut<'a> {
 					// fully-shared prefix.
 
 					// insert into the child node.
-					let (new_child, changed) = self.insert_at(child_branch, partial.mid(cp), value, old_val)?;
+					let (new_child, changed) =
+						self.insert_at(child_branch, partial.mid(cp), value, old_val)?;
 					let new_ext = Node::Extension(existing_key.encoded(false), new_child.into());
 
 					// if the child branch wasn't changed, meaning this extension remains the same.
@@ -606,13 +658,15 @@ impl<'a> TrieDBMut<'a> {
 					// partially-shared.
 					let low = Node::Extension(existing_key.mid(cp).encoded(false), child_branch);
 					// augment the extension. this will take the cp == 0 path, creating a branch.
-					let augmented_low = self.insert_inspector(low, partial.mid(cp), value, old_val)?.unwrap_node();
+					let augmented_low = self
+						.insert_inspector(low, partial.mid(cp), value, old_val)?
+						.unwrap_node();
 
 					// always replace, since this extension is not the one we started with.
 					// this is known because the partial key is only the common prefix.
 					InsertAction::Replace(Node::Extension(
 						existing_key.encoded_leftmost(cp, false),
-						self.storage.alloc(Stored::New(augmented_low)).into()
+						self.storage.alloc(Stored::New(augmented_low)).into(),
 					))
 				}
 			}
@@ -620,9 +674,12 @@ impl<'a> TrieDBMut<'a> {
 	}
 
 	/// Remove a node from the trie based on key.
-	fn remove_at(&mut self, handle: NodeHandle, partial: NibbleSlice, old_val: &mut Option<DBValue>)
-		-> super::Result<Option<(StorageHandle, bool)>>
-	{
+	fn remove_at(
+		&mut self,
+		handle: NodeHandle,
+		partial: NibbleSlice,
+		old_val: &mut Option<DBValue>,
+	) -> super::Result<Option<(StorageHandle, bool)>> {
 		let stored = match handle {
 			NodeHandle::InMemory(h) => self.storage.destroy(h),
 			NodeHandle::Hash(h) => {
@@ -631,13 +688,20 @@ impl<'a> TrieDBMut<'a> {
 			}
 		};
 
-		let opt = self.inspect(stored, move |trie, node| trie.remove_inspector(node, partial, old_val))?;
+		let opt = self.inspect(stored, move |trie, node| {
+			trie.remove_inspector(node, partial, old_val)
+		})?;
 
 		Ok(opt.map(|(new, changed)| (self.storage.alloc(new), changed)))
 	}
 
 	/// the removal inspector
-	fn remove_inspector(&mut self, node: Node, partial: NibbleSlice, old_val: &mut Option<DBValue>) -> super::Result<Action> {
+	fn remove_inspector(
+		&mut self,
+		node: Node,
+		partial: NibbleSlice,
+		old_val: &mut Option<DBValue>,
+	) -> super::Result<Action> {
 		Ok(match (node, partial.is_empty()) {
 			(Node::Empty, _) => Action::Delete,
 			(Node::Branch(c, None), true) => Action::Restore(Node::Branch(c, None)),
@@ -699,7 +763,9 @@ impl<'a> TrieDBMut<'a> {
 							// if the child branch was unchanged, then the extension is too.
 							// otherwise, this extension may need fixing.
 							match changed {
-								true => Action::Replace(self.fix(Node::Extension(encoded, new_child))?),
+								true => {
+									Action::Replace(self.fix(Node::Extension(encoded, new_child))?)
+								}
 								false => Action::Restore(Node::Extension(encoded, new_child)),
 							}
 						}
@@ -746,11 +812,15 @@ impl<'a> TrieDBMut<'a> {
 				}
 
 				match (used_index, value) {
-					(UsedIndex::None, None) => panic!("Branch with no subvalues. Something went wrong."),
+					(UsedIndex::None, None) => {
+						panic!("Branch with no subvalues. Something went wrong.")
+					}
 					(UsedIndex::One(a), None) => {
 						// only one onward node. make an extension.
 						let new_partial = NibbleSlice::new_offset(&[a], 1).encoded(false);
-						let child = children[a as usize].take().expect("used_index only set if occupied; qed");
+						let child = children[a as usize]
+							.take()
+							.expect("used_index only set if occupied; qed");
 						let new_node = Node::Extension(new_partial, child);
 						self.fix(new_node)
 					}
@@ -777,7 +847,7 @@ impl<'a> TrieDBMut<'a> {
 
 				let (child_node, maybe_hash) = match stored {
 					Stored::New(node) => (node, None),
-					Stored::Cached(node, hash) => (node, Some(hash))
+					Stored::Cached(node, hash) => (node, Some(hash)),
 				};
 
 				match child_node {
@@ -853,7 +923,8 @@ impl<'a> TrieDBMut<'a> {
 			Stored::Cached(node, hash) => {
 				// probably won't happen, but update the root and move on.
 				*self.root = hash;
-				self.root_handle = NodeHandle::InMemory(self.storage.alloc(Stored::Cached(node, hash)));
+				self.root_handle =
+					NodeHandle::InMemory(self.storage.alloc(Stored::Cached(node, hash)));
 			}
 		}
 	}
@@ -875,7 +946,7 @@ impl<'a> TrieDBMut<'a> {
 						stream.append_raw(&node_rlp, 1)
 					}
 				}
-			}
+			},
 		};
 	}
 
@@ -900,16 +971,21 @@ impl<'a> TrieMut for TrieDBMut<'a> {
 			NodeHandle::InMemory(ref h) => match self.storage[h] {
 				Node::Empty => true,
 				_ => false,
-			}
+			},
 		}
 	}
 
-	fn get<'x, 'key>(&'x self, key: &'key [u8]) -> super::Result<Option<DBValue>> where 'x: 'key {
+	fn get<'x, 'key>(&'x self, key: &'key [u8]) -> super::Result<Option<DBValue>>
+	where
+		'x: 'key,
+	{
 		self.lookup(NibbleSlice::new(key), &self.root_handle)
 	}
 
 	fn insert(&mut self, key: &[u8], value: &[u8]) -> super::Result<Option<DBValue>> {
-		if value.is_empty() { return self.remove(key) }
+		if value.is_empty() {
+			return self.remove(key);
+		}
 
 		let mut old_val = None;
 
@@ -963,18 +1039,22 @@ mod tests {
 	extern crate triehash;
 
 	use self::triehash::trie_root;
-	use hashdb::*;
-	use memorydb::*;
+	use super::super::TrieMut;
 	use super::*;
 	use bytes::ToPretty;
+	use hashdb::*;
 	use keccak::KECCAK_NULL_RLP;
-	use super::super::TrieMut;
+	use memorydb::*;
 	use standardmap::*;
 
-	fn populate_trie<'db>(db: &'db mut HashDB, root: &'db mut H256, v: &[(Vec<u8>, Vec<u8>)]) -> TrieDBMut<'db> {
+	fn populate_trie<'db>(
+		db: &'db mut HashDB,
+		root: &'db mut H256,
+		v: &[(Vec<u8>, Vec<u8>)],
+	) -> TrieDBMut<'db> {
 		let mut t = TrieDBMut::new(db, root);
 		for i in 0..v.len() {
-			let key: &[u8]= &v[i].0;
+			let key: &[u8] = &v[i].0;
 			let val: &[u8] = &v[i].1;
 			t.insert(key, val).unwrap();
 		}
@@ -983,7 +1063,7 @@ mod tests {
 
 	fn unpopulate_trie<'db>(t: &mut TrieDBMut<'db>, v: &[(Vec<u8>, Vec<u8>)]) {
 		for i in v {
-			let key: &[u8]= &i.0;
+			let key: &[u8] = &i.0;
 			t.remove(key).unwrap();
 		}
 	}
@@ -1003,7 +1083,8 @@ mod tests {
 				journal_key: 0,
 				value_mode: ValueMode::Index,
 				count: 100,
-			}.make_with(&mut seed);
+			}
+			.make_with(&mut seed);
 
 			let real = trie_root(x.clone());
 			let mut memdb = MemoryDB::new();
@@ -1048,7 +1129,10 @@ mod tests {
 		let mut root = H256::new();
 		let mut t = TrieDBMut::new(&mut memdb, &mut root);
 		t.insert(&[0x01u8, 0x23], &[0x01u8, 0x23]).unwrap();
-		assert_eq!(*t.root(), trie_root(vec![ (vec![0x01u8, 0x23], vec![0x01u8, 0x23]) ]));
+		assert_eq!(
+			*t.root(),
+			trie_root(vec![(vec![0x01u8, 0x23], vec![0x01u8, 0x23])])
+		);
 	}
 
 	#[test]
@@ -1076,7 +1160,10 @@ mod tests {
 		let mut t = TrieDBMut::new(&mut memdb, &mut root);
 		t.insert(&[0x01u8, 0x23], &[0x01u8, 0x23]).unwrap();
 		t.insert(&[0x01u8, 0x23], &[0x23u8, 0x45]).unwrap();
-		assert_eq!(*t.root(), trie_root(vec![ (vec![0x01u8, 0x23], vec![0x23u8, 0x45]) ]));
+		assert_eq!(
+			*t.root(),
+			trie_root(vec![(vec![0x01u8, 0x23], vec![0x23u8, 0x45])])
+		);
 	}
 
 	#[test]
@@ -1086,10 +1173,13 @@ mod tests {
 		let mut t = TrieDBMut::new(&mut memdb, &mut root);
 		t.insert(&[0x01u8, 0x23], &[0x01u8, 0x23]).unwrap();
 		t.insert(&[0x11u8, 0x23], &[0x11u8, 0x23]).unwrap();
-		assert_eq!(*t.root(), trie_root(vec![
-			(vec![0x01u8, 0x23], vec![0x01u8, 0x23]),
-			(vec![0x11u8, 0x23], vec![0x11u8, 0x23])
-		]));
+		assert_eq!(
+			*t.root(),
+			trie_root(vec![
+				(vec![0x01u8, 0x23], vec![0x01u8, 0x23]),
+				(vec![0x11u8, 0x23], vec![0x11u8, 0x23])
+			])
+		);
 	}
 
 	#[test]
@@ -1100,11 +1190,14 @@ mod tests {
 		t.insert(&[0x01u8, 0x23], &[0x01u8, 0x23]).unwrap();
 		t.insert(&[0xf1u8, 0x23], &[0xf1u8, 0x23]).unwrap();
 		t.insert(&[0x81u8, 0x23], &[0x81u8, 0x23]).unwrap();
-		assert_eq!(*t.root(), trie_root(vec![
-			(vec![0x01u8, 0x23], vec![0x01u8, 0x23]),
-			(vec![0x81u8, 0x23], vec![0x81u8, 0x23]),
-			(vec![0xf1u8, 0x23], vec![0xf1u8, 0x23]),
-		]));
+		assert_eq!(
+			*t.root(),
+			trie_root(vec![
+				(vec![0x01u8, 0x23], vec![0x01u8, 0x23]),
+				(vec![0x81u8, 0x23], vec![0x81u8, 0x23]),
+				(vec![0xf1u8, 0x23], vec![0xf1u8, 0x23]),
+			])
+		);
 	}
 
 	#[test]
@@ -1114,10 +1207,13 @@ mod tests {
 		let mut t = TrieDBMut::new(&mut memdb, &mut root);
 		t.insert(&[0x01u8, 0x23], &[0x01u8, 0x23]).unwrap();
 		t.insert(&[], &[0x0]).unwrap();
-		assert_eq!(*t.root(), trie_root(vec![
-			(vec![], vec![0x0]),
-			(vec![0x01u8, 0x23], vec![0x01u8, 0x23]),
-		]));
+		assert_eq!(
+			*t.root(),
+			trie_root(vec![
+				(vec![], vec![0x0]),
+				(vec![0x01u8, 0x23], vec![0x01u8, 0x23]),
+			])
+		);
 	}
 
 	#[test]
@@ -1127,10 +1223,13 @@ mod tests {
 		let mut t = TrieDBMut::new(&mut memdb, &mut root);
 		t.insert(&[0x01u8, 0x23], &[0x01u8, 0x23]).unwrap();
 		t.insert(&[0x01u8, 0x34], &[0x01u8, 0x34]).unwrap();
-		assert_eq!(*t.root(), trie_root(vec![
-			(vec![0x01u8, 0x23], vec![0x01u8, 0x23]),
-			(vec![0x01u8, 0x34], vec![0x01u8, 0x34]),
-		]));
+		assert_eq!(
+			*t.root(),
+			trie_root(vec![
+				(vec![0x01u8, 0x23], vec![0x01u8, 0x23]),
+				(vec![0x01u8, 0x34], vec![0x01u8, 0x34]),
+			])
+		);
 	}
 
 	#[test]
@@ -1141,11 +1240,14 @@ mod tests {
 		t.insert(&[0x01, 0x23, 0x45], &[0x01]).unwrap();
 		t.insert(&[0x01, 0xf3, 0x45], &[0x02]).unwrap();
 		t.insert(&[0x01, 0xf3, 0xf5], &[0x03]).unwrap();
-		assert_eq!(*t.root(), trie_root(vec![
-			(vec![0x01, 0x23, 0x45], vec![0x01]),
-			(vec![0x01, 0xf3, 0x45], vec![0x02]),
-			(vec![0x01, 0xf3, 0xf5], vec![0x03]),
-		]));
+		assert_eq!(
+			*t.root(),
+			trie_root(vec![
+				(vec![0x01, 0x23, 0x45], vec![0x01]),
+				(vec![0x01, 0xf3, 0x45], vec![0x02]),
+				(vec![0x01, 0xf3, 0xf5], vec![0x03]),
+			])
+		);
 	}
 
 	#[test]
@@ -1158,10 +1260,13 @@ mod tests {
 		let mut t = TrieDBMut::new(&mut memdb, &mut root);
 		t.insert(&[0x01u8, 0x23], big_value0).unwrap();
 		t.insert(&[0x11u8, 0x23], big_value1).unwrap();
-		assert_eq!(*t.root(), trie_root(vec![
-			(vec![0x01u8, 0x23], big_value0.to_vec()),
-			(vec![0x11u8, 0x23], big_value1.to_vec())
-		]));
+		assert_eq!(
+			*t.root(),
+			trie_root(vec![
+				(vec![0x01u8, 0x23], big_value0.to_vec()),
+				(vec![0x11u8, 0x23], big_value1.to_vec())
+			])
+		);
 	}
 
 	#[test]
@@ -1173,10 +1278,13 @@ mod tests {
 		let mut t = TrieDBMut::new(&mut memdb, &mut root);
 		t.insert(&[0x01u8, 0x23], big_value).unwrap();
 		t.insert(&[0x11u8, 0x23], big_value).unwrap();
-		assert_eq!(*t.root(), trie_root(vec![
-			(vec![0x01u8, 0x23], big_value.to_vec()),
-			(vec![0x11u8, 0x23], big_value.to_vec())
-		]));
+		assert_eq!(
+			*t.root(),
+			trie_root(vec![
+				(vec![0x01u8, 0x23], big_value.to_vec()),
+				(vec![0x11u8, 0x23], big_value.to_vec())
+			])
+		);
 	}
 
 	#[test]
@@ -1193,9 +1301,15 @@ mod tests {
 		let mut root = H256::new();
 		let mut t = TrieDBMut::new(&mut memdb, &mut root);
 		t.insert(&[0x01u8, 0x23], &[0x01u8, 0x23]).unwrap();
-		assert_eq!(t.get(&[0x1, 0x23]).unwrap().unwrap(), DBValue::from_slice(&[0x1u8, 0x23]));
+		assert_eq!(
+			t.get(&[0x1, 0x23]).unwrap().unwrap(),
+			DBValue::from_slice(&[0x1u8, 0x23])
+		);
 		t.commit();
-		assert_eq!(t.get(&[0x1, 0x23]).unwrap().unwrap(), DBValue::from_slice(&[0x1u8, 0x23]));
+		assert_eq!(
+			t.get(&[0x1, 0x23]).unwrap().unwrap(),
+			DBValue::from_slice(&[0x1u8, 0x23])
+		);
 	}
 
 	#[test]
@@ -1206,14 +1320,32 @@ mod tests {
 		t.insert(&[0x01u8, 0x23], &[0x01u8, 0x23]).unwrap();
 		t.insert(&[0xf1u8, 0x23], &[0xf1u8, 0x23]).unwrap();
 		t.insert(&[0x81u8, 0x23], &[0x81u8, 0x23]).unwrap();
-		assert_eq!(t.get(&[0x01, 0x23]).unwrap().unwrap(), DBValue::from_slice(&[0x01u8, 0x23]));
-		assert_eq!(t.get(&[0xf1, 0x23]).unwrap().unwrap(), DBValue::from_slice(&[0xf1u8, 0x23]));
-		assert_eq!(t.get(&[0x81, 0x23]).unwrap().unwrap(), DBValue::from_slice(&[0x81u8, 0x23]));
+		assert_eq!(
+			t.get(&[0x01, 0x23]).unwrap().unwrap(),
+			DBValue::from_slice(&[0x01u8, 0x23])
+		);
+		assert_eq!(
+			t.get(&[0xf1, 0x23]).unwrap().unwrap(),
+			DBValue::from_slice(&[0xf1u8, 0x23])
+		);
+		assert_eq!(
+			t.get(&[0x81, 0x23]).unwrap().unwrap(),
+			DBValue::from_slice(&[0x81u8, 0x23])
+		);
 		assert_eq!(t.get(&[0x82, 0x23]), Ok(None));
 		t.commit();
-		assert_eq!(t.get(&[0x01, 0x23]).unwrap().unwrap(), DBValue::from_slice(&[0x01u8, 0x23]));
-		assert_eq!(t.get(&[0xf1, 0x23]).unwrap().unwrap(), DBValue::from_slice(&[0xf1u8, 0x23]));
-		assert_eq!(t.get(&[0x81, 0x23]).unwrap().unwrap(), DBValue::from_slice(&[0x81u8, 0x23]));
+		assert_eq!(
+			t.get(&[0x01, 0x23]).unwrap().unwrap(),
+			DBValue::from_slice(&[0x01u8, 0x23])
+		);
+		assert_eq!(
+			t.get(&[0xf1, 0x23]).unwrap().unwrap(),
+			DBValue::from_slice(&[0xf1u8, 0x23])
+		);
+		assert_eq!(
+			t.get(&[0x81, 0x23]).unwrap().unwrap(),
+			DBValue::from_slice(&[0x81u8, 0x23])
+		);
 		assert_eq!(t.get(&[0x82, 0x23]), Ok(None));
 	}
 
@@ -1227,7 +1359,8 @@ mod tests {
 				journal_key: 0,
 				value_mode: ValueMode::Index,
 				count: 4,
-			}.make_with(&mut seed);
+			}
+			.make_with(&mut seed);
 
 			let real = trie_root(x.clone());
 			let mut memdb = MemoryDB::new();
@@ -1265,7 +1398,7 @@ mod tests {
 		}
 
 		{
-		 	let _ = TrieDBMut::from_existing(&mut db, &mut root);
+			let _ = TrieDBMut::from_existing(&mut db, &mut root);
 		}
 	}
 
@@ -1273,12 +1406,13 @@ mod tests {
 	fn insert_empty() {
 		let mut seed = H256::new();
 		let x = StandardMap {
-				alphabet: Alphabet::Custom(b"@QWERTYUIOPASDFGHJKLZXCVBNM[/]^_".to_vec()),
-				min_key: 5,
-				journal_key: 0,
-				value_mode: ValueMode::Index,
-				count: 4,
-		}.make_with(&mut seed);
+			alphabet: Alphabet::Custom(b"@QWERTYUIOPASDFGHJKLZXCVBNM[/]^_".to_vec()),
+			min_key: 5,
+			journal_key: 0,
+			value_mode: ValueMode::Index,
+			count: 4,
+		}
+		.make_with(&mut seed);
 
 		let mut db = MemoryDB::new();
 		let mut root = H256::new();
@@ -1301,19 +1435,23 @@ mod tests {
 	fn return_old_values() {
 		let mut seed = H256::new();
 		let x = StandardMap {
-				alphabet: Alphabet::Custom(b"@QWERTYUIOPASDFGHJKLZXCVBNM[/]^_".to_vec()),
-				min_key: 5,
-				journal_key: 0,
-				value_mode: ValueMode::Index,
-				count: 4,
-		}.make_with(&mut seed);
+			alphabet: Alphabet::Custom(b"@QWERTYUIOPASDFGHJKLZXCVBNM[/]^_".to_vec()),
+			min_key: 5,
+			journal_key: 0,
+			value_mode: ValueMode::Index,
+			count: 4,
+		}
+		.make_with(&mut seed);
 
 		let mut db = MemoryDB::new();
 		let mut root = H256::new();
 		let mut t = TrieDBMut::new(&mut db, &mut root);
 		for &(ref key, ref value) in &x {
 			assert!(t.insert(key, value).unwrap().is_none());
-			assert_eq!(t.insert(key, value).unwrap(), Some(DBValue::from_slice(value)));
+			assert_eq!(
+				t.insert(key, value).unwrap(),
+				Some(DBValue::from_slice(value))
+			);
 		}
 
 		for (key, value) in x {

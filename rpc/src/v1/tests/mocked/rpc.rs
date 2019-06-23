@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::BTreeMap;
 use jsonrpc_core::IoHandler;
+use std::collections::BTreeMap;
 use v1::{Rpc, RpcClient};
 
 fn rpc_client() -> RpcClient {
@@ -45,7 +45,8 @@ fn rpc_modules() {
 	io.extend_with(rpc);
 
 	let request = r#"{"jsonrpc": "2.0", "method": "rpc_modules", "params": [], "id": 1}"#;
-	let response = r#"{"jsonrpc":"2.0","result":{"ethcore":"1.0","rpc":"1.0","web3":"1.0"},"id":1}"#;
+	let response =
+		r#"{"jsonrpc":"2.0","result":{"ethcore":"1.0","rpc":"1.0","web3":"1.0"},"id":1}"#;
 
 	assert_eq!(io.handle_request_sync(request), Some(response.to_owned()));
 }

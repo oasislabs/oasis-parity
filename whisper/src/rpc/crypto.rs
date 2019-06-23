@@ -16,9 +16,9 @@
 
 //! Encryption schemes supported by RPC layer.
 
-use crypto::aes_gcm::{Encryptor, Decryptor};
-use ethkey::crypto::ecies;
+use crypto::aes_gcm::{Decryptor, Encryptor};
 use ethereum_types::H256;
+use ethkey::crypto::ecies;
 use ethkey::{self, Public, Secret};
 use mem::Memzero;
 
@@ -32,7 +32,7 @@ const BROADCAST_IV: [u8; AES_NONCE_LEN] = [0xff; AES_NONCE_LEN];
 
 // how to encode aes key/nonce.
 enum AesEncode {
-	AppendedNonce, // receiver known, random nonce appended.
+	AppendedNonce,       // receiver known, random nonce appended.
 	OnTopics(Vec<H256>), // receiver knows topics but not key. nonce global.
 }
 
@@ -68,51 +68,51 @@ impl EncryptionInstance {
 	/// Key reuse here is extremely dangerous. It should be randomly generated
 	/// with a secure RNG.
 	pub fn broadcast(key: Memzero<[u8; AES_KEY_LEN]>, topics: Vec<H256>) -> Self {
-		EncryptionInstance(EncryptionInner::AES(key, BROADCAST_IV, AesEncode::OnTopics(topics)))
+		EncryptionInstance(EncryptionInner::AES(
+			key,
+			BROADCAST_IV,
+			AesEncode::OnTopics(topics),
+		))
 	}
 
 	/// Encrypt the supplied plaintext
 	pub fn encrypt(self, plain: &[u8]) -> Option<Vec<u8>> {
 		match self.0 {
-			EncryptionInner::AES(key, nonce, encode) => {
-				match encode {
-					AesEncode::AppendedNonce => {
-						let mut enc = Encryptor::aes_256_gcm(&*key).ok()?;
-						let mut buf = enc.encrypt(&nonce, plain.to_vec()).ok()?;
-						buf.extend(&nonce[..]);
-						Some(buf)
-					}
-					AesEncode::OnTopics(topics) => {
-						let mut buf = Vec::new();
-						for mut t in topics {
-							xor(&mut t.0, &key);
-							buf.extend(&t.0);
-						}
-						let mut enc = Encryptor::aes_256_gcm(&*key).ok()?;
-						enc.offset(buf.len());
-						buf.extend(plain);
-						let ciphertext = enc.encrypt(&nonce, buf).ok()?;
-						Some(ciphertext)
-					}
+			EncryptionInner::AES(key, nonce, encode) => match encode {
+				AesEncode::AppendedNonce => {
+					let mut enc = Encryptor::aes_256_gcm(&*key).ok()?;
+					let mut buf = enc.encrypt(&nonce, plain.to_vec()).ok()?;
+					buf.extend(&nonce[..]);
+					Some(buf)
 				}
-			}
-			EncryptionInner::ECIES(valid_public) => {
-				ecies::encrypt(&valid_public, &[], plain).ok()
-			}
+				AesEncode::OnTopics(topics) => {
+					let mut buf = Vec::new();
+					for mut t in topics {
+						xor(&mut t.0, &key);
+						buf.extend(&t.0);
+					}
+					let mut enc = Encryptor::aes_256_gcm(&*key).ok()?;
+					enc.offset(buf.len());
+					buf.extend(plain);
+					let ciphertext = enc.encrypt(&nonce, buf).ok()?;
+					Some(ciphertext)
+				}
+			},
+			EncryptionInner::ECIES(valid_public) => ecies::encrypt(&valid_public, &[], plain).ok(),
 		}
 	}
 }
 
 #[inline]
 fn xor(a: &mut [u8; 32], b: &[u8; 32]) {
-	for i in 0 .. 32 {
+	for i in 0..32 {
 		a[i] ^= b[i]
 	}
 }
 
 enum AesExtract {
 	AppendedNonce(Memzero<[u8; AES_KEY_LEN]>), // extract appended nonce.
-	OnTopics(usize, usize, H256), // number of topics, index we know, topic we know.
+	OnTopics(usize, usize, H256),              // number of topics, index we know, topic we know.
 }
 
 enum DecryptionInner {
@@ -138,10 +138,18 @@ impl DecryptionInstance {
 
 	/// Decode broadcast based on number of topics and known topic.
 	/// Known topic index may not be larger than num topics - 1.
-	pub fn broadcast(num_topics: usize, topic_idx: usize, known_topic: H256) -> Result<Self, &'static str> {
-		if topic_idx >= num_topics { return Err("topic index out of bounds") }
+	pub fn broadcast(
+		num_topics: usize,
+		topic_idx: usize,
+		known_topic: H256,
+	) -> Result<Self, &'static str> {
+		if topic_idx >= num_topics {
+			return Err("topic index out of bounds");
+		}
 
-		Ok(DecryptionInstance(DecryptionInner::AES(AesExtract::OnTopics(num_topics, topic_idx, known_topic))))
+		Ok(DecryptionInstance(DecryptionInner::AES(
+			AesExtract::OnTopics(num_topics, topic_idx, known_topic),
+		)))
 	}
 
 	/// Decrypt ciphertext. Fails if it's an invalid message.
@@ -151,25 +159,27 @@ impl DecryptionInstance {
 				match extract {
 					AesExtract::AppendedNonce(key) => {
 						if ciphertext.len() < AES_NONCE_LEN {
-							return None
+							return None;
 						}
 						// nonce is the suffix of ciphertext.
 						let mut nonce = [0; AES_NONCE_LEN];
 						let nonce_offset = ciphertext.len() - AES_NONCE_LEN;
 						nonce.copy_from_slice(&ciphertext[nonce_offset..]);
-						Decryptor::aes_256_gcm(&*key).ok()?
+						Decryptor::aes_256_gcm(&*key)
+							.ok()?
 							.decrypt(&nonce, Vec::from(&ciphertext[..nonce_offset]))
 							.ok()
 					}
 					AesExtract::OnTopics(num_topics, known_index, known_topic) => {
 						if ciphertext.len() < num_topics * 32 {
-							return None
+							return None;
 						}
 						let mut salted_topic = H256::new();
 						salted_topic.copy_from_slice(&ciphertext[(known_index * 32)..][..32]);
 						let key = Memzero::from((salted_topic ^ known_topic).0);
 						let offset = num_topics * 32;
-						Decryptor::aes_256_gcm(&*key).ok()?
+						Decryptor::aes_256_gcm(&*key)
+							.ok()?
 							.decrypt(&BROADCAST_IV, Vec::from(&ciphertext[offset..]))
 							.ok()
 					}
@@ -213,7 +223,7 @@ mod tests {
 
 	#[test]
 	fn encrypt_symmetric() {
-		use rand::{Rng, OsRng};
+		use rand::{OsRng, Rng};
 
 		let mut rng = OsRng::new().unwrap();
 		let mut test_message = move |message: &[u8]| {
@@ -239,7 +249,7 @@ mod tests {
 
 	#[test]
 	fn encrypt_broadcast() {
-		use rand::{Rng, OsRng};
+		use rand::{OsRng, Rng};
 
 		let mut rng = OsRng::new().unwrap();
 

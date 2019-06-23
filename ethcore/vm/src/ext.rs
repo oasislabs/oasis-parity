@@ -16,14 +16,14 @@
 
 //! Interface for Evm externalities.
 
-use std::sync::Arc;
-use ethereum_types::{U256, H256, Address};
 use bytes::Bytes;
 use call_type::CallType;
 use env_info::EnvInfo;
-use schedule::Schedule;
-use return_data::ReturnData;
 use error::Result;
+use ethereum_types::{Address, H256, U256};
+use return_data::ReturnData;
+use schedule::Schedule;
+use std::sync::Arc;
 
 /// Result of externalities create function.
 pub enum ContractCreateResult {
@@ -108,14 +108,21 @@ pub trait Ext {
 	/// Creates new contract.
 	///
 	/// Returns gas_left and contract address if contract creation was succesfull.
-	fn create(&mut self, gas: &U256, value: &U256, code: &[u8], address: CreateContractAddress) -> ContractCreateResult;
+	fn create(
+		&mut self,
+		gas: &U256,
+		value: &U256,
+		code: &[u8],
+		address: CreateContractAddress,
+	) -> ContractCreateResult;
 
 	/// Message call.
 	///
 	/// Returns Err, if we run out of gas.
 	/// Otherwise returns call_result which contains gas left
 	/// and true if subcall was successfull.
-	fn call(&mut self,
+	fn call(
+		&mut self,
 		gas: &U256,
 		sender_address: &Address,
 		receive_address: &Address,
@@ -123,7 +130,7 @@ pub trait Ext {
 		data: &[u8],
 		code_address: &Address,
 		output: &mut [u8],
-		call_type: CallType
+		call_type: CallType,
 	) -> MessageCallResult;
 
 	/// Returns code at given address
@@ -141,7 +148,7 @@ pub trait Ext {
 
 	/// Should be called when contract commits suicide.
 	/// Address to which funds should be refunded.
-	fn suicide(&mut self, refund_address: &Address) -> Result<()> ;
+	fn suicide(&mut self, refund_address: &Address) -> Result<()>;
 
 	/// Returns schedule.
 	fn schedule(&self) -> &Schedule;
@@ -159,18 +166,26 @@ pub trait Ext {
 	fn inc_sstore_clears(&mut self, bytes_len: u64) -> Result<()>;
 
 	/// Decide if any more operations should be traced. Passthrough for the VM trace.
-	fn trace_next_instruction(&mut self, _pc: usize, _instruction: u8, _current_gas: U256) -> bool { false }
+	fn trace_next_instruction(&mut self, _pc: usize, _instruction: u8, _current_gas: U256) -> bool {
+		false
+	}
 
 	/// Prepare to trace an operation. Passthrough for the VM trace.
 	fn trace_prepare_execute(&mut self, _pc: usize, _instruction: u8, _gas_cost: U256) {}
 
 	/// Trace the finalised execution of a single instruction.
-	fn trace_executed(&mut self, _gas_used: U256, _stack_push: &[U256], _mem_diff: Option<(usize, &[u8])>, _store_diff: Option<(U256, U256)>) {}
+	fn trace_executed(
+		&mut self,
+		_gas_used: U256,
+		_stack_push: &[U256],
+		_mem_diff: Option<(usize, &[u8])>,
+		_store_diff: Option<(U256, U256)>,
+	) {
+	}
 
 	/// Check if running in static context.
 	fn is_static(&self) -> bool;
 
 	/// Returns true if the given contract is confidential.
 	fn is_confidential_contract(&self, contract: &Address) -> Result<bool>;
-
 }

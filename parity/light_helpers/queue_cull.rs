@@ -20,8 +20,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ethcore::client::ClientIoMessage;
-use sync::LightSync;
 use io::{IoContext, IoHandler, TimerToken};
+use sync::LightSync;
 
 use light::client::LightChainClient;
 use light::on_demand::{request, OnDemand};
@@ -56,50 +56,68 @@ pub struct QueueCull<T> {
 
 impl<T: LightChainClient + 'static> IoHandler<ClientIoMessage> for QueueCull<T> {
 	fn initialize(&self, io: &IoContext<ClientIoMessage>) {
-		io.register_timer(TOKEN, TIMEOUT).expect("Error registering timer");
+		io.register_timer(TOKEN, TIMEOUT)
+			.expect("Error registering timer");
 	}
 
 	fn timeout(&self, _io: &IoContext<ClientIoMessage>, timer: TimerToken) {
-		if timer != TOKEN { return }
+		if timer != TOKEN {
+			return;
+		}
 
 		let senders = self.txq.read().queued_senders();
-		if senders.is_empty() { return }
+		if senders.is_empty() {
+			return;
+		}
 
 		let (sync, on_demand, txq) = (self.sync.clone(), self.on_demand.clone(), self.txq.clone());
 		let best_header = self.client.best_block_header();
-		let start_nonce = self.client.engine().account_start_nonce(best_header.number());
+		let start_nonce = self
+			.client
+			.engine()
+			.account_start_nonce(best_header.number());
 
 		info!(target: "cull", "Attempting to cull queued transactions from {} senders.", senders.len());
-		self.remote.spawn_with_timeout(move |_| {
-			let maybe_fetching = sync.with_context(move |ctx| {
-				// fetch the nonce of each sender in the queue.
-				let nonce_reqs = senders.iter()
-					.map(|&address| request::Account { header: best_header.clone().into(), address: address })
-					.collect::<Vec<_>>();
+		self.remote.spawn_with_timeout(
+			move |_| {
+				let maybe_fetching = sync.with_context(move |ctx| {
+					// fetch the nonce of each sender in the queue.
+					let nonce_reqs = senders
+						.iter()
+						.map(|&address| request::Account {
+							header: best_header.clone().into(),
+							address: address,
+						})
+						.collect::<Vec<_>>();
 
-				// when they come in, update each sender to the new nonce.
-				on_demand.request(ctx, nonce_reqs)
-					.expect("No back-references; therefore all back-references are valid; qed")
-					.map(move |accs| {
-						let txq = txq.write();
-						let _ = accs.into_iter()
-							.map(|maybe_acc| maybe_acc.map_or(start_nonce, |acc| acc.nonce))
-							.zip(senders)
-							.fold(txq, |mut txq, (nonce, addr)| {
-								txq.cull(addr, nonce);
-								txq
-							});
-					})
-					.map_err(|_| debug!(target: "cull", "OnDemand prematurely closed channel."))
-			});
+					// when they come in, update each sender to the new nonce.
+					on_demand
+						.request(ctx, nonce_reqs)
+						.expect("No back-references; therefore all back-references are valid; qed")
+						.map(move |accs| {
+							let txq = txq.write();
+							let _ = accs
+								.into_iter()
+								.map(|maybe_acc| maybe_acc.map_or(start_nonce, |acc| acc.nonce))
+								.zip(senders)
+								.fold(txq, |mut txq, (nonce, addr)| {
+									txq.cull(addr, nonce);
+									txq
+								});
+						})
+						.map_err(|_| debug!(target: "cull", "OnDemand prematurely closed channel."))
+				});
 
-			match maybe_fetching {
-				Some(fut) => future::Either::A(fut),
-				None => {
-					debug!(target: "cull", "Unable to acquire network context; qed");
-					future::Either::B(future::ok(()))
-				},
-			}
-		}, PURGE_TIMEOUT, || {})
+				match maybe_fetching {
+					Some(fut) => future::Either::A(fut),
+					None => {
+						debug!(target: "cull", "Unable to acquire network context; qed");
+						future::Either::B(future::ok(()))
+					}
+				}
+			},
+			PURGE_TIMEOUT,
+			|| {},
+		)
 	}
 }

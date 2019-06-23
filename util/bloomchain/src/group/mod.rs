@@ -15,7 +15,7 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Bloom grouping.
-//! 
+//!
 //! Optimization gathering together blooms that are in the same index and are likely to be retrived together.
 
 mod bridge;

@@ -16,12 +16,12 @@
 
 //! Block header.
 
-use std::cmp;
-use hash::{KECCAK_NULL_RLP, KECCAK_EMPTY_LIST_RLP, keccak};
-use heapsize::HeapSizeOf;
-use ethereum_types::{H256, U256, Address, Bloom};
 use bytes::Bytes;
-use rlp::{Rlp, RlpStream, Encodable, DecoderError, Decodable};
+use ethereum_types::{Address, Bloom, H256, U256};
+use hash::{keccak, KECCAK_EMPTY_LIST_RLP, KECCAK_NULL_RLP};
+use heapsize::HeapSizeOf;
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use std::cmp;
 
 pub use types::BlockNumber;
 
@@ -95,24 +95,24 @@ impl PartialEq for Header {
 	fn eq(&self, c: &Header) -> bool {
 		if let (&Some(ref h1), &Some(ref h2)) = (&self.hash, &c.hash) {
 			if h1 == h2 {
-				return true
+				return true;
 			}
 		}
 
-		self.parent_hash == c.parent_hash &&
-		self.timestamp == c.timestamp &&
-		self.number == c.number &&
-		self.author == c.author &&
-		self.transactions_root == c.transactions_root &&
-		self.uncles_hash == c.uncles_hash &&
-		self.extra_data == c.extra_data &&
-		self.state_root == c.state_root &&
-		self.receipts_root == c.receipts_root &&
-		self.log_bloom == c.log_bloom &&
-		self.gas_used == c.gas_used &&
-		self.gas_limit == c.gas_limit &&
-		self.difficulty == c.difficulty &&
-		self.seal == c.seal
+		self.parent_hash == c.parent_hash
+			&& self.timestamp == c.timestamp
+			&& self.number == c.number
+			&& self.author == c.author
+			&& self.transactions_root == c.transactions_root
+			&& self.uncles_hash == c.uncles_hash
+			&& self.extra_data == c.extra_data
+			&& self.state_root == c.state_root
+			&& self.receipts_root == c.receipts_root
+			&& self.log_bloom == c.log_bloom
+			&& self.gas_used == c.gas_used
+			&& self.gas_limit == c.gas_limit
+			&& self.difficulty == c.difficulty
+			&& self.seal == c.seal
 	}
 }
 
@@ -143,55 +143,85 @@ impl Default for Header {
 
 impl Header {
 	/// Create a new, default-valued, header.
-	pub fn new() -> Self { Self::default() }
+	pub fn new() -> Self {
+		Self::default()
+	}
 
 	/// Get the parent_hash field of the header.
-	pub fn parent_hash(&self) -> &H256 { &self.parent_hash }
+	pub fn parent_hash(&self) -> &H256 {
+		&self.parent_hash
+	}
 
 	/// Get the timestamp field of the header.
-	pub fn timestamp(&self) -> u64 { self.timestamp }
+	pub fn timestamp(&self) -> u64 {
+		self.timestamp
+	}
 
 	/// Get the number field of the header.
-	pub fn number(&self) -> BlockNumber { self.number }
+	pub fn number(&self) -> BlockNumber {
+		self.number
+	}
 
 	/// Get the author field of the header.
-	pub fn author(&self) -> &Address { &self.author }
+	pub fn author(&self) -> &Address {
+		&self.author
+	}
 
 	/// Get the extra data field of the header.
-	pub fn extra_data(&self) -> &Bytes { &self.extra_data }
+	pub fn extra_data(&self) -> &Bytes {
+		&self.extra_data
+	}
 
 	/// Get the state root field of the header.
-	pub fn state_root(&self) -> &H256 { &self.state_root }
+	pub fn state_root(&self) -> &H256 {
+		&self.state_root
+	}
 
 	/// Get the receipts root field of the header.
-	pub fn receipts_root(&self) -> &H256 { &self.receipts_root }
+	pub fn receipts_root(&self) -> &H256 {
+		&self.receipts_root
+	}
 
 	/// Get the log bloom field of the header.
-	pub fn log_bloom(&self) -> &Bloom { &self.log_bloom }
+	pub fn log_bloom(&self) -> &Bloom {
+		&self.log_bloom
+	}
 
 	/// Get the transactions root field of the header.
-	pub fn transactions_root(&self) -> &H256 { &self.transactions_root }
+	pub fn transactions_root(&self) -> &H256 {
+		&self.transactions_root
+	}
 
 	/// Get the uncles hash field of the header.
-	pub fn uncles_hash(&self) -> &H256 { &self.uncles_hash }
+	pub fn uncles_hash(&self) -> &H256 {
+		&self.uncles_hash
+	}
 
 	/// Get the gas used field of the header.
-	pub fn gas_used(&self) -> &U256 { &self.gas_used }
+	pub fn gas_used(&self) -> &U256 {
+		&self.gas_used
+	}
 
 	/// Get the gas limit field of the header.
-	pub fn gas_limit(&self) -> &U256 { &self.gas_limit }
+	pub fn gas_limit(&self) -> &U256 {
+		&self.gas_limit
+	}
 
 	/// Get the difficulty field of the header.
-	pub fn difficulty(&self) -> &U256 { &self.difficulty }
+	pub fn difficulty(&self) -> &U256 {
+		&self.difficulty
+	}
 
 	/// Get the seal field of the header.
-	pub fn seal(&self) -> &[Bytes] { &self.seal }
+	pub fn seal(&self) -> &[Bytes] {
+		&self.seal
+	}
 
 	/// Get the seal field with RLP-decoded values as bytes.
-	pub fn decode_seal<'a, T: ::std::iter::FromIterator<&'a [u8]>>(&'a self) -> Result<T, DecoderError> {
-		self.seal.iter().map(|rlp| {
-			Rlp::new(rlp).data()
-		}).collect()
+	pub fn decode_seal<'a, T: ::std::iter::FromIterator<&'a [u8]>>(
+		&'a self,
+	) -> Result<T, DecoderError> {
+		self.seal.iter().map(|rlp| Rlp::new(rlp).data()).collect()
 	}
 
 	/// Get a mutable reference to extra_data
@@ -209,7 +239,6 @@ impl Header {
 	/// Set the uncles hash field of the header.
 	pub fn set_uncles_hash(&mut self, a: H256) {
 		change_field(&mut self.hash, &mut self.uncles_hash, a);
-
 	}
 	/// Set the state root field of the header.
 	pub fn set_state_root(&mut self, a: H256) {
@@ -331,7 +360,10 @@ impl Header {
 }
 
 /// Alter value of given field, reset memoised hash if changed.
-fn change_field<T>(hash: &mut Option<H256>, field: &mut T, value: T) where T: PartialEq<T> {
+fn change_field<T>(hash: &mut Option<H256>, field: &mut T, value: T)
+where
+	T: PartialEq<T>,
+{
 	if field != &value {
 		*field = value;
 		*hash = None;
@@ -379,61 +411,99 @@ impl HeapSizeOf for Header {
 }
 
 impl ::parity_machine::Header for Header {
-	fn bare_hash(&self) -> H256 { Header::bare_hash(self) }
-	fn hash(&self) -> H256 { Header::hash(self) }
-	fn seal(&self) -> &[Vec<u8>] { Header::seal(self) }
-	fn author(&self) -> &Address { Header::author(self) }
-	fn number(&self) -> BlockNumber { Header::number(self) }
+	fn bare_hash(&self) -> H256 {
+		Header::bare_hash(self)
+	}
+	fn hash(&self) -> H256 {
+		Header::hash(self)
+	}
+	fn seal(&self) -> &[Vec<u8>] {
+		Header::seal(self)
+	}
+	fn author(&self) -> &Address {
+		Header::author(self)
+	}
+	fn number(&self) -> BlockNumber {
+		Header::number(self)
+	}
 }
 
 impl ::parity_machine::ScoredHeader for Header {
 	type Value = U256;
 
-	fn score(&self) -> &U256 { self.difficulty() }
-	fn set_score(&mut self, score: U256) { self.set_difficulty(score) }
+	fn score(&self) -> &U256 {
+		self.difficulty()
+	}
+	fn set_score(&mut self, score: U256) {
+		self.set_difficulty(score)
+	}
 }
 
 impl ::parity_machine::Header for ExtendedHeader {
-	fn bare_hash(&self) -> H256 { self.header.bare_hash() }
-	fn hash(&self) -> H256 { self.header.hash() }
-	fn seal(&self) -> &[Vec<u8>] { self.header.seal() }
-	fn author(&self) -> &Address { self.header.author() }
-	fn number(&self) -> BlockNumber { self.header.number() }
+	fn bare_hash(&self) -> H256 {
+		self.header.bare_hash()
+	}
+	fn hash(&self) -> H256 {
+		self.header.hash()
+	}
+	fn seal(&self) -> &[Vec<u8>] {
+		self.header.seal()
+	}
+	fn author(&self) -> &Address {
+		self.header.author()
+	}
+	fn number(&self) -> BlockNumber {
+		self.header.number()
+	}
 }
 
 impl ::parity_machine::ScoredHeader for ExtendedHeader {
 	type Value = U256;
 
-	fn score(&self) -> &U256 { self.header.difficulty() }
-	fn set_score(&mut self, score: U256) { self.header.set_difficulty(score) }
+	fn score(&self) -> &U256 {
+		self.header.difficulty()
+	}
+	fn set_score(&mut self, score: U256) {
+		self.header.set_difficulty(score)
+	}
 }
 
 impl ::parity_machine::TotalScoredHeader for ExtendedHeader {
 	type Value = U256;
 
-	fn total_score(&self) -> U256 { self.parent_total_difficulty + *self.header.difficulty() }
+	fn total_score(&self) -> U256 {
+		self.parent_total_difficulty + *self.header.difficulty()
+	}
 }
 
 impl ::parity_machine::FinalizableHeader for ExtendedHeader {
-	fn is_finalized(&self) -> bool { self.is_finalized }
+	fn is_finalized(&self) -> bool {
+		self.is_finalized
+	}
 }
 
 impl ::parity_machine::WithMetadataHeader for ExtendedHeader {
-	fn metadata(&self) -> Option<&[u8]> { self.metadata.as_ref().map(|v| v.as_ref()) }
+	fn metadata(&self) -> Option<&[u8]> {
+		self.metadata.as_ref().map(|v| v.as_ref())
+	}
 }
 
 #[cfg(test)]
 mod tests {
-	use rustc_hex::FromHex;
-	use rlp;
 	use super::Header;
+	use rlp;
+	use rustc_hex::FromHex;
 
 	#[test]
 	fn test_header_seal_fields() {
 		// that's rlp of block header created with ethash engine.
 		let header_rlp = "f901f9a0d405da4e66f1445d455195229624e133f5baafe72b5cf7b3c36c12c8146e98b7a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347948888f1f195afa192cfee860698584c030f4c9db1a05fb2b4bfdef7b314451cb138a534d225c922fc0e5fbe25e451142732c3e25c25a088d2ec6b9860aae1a2c3b299f72b6a5d70d7f7ba4722c78f2c49ba96273c2158a007c6fdfa8eea7e86b81f5b0fc0f78f90cc19f4aa60d323151e0cac660199e9a1b90100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008302008003832fefba82524d84568e932a80a0a0349d8c3df71f1a48a9df7d03fd5f14aeee7d91332c009ecaff0a71ead405bd88ab4e252a7e8c2a23".from_hex().unwrap();
-		let mix_hash = "a0a0349d8c3df71f1a48a9df7d03fd5f14aeee7d91332c009ecaff0a71ead405bd".from_hex().unwrap();
-		let mix_hash_decoded = "a0349d8c3df71f1a48a9df7d03fd5f14aeee7d91332c009ecaff0a71ead405bd".from_hex().unwrap();
+		let mix_hash = "a0a0349d8c3df71f1a48a9df7d03fd5f14aeee7d91332c009ecaff0a71ead405bd"
+			.from_hex()
+			.unwrap();
+		let mix_hash_decoded = "a0349d8c3df71f1a48a9df7d03fd5f14aeee7d91332c009ecaff0a71ead405bd"
+			.from_hex()
+			.unwrap();
 		let nonce = "88ab4e252a7e8c2a23".from_hex().unwrap();
 		let nonce_decoded = "ab4e252a7e8c2a23".from_hex().unwrap();
 

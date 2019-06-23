@@ -14,20 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::path::PathBuf;
-use ethcore::ethstore::{EthStore, SecretStore, import_account, import_accounts, read_geth_accounts};
+use ethcore::account_provider::{AccountProvider, AccountProviderSettings};
 use ethcore::ethstore::accounts_dir::RootDiskDirectory;
 use ethcore::ethstore::SecretVaultRef;
-use ethcore::account_provider::{AccountProvider, AccountProviderSettings};
-use helpers::{password_prompt, password_from_file};
+use ethcore::ethstore::{
+	import_account, import_accounts, read_geth_accounts, EthStore, SecretStore,
+};
+use helpers::{password_from_file, password_prompt};
 use params::SpecType;
+use std::path::PathBuf;
 
 #[derive(Debug, PartialEq)]
 pub enum AccountCmd {
 	New(NewAccount),
 	List(ListAccounts),
 	Import(ImportAccounts),
-	ImportFromGeth(ImportFromGethAccounts)
+	ImportFromGeth(ImportFromGethAccounts),
 }
 
 #[derive(Debug, PartialEq)]
@@ -66,7 +68,7 @@ pub fn execute(cmd: AccountCmd) -> Result<String, String> {
 		AccountCmd::New(new_cmd) => new(new_cmd),
 		AccountCmd::List(list_cmd) => list(list_cmd),
 		AccountCmd::Import(import_cmd) => import(import_cmd),
-		AccountCmd::ImportFromGeth(import_geth_cmd) => import_geth(import_geth_cmd)
+		AccountCmd::ImportFromGeth(import_geth_cmd) => import_geth(import_geth_cmd),
 	}
 }
 
@@ -80,8 +82,9 @@ fn keys_dir(path: String, spec: SpecType) -> Result<RootDiskDirectory, String> {
 fn secret_store(dir: Box<RootDiskDirectory>, iterations: Option<u32>) -> Result<EthStore, String> {
 	match iterations {
 		Some(i) => EthStore::open_with_iterations(dir, i),
-		_ => EthStore::open(dir)
-	}.map_err(|e| format!("Could not open keys store: {}", e))
+		_ => EthStore::open(dir),
+	}
+	.map_err(|e| format!("Could not open keys store: {}", e))
 }
 
 fn new(n: NewAccount) -> Result<String, String> {
@@ -93,7 +96,9 @@ fn new(n: NewAccount) -> Result<String, String> {
 	let dir = Box::new(keys_dir(n.path, n.spec)?);
 	let secret_store = Box::new(secret_store(dir, Some(n.iterations))?);
 	let acc_provider = AccountProvider::new(secret_store, AccountProviderSettings::default());
-	let new_account = acc_provider.new_account(&password).map_err(|e| format!("Could not create new account: {}", e))?;
+	let new_account = acc_provider
+		.new_account(&password)
+		.map_err(|e| format!("Could not create new account: {}", e))?;
 	Ok(format!("0x{:x}", new_account))
 }
 
@@ -102,7 +107,8 @@ fn list(list_cmd: ListAccounts) -> Result<String, String> {
 	let secret_store = Box::new(secret_store(dir, None)?);
 	let acc_provider = AccountProvider::new(secret_store, AccountProviderSettings::default());
 	let accounts = acc_provider.accounts().map_err(|e| format!("{}", e))?;
-	let result = accounts.into_iter()
+	let result = accounts
+		.into_iter()
 		.map(|a| format!("0x{:x}", a))
 		.collect::<Vec<String>>()
 		.join("\n");
@@ -118,9 +124,12 @@ fn import(i: ImportAccounts) -> Result<String, String> {
 		let path = PathBuf::from(path);
 		if path.is_dir() {
 			let from = RootDiskDirectory::at(&path);
-			imported += import_accounts(&from, &to).map_err(|e| format!("Importing accounts from {:?} failed: {}", path, e))?.len();
+			imported += import_accounts(&from, &to)
+				.map_err(|e| format!("Importing accounts from {:?} failed: {}", path, e))?
+				.len();
 		} else if path.is_file() {
-			import_account(&path, &to).map_err(|e| format!("Importing account from {:?} failed: {}", path, e))?;
+			import_account(&path, &to)
+				.map_err(|e| format!("Importing account from {:?} failed: {}", path, e))?;
 			imported += 1;
 		}
 	}
@@ -129,15 +138,20 @@ fn import(i: ImportAccounts) -> Result<String, String> {
 }
 
 fn import_geth(i: ImportFromGethAccounts) -> Result<String, String> {
-	use std::io::ErrorKind;
 	use ethcore::ethstore::Error;
+	use std::io::ErrorKind;
 
 	let dir = Box::new(keys_dir(i.to, i.spec)?);
 	let secret_store = Box::new(secret_store(dir, None)?);
 	let geth_accounts = read_geth_accounts(i.testnet);
 	match secret_store.import_geth_accounts(SecretVaultRef::Root, geth_accounts, i.testnet) {
-		Ok(v) => Ok(format!("Successfully imported {} account(s) from geth.", v.len())),
-		Err(Error::Io(ref io_err)) if io_err.kind() == ErrorKind::NotFound => Err("Failed to find geth keys folder.".into()),
-		Err(err) => Err(format!("Import geth accounts failed. {}", err))
+		Ok(v) => Ok(format!(
+			"Successfully imported {} account(s) from geth.",
+			v.len()
+		)),
+		Err(Error::Io(ref io_err)) if io_err.kind() == ErrorKind::NotFound => {
+			Err("Failed to find geth keys folder.".into())
+		}
+		Err(err) => Err(format!("Import geth accounts failed. {}", err)),
 	}
 }

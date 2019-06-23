@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use ethjson;
-use trie::{TrieFactory, TrieSpec};
 use ethereum_types::H256;
+use ethjson;
 use memorydb::MemoryDB;
+use trie::{TrieFactory, TrieSpec};
 
 fn test_trie(json: &[u8], trie: TrieSpec) -> Vec<String> {
 	let tests = ethjson::trie::Test::load(json).unwrap();
@@ -32,8 +32,10 @@ fn test_trie(json: &[u8], trie: TrieSpec) -> Vec<String> {
 		for (key, value) in test.input.data.into_iter() {
 			let key: Vec<u8> = key.into();
 			let value: Vec<u8> = value.map_or_else(Vec::new, Into::into);
-			t.insert(&key, &value)
-				.expect(&format!("Trie test '{:?}' failed due to internal error", name));
+			t.insert(&key, &value).expect(&format!(
+				"Trie test '{:?}' failed due to internal error",
+				name
+			));
 		}
 
 		if *t.root() != test.root.into() {
@@ -55,8 +57,8 @@ mod generic {
 		super::test_trie(json, TrieSpec::Generic)
 	}
 
-	declare_test!{TrieTests_trietest, "TrieTests/trietest"}
-	declare_test!{TrieTests_trieanyorder, "TrieTests/trieanyorder"}
+	declare_test! {TrieTests_trietest, "TrieTests/trietest"}
+	declare_test! {TrieTests_trieanyorder, "TrieTests/trieanyorder"}
 }
 
 mod secure {
@@ -66,7 +68,7 @@ mod secure {
 		super::test_trie(json, TrieSpec::Secure)
 	}
 
-	declare_test!{TrieTests_hex_encoded_secure, "TrieTests/hex_encoded_securetrie_test"}
-	declare_test!{TrieTests_trietest_secure, "TrieTests/trietest_secureTrie"}
-	declare_test!{TrieTests_trieanyorder_secure, "TrieTests/trieanyorder_secureTrie"}
+	declare_test! {TrieTests_hex_encoded_secure, "TrieTests/hex_encoded_securetrie_test"}
+	declare_test! {TrieTests_trietest_secure, "TrieTests/trietest_secureTrie"}
+	declare_test! {TrieTests_trieanyorder_secure, "TrieTests/trieanyorder_secureTrie"}
 }

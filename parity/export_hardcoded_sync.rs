@@ -18,16 +18,16 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ethcore::client::DatabaseCompactionProfile;
-use ethcore::spec::{SpecParams, OptimizeFor};
+use ethcore::spec::{OptimizeFor, SpecParams};
 use light::client::fetch::Unavailable as UnavailableDataFetcher;
 use light::Cache as LightDataCache;
 
-use params::{SpecType, Pruning};
-use helpers::execute_upgrades;
-use dir::Directories;
 use cache::CacheConfig;
-use user_defaults::UserDefaults;
 use db;
+use dir::Directories;
+use helpers::execute_upgrades;
+use params::{Pruning, SpecType};
+use user_defaults::UserDefaults;
 
 // Number of minutes before a given gas price corpus should expire.
 // Light client only.
@@ -48,13 +48,20 @@ pub fn execute(cmd: ExportHsyncCmd) -> Result<String, String> {
 	use parking_lot::Mutex;
 
 	// load spec
-	let spec = cmd.spec.spec(SpecParams::new(cmd.dirs.cache.as_ref(), OptimizeFor::Memory))?;
+	let spec = cmd.spec.spec(SpecParams::new(
+		cmd.dirs.cache.as_ref(),
+		OptimizeFor::Memory,
+	))?;
 
 	// load genesis hash
 	let genesis_hash = spec.genesis_header().hash();
 
 	// database paths
-	let db_dirs = cmd.dirs.database(genesis_hash, cmd.spec.legacy_fork_name(), spec.data_dir.clone());
+	let db_dirs = cmd.dirs.database(
+		genesis_hash,
+		cmd.spec.legacy_fork_name(),
+		spec.data_dir.clone(),
+	);
 
 	// user defaults path
 	let user_defaults_path = db_dirs.user_defaults_path();
@@ -72,7 +79,10 @@ pub fn execute(cmd: ExportHsyncCmd) -> Result<String, String> {
 	cmd.dirs.create_dirs(false, false, false)?;
 
 	// TODO: configurable cache size.
-	let cache = LightDataCache::new(Default::default(), Duration::from_secs(60 * GAS_CORPUS_EXPIRATION_MINUTES));
+	let cache = LightDataCache::new(
+		Default::default(),
+		Duration::from_secs(60 * GAS_CORPUS_EXPIRATION_MINUTES),
+	);
 	let cache = Arc::new(Mutex::new(cache));
 
 	// start client and create transaction queue.
@@ -87,15 +97,22 @@ pub fn execute(cmd: ExportHsyncCmd) -> Result<String, String> {
 	config.queue.max_mem_use = cmd.cache_config.queue() as usize * 1024 * 1024;
 
 	// initialize database.
-	let db = db::open_db(&db_dirs.client_path(algorithm).to_str().expect("DB path could not be converted to string."),
-						 &cmd.cache_config,
-						 &cmd.compaction,
-						 cmd.wal)?;
+	let db = db::open_db(
+		&db_dirs
+			.client_path(algorithm)
+			.to_str()
+			.expect("DB path could not be converted to string."),
+		&cmd.cache_config,
+		&cmd.compaction,
+		cmd.wal,
+	)?;
 
 	let service = light_client::Service::start(config, &spec, UnavailableDataFetcher, db, cache)
 		.map_err(|e| format!("Error starting light client: {}", e))?;
 
-	let hs = service.client().read_hardcoded_sync()
+	let hs = service
+		.client()
+		.read_hardcoded_sync()
 		.map_err(|e| format!("Error reading hardcoded sync: {}", e))?;
 	if let Some(hs) = hs {
 		Ok(::serde_json::to_string_pretty(&hs.to_json()).expect("generated JSON is always valid"))

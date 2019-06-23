@@ -30,47 +30,47 @@ mod hash;
 mod histogram;
 mod index;
 mod log;
-mod transaction_outcome;
 mod node_kind;
 mod provenance;
 mod receipt;
 mod rpc_settings;
 mod secretstore;
+mod transaction_outcome;
 //mod sync;
 //mod trace;
 //mod trace_filter;
+mod private_receipt;
 mod transaction;
-mod transaction_request;
 mod transaction_condition;
+mod transaction_request;
 mod uint;
 mod work;
-mod private_receipt;
 
 pub mod pubsub;
 
 pub use self::account_info::{AccountInfo, ExtAccountInfo, HwAccountInfo};
+pub use self::block::{Block, BlockTransactions, Header, Rich, RichBlock, RichHeader};
+pub use self::block_number::{block_number_to_id, BlockNumber};
 pub use self::bytes::Bytes;
-pub use self::block::{RichBlock, Block, BlockTransactions, Header, RichHeader, Rich};
-pub use self::block_number::{BlockNumber, block_number_to_id};
 pub use self::call_request::CallRequest;
 pub use self::confirmations::{
 	ConfirmationPayload, ConfirmationRequest, ConfirmationResponse, ConfirmationResponseWithToken,
-	TransactionModification, SignRequest, DecryptRequest, Either
+	DecryptRequest, Either, SignRequest, TransactionModification,
 };
 //pub use self::consensus_status::*;
 pub use self::dapps::LocalDapp;
 //pub use self::derivation::{DeriveHash, DeriveHierarchical, Derive};
-pub use self::filter::{TxFilter, Filter, FilterChanges};
-pub use self::hash::{H64, H160, H256, H512, H520, H2048};
+pub use self::filter::{Filter, FilterChanges, TxFilter};
+pub use self::hash::{H160, H2048, H256, H512, H520, H64};
 pub use self::histogram::Histogram;
 pub use self::index::Index;
 pub use self::log::Log;
-pub use self::transaction_outcome::TransactionOutcome;
-pub use self::node_kind::{NodeKind, Availability, Capability};
-pub use self::provenance::{Origin, DappId};
+pub use self::node_kind::{Availability, Capability, NodeKind};
+pub use self::provenance::{DappId, Origin};
 pub use self::receipt::Receipt;
 pub use self::rpc_settings::RpcSettings;
 pub use self::secretstore::EncryptedDocumentKey;
+pub use self::transaction_outcome::TransactionOutcome;
 /*
 pub use self::sync::{
 	SyncStatus, SyncInfo, Peers, PeerInfo, PeerNetworkInfo, PeerProtocolsInfo,
@@ -79,12 +79,14 @@ pub use self::sync::{
 */
 //pub use self::trace::{LocalizedTrace, TraceResults};
 //pub use self::trace_filter::TraceFilter;
-pub use self::transaction::{Transaction, RichRawTransaction, LocalTransactionStatus};
-pub use self::transaction_request::TransactionRequest;
+pub use self::private_receipt::{
+	PrivateTransactionReceipt, PrivateTransactionReceiptAndTransaction,
+};
+pub use self::transaction::{LocalTransactionStatus, RichRawTransaction, Transaction};
 pub use self::transaction_condition::TransactionCondition;
+pub use self::transaction_request::TransactionRequest;
 pub use self::uint::{U128, U256, U64};
 pub use self::work::Work;
-pub use self::private_receipt::{PrivateTransactionReceipt, PrivateTransactionReceiptAndTransaction};
 
 // TODO [ToDr] Refactor to a proper type Vec of enums?
 /// Expected tracing type.

@@ -14,17 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use zip;
-use std::{fs, fmt};
-use std::io::{self, Read, Write};
-use std::path::PathBuf;
 use ethereum_types::H256;
 use fetch;
 use futures_cpupool::CpuPool;
 use hash::keccak_pipe;
 use mime_guess::Mime;
+use std::io::{self, Read, Write};
+use std::path::PathBuf;
+use std::{fmt, fs};
+use zip;
 
-use apps::manifest::{MANIFEST_FILENAME, deserialize_manifest, serialize_manifest, Manifest};
+use apps::manifest::{deserialize_manifest, serialize_manifest, Manifest, MANIFEST_FILENAME};
 use handlers::{ContentValidator, ValidatorResponse};
 use page::{local, PageCache};
 
@@ -34,7 +34,7 @@ fn write_response_and_check_hash(
 	id: &str,
 	mut content_path: PathBuf,
 	filename: &str,
-	response: fetch::Response
+	response: fetch::Response,
 ) -> Result<(fs::File, PathBuf), ValidationError> {
 	// try to parse id
 	let id = id.parse().map_err(|_| ValidationError::InvalidContentId)?;
@@ -80,7 +80,13 @@ pub struct Content {
 }
 
 impl Content {
-	pub fn new(id: String, mime: Mime, content_path: PathBuf, on_done: OnDone, pool: CpuPool) -> Self {
+	pub fn new(
+		id: String,
+		mime: Mime,
+		content_path: PathBuf,
+		on_done: OnDone,
+		pool: CpuPool,
+	) -> Self {
 		Content {
 			id,
 			mime,
@@ -94,15 +100,24 @@ impl Content {
 impl ContentValidator for Content {
 	type Error = ValidationError;
 
-	fn validate_and_install(self, response: fetch::Response) -> Result<ValidatorResponse, ValidationError> {
+	fn validate_and_install(
+		self,
+		response: fetch::Response,
+	) -> Result<ValidatorResponse, ValidationError> {
 		let pool = self.pool;
 		let id = self.id.clone();
 		let mime = self.mime;
 		let validate = move |content_path: PathBuf| {
 			// Create dir
-			let (_, content_path) = write_response_and_check_hash(&id, content_path, &id, response)?;
+			let (_, content_path) =
+				write_response_and_check_hash(&id, content_path, &id, response)?;
 
-			Ok(local::Dapp::single_file(pool, content_path, mime, PageCache::Enabled))
+			Ok(local::Dapp::single_file(
+				pool,
+				content_path,
+				mime,
+				PageCache::Enabled,
+			))
 		};
 
 		// Prepare path for a file
@@ -136,7 +151,9 @@ impl Dapp {
 		}
 	}
 
-	fn find_manifest(zip: &mut zip::ZipArchive<fs::File>) -> Result<(Manifest, PathBuf), ValidationError> {
+	fn find_manifest(
+		zip: &mut zip::ZipArchive<fs::File>,
+	) -> Result<(Manifest, PathBuf), ValidationError> {
 		for i in 0..zip.len() {
 			let mut file = zip.by_index(i)?;
 
@@ -147,7 +164,8 @@ impl Dapp {
 			// try to read manifest
 			let mut manifest = String::new();
 			let manifest = file
-				.read_to_string(&mut manifest).ok()
+				.read_to_string(&mut manifest)
+				.ok()
 				.and_then(|_| deserialize_manifest(manifest).ok());
 
 			if let Some(manifest) = manifest {
@@ -164,11 +182,19 @@ impl Dapp {
 impl ContentValidator for Dapp {
 	type Error = ValidationError;
 
-	fn validate_and_install(self, response: fetch::Response) -> Result<ValidatorResponse, ValidationError> {
+	fn validate_and_install(
+		self,
+		response: fetch::Response,
+	) -> Result<ValidatorResponse, ValidationError> {
 		let id = self.id.clone();
 		let pool = self.pool;
 		let validate = move |dapp_path: PathBuf| {
-			let (file, zip_path) = write_response_and_check_hash(&id, dapp_path.clone(), &format!("{}.zip", id), response)?;
+			let (file, zip_path) = write_response_and_check_hash(
+				&id,
+				dapp_path.clone(),
+				&format!("{}.zip", id),
+				response,
+			)?;
 			trace!(target: "dapps", "Opening dapp bundle at {:?}", zip_path);
 			// Unpack archive
 			let mut zip = zip::ZipArchive::new(file)?;
@@ -201,7 +227,8 @@ impl ContentValidator for Dapp {
 			fs::remove_file(&zip_path)?;
 
 			// Write manifest
-			let manifest_str = serialize_manifest(&manifest).map_err(ValidationError::ManifestSerialization)?;
+			let manifest_str =
+				serialize_manifest(&manifest).map_err(ValidationError::ManifestSerialization)?;
 			let manifest_path = dapp_path.join(MANIFEST_FILENAME);
 			let mut manifest_file = fs::File::create(manifest_path)?;
 			manifest_file.write_all(manifest_str.as_bytes())?;
@@ -231,7 +258,7 @@ pub enum ValidationError {
 	InvalidContentId,
 	ManifestNotFound,
 	ManifestSerialization(String),
-	HashMismatch { expected: H256, got: H256, },
+	HashMismatch { expected: H256, got: H256 },
 }
 
 impl fmt::Display for ValidationError {
@@ -239,14 +266,27 @@ impl fmt::Display for ValidationError {
 		match *self {
 			ValidationError::Io(ref io) => write!(f, "Unexpected IO error occured: {:?}", io),
 			ValidationError::Zip(ref zip) => write!(f, "Unable to read ZIP archive: {:?}", zip),
-			ValidationError::InvalidContentId => write!(f, "ID is invalid. It should be 256 bits keccak hash of content."),
-			ValidationError::ManifestNotFound => write!(f, "Downloaded Dapp bundle did not contain valid manifest.json file."),
-			ValidationError::ManifestSerialization(ref err) => {
-				write!(f, "There was an error during Dapp Manifest serialization: {:?}", err)
-			},
-			ValidationError::HashMismatch { ref expected, ref got } => {
-				write!(f, "Hash of downloaded content did not match. Expected:{:?}, Got:{:?}.", expected, got)
-			},
+			ValidationError::InvalidContentId => write!(
+				f,
+				"ID is invalid. It should be 256 bits keccak hash of content."
+			),
+			ValidationError::ManifestNotFound => write!(
+				f,
+				"Downloaded Dapp bundle did not contain valid manifest.json file."
+			),
+			ValidationError::ManifestSerialization(ref err) => write!(
+				f,
+				"There was an error during Dapp Manifest serialization: {:?}",
+				err
+			),
+			ValidationError::HashMismatch {
+				ref expected,
+				ref got,
+			} => write!(
+				f,
+				"Hash of downloaded content did not match. Expected:{:?}, Got:{:?}.",
+				expected, got
+			),
 		}
 	}
 }

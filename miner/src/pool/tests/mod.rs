@@ -18,20 +18,20 @@ use ethereum_types::U256;
 use transaction::{self, PendingTransaction};
 use txpool;
 
-use pool::{verifier, TransactionQueue, PrioritizationStrategy};
+use pool::{verifier, PrioritizationStrategy, TransactionQueue};
 
-pub mod tx;
 pub mod client;
+pub mod tx;
 
-use self::tx::{Tx, TxExt, PairExt};
 use self::client::TestClient;
+use self::tx::{PairExt, Tx, TxExt};
 
 fn new_queue() -> TransactionQueue {
 	TransactionQueue::new(
 		txpool::Options {
 			max_count: 3,
 			max_per_sender: 3,
-			max_mem_usage: 50
+			max_mem_usage: 50,
 		},
 		verifier::Options {
 			minimal_gas_price: 1.into(),
@@ -49,7 +49,7 @@ fn should_return_correct_nonces_when_dropped_because_of_limit() {
 		txpool::Options {
 			max_count: 3,
 			max_per_sender: 1,
-			max_mem_usage: 50
+			max_mem_usage: 50,
 		},
 		verifier::Options {
 			minimal_gas_price: 1.into(),
@@ -63,14 +63,17 @@ fn should_return_correct_nonces_when_dropped_because_of_limit() {
 	let nonce = tx1.nonce;
 
 	// when
-	let r1= txq.import(TestClient::new(), vec![tx1].local());
-	let r2= txq.import(TestClient::new(), vec![tx2].local());
+	let r1 = txq.import(TestClient::new(), vec![tx1].local());
+	let r2 = txq.import(TestClient::new(), vec![tx2].local());
 	assert_eq!(r1, vec![Ok(())]);
 	assert_eq!(r2, vec![Err(transaction::Error::LimitReached)]);
 	assert_eq!(txq.status().status.transaction_count, 1);
 
 	// then
-	assert_eq!(txq.next_nonce(TestClient::new(), &sender), Some(nonce + 1.into()));
+	assert_eq!(
+		txq.next_nonce(TestClient::new(), &sender),
+		Some(nonce + 1.into())
+	);
 
 	// when
 	let tx1 = Tx::gas_price(2).signed();
@@ -149,10 +152,13 @@ fn should_drop_transactions_from_senders_without_balance() {
 	let res = txq.import(client, vec![tx.local()]);
 
 	// then
-	assert_eq!(res, vec![Err(transaction::Error::InsufficientBalance {
-		balance: U256::from(1),
-		cost: U256::from(21_100),
-	})]);
+	assert_eq!(
+		res,
+		vec![Err(transaction::Error::InsufficientBalance {
+			balance: U256::from(1),
+			cost: U256::from(21_100),
+		})]
+	);
 	assert_eq!(txq.status().status.transaction_count, 0);
 }
 
@@ -170,10 +176,13 @@ fn should_not_import_transaction_below_min_gas_price_threshold_if_external() {
 	let res = txq.import(TestClient::new(), vec![tx.signed().unverified()]);
 
 	// then
-	assert_eq!(res, vec![Err(transaction::Error::InsufficientGasPrice {
-		minimal: U256::from(3),
-		got: U256::from(1),
-	})]);
+	assert_eq!(
+		res,
+		vec![Err(transaction::Error::InsufficientGasPrice {
+			minimal: U256::from(3),
+			got: U256::from(1),
+		})]
+	);
 	assert_eq!(txq.status().status.transaction_count, 0);
 }
 
@@ -207,7 +216,7 @@ fn should_import_txs_from_same_sender() {
 	txq.import(TestClient::new(), txs.local().into_vec());
 
 	// then
-	let top = txq.pending(TestClient::new(), 0 ,0, None);
+	let top = txq.pending(TestClient::new(), 0, 0, None);
 	assert_eq!(top[0].hash, hash);
 	assert_eq!(top[1].hash, hash2);
 	assert_eq!(top.len(), 2);
@@ -301,10 +310,16 @@ fn should_handle_min_block() {
 	let (tx, tx2) = Tx::default().signed_pair();
 
 	// when
-	let res = txq.import(TestClient::new(), vec![
-		verifier::Transaction::Local(PendingTransaction::new(tx, transaction::Condition::Number(1).into())),
-		tx2.local()
-	]);
+	let res = txq.import(
+		TestClient::new(),
+		vec![
+			verifier::Transaction::Local(PendingTransaction::new(
+				tx,
+				transaction::Condition::Number(1).into(),
+			)),
+			tx2.local(),
+		],
+	);
 	assert_eq!(res, vec![Ok(()), Ok(())]);
 
 	// then
@@ -318,7 +333,7 @@ fn should_handle_min_block() {
 fn should_correctly_update_futures_when_removing() {
 	// given
 	let txq = new_queue();
-	let txs= Tx::default().signed_pair();
+	let txs = Tx::default().signed_pair();
 
 	let res = txq.import(TestClient::new().with_nonce(121), txs.local().into_vec());
 	assert_eq!(res, vec![Ok(()), Ok(())]);
@@ -366,7 +381,11 @@ fn should_remove_transaction() {
 	// when
 	txq.cull(TestClient::new().with_nonce(124));
 	assert_eq!(txq.status().status.transaction_count, 1);
-	assert_eq!(txq.pending(TestClient::new().with_nonce(125), 0, 0, None).len(), 1);
+	assert_eq!(
+		txq.pending(TestClient::new().with_nonce(125), 0, 0, None)
+			.len(),
+		1
+	);
 	txq.cull(TestClient::new().with_nonce(126));
 
 	// then
@@ -423,7 +442,7 @@ fn should_prefer_current_transactions_when_hitting_the_limit() {
 		txpool::Options {
 			max_count: 1,
 			max_per_sender: 2,
-			max_mem_usage: 50
+			max_mem_usage: 50,
 		},
 		verifier::Options {
 			minimal_gas_price: 1.into(),
@@ -524,10 +543,23 @@ fn should_not_replace_same_transaction_if_the_fee_is_less_than_minimal_bump() {
 	let res = txq.import(client.clone(), vec![tx2, tx4].local());
 
 	// then
-	assert_eq!(res, vec![Err(transaction::Error::TooCheapToReplace), Ok(())]);
+	assert_eq!(
+		res,
+		vec![Err(transaction::Error::TooCheapToReplace), Ok(())]
+	);
 	assert_eq!(txq.status().status.transaction_count, 2);
-	assert_eq!(txq.pending(client.clone(), 0, 0, None)[0].signed().gas_price, U256::from(20));
-	assert_eq!(txq.pending(client.clone(), 0, 0, None)[1].signed().gas_price, U256::from(2));
+	assert_eq!(
+		txq.pending(client.clone(), 0, 0, None)[0]
+			.signed()
+			.gas_price,
+		U256::from(20)
+	);
+	assert_eq!(
+		txq.pending(client.clone(), 0, 0, None)[1]
+			.signed()
+			.gas_price,
+		U256::from(2)
+	);
 }
 
 #[test]
@@ -551,7 +583,10 @@ fn should_return_correct_nonce_when_transactions_from_given_address_exist() {
 	txq.import(TestClient::new(), vec![tx.local()]);
 
 	// then
-	assert_eq!(txq.next_nonce(TestClient::new(), &from), Some(nonce + 1.into()));
+	assert_eq!(
+		txq.next_nonce(TestClient::new(), &from),
+		Some(nonce + 1.into())
+	);
 }
 
 #[test]
@@ -573,7 +608,10 @@ fn should_return_valid_last_nonce_after_cull() {
 
 	// then
 	assert_eq!(txq.next_nonce(client.clone(), &sender), None);
-	assert_eq!(txq.next_nonce(client.with_nonce(125), &sender), Some(126.into()));
+	assert_eq!(
+		txq.next_nonce(client.with_nonce(125), &sender),
+		Some(126.into())
+	);
 }
 
 #[test]
@@ -599,13 +637,19 @@ fn should_reject_transactions_below_base_gas() {
 	let tx = Tx::default().signed();
 
 	// when
-	let res = txq.import(TestClient::new().with_gas_required(100_001), vec![tx].local());
+	let res = txq.import(
+		TestClient::new().with_gas_required(100_001),
+		vec![tx].local(),
+	);
 
 	// then
-	assert_eq!(res, vec![Err(transaction::Error::InsufficientGas {
-		minimal: 100_001.into(),
-		got: 21_000.into(),
-	})]);
+	assert_eq!(
+		res,
+		vec![Err(transaction::Error::InsufficientGas {
+			minimal: 100_001.into(),
+			got: 21_000.into(),
+		})]
+	);
 }
 
 #[test]
@@ -652,7 +696,7 @@ fn should_accept_local_transactions_below_min_gas_price() {
 		txpool::Options {
 			max_count: 3,
 			max_per_sender: 3,
-			max_mem_usage: 50
+			max_mem_usage: 50,
 		},
 		verifier::Options {
 			minimal_gas_price: 10.into(),
@@ -677,11 +721,7 @@ fn should_accept_local_service_transaction() {
 	let tx = Tx::gas_price(0).signed();
 
 	// when
-	let res = txq.import(
-		TestClient::new()
-			.with_local(&tx.sender()),
-		vec![tx.local()]
-	);
+	let res = txq.import(TestClient::new().with_local(&tx.sender()), vec![tx.local()]);
 	assert_eq!(res, vec![Ok(())]);
 
 	// then
@@ -698,16 +738,19 @@ fn should_not_accept_external_service_transaction_if_sender_not_certified() {
 
 	// when
 	let res = txq.import(TestClient::new(), vec![tx1, tx2]);
-	assert_eq!(res, vec![
-		Err(transaction::Error::InsufficientGasPrice {
-			minimal: 1.into(),
-			got: 0.into(),
-		}),
-		Err(transaction::Error::InsufficientGasPrice {
-			minimal: 1.into(),
-			got: 0.into(),
-		}),
-	]);
+	assert_eq!(
+		res,
+		vec![
+			Err(transaction::Error::InsufficientGasPrice {
+				minimal: 1.into(),
+				got: 0.into(),
+			}),
+			Err(transaction::Error::InsufficientGasPrice {
+				minimal: 1.into(),
+				got: 0.into(),
+			}),
+		]
+	);
 
 	// then
 	let res = txq.import(TestClient::new().with_service_transaction(), vec![tx3]);
@@ -719,10 +762,7 @@ fn should_not_return_transactions_over_nonce_cap() {
 	// given
 	let txq = new_queue();
 	let (tx1, tx2, tx3) = Tx::default().signed_triple();
-	let res = txq.import(
-		TestClient::new(),
-		vec![tx1, tx2, tx3].local()
-	);
+	let res = txq.import(TestClient::new(), vec![tx1, tx2, tx3].local());
 	assert_eq!(res, vec![Ok(()), Ok(()), Ok(())]);
 
 	// when
@@ -740,10 +780,16 @@ fn should_clear_cache_after_timeout_for_local() {
 	// given
 	let txq = new_queue();
 	let (tx, tx2) = Tx::default().signed_pair();
-	let res = txq.import(TestClient::new(), vec![
-		verifier::Transaction::Local(PendingTransaction::new(tx, transaction::Condition::Timestamp(1000).into())),
-		tx2.local()
-	]);
+	let res = txq.import(
+		TestClient::new(),
+		vec![
+			verifier::Transaction::Local(PendingTransaction::new(
+				tx,
+				transaction::Condition::Timestamp(1000).into(),
+			)),
+			tx2.local(),
+		],
+	);
 	assert_eq!(res, vec![Ok(()), Ok(())]);
 
 	// This should populate cache and set timestamp to 1
@@ -760,9 +806,13 @@ fn should_clear_cache_after_timeout_for_local() {
 fn should_reject_big_transaction() {
 	let txq = new_queue();
 	let big_tx = Tx::default().big_one();
-	let res = txq.import(TestClient::new(), vec![
-		verifier::Transaction::Local(PendingTransaction::new(big_tx, transaction::Condition::Timestamp(1000).into()))
-	]);
+	let res = txq.import(
+		TestClient::new(),
+		vec![verifier::Transaction::Local(PendingTransaction::new(
+			big_tx,
+			transaction::Condition::Timestamp(1000).into(),
+		))],
+	);
 	assert_eq!(res, vec![Err(transaction::Error::TooBig)]);
 }
 
@@ -773,7 +823,7 @@ fn should_include_local_transaction_to_a_full_pool() {
 		txpool::Options {
 			max_count: 1,
 			max_per_sender: 2,
-			max_mem_usage: 50
+			max_mem_usage: 50,
 		},
 		verifier::Options {
 			minimal_gas_price: 1.into(),

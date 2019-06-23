@@ -15,7 +15,7 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 use engines::{Engine, Seal};
-use parity_machine::{Machine, Transactions, TotalScoredHeader};
+use parity_machine::{Machine, TotalScoredHeader, Transactions};
 
 /// An engine which does not provide any consensus mechanism, just seals blocks internally.
 /// Only seals blocks which have transactions.
@@ -26,27 +26,34 @@ pub struct InstantSeal<M> {
 impl<M> InstantSeal<M> {
 	/// Returns new instance of InstantSeal over the given state machine.
 	pub fn new(machine: M) -> Self {
-		InstantSeal {
-			machine: machine,
-		}
+		InstantSeal { machine: machine }
 	}
 }
 
 impl<M: Machine> Engine<M> for InstantSeal<M>
-  where M::LiveBlock: Transactions,
-        M::ExtendedHeader: TotalScoredHeader,
-        <M::ExtendedHeader as TotalScoredHeader>::Value: Ord
+where
+	M::LiveBlock: Transactions,
+	M::ExtendedHeader: TotalScoredHeader,
+	<M::ExtendedHeader as TotalScoredHeader>::Value: Ord,
 {
 	fn name(&self) -> &str {
 		"InstantSeal"
 	}
 
-	fn machine(&self) -> &M { &self.machine }
+	fn machine(&self) -> &M {
+		&self.machine
+	}
 
-	fn seals_internally(&self) -> Option<bool> { Some(true) }
+	fn seals_internally(&self) -> Option<bool> {
+		Some(true)
+	}
 
 	fn generate_seal(&self, block: &M::LiveBlock, _parent: &M::Header) -> Seal {
-		if block.transactions().is_empty() { Seal::None } else { Seal::Regular(Vec::new()) }
+		if block.transactions().is_empty() {
+			Seal::None
+		} else {
+			Seal::Regular(Vec::new())
+		}
 	}
 
 	fn verify_local_seal(&self, _header: &M::Header) -> Result<(), M::Error> {
@@ -54,9 +61,11 @@ impl<M: Machine> Engine<M> for InstantSeal<M>
 	}
 
 	fn open_block_header_timestamp(&self, parent_timestamp: u64) -> u64 {
-		use std::{time, cmp};
+		use std::{cmp, time};
 
-		let now = time::SystemTime::now().duration_since(time::UNIX_EPOCH).unwrap_or_default();
+		let now = time::SystemTime::now()
+			.duration_since(time::UNIX_EPOCH)
+			.unwrap_or_default();
 		cmp::max(now.as_secs(), parent_timestamp)
 	}
 
@@ -64,7 +73,11 @@ impl<M: Machine> Engine<M> for InstantSeal<M>
 		header_timestamp >= parent_timestamp
 	}
 
-	fn fork_choice(&self, new: &M::ExtendedHeader, current: &M::ExtendedHeader) -> super::ForkChoice {
+	fn fork_choice(
+		&self,
+		new: &M::ExtendedHeader,
+		current: &M::ExtendedHeader,
+	) -> super::ForkChoice {
 		super::total_difficulty_fork_choice(new, current)
 	}
 }

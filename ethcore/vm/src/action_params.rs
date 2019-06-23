@@ -15,10 +15,10 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Evm input params.
-use ethereum_types::{U256, H256, Address};
 use bytes::Bytes;
-use hash::{keccak, KECCAK_EMPTY};
+use ethereum_types::{Address, H256, U256};
 use ethjson;
+use hash::{keccak, KECCAK_EMPTY};
 use oasis_contract::OasisContract;
 
 use call_type::CallType;
@@ -31,7 +31,7 @@ pub enum ActionValue {
 	/// Value that should be transfered
 	Transfer(U256),
 	/// Apparent value for transaction (not transfered)
-	Apparent(U256)
+	Apparent(U256),
 }
 
 /// Type of the way parameters encoded
@@ -47,7 +47,7 @@ impl ActionValue {
 	/// Returns action value as U256.
 	pub fn value(&self) -> U256 {
 		match *self {
-			ActionValue::Transfer(x) | ActionValue::Apparent(x) => x
+			ActionValue::Transfer(x) | ActionValue::Apparent(x) => x,
 		}
 	}
 
@@ -131,7 +131,10 @@ impl From<ethjson::vm::Transaction> for ActionParams {
 			gas: t.gas.into(),
 			gas_price: t.gas_price.into(),
 			value: ActionValue::Transfer(t.value.into()),
-			call_type: match address.is_zero() { true => CallType::None, false => CallType::Call },	// TODO @debris is this correct?
+			call_type: match address.is_zero() {
+				true => CallType::None,
+				false => CallType::Call,
+			}, // TODO @debris is this correct?
 			params_type: ParamsType::Separate,
 			oasis_contract: None,
 		}

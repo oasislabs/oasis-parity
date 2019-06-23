@@ -18,11 +18,9 @@
 //! Push requests with `push`. Back-references and data required to verify responses must be
 //! supplied as well.
 
+use request::{IncompleteRequest, NoSuchOutput, Output, OutputKind, ResponseError, ResponseLike};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
-use request::{
-	IncompleteRequest, OutputKind, Output, NoSuchOutput, ResponseError, ResponseLike,
-};
 
 /// Build chained requests. Push them onto the series with `push`,
 /// and produce a `Batch` object with `build`. Outputs are checked for consistency.
@@ -45,14 +43,14 @@ impl<T: IncompleteRequest> Builder<T> {
 	/// Attempt to push a request onto the request chain. Fails if the request
 	/// references a non-existent output of a prior request.
 	pub fn push(&mut self, request: T) -> Result<(), NoSuchOutput> {
-		request.check_outputs(|req, idx, kind| {
-			match self.output_kinds.get(&(req, idx)) {
-				Some(k) if k == &kind => Ok(()),
-				_ => Err(NoSuchOutput),
-			}
+		request.check_outputs(|req, idx, kind| match self.output_kinds.get(&(req, idx)) {
+			Some(k) if k == &kind => Ok(()),
+			_ => Err(NoSuchOutput),
 		})?;
 		let req_idx = self.requests.len();
-		request.note_outputs(|idx, kind| { self.output_kinds.insert((req_idx, idx), kind); });
+		request.note_outputs(|idx, kind| {
+			self.output_kinds.insert((req_idx, idx), kind);
+		});
 		self.requests.push(request);
 		Ok(())
 	}
@@ -83,10 +81,14 @@ pub struct Batch<T> {
 impl<T> Batch<T> {
 	/// Get access to the underlying slice of requests.
 	// TODO: unimplemented -> Vec<Request>, // do we _have to_ allocate?
-	pub fn requests(&self) -> &[T] { &self.requests }
+	pub fn requests(&self) -> &[T] {
+		&self.requests
+	}
 
 	/// Get the number of answered requests.
-	pub fn num_answered(&self) -> usize { self.answered }
+	pub fn num_answered(&self) -> usize {
+		self.answered
+	}
 
 	/// Whether the batch is complete.
 	pub fn is_complete(&self) -> bool {
@@ -95,7 +97,9 @@ impl<T> Batch<T> {
 
 	/// Map requests from one type into another.
 	pub fn map_requests<F, U>(self, f: F) -> Batch<U>
-		where F: FnMut(T) -> U, U: IncompleteRequest
+	where
+		F: FnMut(T) -> U,
+		U: IncompleteRequest,
 	{
 		Batch {
 			outputs: self.outputs,
@@ -111,9 +115,12 @@ impl<T: IncompleteRequest + Clone> Batch<T> {
 		if self.is_complete() {
 			None
 		} else {
-			Some(self.requests[self.answered].clone()
-				.complete()
-				.expect("All outputs checked as invariant of `Batch` object; qed"))
+			Some(
+				self.requests[self.answered]
+					.clone()
+					.complete()
+					.expect("All outputs checked as invariant of `Batch` object; qed"),
+			)
 		}
 	}
 
@@ -122,14 +129,21 @@ impl<T: IncompleteRequest + Clone> Batch<T> {
 		let outputs = &mut self.outputs;
 
 		for req in self.requests.iter_mut().skip(self.answered) {
-			req.fill(|req_idx, out_idx| outputs.get(&(req_idx, out_idx)).cloned().ok_or(NoSuchOutput))
+			req.fill(|req_idx, out_idx| {
+				outputs
+					.get(&(req_idx, out_idx))
+					.cloned()
+					.ok_or(NoSuchOutput)
+			})
 		}
 	}
 
 	/// Supply a response, asserting its correctness.
 	/// Fill outputs based upon it.
 	pub fn supply_response_unchecked<R: ResponseLike>(&mut self, response: &R) {
-		if self.is_complete() { return }
+		if self.is_complete() {
+			return;
+		}
 
 		let outputs = &mut self.outputs;
 		let idx = self.answered;
@@ -144,7 +158,12 @@ impl<T: IncompleteRequest + Clone> Batch<T> {
 
 		// fill as much of the next request as we can.
 		if let Some(ref mut req) = self.requests.get_mut(self.answered) {
-			req.fill(|req_idx, out_idx| outputs.get(&(req_idx, out_idx)).cloned().ok_or(NoSuchOutput))
+			req.fill(|req_idx, out_idx| {
+				outputs
+					.get(&(req_idx, out_idx))
+					.cloned()
+					.ok_or(NoSuchOutput)
+			})
 		}
 	}
 }
@@ -152,18 +171,24 @@ impl<T: IncompleteRequest + Clone> Batch<T> {
 impl<T: super::CheckedRequest + Clone> Batch<T> {
 	/// Supply a response for the next request.
 	/// Fails on: wrong request kind, all requests answered already.
-	pub fn supply_response(&mut self, env: &T::Environment, response: &T::Response)
-		-> Result<T::Extract, ResponseError<T::Error>>
-	{
+	pub fn supply_response(
+		&mut self,
+		env: &T::Environment,
+		response: &T::Response,
+	) -> Result<T::Extract, ResponseError<T::Error>> {
 		let idx = self.answered;
 
 		// check validity.
-		if idx == self.requests.len() { return Err(ResponseError::Unexpected) }
-		let completed = self.next_complete()
-			.expect("only fails when all requests have been answered; this just checked against; qed");
+		if idx == self.requests.len() {
+			return Err(ResponseError::Unexpected);
+		}
+		let completed = self.next_complete().expect(
+			"only fails when all requests have been answered; this just checked against; qed",
+		);
 
 		let extracted = self.requests[idx]
-			.check_response(&completed, env, response).map_err(ResponseError::Validity)?;
+			.check_response(&completed, env, response)
+			.map_err(ResponseError::Validity)?;
 
 		self.supply_response_unchecked(response);
 		Ok(extracted)
@@ -175,7 +200,8 @@ impl Batch<super::Request> {
 	/// The responses vector produced goes up to the point where the responder
 	/// first returns `None`, an invalid response, or until all requests have been responded to.
 	pub fn respond_to_all<F>(mut self, responder: F) -> Vec<super::Response>
-		where F: Fn(super::CompleteRequest) -> Option<super::Response>
+	where
+		F: Fn(super::CompleteRequest) -> Option<super::Response>,
 	{
 		let mut responses = Vec::new();
 
@@ -209,50 +235,64 @@ impl<T: IncompleteRequest> DerefMut for Batch<T> {
 
 #[cfg(test)]
 mod tests {
-	use request::*;
 	use super::Builder;
 	use ethereum_types::H256;
+	use request::*;
 
 	#[test]
 	fn all_scalar() {
 		let mut builder = Builder::default();
-		builder.push(Request::HeaderProof(IncompleteHeaderProofRequest {
-			num: 100.into(),
-		})).unwrap();
-		builder.push(Request::Receipts(IncompleteReceiptsRequest {
-			hash: H256::default().into(),
-		})).unwrap();
+		builder
+			.push(Request::HeaderProof(IncompleteHeaderProofRequest {
+				num: 100.into(),
+			}))
+			.unwrap();
+		builder
+			.push(Request::Receipts(IncompleteReceiptsRequest {
+				hash: H256::default().into(),
+			}))
+			.unwrap();
 	}
 
 	#[test]
 	#[should_panic]
 	fn missing_backref() {
 		let mut builder = Builder::default();
-		builder.push(Request::HeaderProof(IncompleteHeaderProofRequest {
-			num: Field::BackReference(100, 3),
-		})).unwrap();
+		builder
+			.push(Request::HeaderProof(IncompleteHeaderProofRequest {
+				num: Field::BackReference(100, 3),
+			}))
+			.unwrap();
 	}
 
 	#[test]
 	#[should_panic]
 	fn wrong_kind() {
 		let mut builder = Builder::default();
-		assert!(builder.push(Request::HeaderProof(IncompleteHeaderProofRequest {
-			num: 100.into(),
-		})).is_ok());
-		builder.push(Request::HeaderProof(IncompleteHeaderProofRequest {
-			num: Field::BackReference(0, 0),
-		})).unwrap();
+		assert!(builder
+			.push(Request::HeaderProof(IncompleteHeaderProofRequest {
+				num: 100.into(),
+			}))
+			.is_ok());
+		builder
+			.push(Request::HeaderProof(IncompleteHeaderProofRequest {
+				num: Field::BackReference(0, 0),
+			}))
+			.unwrap();
 	}
 
 	#[test]
 	fn good_backreference() {
 		let mut builder = Builder::default();
-		builder.push(Request::HeaderProof(IncompleteHeaderProofRequest {
-			num: 100.into(), // header proof puts hash at output 0.
-		})).unwrap();
-		builder.push(Request::Receipts(IncompleteReceiptsRequest {
-			hash: Field::BackReference(0, 0),
-		})).unwrap();
+		builder
+			.push(Request::HeaderProof(IncompleteHeaderProofRequest {
+				num: 100.into(), // header proof puts hash at output 0.
+			}))
+			.unwrap();
+		builder
+			.push(Request::Receipts(IncompleteReceiptsRequest {
+				hash: Field::BackReference(0, 0),
+			}))
+			.unwrap();
 	}
 }

@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::HashMap;
-use parking_lot::RwLock;
-use itertools;
 use ethkey::Address;
+use itertools;
+use parking_lot::RwLock;
+use std::collections::HashMap;
 
-use {SafeAccount, Error};
 use super::KeyDirectory;
+use {Error, SafeAccount};
 
 /// Accounts in-memory storage.
 #[derive(Default)]
@@ -68,7 +68,9 @@ impl KeyDirectory for MemoryDirectory {
 	fn unique_repr(&self) -> Result<u64, Error> {
 		let mut val = 0u64;
 		let accounts = self.accounts.read();
-		for acc in accounts.keys() { val = val ^ acc.low_u64() }
+		for acc in accounts.keys() {
+			val = val ^ acc.low_u64()
+		}
 		Ok(val)
 	}
 }

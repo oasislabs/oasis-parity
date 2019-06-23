@@ -16,10 +16,10 @@
 
 //! SecretStore-specific rpc interface.
 
-use std::collections::BTreeSet;
 use jsonrpc_core::Result;
+use std::collections::BTreeSet;
 
-use v1::types::{H160, H256, H512, Bytes, EncryptedDocumentKey};
+use v1::types::{Bytes, EncryptedDocumentKey, H160, H256, H512};
 
 build_rpc_trait! {
 	/// Parity-specific rpc interface.

@@ -28,10 +28,10 @@ mod update;
 #[cfg(test)]
 pub mod generator;
 
-pub use self::blockchain::{BlockProvider, BlockChain};
+pub use self::blockchain::{BlockChain, BlockProvider};
 pub use self::cache::CacheSize;
 pub use self::config::Config;
-pub use self::extras::{BlockReceipts, BlockDetails, TransactionAddress};
+pub use self::extras::{BlockDetails, BlockReceipts, TransactionAddress};
 pub use self::import_route::ImportRoute;
 pub use self::update::ExtrasInsert;
 pub use types::tree_route::TreeRoute;

@@ -36,13 +36,17 @@ pub enum ReleaseTrack {
 
 impl fmt::Display for ReleaseTrack {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{}", match *self {
-			ReleaseTrack::Stable => "stable",
-			ReleaseTrack::Beta => "beta",
-			ReleaseTrack::Nightly => "nightly",
-			ReleaseTrack::Testing => "testing",
-			ReleaseTrack::Unknown => "unknown",
-		})
+		write!(
+			f,
+			"{}",
+			match *self {
+				ReleaseTrack::Stable => "stable",
+				ReleaseTrack::Beta => "beta",
+				ReleaseTrack::Nightly => "nightly",
+				ReleaseTrack::Testing => "testing",
+				ReleaseTrack::Unknown => "unknown",
+			}
+		)
 	}
 }
 

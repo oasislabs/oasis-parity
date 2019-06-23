@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use tests::helpers::{serve_hosts, request};
+use tests::helpers::{request, serve_hosts};
 
 #[test]
 fn should_reject_invalid_host() {
@@ -22,19 +22,25 @@ fn should_reject_invalid_host() {
 	let server = serve_hosts(Some(vec!["localhost:8080".into()]));
 
 	// when
-	let response = request(server,
+	let response = request(
+		server,
 		"\
 			GET / HTTP/1.1\r\n\
 			Host: 127.0.0.1:8080\r\n\
 			Connection: close\r\n\
 			\r\n\
 			{}
-		"
+		",
 	);
 
 	// then
 	response.assert_status("HTTP/1.1 403 Forbidden");
-	assert!(response.body.contains("Provided Host header is not whitelisted."), response.body);
+	assert!(
+		response
+			.body
+			.contains("Provided Host header is not whitelisted."),
+		response.body
+	);
 }
 
 #[test]
@@ -43,14 +49,15 @@ fn should_serve_dapps_domains() {
 	let server = serve_hosts(Some(vec!["localhost:8080".into()]));
 
 	// when
-	let response = request(server,
+	let response = request(
+		server,
 		"\
 			GET / HTTP/1.1\r\n\
 			Host: proxy.web3.site\r\n\
 			Connection: close\r\n\
 			\r\n\
 			{}
-		"
+		",
 	);
 
 	// then

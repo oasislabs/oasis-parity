@@ -17,7 +17,7 @@
 use std::io::{Error, ErrorKind};
 
 pub fn preset_config_string(arg: &str) -> Result<&'static str, Error> {
-    match arg.to_lowercase().as_ref() {
+	match arg.to_lowercase().as_ref() {
         "dev" => Ok(include_str!("./config.dev.toml")),
         "mining" => Ok(include_str!("./config.mining.toml")),
         "non-standard-ports" => Ok(include_str!("./config.non-standard-ports.toml")),

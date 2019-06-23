@@ -20,21 +20,22 @@ extern crate byteorder;
 // extern crate ethcore_logger;
 extern crate ethereum_types;
 extern crate keccak_hash as hash;
-#[macro_use] extern crate log;
+#[macro_use]
+extern crate log;
 // extern crate libc;
 extern crate parity_wasm;
-extern crate vm;
 extern crate pwasm_utils as wasm_utils;
+extern crate vm;
 extern crate wasmi;
 
-mod runtime;
-#[cfg(test)]
-mod tests;
 mod env;
 mod panic_payload;
 mod parser;
+mod runtime;
+#[cfg(test)]
+mod tests;
 
-use vm::{GasLeft, ReturnData, ActionParams};
+use vm::{ActionParams, GasLeft, ReturnData};
 use wasmi::{Error as InterpreterError, Trap};
 
 use runtime::{Runtime, RuntimeContext};
@@ -85,28 +86,32 @@ enum ExecutionOutcome {
 }
 
 impl vm::Vm for WasmInterpreter {
-
 	fn exec(&mut self, params: ActionParams, ext: &mut vm::Ext) -> vm::Result<GasLeft> {
 		let (module, data) = parser::payload(&params, ext.schedule().wasm())?;
 
-		let loaded_module = wasmi::Module::from_parity_wasm_module(module).map_err(Error::Interpreter)?;
+		let loaded_module =
+			wasmi::Module::from_parity_wasm_module(module).map_err(Error::Interpreter)?;
 
 		let instantiation_resolver = env::ImportResolver::with_limit(<u32>::max_value() - 1);
 
 		let module_instance = wasmi::ModuleInstance::new(
 			&loaded_module,
-			&wasmi::ImportsBuilder::new().with_resolver("env", &instantiation_resolver)
-		).map_err(Error::Interpreter)?;
+			&wasmi::ImportsBuilder::new().with_resolver("env", &instantiation_resolver),
+		)
+		.map_err(Error::Interpreter)?;
 
-		let adjusted_gas = params.gas * U256::from(ext.schedule().wasm().opcodes_div) /
-			U256::from(ext.schedule().wasm().opcodes_mul);
+		let adjusted_gas = params.gas * U256::from(ext.schedule().wasm().opcodes_div)
+			/ U256::from(ext.schedule().wasm().opcodes_mul);
 
-		if adjusted_gas > ::std::u64::MAX.into()
-		{
-			return Err(vm::Error::Wasm("Wasm interpreter cannot run contracts with gas (wasm adjusted) >= 2^64".to_owned()));
+		if adjusted_gas > ::std::u64::MAX.into() {
+			return Err(vm::Error::Wasm(
+				"Wasm interpreter cannot run contracts with gas (wasm adjusted) >= 2^64".to_owned(),
+			));
 		}
 
-		let initial_memory = instantiation_resolver.memory_size().map_err(Error::Interpreter)?;
+		let initial_memory = instantiation_resolver
+			.memory_size()
+			.map_err(Error::Interpreter)?;
 		trace!(target: "wasm", "Contract requested {:?} pages of initial memory", initial_memory);
 
 		let (gas_left, result) = {
@@ -133,19 +138,26 @@ impl vm::Vm for WasmInterpreter {
 			assert!(runtime.schedule().wasm().initial_mem_cost < 1 << 16);
 			runtime.charge(|s| initial_memory as u64 * s.wasm().initial_mem_cost as u64)?;
 
-			let module_instance = module_instance.run_start(&mut runtime).map_err(Error::Trap)?;
+			let module_instance = module_instance
+				.run_start(&mut runtime)
+				.map_err(Error::Trap)?;
 
 			let invoke_result = module_instance.invoke_export("call", &[], &mut runtime);
 
 			let mut execution_outcome = ExecutionOutcome::NotSpecial;
 			if let Err(InterpreterError::Trap(ref trap)) = invoke_result {
 				if let wasmi::TrapKind::Host(ref boxed) = *trap.kind() {
-					let ref runtime_err = boxed.downcast_ref::<runtime::Error>()
+					let ref runtime_err = boxed
+						.downcast_ref::<runtime::Error>()
 						.expect("Host errors other than runtime::Error never produced; qed");
 
 					match **runtime_err {
-						runtime::Error::Suicide => { execution_outcome = ExecutionOutcome::Suicide; },
-						runtime::Error::Return => { execution_outcome = ExecutionOutcome::Return; },
+						runtime::Error::Suicide => {
+							execution_outcome = ExecutionOutcome::Suicide;
+						}
+						runtime::Error::Return => {
+							execution_outcome = ExecutionOutcome::Return;
+						}
 						_ => {}
 					}
 				}
@@ -157,14 +169,15 @@ impl vm::Vm for WasmInterpreter {
 			}
 
 			(
-				runtime.gas_left().expect("Cannot fail since it was not updated since last charge"),
+				runtime
+					.gas_left()
+					.expect("Cannot fail since it was not updated since last charge"),
 				runtime.into_result(),
 			)
 		};
 
-		let gas_left =
-			U256::from(gas_left) * U256::from(ext.schedule().wasm().opcodes_mul)
-				/ U256::from(ext.schedule().wasm().opcodes_div);
+		let gas_left = U256::from(gas_left) * U256::from(ext.schedule().wasm().opcodes_mul)
+			/ U256::from(ext.schedule().wasm().opcodes_div);
 
 		if result.is_empty() {
 			trace!(target: "wasm", "Contract execution result is empty.");
@@ -173,11 +186,7 @@ impl vm::Vm for WasmInterpreter {
 			let len = result.len();
 			Ok(GasLeft::NeedsReturn {
 				gas_left: gas_left,
-				data: ReturnData::new(
-					result,
-					0,
-					len,
-				),
+				data: ReturnData::new(result, 0, len),
 				apply_state: true,
 			})
 		}

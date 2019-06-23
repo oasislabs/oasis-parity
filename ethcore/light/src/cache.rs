@@ -24,11 +24,11 @@ use ethcore::encoded;
 use ethcore::header::BlockNumber;
 use ethcore::receipt::Receipt;
 
-use stats::Corpus;
-use std::time::{Instant, Duration};
-use heapsize::HeapSizeOf;
 use ethereum_types::{H256, U256};
+use heapsize::HeapSizeOf;
 use memory_cache::MemoryLruCache;
+use stats::Corpus;
+use std::time::{Duration, Instant};
 
 /// Configuration for how much data to cache.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -168,7 +168,7 @@ impl HeapSizeOf for Cache {
 			+ self.bodies.current_size()
 			+ self.receipts.current_size()
 			+ self.chain_score.current_size()
-			// TODO: + corpus
+		// TODO: + corpus
 	}
 }
 

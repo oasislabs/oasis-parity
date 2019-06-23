@@ -15,7 +15,7 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 pub mod builtin;
-pub mod local;
 mod handler;
+pub mod local;
 
 pub use self::handler::PageCache;

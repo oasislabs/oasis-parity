@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use ethereum_types::{U256, H256, Address};
+use ethereum_types::{Address, H256, U256};
 use rlp::Rlp;
-use transaction::{self, Transaction, SignedTransaction, UnverifiedTransaction};
+use transaction::{self, SignedTransaction, Transaction, UnverifiedTransaction};
 
 use pool;
 use pool::client::AccountDetails;
@@ -78,7 +78,10 @@ impl TestClient {
 		self
 	}
 
-	pub fn verify<T: Into<transaction::PendingTransaction>>(&self, tx: T) -> pool::VerifiedTransaction {
+	pub fn verify<T: Into<transaction::PendingTransaction>>(
+		&self,
+		tx: T,
+	) -> pool::VerifiedTransaction {
 		let tx = tx.into();
 		pool::VerifiedTransaction {
 			hash: tx.hash(),
@@ -95,9 +98,10 @@ impl pool::client::Client for TestClient {
 		false
 	}
 
-	fn verify_transaction(&self, tx: UnverifiedTransaction)
-		-> Result<SignedTransaction, transaction::Error>
-	{
+	fn verify_transaction(
+		&self,
+		tx: UnverifiedTransaction,
+	) -> Result<SignedTransaction, transaction::Error> {
 		Ok(SignedTransaction::new(tx)?)
 	}
 
@@ -122,14 +126,17 @@ impl pool::client::Client for TestClient {
 		}
 	}
 
-	fn decode_transaction(&self, transaction: &[u8]) -> Result<UnverifiedTransaction, transaction::Error> {
+	fn decode_transaction(
+		&self,
+		transaction: &[u8],
+	) -> Result<UnverifiedTransaction, transaction::Error> {
 		let rlp = Rlp::new(&transaction);
 		if rlp.as_raw().len() > self.max_transaction_size {
-			return Err(transaction::Error::TooBig)
+			return Err(transaction::Error::TooBig);
 		}
-		rlp.as_val().map_err(|e| transaction::Error::InvalidRlp(e.to_string()))
+		rlp.as_val()
+			.map_err(|e| transaction::Error::InvalidRlp(e.to_string()))
 	}
-
 }
 
 impl pool::client::NonceClient for TestClient {

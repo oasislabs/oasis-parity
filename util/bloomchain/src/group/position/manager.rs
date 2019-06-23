@@ -14,17 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use super::{Position, GroupPosition};
+use super::{GroupPosition, Position};
 use position::Position as BloomPosition;
 
 pub struct Manager {
-	index_size: usize
+	index_size: usize,
 }
 
 impl Manager {
 	pub fn new(index_size: usize) -> Self {
 		Manager {
-			index_size: index_size
+			index_size: index_size,
 		}
 	}
 
@@ -38,7 +38,7 @@ impl Manager {
 	pub fn position(&self, pos: &BloomPosition) -> Position {
 		Position {
 			group: self.group_position(pos),
-			number: pos.index % self.index_size,	
+			number: pos.index % self.index_size,
 		}
 	}
 }

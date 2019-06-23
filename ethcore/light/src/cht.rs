@@ -23,17 +23,19 @@
 //! root has. A correct proof implies that the claimed block is identical to the one
 //! we discarded.
 
+use bytes::Bytes;
 use ethcore::ids::BlockId;
 use ethereum_types::{H256, U256};
 use hashdb::HashDB;
 use memorydb::MemoryDB;
-use bytes::Bytes;
-use trie::{self, TrieMut, TrieDBMut, Trie, TrieDB, Recorder};
-use rlp::{RlpStream, Rlp};
+use rlp::{Rlp, RlpStream};
+use trie::{self, Recorder, Trie, TrieDB, TrieDBMut, TrieMut};
 
 // encode a key.
 macro_rules! key {
-	($num: expr) => { ::rlp::encode(&$num) }
+	($num: expr) => {
+		::rlp::encode(&$num)
+	};
 }
 
 macro_rules! val {
@@ -41,7 +43,7 @@ macro_rules! val {
 		let mut stream = RlpStream::new_list(2);
 		stream.append(&$hash).append(&$td);
 		stream.drain()
-	}}
+		}};
 }
 
 /// The size of each CHT.
@@ -58,16 +60,22 @@ pub struct CHT<DB: HashDB> {
 
 impl<DB: HashDB> CHT<DB> {
 	/// Query the root of the CHT.
-	pub fn root(&self) -> H256 { self.root }
+	pub fn root(&self) -> H256 {
+		self.root
+	}
 
 	/// Query the number of the CHT.
-	pub fn number(&self) -> u64 { self.number }
+	pub fn number(&self) -> u64 {
+		self.number
+	}
 
 	/// Generate an inclusion proof for the entry at a specific block.
 	/// Nodes before level `from_level` will be omitted.
 	/// Returns an error on an incomplete trie, and `Ok(None)` on an unprovable request.
 	pub fn prove(&self, num: u64, from_level: u32) -> trie::Result<Option<Vec<Bytes>>> {
-		if block_to_cht_number(num) != Some(self.number) { return Ok(None) }
+		if block_to_cht_number(num) != Some(self.number) {
+			return Ok(None);
+		}
 
 		let mut recorder = Recorder::with_depth(from_level);
 		let t = TrieDB::new(&self.db, &self.root)?;
@@ -90,8 +98,9 @@ pub struct BlockInfo {
 /// Build an in-memory CHT from a closure which provides necessary information
 /// about blocks. If the fetcher ever fails to provide the info, the CHT
 /// will not be generated.
-pub fn build<F>(cht_num: u64, mut fetcher: F) ->  Option<CHT<MemoryDB>>
-	where F: FnMut(BlockId) -> Option<BlockInfo>
+pub fn build<F>(cht_num: u64, mut fetcher: F) -> Option<CHT<MemoryDB>>
+where
+	F: FnMut(BlockId) -> Option<BlockInfo>,
 {
 	let mut db = MemoryDB::new();
 
@@ -126,7 +135,8 @@ pub fn build<F>(cht_num: u64, mut fetcher: F) ->  Option<CHT<MemoryDB>>
 /// SIZE items. The items are assumed to proceed sequentially from `start_number(cht_num)`.
 /// Discards the trie's nodes.
 pub fn compute_root<I>(cht_num: u64, iterable: I) -> Option<H256>
-	where I: IntoIterator<Item=(H256, U256)>
+where
+	I: IntoIterator<Item = (H256, U256)>,
 {
 	let mut v = Vec::with_capacity(SIZE as usize);
 	let start_num = start_number(cht_num) as usize;
@@ -149,7 +159,9 @@ pub fn compute_root<I>(cht_num: u64, iterable: I) -> Option<H256>
 pub fn check_proof(proof: &[Bytes], num: u64, root: H256) -> Option<(H256, U256)> {
 	let mut db = MemoryDB::new();
 
-	for node in proof { db.insert(&node[..]); }
+	for node in proof {
+		db.insert(&node[..]);
+	}
 	let res = match TrieDB::new(&db, &root) {
 		Err(_) => return None,
 		Ok(trie) => trie.get_with(&key!(num), |val: &[u8]| {
@@ -157,7 +169,7 @@ pub fn check_proof(proof: &[Bytes], num: u64, root: H256) -> Option<(H256, U256)
 			rlp.val_at::<H256>(0)
 				.and_then(|h| rlp.val_at::<U256>(1).map(|td| (h, td)))
 				.ok()
-		})
+		}),
 	};
 
 	match res {

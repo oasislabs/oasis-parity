@@ -32,7 +32,7 @@ use std::time::{Duration, Instant};
 use request::{CompleteRequest, Kind};
 
 use bincode;
-use parking_lot::{RwLock, Mutex};
+use parking_lot::{Mutex, RwLock};
 
 /// Number of time periods samples should be kept for.
 pub const MOVING_SAMPLE_SIZE: usize = 256;
@@ -52,26 +52,31 @@ pub trait SampleStore: Send + Sync {
 //
 // TODO: seed this with empirical data.
 fn hardcoded_serve_time(kind: Kind) -> Duration {
-	Duration::new(0, match kind {
-		Kind::Headers => 500_000,
-		Kind::HeaderProof => 500_000,
-		Kind::TransactionIndex => 500_000,
-		Kind::Receipts => 1_000_000,
-		Kind::Body => 1_000_000,
-		Kind::Account => 1_500_000,
-		Kind::Storage => 2_000_000,
-		Kind::Code => 1_500_000,
-		Kind::Execution => 250, // per gas.
-		Kind::Signal => 500_000,
-	})
+	Duration::new(
+		0,
+		match kind {
+			Kind::Headers => 500_000,
+			Kind::HeaderProof => 500_000,
+			Kind::TransactionIndex => 500_000,
+			Kind::Receipts => 1_000_000,
+			Kind::Body => 1_000_000,
+			Kind::Account => 1_500_000,
+			Kind::Storage => 2_000_000,
+			Kind::Code => 1_500_000,
+			Kind::Execution => 250, // per gas.
+			Kind::Signal => 500_000,
+		},
+	)
 }
 
 /// A no-op store.
 pub struct NullStore;
 
 impl SampleStore for NullStore {
-	fn load(&self) -> HashMap<Kind, VecDeque<u64>> { HashMap::new() }
-	fn store(&self, _samples: &HashMap<Kind, VecDeque<u64>>) { }
+	fn load(&self) -> HashMap<Kind, VecDeque<u64>> {
+		HashMap::new()
+	}
+	fn store(&self, _samples: &HashMap<Kind, VecDeque<u64>>) {}
 }
 
 /// Request load distributions.
@@ -119,19 +124,27 @@ impl LoadDistribution {
 	/// but a hardcoded time will be returned.
 	pub fn expected_time(&self, kind: Kind) -> Duration {
 		let samples = self.samples.read();
-		samples.get(&kind).and_then(|s| {
-			if s.len() == 0 { return None }
+		samples
+			.get(&kind)
+			.and_then(|s| {
+				if s.len() == 0 {
+					return None;
+				}
 
-			let alpha: f64 = 1f64 / s.len() as f64;
-			let start = s.front().expect("length known to be non-zero; qed").clone();
-			let ema = s.iter().skip(1).fold(start as f64, |a, &c| {
-				(alpha * c as f64) + ((1.0 - alpha) * a)
-			});
+				let alpha: f64 = 1f64 / s.len() as f64;
+				let start = s.front().expect("length known to be non-zero; qed").clone();
+				let ema = s.iter().skip(1).fold(start as f64, |a, &c| {
+					(alpha * c as f64) + ((1.0 - alpha) * a)
+				});
 
-			// TODO: use `Duration::from_nanos` once stable (https://github.com/rust-lang/rust/issues/46507)
-			let ema = ema as u64;
-			Some(Duration::new(ema / 1_000_000_000, (ema % 1_000_000_000) as u32))
-		}).unwrap_or_else(move || hardcoded_serve_time(kind))
+				// TODO: use `Duration::from_nanos` once stable (https://github.com/rust-lang/rust/issues/46507)
+				let ema = ema as u64;
+				Some(Duration::new(
+					ema / 1_000_000_000,
+					(ema % 1_000_000_000) as u32,
+				))
+			})
+			.unwrap_or_else(move || hardcoded_serve_time(kind))
 	}
 
 	/// End the current time period. Provide a store to
@@ -141,12 +154,17 @@ impl LoadDistribution {
 
 		for (&kind, set) in active_period.iter() {
 			let (elapsed, n) = ::std::mem::replace(&mut *set.lock(), (0, 0));
-			if n == 0 { continue }
+			if n == 0 {
+				continue;
+			}
 
-			let kind_samples = samples.entry(kind)
+			let kind_samples = samples
+				.entry(kind)
 				.or_insert_with(|| VecDeque::with_capacity(MOVING_SAMPLE_SIZE));
 
-			if kind_samples.len() == MOVING_SAMPLE_SIZE { kind_samples.pop_front(); }
+			if kind_samples.len() == MOVING_SAMPLE_SIZE {
+				kind_samples.pop_front();
+			}
 			kind_samples.push_back(elapsed / n);
 		}
 
@@ -156,9 +174,11 @@ impl LoadDistribution {
 	fn update(&self, kind: Kind, elapsed: Duration, n: u64) {
 		macro_rules! update_counters {
 			($counters: expr) => {
-				$counters.0 = $counters.0.saturating_add({ elapsed.as_secs() * 1_000_000_000 + elapsed.subsec_nanos() as u64 });
+				$counters.0 = $counters.0.saturating_add({
+					elapsed.as_secs() * 1_000_000_000 + elapsed.subsec_nanos() as u64
+					});
 				$counters.1 = $counters.1.saturating_add(n);
-			}
+			};
 		};
 
 		{
@@ -171,9 +191,7 @@ impl LoadDistribution {
 		}
 
 		let mut set = self.active_period.write();
-		let counters = set
-			.entry(kind)
-			.or_insert_with(|| Mutex::new((0, 0)));
+		let counters = set.entry(kind).or_insert_with(|| Mutex::new((0, 0)));
 
 		update_counters!(counters.get_mut());
 	}
@@ -225,7 +243,10 @@ mod tests {
 	#[test]
 	fn hardcoded_before_data() {
 		let dist = LoadDistribution::load(&NullStore);
-		assert_eq!(dist.expected_time(Kind::Headers), hardcoded_serve_time(Kind::Headers));
+		assert_eq!(
+			dist.expected_time(Kind::Headers),
+			hardcoded_serve_time(Kind::Headers)
+		);
 
 		dist.update(Kind::Headers, Duration::new(0, 100_000), 100);
 		dist.end_period(&NullStore);
@@ -244,7 +265,9 @@ mod tests {
 			dist.end_period(&NullStore);
 
 			sum += x;
-			if i == 0 { continue }
+			if i == 0 {
+				continue;
+			}
 
 			let moving_average = dist.expected_time(Kind::Headers);
 

@@ -27,10 +27,13 @@ extern crate threadpool;
 extern crate serde_derive;
 
 use std::num::ParseIntError;
-use std::{env, fmt, process, io, sync};
+use std::{env, fmt, io, process, sync};
 
 use docopt::Docopt;
-use ethkey::{KeyPair, Random, Brain, BrainPrefix, Prefix, Error as EthkeyError, Generator, sign, verify_public, verify_address, brain_recover};
+use ethkey::{
+	brain_recover, sign, verify_address, verify_public, Brain, BrainPrefix, Error as EthkeyError,
+	Generator, KeyPair, Prefix, Random,
+};
 use rustc_hex::{FromHex, FromHexError};
 
 const USAGE: &'static str = r#"
@@ -169,7 +172,7 @@ fn main() {
 		Err(err) => {
 			println!("{}", err);
 			process::exit(1);
-		},
+		}
 	}
 }
 
@@ -178,7 +181,7 @@ fn display(result: (KeyPair, Option<String>), mode: DisplayMode) -> String {
 	match mode {
 		DisplayMode::KeyPair => match result.1 {
 			Some(extra_data) => format!("{}\n{}", extra_data, keypair),
-			None => format!("{}", keypair)
+			None => format!("{}", keypair),
 		},
 		DisplayMode::Secret => format!("{:x}", keypair.secret()),
 		DisplayMode::Public => format!("{:x}", keypair.public()),
@@ -186,9 +189,12 @@ fn display(result: (KeyPair, Option<String>), mode: DisplayMode) -> String {
 	}
 }
 
-fn execute<S, I>(command: I) -> Result<String, Error> where I: IntoIterator<Item=S>, S: AsRef<str> {
-	let args: Args = Docopt::new(USAGE)
-		.and_then(|d| d.argv(command).deserialize())?;
+fn execute<S, I>(command: I) -> Result<String, Error>
+where
+	I: IntoIterator<Item = S>,
+	S: AsRef<str>,
+{
+	let args: Args = Docopt::new(USAGE).and_then(|d| d.argv(command).deserialize())?;
 
 	return if args.cmd_info {
 		let display_mode = DisplayMode::new(&args);
@@ -196,10 +202,15 @@ fn execute<S, I>(command: I) -> Result<String, Error> where I: IntoIterator<Item
 		let result = if args.flag_brain {
 			let phrase = args.arg_secret_or_phrase;
 			let phrase_info = validate_phrase(&phrase);
-			let keypair = Brain::new(phrase).generate().expect("Brain wallet generator is infallible; qed");
+			let keypair = Brain::new(phrase)
+				.generate()
+				.expect("Brain wallet generator is infallible; qed");
 			(keypair, Some(phrase_info))
 		} else {
-			let secret = args.arg_secret_or_phrase.parse().map_err(|_| EthkeyError::InvalidSecret)?;
+			let secret = args
+				.arg_secret_or_phrase
+				.parse()
+				.map_err(|_| EthkeyError::InvalidSecret)?;
 			(KeyPair::from_secret(secret)?, None)
 		};
 		Ok(display(result, display_mode))
@@ -236,33 +247,55 @@ fn execute<S, I>(command: I) -> Result<String, Error> where I: IntoIterator<Item
 				}
 			})?
 		} else {
-			return Ok(format!("{}", USAGE))
+			return Ok(format!("{}", USAGE));
 		};
 		Ok(display(result, display_mode))
 	} else if args.cmd_sign {
-		let secret = args.arg_secret.parse().map_err(|_| EthkeyError::InvalidSecret)?;
-		let message = args.arg_message.parse().map_err(|_| EthkeyError::InvalidMessage)?;
+		let secret = args
+			.arg_secret
+			.parse()
+			.map_err(|_| EthkeyError::InvalidSecret)?;
+		let message = args
+			.arg_message
+			.parse()
+			.map_err(|_| EthkeyError::InvalidMessage)?;
 		let signature = sign(&secret, &message)?;
 		Ok(format!("{}", signature))
 	} else if args.cmd_verify {
-		let signature = args.arg_signature.parse().map_err(|_| EthkeyError::InvalidSignature)?;
-		let message = args.arg_message.parse().map_err(|_| EthkeyError::InvalidMessage)?;
+		let signature = args
+			.arg_signature
+			.parse()
+			.map_err(|_| EthkeyError::InvalidSignature)?;
+		let message = args
+			.arg_message
+			.parse()
+			.map_err(|_| EthkeyError::InvalidMessage)?;
 		let ok = if args.cmd_public {
-			let public = args.arg_public.parse().map_err(|_| EthkeyError::InvalidPublic)?;
+			let public = args
+				.arg_public
+				.parse()
+				.map_err(|_| EthkeyError::InvalidPublic)?;
 			verify_public(&public, &signature, &message)?
 		} else if args.cmd_address {
-			let address = args.arg_address.parse().map_err(|_| EthkeyError::InvalidAddress)?;
+			let address = args
+				.arg_address
+				.parse()
+				.map_err(|_| EthkeyError::InvalidAddress)?;
 			verify_address(&address, &signature, &message)?
 		} else {
-			return Ok(format!("{}", USAGE))
+			return Ok(format!("{}", USAGE));
 		};
 		Ok(format!("{}", ok))
 	} else if args.cmd_recover {
 		let display_mode = DisplayMode::new(&args);
 		let known_phrase = args.arg_known_phrase;
-		let address = args.arg_address.parse().map_err(|_| EthkeyError::InvalidAddress)?;
+		let address = args
+			.arg_address
+			.parse()
+			.map_err(|_| EthkeyError::InvalidAddress)?;
 		let (phrase, keypair) = in_threads(move || {
-			let mut it = brain_recover::PhrasesIterator::from_known_phrase(&known_phrase, BRAIN_WORDS);
+			let mut it =
+				brain_recover::PhrasesIterator::from_known_phrase(&known_phrase, BRAIN_WORDS);
 			move || {
 				let mut i = 0;
 				while let Some(phrase) = it.next() {
@@ -270,11 +303,11 @@ fn execute<S, I>(command: I) -> Result<String, Error> where I: IntoIterator<Item
 
 					let keypair = Brain::new(phrase.clone()).generate().unwrap();
 					if keypair.address() == address {
-						return Ok(Some((phrase, keypair)))
+						return Ok(Some((phrase, keypair)));
 					}
 
 					if i >= 1024 {
-						return Ok(None)
+						return Ok(None);
 					}
 				}
 
@@ -284,7 +317,7 @@ fn execute<S, I>(command: I) -> Result<String, Error> where I: IntoIterator<Item
 		Ok(display((keypair, Some(phrase)), display_mode))
 	} else {
 		Ok(format!("{}", USAGE))
-	}
+	};
 }
 
 const BRAIN_WORDS: usize = 12;
@@ -292,11 +325,12 @@ const BRAIN_WORDS: usize = 12;
 fn validate_phrase(phrase: &str) -> String {
 	match Brain::validate_phrase(phrase, BRAIN_WORDS) {
 		Ok(()) => format!("The recovery phrase looks correct.\n"),
-		Err(err) => format!("The recover phrase was not generated by Parity: {}", err)
+		Err(err) => format!("The recover phrase was not generated by Parity: {}", err),
 	}
 }
 
-fn in_threads<F, X, O>(prepare: F) -> Result<O, EthkeyError> where
+fn in_threads<F, X, O>(prepare: F) -> Result<O, EthkeyError>
+where
 	O: Send + 'static,
 	X: Send + 'static,
 	F: Fn() -> X,
@@ -343,10 +377,14 @@ mod tests {
 
 	#[test]
 	fn info() {
-		let command = vec!["ethkey", "info", "17d08f5fe8c77af811caa0c9a187e668ce3b74a99acc3f6d976f075fa8e0be55"]
-			.into_iter()
-			.map(Into::into)
-			.collect::<Vec<String>>();
+		let command = vec![
+			"ethkey",
+			"info",
+			"17d08f5fe8c77af811caa0c9a187e668ce3b74a99acc3f6d976f075fa8e0be55",
+		]
+		.into_iter()
+		.map(Into::into)
+		.collect::<Vec<String>>();
 
 		let expected =
 "secret:  17d08f5fe8c77af811caa0c9a187e668ce3b74a99acc3f6d976f075fa8e0be55
@@ -378,7 +416,8 @@ address: 006e27b6a72e1f34c626762f3c4761547aff1421".to_owned();
 			.map(Into::into)
 			.collect::<Vec<String>>();
 
-		let expected = "aa22b54c0cb43ee30a014afe5ef3664b1cde299feabca46cd3167a85a57c39f2".to_owned();
+		let expected =
+			"aa22b54c0cb43ee30a014afe5ef3664b1cde299feabca46cd3167a85a57c39f2".to_owned();
 		assert_eq!(execute(command).unwrap(), expected);
 	}
 
@@ -406,10 +445,15 @@ address: 006e27b6a72e1f34c626762f3c4761547aff1421".to_owned();
 
 	#[test]
 	fn sign() {
-		let command = vec!["ethkey", "sign", "17d08f5fe8c77af811caa0c9a187e668ce3b74a99acc3f6d976f075fa8e0be55", "bd50b7370c3f96733b31744c6c45079e7ae6c8d299613246d28ebcef507ec987"]
-			.into_iter()
-			.map(Into::into)
-			.collect::<Vec<String>>();
+		let command = vec![
+			"ethkey",
+			"sign",
+			"17d08f5fe8c77af811caa0c9a187e668ce3b74a99acc3f6d976f075fa8e0be55",
+			"bd50b7370c3f96733b31744c6c45079e7ae6c8d299613246d28ebcef507ec987",
+		]
+		.into_iter()
+		.map(Into::into)
+		.collect::<Vec<String>>();
 
 		let expected = "c1878cf60417151c766a712653d26ef350c8c75393458b7a9be715f053215af63dfd3b02c2ae65a8677917a8efa3172acb71cb90196e42106953ea0363c5aaf200".to_owned();
 		assert_eq!(execute(command).unwrap(), expected);

@@ -16,10 +16,10 @@
 
 #![cfg_attr(feature = "benches", feature(test))]
 
-extern crate primal;
-extern crate parking_lot;
 extern crate either;
 extern crate memmap;
+extern crate parking_lot;
+extern crate primal;
 
 #[macro_use]
 extern crate crunchy;
@@ -29,15 +29,15 @@ extern crate log;
 #[cfg(test)]
 extern crate tempdir;
 
-mod compute;
-mod seed_compute;
 mod cache;
+mod compute;
 mod keccak;
+mod seed_compute;
 mod shared;
 
 pub use cache::{NodeCacheBuilder, OptimizeFor};
-pub use compute::{ProofOfWork, quick_get_difficulty, slow_hash_block_number};
 use compute::Light;
+pub use compute::{quick_get_difficulty, slow_hash_block_number, ProofOfWork};
 use keccak::H256;
 use parking_lot::Mutex;
 pub use seed_compute::SeedHashCompute;
@@ -108,17 +108,15 @@ impl EthashManager {
 			};
 			match light {
 				None => {
-					let light = match self.nodecache_builder.light_from_file(
-						&self.cache_dir,
-						block_number,
-					) {
+					let light = match self
+						.nodecache_builder
+						.light_from_file(&self.cache_dir, block_number)
+					{
 						Ok(light) => Arc::new(light),
 						Err(e) => {
 							debug!("Light cache file not found for {}:{}", block_number, e);
-							let mut light = self.nodecache_builder.light(
-								&self.cache_dir,
-								block_number,
-							);
+							let mut light =
+								self.nodecache_builder.light(&self.cache_dir, block_number);
 							if let Err(e) = light.to_file() {
 								warn!("Light cache file write error: {}", e);
 							}
@@ -161,11 +159,13 @@ mod benchmarks {
 
 	use self::test::Bencher;
 	use cache::{NodeCacheBuilder, OptimizeFor};
-	use compute::{Light, light_compute};
+	use compute::{light_compute, Light};
 
-	const HASH: [u8; 32] = [0xf5, 0x7e, 0x6f, 0x3a, 0xcf, 0xc0, 0xdd, 0x4b, 0x5b, 0xf2, 0xbe,
-	                        0xe4, 0x0a, 0xb3, 0x35, 0x8a, 0xa6, 0x87, 0x73, 0xa8, 0xd0, 0x9f,
-	                        0x5e, 0x59, 0x5e, 0xab, 0x55, 0x94, 0x05, 0x52, 0x7d, 0x72];
+	const HASH: [u8; 32] = [
+		0xf5, 0x7e, 0x6f, 0x3a, 0xcf, 0xc0, 0xdd, 0x4b, 0x5b, 0xf2, 0xbe, 0xe4, 0x0a, 0xb3, 0x35,
+		0x8a, 0xa6, 0x87, 0x73, 0xa8, 0xd0, 0x9f, 0x5e, 0x59, 0x5e, 0xab, 0x55, 0x94, 0x05, 0x52,
+		0x7d, 0x72,
+	];
 	const NONCE: u64 = 0xd7b3ac70a301a249;
 
 	#[bench]

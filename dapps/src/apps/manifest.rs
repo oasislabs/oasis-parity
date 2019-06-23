@@ -14,13 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use serde_json;
 pub use apps::App as Manifest;
+use serde_json;
 
 pub const MANIFEST_FILENAME: &'static str = "manifest.json";
 
 pub fn deserialize_manifest(manifest: String) -> Result<Manifest, String> {
-	let mut manifest = serde_json::from_str::<Manifest>(&manifest).map_err(|e| format!("{:?}", e))?;
+	let mut manifest =
+		serde_json::from_str::<Manifest>(&manifest).map_err(|e| format!("{:?}", e))?;
 	if manifest.id.is_none() {
 		return Err("App 'id' is missing.".into());
 	}

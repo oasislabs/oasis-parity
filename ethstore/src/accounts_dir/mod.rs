@@ -16,8 +16,8 @@
 
 //! Accounts Directory
 
-use std::path::{PathBuf};
-use {SafeAccount, Error};
+use std::path::PathBuf;
+use {Error, SafeAccount};
 
 mod disk;
 mod memory;
@@ -54,9 +54,13 @@ pub trait KeyDirectory: Send + Sync {
 	/// Remove key from directory
 	fn remove(&self, account: &SafeAccount) -> Result<(), Error>;
 	/// Get directory filesystem path, if available
-	fn path(&self) -> Option<&PathBuf> { None }
+	fn path(&self) -> Option<&PathBuf> {
+		None
+	}
 	/// Return vault provider, if available
-	fn as_vault_provider(&self) -> Option<&VaultKeyDirectoryProvider> { None }
+	fn as_vault_provider(&self) -> Option<&VaultKeyDirectoryProvider> {
+		None
+	}
 	/// Unique representation of directory account collection
 	fn unique_repr(&self) -> Result<u64, Error>;
 }
@@ -89,7 +93,7 @@ pub trait VaultKeyDirectory: KeyDirectory {
 	fn set_meta(&self, meta: &str) -> Result<(), Error>;
 }
 
-pub use self::disk::{RootDiskDirectory, DiskKeyFileManager, KeyFileManager};
+pub use self::disk::{DiskKeyFileManager, KeyFileManager, RootDiskDirectory};
 pub use self::memory::MemoryDirectory;
 pub use self::vault::VaultDiskDirectory;
 

@@ -94,7 +94,9 @@ impl txpool::Listener<Transaction> for Logger {
 
 	fn dropped(&mut self, tx: &Arc<Transaction>, new: Option<&Transaction>) {
 		match new {
-			Some(new) => debug!(target: "txqueue", "[{:?}] Pushed out by [{:?}]", tx.hash(), new.hash()),
+			Some(new) => {
+				debug!(target: "txqueue", "[{:?}] Pushed out by [{:?}]", tx.hash(), new.hash())
+			}
 			None => debug!(target: "txqueue", "[{:?}] Dropped.", tx.hash()),
 		}
 	}
@@ -140,7 +142,11 @@ mod tests {
 		tx_listener.notify();
 		assert_eq!(
 			*received.lock(),
-			vec!["13aff4201ac1dc49daf6a7cf07b558ed956511acbaabf9502bdacc353953766d".parse().unwrap()]
+			vec![
+				"13aff4201ac1dc49daf6a7cf07b558ed956511acbaabf9502bdacc353953766d"
+					.parse()
+					.unwrap()
+			]
 		);
 	}
 
@@ -152,7 +158,8 @@ mod tests {
 			gas: 21_000.into(),
 			gas_price: 5.into(),
 			value: 0.into(),
-		}.fake_sign(5.into());
+		}
+		.fake_sign(5.into());
 
 		Arc::new(Transaction::from_pending_block_transaction(signed))
 	}

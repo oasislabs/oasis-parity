@@ -14,10 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
-use ethcore::client::{TestBlockChainClient, BlockChainClient, BlockId, EachBlockWith, ChainInfo, BlockInfo};
-use chain::{SyncState};
 use super::helpers::*;
+use chain::SyncState;
+use ethcore::client::{
+	BlockChainClient, BlockId, BlockInfo, ChainInfo, EachBlockWith, TestBlockChainClient,
+};
+use std::sync::Arc;
 use {SyncConfig, WarpSync};
 
 #[test]
@@ -28,7 +30,10 @@ fn two_peers() {
 	net.peer(2).chain.add_blocks(1000, EachBlockWith::Uncle);
 	net.sync();
 	assert!(net.peer(0).chain.block(BlockId::Number(1000)).is_some());
-	assert_eq!(*net.peer(0).chain.blocks.read(), *net.peer(1).chain.blocks.read());
+	assert_eq!(
+		*net.peer(0).chain.blocks.read(),
+		*net.peer(1).chain.blocks.read()
+	);
 }
 
 #[test]
@@ -38,7 +43,10 @@ fn long_chain() {
 	net.peer(1).chain.add_blocks(50000, EachBlockWith::Nothing);
 	net.sync();
 	assert!(net.peer(0).chain.block(BlockId::Number(50000)).is_some());
-	assert_eq!(*net.peer(0).chain.blocks.read(), *net.peer(1).chain.blocks.read());
+	assert_eq!(
+		*net.peer(0).chain.blocks.read(),
+		*net.peer(1).chain.blocks.read()
+	);
 }
 
 #[test]
@@ -66,13 +74,20 @@ fn empty_blocks() {
 	::env_logger::init().ok();
 	let mut net = TestNet::new(3);
 	for n in 0..200 {
-		let with = if n % 2 == 0 { EachBlockWith::Nothing } else { EachBlockWith::Uncle };
+		let with = if n % 2 == 0 {
+			EachBlockWith::Nothing
+		} else {
+			EachBlockWith::Uncle
+		};
 		net.peer(1).chain.add_blocks(5, with.clone());
 		net.peer(2).chain.add_blocks(5, with);
 	}
 	net.sync();
 	assert!(net.peer(0).chain.block(BlockId::Number(1000)).is_some());
-	assert_eq!(*net.peer(0).chain.blocks.read(), *net.peer(1).chain.blocks.read());
+	assert_eq!(
+		*net.peer(0).chain.blocks.read(),
+		*net.peer(1).chain.blocks.read()
+	);
 }
 
 #[test]
@@ -90,7 +105,10 @@ fn forked() {
 	// peer 1 has the best chain of 601 blocks
 	let peer1_chain = net.peer(1).chain.numbers.read().clone();
 	net.sync();
-	assert_eq!(*net.peer(0).chain.difficulty.read(), *net.peer(1).chain.difficulty.read());
+	assert_eq!(
+		*net.peer(0).chain.difficulty.read(),
+		*net.peer(1).chain.difficulty.read()
+	);
 	assert_eq!(&*net.peer(0).chain.numbers.read(), &peer1_chain);
 	assert_eq!(&*net.peer(1).chain.numbers.read(), &peer1_chain);
 	assert_eq!(&*net.peer(2).chain.numbers.read(), &peer1_chain);
@@ -126,13 +144,19 @@ fn net_hard_fork() {
 	let ref_client = TestBlockChainClient::new();
 	ref_client.add_blocks(50, EachBlockWith::Uncle);
 	{
-		let mut net = TestNet::new_with_fork(2, Some((50, ref_client.block_hash(BlockId::Number(50)).unwrap())));
+		let mut net = TestNet::new_with_fork(
+			2,
+			Some((50, ref_client.block_hash(BlockId::Number(50)).unwrap())),
+		);
 		net.peer(0).chain.add_blocks(100, EachBlockWith::Uncle);
 		net.sync();
 		assert_eq!(net.peer(1).chain.chain_info().best_block_number, 100);
 	}
 	{
-		let mut net = TestNet::new_with_fork(2, Some((50, ref_client.block_hash(BlockId::Number(50)).unwrap())));
+		let mut net = TestNet::new_with_fork(
+			2,
+			Some((50, ref_client.block_hash(BlockId::Number(50)).unwrap())),
+		);
 		net.peer(0).chain.add_blocks(100, EachBlockWith::Nothing);
 		net.sync();
 		assert_eq!(net.peer(1).chain.chain_info().best_block_number, 0);
@@ -163,7 +187,10 @@ fn status_empty() {
 	let mut config = SyncConfig::default();
 	config.warp_sync = WarpSync::Enabled;
 	let net = TestNet::new_with_config(2, config);
-	assert_eq!(net.peer(0).sync.read().status().state, SyncState::WaitingPeers);
+	assert_eq!(
+		net.peer(0).sync.read().status().state,
+		SyncState::WaitingPeers
+	);
 }
 
 #[test]
@@ -219,7 +246,13 @@ fn propagate_blocks() {
 
 	assert!(!net.peer(0).queue.read().is_empty());
 	// NEW_BLOCK_PACKET
-	let blocks = net.peer(0).queue.read().iter().filter(|p| p.packet_id == 0x7).count();
+	let blocks = net
+		.peer(0)
+		.queue
+		.read()
+		.iter()
+		.filter(|p| p.packet_id == 0x7)
+		.count();
 	assert!(blocks > 0);
 }
 

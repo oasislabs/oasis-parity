@@ -18,7 +18,6 @@
 ///
 /// This bloom filter implementation is used by the externalities tracer to estimate the size
 /// of read- / write-conflict sets.
-
 // Some of this code is taken from util/bloom/src/lib.rs; to reduce memory usage, we do not
 // keep a HashSet of all bit locations, since for long running transactions this could be
 // large, and as long as we do not intend to serialize the Bloom filter the journal is not
@@ -33,14 +32,13 @@
 // approximation formula should yield the approximate number of elements common to both
 // original Bloom filters.  The same consideration applies for union.  Intersection, union, and
 // estimating number of entries are operations that we support.
-
 extern crate siphasher;
 
+use self::siphasher::sip::SipHasher;
 use std::cmp;
 use std::f64;
-use std::usize;
 use std::hash::{Hash, Hasher};
-use self::siphasher::sip::SipHasher;
+use std::usize;
 
 use trace_ext::error::Error;
 
@@ -72,7 +70,9 @@ impl Bitmap {
 	/// pop_count is used for SwamidassBaldi approximation formula for the number of
 	/// entries in a Bloom filter, and for saturation.
 	pub fn pop_count(&self) -> usize {
-		self.elems.iter().fold(0usize, |acc, e| acc + e.count_ones() as usize)
+		self.elems
+			.iter()
+			.fold(0usize, |acc, e| acc + e.count_ones() as usize)
 	}
 
 	/// Returns a new Bitmap that is the intersection of self and other.
@@ -146,7 +146,8 @@ impl BloomFilter {
 
 	/// Records the presence of an item.
 	pub fn set<T>(&mut self, item: &T)
-		where T: Hash
+	where
+		T: Hash,
 	{
 		let base_hash = BloomFilter::sip_hash(item);
 		for k_i in 0..self.k_num {
@@ -158,7 +159,8 @@ impl BloomFilter {
 	/// Check if an item is present in the set.  There can be false positives, but no false
 	/// negatives.
 	pub fn check<T>(&self, item: &T) -> bool
-		where T: Hash
+	where
+		T: Hash,
 	{
 		let base_hash = BloomFilter::sip_hash(item);
 		for k_i in 0..self.k_num {
@@ -199,8 +201,8 @@ impl BloomFilter {
 		// where n* is the estimated number of entries, m is the length of the filter,
 		// k is the number of hash functions, and X is the number of bits set to one.
 		let f_m = self.number_of_bits() as f64;
-		let fest = -f_m/(self.number_of_hash_functions() as f64) * f64::ln(
-			1.0f64 - (self.pop_count() as f64) / f_m);
+		let fest = -f_m / (self.number_of_hash_functions() as f64)
+			* f64::ln(1.0f64 - (self.pop_count() as f64) / f_m);
 		fest.ceil() as u64
 	}
 
@@ -223,7 +225,8 @@ impl BloomFilter {
 	// contract author creating barriers to parallelism for her/his own contract; the
 	// author has no incentive to do so.
 	fn sip_hash<T>(item: &T) -> u64
-		where T: Hash
+	where
+		T: Hash,
 	{
 		let mut sip = SipHasher::new();
 		item.hash(&mut sip);
@@ -380,7 +383,7 @@ fn test_self_union() {
 		assert!(bf3.check(&i));
 	}
 
-	let actual_count = (100-0);
+	let actual_count = (100 - 0);
 	let lower = (0.8 * (actual_count as f64)) as u64;
 	let upper = (1.2 * (actual_count as f64)) as u64;
 
@@ -409,7 +412,7 @@ fn test_union() {
 		assert!(bf3.check(&i));
 	}
 
-	let actual_count = (100-0) + (250-200);
+	let actual_count = (100 - 0) + (250 - 200);
 	let lower = (0.8 * (actual_count as f64)) as u64;
 	let upper = (1.2 * (actual_count as f64)) as u64;
 

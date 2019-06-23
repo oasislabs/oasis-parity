@@ -16,11 +16,11 @@
 
 //! External Miner hashrate tracker.
 
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::{Instant, Duration};
 use ethereum_types::{H256, U256};
 use parking_lot::Mutex;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 /// External miner interface.
 pub trait ExternalMinerService: Send + Sync {
@@ -57,23 +57,30 @@ const ENTRY_TIMEOUT: Duration = Duration::from_secs(2);
 
 impl ExternalMinerService for ExternalMiner {
 	fn submit_hashrate(&self, hashrate: U256, id: H256) {
-		self.hashrates.lock().insert(id, (Instant::now() + ENTRY_TIMEOUT, hashrate));
+		self.hashrates
+			.lock()
+			.insert(id, (Instant::now() + ENTRY_TIMEOUT, hashrate));
 	}
 
 	fn hashrate(&self) -> U256 {
 		let mut hashrates = self.hashrates.lock();
-		let h = hashrates.drain().filter(|&(_, (t, _))| t > Instant::now()).collect();
+		let h = hashrates
+			.drain()
+			.filter(|&(_, (t, _))| t > Instant::now())
+			.collect();
 		*hashrates = h;
-		hashrates.iter().fold(U256::from(0), |sum, (_, &(_, v))| sum + v)
+		hashrates
+			.iter()
+			.fold(U256::from(0), |sum, (_, &(_, v))| sum + v)
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use ethereum_types::{H256, U256};
 	use std::thread::sleep;
 	use std::time::Duration;
-	use ethereum_types::{H256, U256};
 
 	fn miner() -> ExternalMiner {
 		ExternalMiner::default()

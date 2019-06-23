@@ -40,11 +40,11 @@ extern crate error_chain;
 extern crate log;
 
 #[cfg(test)]
-extern crate rustc_hex;
+extern crate env_logger;
 #[cfg(test)]
 extern crate ethkey;
 #[cfg(test)]
-extern crate env_logger;
+extern crate rustc_hex;
 
 pub mod external;
 pub mod gas_pricer;

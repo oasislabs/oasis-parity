@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use {syn, quote};
+use {quote, syn};
 
 struct ParseQuotes {
 	single: quote::Tokens,
@@ -44,7 +44,12 @@ pub fn impl_decodable(ast: &syn::DeriveInput) -> quote::Tokens {
 		_ => panic!("#[derive(RlpDecodable)] is only defined for structs."),
 	};
 
-	let stmts: Vec<_> = body.fields.iter().enumerate().map(decodable_field_map).collect();
+	let stmts: Vec<_> = body
+		.fields
+		.iter()
+		.enumerate()
+		.map(decodable_field_map)
+		.collect();
 	let name = &ast.ident;
 
 	let dummy_const: syn::Ident = format!("_IMPL_RLP_DECODABLE_FOR_{}", name).into();
@@ -129,7 +134,13 @@ fn decodable_field(index: usize, field: &syn::Field, quotes: ParseQuotes) -> quo
 
 	match field.ty {
 		syn::Type::Path(ref path) => {
-			let ident = &path.path.segments.first().expect("there must be at least 1 segment").value().ident;
+			let ident = &path
+				.path
+				.segments
+				.first()
+				.expect("there must be at least 1 segment")
+				.value()
+				.ident;
 			if &ident.to_string() == "Vec" {
 				if quotes.takes_index {
 					quote! { #id: #list(#index)?, }
@@ -143,7 +154,7 @@ fn decodable_field(index: usize, field: &syn::Field, quotes: ParseQuotes) -> quo
 					quote! { #id: #single()?, }
 				}
 			}
-		},
+		}
 		_ => panic!("rlp_derive not supported"),
 	}
 }

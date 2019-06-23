@@ -16,10 +16,10 @@
 
 //! Blockchain test state deserializer.
 
-use std::collections::BTreeMap;
-use hash::Address;
 use bytes::Bytes;
+use hash::Address;
 use spec::{Account, Builtin};
+use std::collections::BTreeMap;
 
 /// Blockchain test state deserializer.
 #[derive(Debug, PartialEq, Deserialize)]

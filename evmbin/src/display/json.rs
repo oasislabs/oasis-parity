@@ -19,9 +19,9 @@
 use std::collections::HashMap;
 use std::mem;
 
-use ethereum_types::{U256, H256};
 use bytes::ToPretty;
 use ethcore::trace;
+use ethereum_types::{H256, U256};
 
 use display;
 use info as vm;
@@ -49,12 +49,18 @@ impl Informant {
 	}
 
 	fn stack(&self) -> String {
-		let items = self.stack.iter().map(|i| format!("\"0x{:x}\"", i)).collect::<Vec<_>>();
+		let items = self
+			.stack
+			.iter()
+			.map(|i| format!("\"0x{:x}\"", i))
+			.collect::<Vec<_>>();
 		format!("[{}]", items.join(","))
 	}
 
 	fn storage(&self) -> String {
-		let vals = self.storage.iter()
+		let vals = self
+			.storage
+			.iter()
 			.map(|(k, v)| format!("\"0x{:?}\": \"0x{:?}\"", k, v))
 			.collect::<Vec<_>>();
 		format!("{{{}}}", vals.join(","))
@@ -87,7 +93,7 @@ impl vm::Informant for Informant {
 					gas = success.gas_used,
 					time = display::as_micros(&success.time),
 				)
-			},
+			}
 			Err(failure) => {
 				for trace in failure.traces.unwrap_or_else(Vec::new) {
 					println!("{}", trace);
@@ -99,7 +105,7 @@ impl vm::Informant for Informant {
 					gas = failure.gas_used,
 					time = display::as_micros(&failure.time),
 				)
-			},
+			}
 		}
 	}
 }
@@ -120,7 +126,13 @@ impl trace::VMTracer for Informant {
 		self.gas_cost = gas_cost;
 	}
 
-	fn trace_executed(&mut self, gas_used: U256, stack_push: &[U256], mem_diff: Option<(usize, &[u8])>, store_diff: Option<(U256, U256)>) {
+	fn trace_executed(
+		&mut self,
+		gas_used: U256,
+		stack_push: &[U256],
+		mem_diff: Option<(usize, &[u8])>,
+		store_diff: Option<(U256, U256)>,
+	) {
 		let info = ::evm::INSTRUCTIONS[self.instruction as usize];
 
 		let trace = format!(
@@ -141,7 +153,8 @@ impl trace::VMTracer for Informant {
 		self.gas_used = gas_used;
 
 		let len = self.stack.len();
-		self.stack.truncate(if len > info.args { len - info.args } else { 0 });
+		self.stack
+			.truncate(if len > info.args { len - info.args } else { 0 });
 		self.stack.extend_from_slice(stack_push);
 
 		// TODO [ToDr] Align memory?
@@ -157,11 +170,15 @@ impl trace::VMTracer for Informant {
 		}
 
 		if !self.subtraces.is_empty() {
-			self.traces.extend(mem::replace(&mut self.subtraces, vec![]));
+			self.traces
+				.extend(mem::replace(&mut self.subtraces, vec![]));
 		}
 	}
 
-	fn prepare_subtrace(&self, code: &[u8]) -> Self where Self: Sized {
+	fn prepare_subtrace(&self, code: &[u8]) -> Self
+	where
+		Self: Sized,
+	{
 		let mut vm = Informant::default();
 		vm.depth = self.depth + 1;
 		vm.code = code.to_vec();
@@ -182,7 +199,8 @@ impl trace::VMTracer for Informant {
 			let gas_used = self.gas_used;
 			self.trace_executed(gas_used, &[], None, None);
 		} else if !self.subtraces.is_empty() {
-			self.traces.extend(mem::replace(&mut self.subtraces, vec![]));
+			self.traces
+				.extend(mem::replace(&mut self.subtraces, vec![]));
 		}
 		Some(self.traces)
 	}
@@ -193,10 +211,7 @@ mod tests {
 	use super::*;
 	use info::tests::run_test;
 
-	fn assert_traces_eq(
-		a: &[String],
-		b: &[String],
-	) {
+	fn assert_traces_eq(a: &[String], b: &[String]) {
 		let mut ita = a.iter();
 		let mut itb = b.iter();
 
@@ -205,7 +220,7 @@ mod tests {
 				(Some(a), Some(b)) => {
 					assert_eq!(a, b);
 					println!("{}", a);
-				},
+				}
 				(None, None) => return,
 				e => {
 					panic!("Traces mismatch: {:?}", e);
@@ -215,7 +230,8 @@ mod tests {
 	}
 
 	fn compare_json(traces: Option<Vec<String>>, expected: &str) {
-		let expected = expected.split("\n")
+		let expected = expected
+			.split("\n")
 			.map(|x| x.trim())
 			.map(|x| x.to_owned())
 			.filter(|x| !x.is_empty())

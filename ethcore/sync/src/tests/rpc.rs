@@ -15,9 +15,9 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::super::NetworkConfiguration;
+use ipc::binary::{deserialize, serialize};
 use network::NetworkConfiguration as BasicNetworkConfiguration;
 use std::convert::From;
-use ipc::binary::{serialize, deserialize};
 
 #[test]
 fn network_settings_serialize() {

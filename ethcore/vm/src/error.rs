@@ -16,8 +16,8 @@
 
 //! VM errors module
 
-use trie;
 use std::fmt;
+use trie;
 
 /// VM errors.
 #[derive(Debug, Clone, PartialEq)]
@@ -32,7 +32,7 @@ pub enum Error {
 	/// to position that wasn't marked with JUMPDEST instruction
 	BadJumpDestination {
 		/// Position the code tried to jump to.
-		destination: usize
+		destination: usize,
 	},
 	/// `BadInstructions` is returned when given instruction is not supported
 	BadInstruction {
@@ -46,7 +46,7 @@ pub enum Error {
 		/// How many stack elements was requested by instruction
 		wanted: usize,
 		/// How many elements were on stack
-		on_stack: usize
+		on_stack: usize,
 	},
 	/// When execution would exceed defined Stack Limit
 	OutOfStack {
@@ -55,7 +55,7 @@ pub enum Error {
 		/// How many stack elements instruction wanted to push
 		wanted: usize,
 		/// What was the stack limit
-		limit: usize
+		limit: usize,
 	},
 	/// Built-in contract failed on given input
 	BuiltIn(&'static str),
@@ -92,10 +92,20 @@ impl fmt::Display for Error {
 		use self::Error::*;
 		match *self {
 			OutOfGas => write!(f, "Out of gas"),
-			BadJumpDestination { destination } => write!(f, "Bad jump destination {:x}", destination),
-			BadInstruction { instruction } => write!(f, "Bad instruction {:x}",  instruction),
-			StackUnderflow { instruction, wanted, on_stack } => write!(f, "Stack underflow {} {}/{}", instruction, wanted, on_stack),
-			OutOfStack { instruction, wanted, limit } => write!(f, "Out of stack {} {}/{}", instruction, wanted, limit),
+			BadJumpDestination { destination } => {
+				write!(f, "Bad jump destination {:x}", destination)
+			}
+			BadInstruction { instruction } => write!(f, "Bad instruction {:x}", instruction),
+			StackUnderflow {
+				instruction,
+				wanted,
+				on_stack,
+			} => write!(f, "Stack underflow {} {}/{}", instruction, wanted, on_stack),
+			OutOfStack {
+				instruction,
+				wanted,
+				limit,
+			} => write!(f, "Out of stack {} {}/{}", instruction, wanted, limit),
 			BuiltIn(name) => write!(f, "Built-in failed: {}", name),
 			Internal(ref msg) => write!(f, "Internal error: {}", msg),
 			MutableCallInStaticContext => write!(f, "Mutable call in static context"),
