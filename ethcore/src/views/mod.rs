@@ -35,7 +35,7 @@ mod tests {
 
 	#[test]
 	#[should_panic(
-		expected = "View rlp is trusted and should be valid. Constructed in ethcore/src/views/mod.rs on line 39: RlpExpectedToBeList"
+		expected = "View rlp is trusted and should be valid. Constructed in ethcore/src/views/mod.rs on line 41: RlpExpectedToBeList"
 	)]
 	fn should_include_file_line_number_in_panic_for_invalid_rlp() {
 		let _ = view!(HeaderView, &[]).parent_hash();
