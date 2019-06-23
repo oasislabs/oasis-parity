@@ -16,7 +16,7 @@
 
 //! Indication of how secure the chain is.
 
-use {BlockNumber};
+use BlockNumber;
 
 /// Indication of how secure the chain is.
 #[derive(Debug, PartialEq, Copy, Clone, Hash, Eq)]

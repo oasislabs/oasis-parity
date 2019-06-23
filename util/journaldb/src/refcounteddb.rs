@@ -19,17 +19,17 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 // use heapsize::HeapSizeOf;
-use rlp::{encode, decode};
-use hashdb::*;
-use overlaydb::OverlayDB;
-use memorydb::MemoryDB;
-use super::{DB_PREFIX_LEN, LATEST_ERA_KEY};
 use super::traits::JournalDB;
-use kvdb::{KeyValueDB, DBTransaction};
-use ethereum_types::H256;
-use error::UtilError;
+use super::{DB_PREFIX_LEN, LATEST_ERA_KEY};
 use bytes::Bytes;
-use util::{DatabaseKey, DatabaseValueView, DatabaseValueRef};
+use error::UtilError;
+use ethereum_types::H256;
+use hashdb::*;
+use kvdb::{DBTransaction, KeyValueDB};
+use memorydb::MemoryDB;
+use overlaydb::OverlayDB;
+use rlp::{decode, encode};
+use util::{DatabaseKey, DatabaseValueRef, DatabaseValueView};
 
 /// Implementation of the `HashDB` trait for a disk-backed database with a memory overlay
 /// and latent-removal semantics.
@@ -63,7 +63,8 @@ pub struct RefCountedDB {
 impl RefCountedDB {
 	/// Create a new instance given a `backing` database.
 	pub fn new(backing: Arc<KeyValueDB>, column: Option<u32>) -> RefCountedDB {
-		let latest_era = backing.get(column, &LATEST_ERA_KEY)
+		let latest_era = backing
+			.get(column, &LATEST_ERA_KEY)
 			.expect("Low-level database error.")
 			.map(|v| decode::<u64>(&v).expect("decoding db value failed"));
 
@@ -79,12 +80,27 @@ impl RefCountedDB {
 }
 
 impl HashDB for RefCountedDB {
-	fn keys(&self) -> HashMap<H256, i32> { self.forward.keys() }
-	fn get(&self, key: &H256) -> Option<DBValue> { self.forward.get(key) }
-	fn contains(&self, key: &H256) -> bool { self.forward.contains(key) }
-	fn insert(&mut self, value: &[u8]) -> H256 { let r = self.forward.insert(value); self.inserts.push(r.clone()); r }
-	fn emplace(&mut self, key: H256, value: DBValue) { self.inserts.push(key.clone()); self.forward.emplace(key, value); }
-	fn remove(&mut self, key: &H256) { self.removes.push(key.clone()); }
+	fn keys(&self) -> HashMap<H256, i32> {
+		self.forward.keys()
+	}
+	fn get(&self, key: &H256) -> Option<DBValue> {
+		self.forward.get(key)
+	}
+	fn contains(&self, key: &H256) -> bool {
+		self.forward.contains(key)
+	}
+	fn insert(&mut self, value: &[u8]) -> H256 {
+		let r = self.forward.insert(value);
+		self.inserts.push(r.clone());
+		r
+	}
+	fn emplace(&mut self, key: H256, value: DBValue) {
+		self.inserts.push(key.clone());
+		self.forward.emplace(key, value);
+	}
+	fn remove(&mut self, key: &H256) {
+		self.removes.push(key.clone());
+	}
 }
 
 impl JournalDB for RefCountedDB {
@@ -111,13 +127,22 @@ impl JournalDB for RefCountedDB {
 		&self.backing
 	}
 
-	fn latest_era(&self) -> Option<u64> { self.latest_era }
-
-	fn state(&self, id: &H256) -> Option<Bytes> {
-		self.backing.get_by_prefix(self.column, &id[0..DB_PREFIX_LEN]).map(|b| b.into_vec())
+	fn latest_era(&self) -> Option<u64> {
+		self.latest_era
 	}
 
-	fn journal_under(&mut self, batch: &mut DBTransaction, now: u64, id: &H256) -> Result<u32, UtilError> {
+	fn state(&self, id: &H256) -> Option<Bytes> {
+		self.backing
+			.get_by_prefix(self.column, &id[0..DB_PREFIX_LEN])
+			.map(|b| b.into_vec())
+	}
+
+	fn journal_under(
+		&mut self,
+		batch: &mut DBTransaction,
+		now: u64,
+		id: &H256,
+	) -> Result<u32, UtilError> {
 		// record new commit's details.
 		let mut db_key = DatabaseKey {
 			era: now,
@@ -125,10 +150,14 @@ impl JournalDB for RefCountedDB {
 		};
 		let mut last;
 
-		while self.backing.get(self.column, {
-			last = encode(&db_key);
-			&last
-		})?.is_some() {
+		while self
+			.backing
+			.get(self.column, {
+				last = encode(&db_key);
+				&last
+			})?
+			.is_some()
+		{
 			db_key.index += 1;
 		}
 
@@ -157,7 +186,12 @@ impl JournalDB for RefCountedDB {
 		Ok(ops as u32)
 	}
 
-	fn mark_canonical(&mut self, batch: &mut DBTransaction, end_era: u64, canon_id: &H256) -> Result<u32, UtilError> {
+	fn mark_canonical(
+		&mut self,
+		batch: &mut DBTransaction,
+		end_era: u64,
+		canon_id: &H256,
+	) -> Result<u32, UtilError> {
 		// apply old commits' details
 		let mut db_key = DatabaseKey {
 			era: end_era,
@@ -176,7 +210,8 @@ impl JournalDB for RefCountedDB {
 				view.deletes()
 			} else {
 				view.inserts()
-			}.expect("rlp read from db; qed");
+			}
+			.expect("rlp read from db; qed");
 			trace!(target: "rcdb", "delete journal for time #{}.{}=>{}, (canon was {}): deleting {:?}", end_era, db_key.index, our_id, canon_id, to_remove);
 			for i in &to_remove {
 				self.forward.remove(i);
@@ -213,10 +248,10 @@ impl JournalDB for RefCountedDB {
 #[cfg(test)]
 mod tests {
 
-	use keccak::keccak;
-	use hashdb::{HashDB, DBValue};
 	use super::*;
-	use {JournalDB, kvdb_memorydb};
+	use hashdb::{DBValue, HashDB};
+	use keccak::keccak;
+	use {kvdb_memorydb, JournalDB};
 
 	fn new_db() -> RefCountedDB {
 		let backing = Arc::new(kvdb_memorydb::create(0));
@@ -235,9 +270,11 @@ mod tests {
 		assert!(jdb.contains(&h));
 		jdb.commit_batch(2, &keccak(b"2"), None).unwrap();
 		assert!(jdb.contains(&h));
-		jdb.commit_batch(3, &keccak(b"3"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(3, &keccak(b"3"), Some((0, keccak(b"0"))))
+			.unwrap();
 		assert!(jdb.contains(&h));
-		jdb.commit_batch(4, &keccak(b"4"), Some((1, keccak(b"1")))).unwrap();
+		jdb.commit_batch(4, &keccak(b"4"), Some((1, keccak(b"1"))))
+			.unwrap();
 		assert!(!jdb.contains(&h));
 	}
 
@@ -254,9 +291,11 @@ mod tests {
 		assert_eq!(jdb.latest_era(), Some(1));
 		jdb.commit_batch(2, &keccak(b"2"), None).unwrap();
 		assert_eq!(jdb.latest_era(), Some(2));
-		jdb.commit_batch(3, &keccak(b"3"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(3, &keccak(b"3"), Some((0, keccak(b"0"))))
+			.unwrap();
 		assert_eq!(jdb.latest_era(), Some(3));
-		jdb.commit_batch(4, &keccak(b"4"), Some((1, keccak(b"1")))).unwrap();
+		jdb.commit_batch(4, &keccak(b"4"), Some((1, keccak(b"1"))))
+			.unwrap();
 		assert_eq!(jdb.latest_era(), Some(4));
 	}
 
@@ -274,25 +313,29 @@ mod tests {
 		jdb.remove(&foo);
 		jdb.remove(&bar);
 		let baz = jdb.insert(b"baz");
-		jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0"))))
+			.unwrap();
 		assert!(jdb.contains(&foo));
 		assert!(jdb.contains(&bar));
 		assert!(jdb.contains(&baz));
 
 		let foo = jdb.insert(b"foo");
 		jdb.remove(&baz);
-		jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1")))).unwrap();
+		jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1"))))
+			.unwrap();
 		assert!(jdb.contains(&foo));
 		assert!(!jdb.contains(&bar));
 		assert!(jdb.contains(&baz));
 
 		jdb.remove(&foo);
-		jdb.commit_batch(3, &keccak(b"3"), Some((2, keccak(b"2")))).unwrap();
+		jdb.commit_batch(3, &keccak(b"3"), Some((2, keccak(b"2"))))
+			.unwrap();
 		assert!(jdb.contains(&foo));
 		assert!(!jdb.contains(&bar));
 		assert!(!jdb.contains(&baz));
 
-		jdb.commit_batch(4, &keccak(b"4"), Some((3, keccak(b"3")))).unwrap();
+		jdb.commit_batch(4, &keccak(b"4"), Some((3, keccak(b"3"))))
+			.unwrap();
 		assert!(!jdb.contains(&foo));
 		assert!(!jdb.contains(&bar));
 		assert!(!jdb.contains(&baz));
@@ -311,16 +354,19 @@ mod tests {
 
 		jdb.remove(&foo);
 		let baz = jdb.insert(b"baz");
-		jdb.commit_batch(1, &keccak(b"1a"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(1, &keccak(b"1a"), Some((0, keccak(b"0"))))
+			.unwrap();
 
 		jdb.remove(&bar);
-		jdb.commit_batch(1, &keccak(b"1b"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(1, &keccak(b"1b"), Some((0, keccak(b"0"))))
+			.unwrap();
 
 		assert!(jdb.contains(&foo));
 		assert!(jdb.contains(&bar));
 		assert!(jdb.contains(&baz));
 
-		jdb.commit_batch(2, &keccak(b"2b"), Some((1, keccak(b"1b")))).unwrap();
+		jdb.commit_batch(2, &keccak(b"2b"), Some((1, keccak(b"1b"))))
+			.unwrap();
 		assert!(jdb.contains(&foo));
 		assert!(!jdb.contains(&baz));
 		assert!(!jdb.contains(&bar));

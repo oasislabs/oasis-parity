@@ -14,17 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use ethereum_types::H256;
-use keccak::keccak;
-use hashdb::{HashDB, DBValue};
 use super::triedbmut::TrieDBMut;
 use super::TrieMut;
+use ethereum_types::H256;
+use hashdb::{DBValue, HashDB};
+use keccak::keccak;
 
 /// A mutable `Trie` implementation which hashes keys and uses a generic `HashDB` backing database.
 ///
 /// Use it as a `Trie` or `TrieMut` trait object. You can use `raw()` to get the backing `TrieDBMut` object.
 pub struct SecTrieDBMut<'db> {
-	raw: TrieDBMut<'db>
+	raw: TrieDBMut<'db>,
 }
 
 impl<'db> SecTrieDBMut<'db> {
@@ -32,21 +32,29 @@ impl<'db> SecTrieDBMut<'db> {
 	/// Initialise to the state entailed by the genesis block.
 	/// This guarantees the trie is built correctly.
 	pub fn new(db: &'db mut HashDB, root: &'db mut H256) -> Self {
-		SecTrieDBMut { raw: TrieDBMut::new(db, root) }
+		SecTrieDBMut {
+			raw: TrieDBMut::new(db, root),
+		}
 	}
 
 	/// Create a new trie with the backing database `db` and `root`.
 	///
 	/// Returns an error if root does not exist.
 	pub fn from_existing(db: &'db mut HashDB, root: &'db mut H256) -> super::Result<Self> {
-		Ok(SecTrieDBMut { raw: TrieDBMut::from_existing(db, root)? })
+		Ok(SecTrieDBMut {
+			raw: TrieDBMut::from_existing(db, root)?,
+		})
 	}
 
 	/// Get the backing database.
-	pub fn db(&self) -> &HashDB { self.raw.db() }
+	pub fn db(&self) -> &HashDB {
+		self.raw.db()
+	}
 
 	/// Get the backing database.
-	pub fn db_mut(&mut self) -> &mut HashDB { self.raw.db_mut() }
+	pub fn db_mut(&mut self) -> &mut HashDB {
+		self.raw.db_mut()
+	}
 }
 
 impl<'db> TrieMut for SecTrieDBMut<'db> {
@@ -63,7 +71,8 @@ impl<'db> TrieMut for SecTrieDBMut<'db> {
 	}
 
 	fn get<'a, 'key>(&'a self, key: &'key [u8]) -> super::Result<Option<DBValue>>
-		where 'a: 'key
+	where
+		'a: 'key,
 	{
 		self.raw.get(&keccak(key))
 	}
@@ -79,9 +88,9 @@ impl<'db> TrieMut for SecTrieDBMut<'db> {
 
 #[test]
 fn sectrie_to_trie() {
-	use memorydb::*;
 	use super::triedb::*;
 	use super::Trie;
+	use memorydb::*;
 
 	let mut memdb = MemoryDB::new();
 	let mut root = H256::default();
@@ -90,5 +99,8 @@ fn sectrie_to_trie() {
 		t.insert(&[0x01u8, 0x23], &[0x01u8, 0x23]).unwrap();
 	}
 	let t = TrieDB::new(&memdb, &root).unwrap();
-	assert_eq!(t.get(&keccak(&[0x01u8, 0x23])).unwrap().unwrap(), DBValue::from_slice(&[0x01u8, 0x23]));
+	assert_eq!(
+		t.get(&keccak(&[0x01u8, 0x23])).unwrap().unwrap(),
+		DBValue::from_slice(&[0x01u8, 0x23])
+	);
 }

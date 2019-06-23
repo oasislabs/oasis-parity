@@ -14,14 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::{Arc, Mutex};
+use ethereum_types::H256;
 use hash::KECCAK_EMPTY;
 use heapsize::HeapSizeOf;
-use ethereum_types::H256;
+use std::sync::{Arc, Mutex};
 // use parking_lot::Mutex;
-use memory_cache::MemoryLruCache;
-use bit_set::BitSet;
 use super::super::instructions;
+use bit_set::BitSet;
+use memory_cache::MemoryLruCache;
 
 const DEFAULT_CACHE_SIZE: usize = 4 * 1024 * 1024;
 
@@ -60,7 +60,10 @@ impl SharedCache {
 		}
 
 		let d = Self::find_jump_destinations(code);
-		self.jump_destinations.lock().unwrap().insert(code_hash.clone(), Bits(d.clone()));
+		self.jump_destinations
+			.lock()
+			.unwrap()
+			.insert(code_hash.clone(), Bits(d.clone()));
 
 		d
 	}

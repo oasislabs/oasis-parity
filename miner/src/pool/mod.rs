@@ -16,7 +16,7 @@
 
 //! Transaction Pool
 
-use ethereum_types::{H256, Address};
+use ethereum_types::{Address, H256};
 use heapsize::HeapSizeOf;
 use transaction;
 use txpool;
@@ -33,8 +33,8 @@ pub mod verifier;
 #[cfg(test)]
 mod tests;
 
-pub use self::queue::{TransactionQueue, Status as QueueStatus};
-pub use self::txpool::{VerifiedTransaction as PoolVerifiedTransaction, Options};
+pub use self::queue::{Status as QueueStatus, TransactionQueue};
+pub use self::txpool::{Options, VerifiedTransaction as PoolVerifiedTransaction};
 
 /// How to prioritize transactions in the pool
 ///
@@ -119,7 +119,6 @@ impl VerifiedTransaction {
 	pub fn pending(&self) -> &transaction::PendingTransaction {
 		&self.transaction
 	}
-
 }
 
 impl txpool::VerifiedTransaction for VerifiedTransaction {

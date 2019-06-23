@@ -21,32 +21,36 @@
 //! https://github.com/ethereum/wiki/wiki/Ethereum-Wire-Protocol
 //!
 
-extern crate ethcore_network as network;
-extern crate ethcore_network_devp2p as devp2p;
 extern crate ethcore_bytes as bytes;
 extern crate ethcore_io as io;
+extern crate ethcore_network as network;
+extern crate ethcore_network_devp2p as devp2p;
 extern crate ethcore_transaction as transaction;
 #[macro_use]
 extern crate ethcore;
-extern crate ethereum_types;
 extern crate env_logger;
-extern crate plain_hasher;
-extern crate rand;
-extern crate semver;
-extern crate parking_lot;
-extern crate smallvec;
-extern crate rlp;
+extern crate ethereum_types;
 extern crate ipnetwork;
 extern crate keccak_hash as hash;
-extern crate triehash;
 extern crate kvdb;
+extern crate parking_lot;
+extern crate plain_hasher;
+extern crate rand;
+extern crate rlp;
+extern crate semver;
+extern crate smallvec;
+extern crate triehash;
 
 extern crate ethcore_light as light;
 
-#[cfg(test)] extern crate ethkey;
-#[cfg(test)] extern crate kvdb_memorydb;
-#[cfg(test)] extern crate rustc_hex;
-#[cfg(test)] extern crate ethcore_private_tx;
+#[cfg(test)]
+extern crate ethcore_private_tx;
+#[cfg(test)]
+extern crate ethkey;
+#[cfg(test)]
+extern crate kvdb_memorydb;
+#[cfg(test)]
+extern crate rustc_hex;
 
 #[macro_use]
 extern crate macros;
@@ -57,12 +61,12 @@ extern crate heapsize;
 #[macro_use]
 extern crate trace_time;
 
-mod chain;
-mod blocks;
 mod block_sync;
-mod sync_io;
+mod blocks;
+mod chain;
 mod private_tx;
 mod snapshot;
+mod sync_io;
 mod transactions_stats;
 
 pub mod light_sync;
@@ -73,7 +77,7 @@ mod tests;
 mod api;
 
 pub use api::*;
-pub use chain::{SyncStatus, SyncState};
+pub use chain::{SyncState, SyncStatus};
 pub use devp2p::validate_node_url;
-pub use network::{NonReservedPeerMode, Error, ErrorKind, ConnectionFilter, ConnectionDirection};
-pub use private_tx::{PrivateTxHandler, NoopPrivateTxHandler, SimplePrivateTxHandler};
+pub use network::{ConnectionDirection, ConnectionFilter, Error, ErrorKind, NonReservedPeerMode};
+pub use private_tx::{NoopPrivateTxHandler, PrivateTxHandler, SimplePrivateTxHandler};

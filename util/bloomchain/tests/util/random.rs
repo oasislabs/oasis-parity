@@ -31,7 +31,7 @@ pub fn generate_random_bloom() -> Bloom {
 	res[p0 as usize] |= 1 << b0;
 	res[p1 as usize] |= 1 << b1;
 	res[p2 as usize] |= 1 << b2;
-	
+
 	From::from(res)
 }
 

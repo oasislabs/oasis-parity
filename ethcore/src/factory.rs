@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use evm::{Factory as EvmFactory, VMType};
-use vm::{Vm, ConfidentialCtx, OasisVm, ActionParams, Schedule};
 use bytes::Bytes;
+use evm::{Factory as EvmFactory, VMType};
 use std::{cell::RefCell, rc::Rc};
+use vm::{ActionParams, ConfidentialCtx, OasisVm, Schedule, Vm};
 
 use wasm::WasmInterpreter;
 
@@ -33,11 +33,18 @@ pub struct VmFactory {
 }
 
 impl VmFactory {
-	
 	#[cfg(not(feature = "use-wasmer-runtime"))]
-	pub fn create(&self, ctx: Option<Rc<RefCell<Box<ConfidentialCtx>>>>, params: &ActionParams, schedule: &Schedule) -> Box<Vm> {
+	pub fn create(
+		&self,
+		ctx: Option<Rc<RefCell<Box<ConfidentialCtx>>>>,
+		params: &ActionParams,
+		schedule: &Schedule,
+	) -> Box<Vm> {
 		let vm = {
-			if schedule.wasm.is_some() && params.code.as_ref().map_or(false, |code| code.len() > 4 && &code[0..4] == WASM_MAGIC_NUMBER) {
+			if schedule.wasm.is_some()
+				&& params.code.as_ref().map_or(false, |code| {
+					code.len() > 4 && &code[0..4] == WASM_MAGIC_NUMBER
+				}) {
 				Box::new(WasmInterpreter)
 			} else {
 				self.evm.create(&params.gas)
@@ -47,9 +54,17 @@ impl VmFactory {
 	}
 
 	#[cfg(feature = "use-wasmer-runtime")]
-	pub fn create(&self, ctx: Option<Rc<RefCell<Box<ConfidentialCtx>>>>, params: &ActionParams, schedule: &Schedule) -> Box<Vm> {
+	pub fn create(
+		&self,
+		ctx: Option<Rc<RefCell<Box<ConfidentialCtx>>>>,
+		params: &ActionParams,
+		schedule: &Schedule,
+	) -> Box<Vm> {
 		let vm = {
-			if schedule.wasm.is_some() && params.code.as_ref().map_or(false, |code| code.len() > 4 && &code[0..4] == WASM_MAGIC_NUMBER) {
+			if schedule.wasm.is_some()
+				&& params.code.as_ref().map_or(false, |code| {
+					code.len() > 4 && &code[0..4] == WASM_MAGIC_NUMBER
+				}) {
 				Box::new(WasmRuntime)
 			} else {
 				self.evm.create(&params.gas)
@@ -59,7 +74,9 @@ impl VmFactory {
 	}
 
 	pub fn new(evm: VMType, cache_size: usize) -> Self {
-		VmFactory { evm: EvmFactory::new(evm, cache_size) }
+		VmFactory {
+			evm: EvmFactory::new(evm, cache_size),
+		}
 	}
 }
 

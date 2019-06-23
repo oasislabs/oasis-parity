@@ -16,15 +16,15 @@
 
 //! Transaction execution format module.
 
-use ethereum_types::{U256, U512, Address};
 use bytes::Bytes;
-use trie;
-use vm;
-use trace::{VMTrace, FlatTrace};
+use ethereum_types::{Address, U256, U512};
 use log_entry::LogEntry;
 use state_diff::StateDiff;
+use trace::{FlatTrace, VMTrace};
+use trie;
+use vm;
 
-use std::{fmt, error};
+use std::{error, fmt};
 
 /// Transaction execution receipt.
 #[derive(Debug, PartialEq, Clone)]
@@ -78,7 +78,7 @@ pub enum ExecutionError {
 		/// Absolute minimum gas required.
 		required: U256,
 		/// Gas provided.
-		got: U256
+		got: U256,
 	},
 	/// Returned when block (gas_used + gas) > gas_limit.
 	///
@@ -90,14 +90,14 @@ pub enum ExecutionError {
 		/// Gas used in block prior to transaction.
 		gas_used: U256,
 		/// Amount of gas in block.
-		gas: U256
+		gas: U256,
 	},
 	/// Returned when transaction nonce does not match state nonce.
 	InvalidNonce {
 		/// Nonce expected.
 		expected: U256,
 		/// Nonce found.
-		got: U256
+		got: U256,
 	},
 	/// Returned when cost of transaction (value + gas_price * gas) exceeds
 	/// current sender balance.
@@ -105,7 +105,7 @@ pub enum ExecutionError {
 		/// Minimum required balance.
 		required: U512,
 		/// Actual balance.
-		got: U512
+		got: U512,
 	},
 	/// When execution tries to modify the state in static context
 	MutableCallInStaticContext,
@@ -130,21 +130,49 @@ impl fmt::Display for ExecutionError {
 		use self::ExecutionError::*;
 
 		match *self {
-			NotEnoughBaseGas { ref required, ref got } =>
-				write!(f, "Not enough base gas. {} is required, but only {} paid", required, got),
-			BlockGasLimitReached { ref gas_limit, ref gas_used, ref gas } =>
-				write!(f, "Block gas limit reached. The limit is {}, {} has \
-					already been used, and {} more is required", gas_limit, gas_used, gas),
-			InvalidNonce { ref expected, ref got } =>
-				write!(f, "Invalid transaction nonce: expected {}, found {}", expected, got),
-			NotEnoughCash { ref required, ref got } =>
-				write!(f, "Cost of transaction exceeds sender balance. {} is required \
-					but the sender only has {}", required, got),
+			NotEnoughBaseGas {
+				ref required,
+				ref got,
+			} => write!(
+				f,
+				"Not enough base gas. {} is required, but only {} paid",
+				required, got
+			),
+			BlockGasLimitReached {
+				ref gas_limit,
+				ref gas_used,
+				ref gas,
+			} => write!(
+				f,
+				"Block gas limit reached. The limit is {}, {} has \
+				 already been used, and {} more is required",
+				gas_limit, gas_used, gas
+			),
+			InvalidNonce {
+				ref expected,
+				ref got,
+			} => write!(
+				f,
+				"Invalid transaction nonce: expected {}, found {}",
+				expected, got
+			),
+			NotEnoughCash {
+				ref required,
+				ref got,
+			} => write!(
+				f,
+				"Cost of transaction exceeds sender balance. {} is required \
+				 but the sender only has {}",
+				required, got
+			),
 			MutableCallInStaticContext => write!(f, "Mutable Call in static context"),
 			SenderMustExist => write!(f, "Transacting from an empty account"),
 			Internal(ref msg) => write!(f, "{}", msg),
 			TransactionMalformed(ref err) => write!(f, "Malformed transaction: {}", err),
-			NotConfidential => write!(f, "Tried executing a non-confidential transaction in confidential mode"),
+			NotConfidential => write!(
+				f,
+				"Tried executing a non-confidential transaction in confidential mode"
+			),
 		}
 	}
 }

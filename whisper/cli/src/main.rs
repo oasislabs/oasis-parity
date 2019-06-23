@@ -23,16 +23,16 @@
 #![cfg_attr(feature = "cargo-clippy", deny(clippy, clippy_pedantic))]
 
 extern crate docopt;
-extern crate ethcore_network_devp2p as devp2p;
 extern crate ethcore_network as net;
+extern crate ethcore_network_devp2p as devp2p;
+extern crate panic_hook;
 extern crate parity_whisper as whisper;
 extern crate serde;
-extern crate panic_hook;
 
-extern crate jsonrpc_core;
-extern crate jsonrpc_pubsub;
-extern crate jsonrpc_http_server;
 extern crate ethcore_logger as log;
+extern crate jsonrpc_core;
+extern crate jsonrpc_http_server;
+extern crate jsonrpc_pubsub;
 
 #[macro_use]
 extern crate log as rlog;
@@ -41,10 +41,10 @@ extern crate log as rlog;
 extern crate serde_derive;
 
 use docopt::Docopt;
-use std::{fmt, io, process, env, sync::Arc};
-use jsonrpc_core::{Metadata, MetaIoHandler};
-use jsonrpc_pubsub::{PubSubMetadata, Session};
+use jsonrpc_core::{MetaIoHandler, Metadata};
 use jsonrpc_http_server::{AccessControlAllowOrigin, DomainsValidation};
+use jsonrpc_pubsub::{PubSubMetadata, Session};
+use std::{env, fmt, io, process, sync::Arc};
 
 const POOL_UNIT: usize = 1024 * 1024;
 const USAGE: &'static str = r#"
@@ -118,8 +118,14 @@ struct RpcFactory {
 }
 
 impl RpcFactory {
-	fn make_handler(&self, net: Arc<devp2p::NetworkService>) -> whisper::rpc::WhisperClient<WhisperPoolHandle, Meta> {
-		let whisper_pool_handle = WhisperPoolHandle { handle: self.handle.clone(), net: net };
+	fn make_handler(
+		&self,
+		net: Arc<devp2p::NetworkService>,
+	) -> whisper::rpc::WhisperClient<WhisperPoolHandle, Meta> {
+		let whisper_pool_handle = WhisperPoolHandle {
+			handle: self.handle.clone(),
+			net: net,
+		};
 		whisper::rpc::WhisperClient::new(whisper_pool_handle, self.manager.clone())
 	}
 }
@@ -194,12 +200,15 @@ fn main() {
 		Err(err) => {
 			println!("{}", err);
 			process::exit(1);
-		},
+		}
 	}
 }
 
-fn execute<S, I>(command: I) -> Result<(), Error> where I: IntoIterator<Item=S>, S: AsRef<str> {
-
+fn execute<S, I>(command: I) -> Result<(), Error>
+where
+	I: IntoIterator<Item = S>,
+	S: AsRef<str>,
+{
 	// Parse arguments
 	let args: Args = Docopt::new(USAGE).and_then(|d| d.argv(command).deserialize())?;
 	let pool_size = args.flag_whisper_pool_size * POOL_UNIT;
@@ -221,10 +230,16 @@ fn execute<S, I>(command: I) -> Result<(), Error> where I: IntoIterator<Item=S>,
 	network.start().map_err(|(err, _)| err)?;
 
 	// Attach whisper protocol to the network service
-	network.register_protocol(whisper_network_handler.clone(), whisper::net::PROTOCOL_ID,
-							  whisper::net::SUPPORTED_VERSIONS)?;
-	network.register_protocol(Arc::new(whisper::net::ParityExtensions), whisper::net::PARITY_PROTOCOL_ID,
-							  whisper::net::SUPPORTED_VERSIONS)?;
+	network.register_protocol(
+		whisper_network_handler.clone(),
+		whisper::net::PROTOCOL_ID,
+		whisper::net::SUPPORTED_VERSIONS,
+	)?;
+	network.register_protocol(
+		Arc::new(whisper::net::ParityExtensions),
+		whisper::net::PARITY_PROTOCOL_ID,
+		whisper::net::SUPPORTED_VERSIONS,
+	)?;
 
 	// Request handler
 	let mut io = MetaIoHandler::default();
@@ -233,13 +248,22 @@ fn execute<S, I>(command: I) -> Result<(), Error> where I: IntoIterator<Item=S>,
 	let shared_network = Arc::new(network);
 
 	// Pool handler
-	let whisper_factory = RpcFactory { handle: whisper_network_handler, manager: manager };
+	let whisper_factory = RpcFactory {
+		handle: whisper_network_handler,
+		manager: manager,
+	};
 
-	io.extend_with(whisper::rpc::Whisper::to_delegate(whisper_factory.make_handler(shared_network.clone())));
-	io.extend_with(whisper::rpc::WhisperPubSub::to_delegate(whisper_factory.make_handler(shared_network.clone())));
+	io.extend_with(whisper::rpc::Whisper::to_delegate(
+		whisper_factory.make_handler(shared_network.clone()),
+	));
+	io.extend_with(whisper::rpc::WhisperPubSub::to_delegate(
+		whisper_factory.make_handler(shared_network.clone()),
+	));
 
 	let server = jsonrpc_http_server::ServerBuilder::new(io)
-		.cors(DomainsValidation::AllowOnly(vec![AccessControlAllowOrigin::Null]))
+		.cors(DomainsValidation::AllowOnly(vec![
+			AccessControlAllowOrigin::Null,
+		]))
 		.start_http(&url.parse()?)?;
 
 	server.wait();
@@ -292,10 +316,13 @@ mod tests {
 
 	#[test]
 	fn invalid_whisper_pool_size() {
-		let command = vec!["whisper", "--whisper-pool-size=-100000000000000000000000000000000000000"]
-			.into_iter()
-			.map(Into::into)
-			.collect::<Vec<String>>();
+		let command = vec![
+			"whisper",
+			"--whisper-pool-size=-100000000000000000000000000000000000000",
+		]
+		.into_iter()
+		.map(Into::into)
+		.collect::<Vec<String>>();
 
 		assert!(execute(command).is_err());
 	}

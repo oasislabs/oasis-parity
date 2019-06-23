@@ -65,6 +65,6 @@ pub enum GasLeft {
 		/// Return data buffer.
 		data: ReturnData,
 		/// Apply or revert state changes on revert.
-		apply_state: bool
+		apply_state: bool,
 	},
 }

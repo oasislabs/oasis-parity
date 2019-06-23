@@ -20,35 +20,35 @@
 
 use transaction::UnverifiedTransaction;
 
-use io::TimerToken;
-use network::{NetworkProtocolHandler, NetworkContext, PeerId};
-use rlp::{RlpStream, Rlp};
 use ethereum_types::{H256, U256};
+use io::TimerToken;
 use kvdb::DBValue;
+use network::{NetworkContext, NetworkProtocolHandler, PeerId};
 use parking_lot::{Mutex, RwLock};
+use rlp::{Rlp, RlpStream};
 use std::time::{Duration, Instant};
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;
-use std::sync::Arc;
+use std::ops::{BitAnd, BitOr, Not};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::ops::{BitOr, BitAnd, Not};
+use std::sync::Arc;
 
 use provider::Provider;
-use request::{Request, NetworkRequests as Requests, Response};
+use request::{NetworkRequests as Requests, Request, Response};
 
-use self::request_credits::{Credits, FlowParams};
 use self::context::{Ctx, TickCtx};
 use self::error::Punishment;
-use self::load_timer::{LoadDistribution, NullStore};
-use self::request_set::RequestSet;
 use self::id_guard::IdGuard;
+use self::load_timer::{LoadDistribution, NullStore};
+use self::request_credits::{Credits, FlowParams};
+use self::request_set::RequestSet;
 
 mod context;
 mod error;
 mod load_timer;
-mod status;
 mod request_set;
+mod status;
 
 #[cfg(test)]
 mod tests;
@@ -57,8 +57,8 @@ pub mod request_credits;
 
 pub use self::context::{BasicContext, EventContext, IoContext};
 pub use self::error::Error;
-pub use self::load_timer::{SampleStore, FileStore};
-pub use self::status::{Status, Capabilities, Announcement};
+pub use self::load_timer::{FileStore, SampleStore};
+pub use self::status::{Announcement, Capabilities, Status};
 
 const TIMEOUT: TimerToken = 0;
 const TIMEOUT_INTERVAL: Duration = Duration::from_secs(1);
@@ -79,9 +79,7 @@ const UPDATE_INTERVAL: Duration = Duration::from_millis(5000);
 const PACKET_COUNT_V1: u8 = 9;
 
 /// Supported protocol versions.
-pub const PROTOCOL_VERSIONS: &'static [(u8, u8)] = &[
-	(1, PACKET_COUNT_V1),
-];
+pub const PROTOCOL_VERSIONS: &'static [(u8, u8)] = &[(1, PACKET_COUNT_V1)];
 
 /// Max protocol version.
 pub const MAX_PROTOCOL_VERSION: u8 = 1;
@@ -231,27 +229,29 @@ pub trait Handler: Send + Sync {
 		&self,
 		_ctx: &EventContext,
 		_status: &Status,
-		_capabilities: &Capabilities
-	) -> PeerStatus { PeerStatus::Kept }
+		_capabilities: &Capabilities,
+	) -> PeerStatus {
+		PeerStatus::Kept
+	}
 	/// Called when a peer disconnects, with a list of unfulfilled request IDs as
 	/// of yet.
-	fn on_disconnect(&self, _ctx: &EventContext, _unfulfilled: &[ReqId]) { }
+	fn on_disconnect(&self, _ctx: &EventContext, _unfulfilled: &[ReqId]) {}
 	/// Called when a peer makes an announcement.
-	fn on_announcement(&self, _ctx: &EventContext, _announcement: &Announcement) { }
+	fn on_announcement(&self, _ctx: &EventContext, _announcement: &Announcement) {}
 	/// Called when a peer requests relay of some transactions.
-	fn on_transactions(&self, _ctx: &EventContext, _relay: &[UnverifiedTransaction]) { }
+	fn on_transactions(&self, _ctx: &EventContext, _relay: &[UnverifiedTransaction]) {}
 	/// Called when a peer responds to requests.
 	/// Responses not guaranteed to contain valid data and are not yet checked against
 	/// the requests they correspond to.
-	fn on_responses(&self, _ctx: &EventContext, _req_id: ReqId, _responses: &[Response]) { }
+	fn on_responses(&self, _ctx: &EventContext, _req_id: ReqId, _responses: &[Response]) {}
 	/// Called when a peer responds with a transaction proof. Each proof is a vector of state items.
-	fn on_transaction_proof(&self, _ctx: &EventContext, _req_id: ReqId, _state_items: &[DBValue]) { }
+	fn on_transaction_proof(&self, _ctx: &EventContext, _req_id: ReqId, _state_items: &[DBValue]) {}
 	/// Called to "tick" the handler periodically.
-	fn tick(&self, _ctx: &BasicContext) { }
+	fn tick(&self, _ctx: &BasicContext) {}
 	/// Called on abort. This signals to handlers that they should clean up
 	/// and ignore peers.
 	// TODO: coreresponding `on_activate`?
-	fn on_abort(&self) { }
+	fn on_abort(&self) {}
 }
 
 /// Configuration.
@@ -329,7 +329,9 @@ mod id_guard {
 
 	impl<'a> Drop for IdGuard<'a> {
 		fn drop(&mut self) {
-			if !self.active { return }
+			if !self.active {
+				return;
+			}
 			if let Some(p) = self.peers.get(&self.peer_id) {
 				p.lock().failed_requests.push(self.req_id);
 			}
@@ -394,7 +396,9 @@ impl LightProtocol {
 
 	/// Attempt to get peer status.
 	pub fn peer_status(&self, peer: &PeerId) -> Option<Status> {
-		self.peers.read().get(&peer)
+		self.peers
+			.read()
+			.get(&peer)
 			.map(|peer| peer.lock().status.clone())
 	}
 
@@ -404,7 +408,10 @@ impl LightProtocol {
 		let peers = self.peers.read();
 		(
 			num_pending + peers.len(),
-			peers.values().filter(|p| !p.lock().pending_requests.is_empty()).count(),
+			peers
+				.values()
+				.filter(|p| !p.lock().pending_requests.is_empty())
+				.count(),
 		)
 	}
 
@@ -414,7 +421,12 @@ impl LightProtocol {
 	/// insufficient credits. Does not check capabilities before sending.
 	/// On success, returns a request id which can later be coordinated
 	/// with an event.
-	pub fn request_from(&self, io: &IoContext, peer_id: &PeerId, requests: Requests) -> Result<ReqId, Error> {
+	pub fn request_from(
+		&self,
+		io: &IoContext,
+		peer_id: &PeerId,
+		requests: Requests,
+	) -> Result<ReqId, Error> {
 		let peers = self.peers.read();
 		let peer = match peers.get(peer_id) {
 			Some(peer) => peer,
@@ -451,7 +463,8 @@ impl LightProtocol {
 				});
 
 				// begin timeout.
-				peer.pending_requests.insert(req_id, requests, cost, Instant::now());
+				peer.pending_requests
+					.insert(req_id, requests, cost, Instant::now());
 				Ok(req_id)
 			}
 		}
@@ -472,32 +485,39 @@ impl LightProtocol {
 
 			// TODO: "urgent" announcements like new blocks?
 			// the timer approach will skip 1 (possibly 2) in rare occasions.
-			if peer_info.sent_head == announcement.head_hash ||
-				peer_info.status.head_num >= announcement.head_num  ||
-				now - peer_info.last_update < UPDATE_INTERVAL {
-				continue
+			if peer_info.sent_head == announcement.head_hash
+				|| peer_info.status.head_num >= announcement.head_num
+				|| now - peer_info.last_update < UPDATE_INTERVAL
+			{
+				continue;
 			}
 
 			peer_info.last_update = now;
 
-			let reorg_depth = reorgs_map.entry(peer_info.sent_head)
-				.or_insert_with(|| {
-					match self.provider.reorg_depth(&announcement.head_hash, &peer_info.sent_head) {
-						Some(depth) => depth,
-						None => {
-							// both values will always originate locally -- this means something
-							// has gone really wrong
-							debug!(target: "pip", "couldn't compute reorganization depth between {:?} and {:?}",
+			let reorg_depth = reorgs_map.entry(peer_info.sent_head).or_insert_with(|| {
+				match self
+					.provider
+					.reorg_depth(&announcement.head_hash, &peer_info.sent_head)
+				{
+					Some(depth) => depth,
+					None => {
+						// both values will always originate locally -- this means something
+						// has gone really wrong
+						debug!(target: "pip", "couldn't compute reorganization depth between {:?} and {:?}",
 								&announcement.head_hash, &peer_info.sent_head);
-							0
-						}
+						0
 					}
-				});
+				}
+			});
 
 			peer_info.sent_head = announcement.head_hash;
 			announcement.reorg_depth = *reorg_depth;
 
-			io.send(*peer_id, packet::ANNOUNCE, status::write_announcement(&announcement));
+			io.send(
+				*peer_id,
+				packet::ANNOUNCE,
+				status::write_announcement(&announcement),
+			);
 		}
 	}
 
@@ -556,7 +576,9 @@ impl LightProtocol {
 							c.update_to(actual_credits);
 						}
 
-						if last_batched { peer_info.skip_update = false }
+						if last_batched {
+							peer_info.skip_update = false
+						}
 
 						Ok(())
 					}
@@ -591,9 +613,7 @@ impl LightProtocol {
 
 			packet::SEND_TRANSACTIONS => self.relay_transactions(peer, io, rlp),
 
-			other => {
-				Err(Error::UnrecognizedPacket(other))
-			}
+			other => Err(Error::UnrecognizedPacket(other)),
 		};
 
 		if let Err(e) = res {
@@ -608,10 +628,9 @@ impl LightProtocol {
 		// handshake timeout
 		{
 			let mut pending = self.pending_peers.write();
-			let slowpokes: Vec<_> = pending.iter()
-				.filter(|&(_, ref peer)| {
-					peer.last_update + timeout::HANDSHAKE <= now
-				})
+			let slowpokes: Vec<_> = pending
+				.iter()
+				.filter(|&(_, ref peer)| peer.last_update + timeout::HANDSHAKE <= now)
 				.map(|(&p, _)| p)
 				.collect();
 
@@ -645,33 +664,43 @@ impl LightProtocol {
 	// propagate transactions to relay peers.
 	// if we aren't on the mainnet, we just propagate to all relay peers
 	fn propagate_transactions(&self, io: &IoContext) {
-		if self.capabilities.read().tx_relay { return }
+		if self.capabilities.read().tx_relay {
+			return;
+		}
 
 		let ready_transactions = self.provider.ready_transactions();
-		if ready_transactions.is_empty() { return }
+		if ready_transactions.is_empty() {
+			return;
+		}
 
 		trace!(target: "pip", "propagate transactions: {} ready", ready_transactions.len());
 
-		let all_transaction_hashes: HashSet<_> = ready_transactions.iter().map(|tx| tx.hash()).collect();
+		let all_transaction_hashes: HashSet<_> =
+			ready_transactions.iter().map(|tx| tx.hash()).collect();
 		let mut buf = Vec::new();
 
 		let peers = self.peers.read();
 		for (peer_id, peer_info) in peers.iter() {
 			let mut peer_info = peer_info.lock();
-			if !peer_info.capabilities.tx_relay { continue }
+			if !peer_info.capabilities.tx_relay {
+				continue;
+			}
 
 			let prop_filter = &mut peer_info.propagated_transactions;
 			*prop_filter = &*prop_filter & &all_transaction_hashes;
 
 			// fill the buffer with all non-propagated transactions.
-			let to_propagate = ready_transactions.iter()
+			let to_propagate = ready_transactions
+				.iter()
 				.filter(|tx| prop_filter.insert(tx.hash()))
 				.map(|tx| &tx.transaction);
 
 			buf.extend(to_propagate);
 
 			// propagate to the given peer.
-			if buf.is_empty() { continue }
+			if buf.is_empty() {
+				continue;
+			}
 			io.send(*peer_id, packet::SEND_TRANSACTIONS, {
 				let mut stream = RlpStream::new_list(buf.len());
 				for pending_tx in buf.drain(..) {
@@ -687,10 +716,17 @@ impl LightProtocol {
 	pub fn on_connect(&self, peer: &PeerId, io: &IoContext) {
 		let proto_version = match io.protocol_version(*peer).ok_or(Error::WrongNetwork) {
 			Ok(pv) => pv,
-			Err(e) => { punish(*peer, io, e); return }
+			Err(e) => {
+				punish(*peer, io, e);
+				return;
+			}
 		};
 
-		if PROTOCOL_VERSIONS.iter().find(|x| x.0 == proto_version).is_none() {
+		if PROTOCOL_VERSIONS
+			.iter()
+			.find(|x| x.0 == proto_version)
+			.is_none()
+		{
 			punish(*peer, io, Error::UnsupportedProtocolVersion(proto_version));
 			return;
 		}
@@ -711,10 +747,13 @@ impl LightProtocol {
 		let local_flow = self.flow_params.read();
 		let status_packet = status::write_handshake(&status, &capabilities, Some(&**local_flow));
 
-		self.pending_peers.write().insert(*peer, PendingPeer {
-			sent_head: chain_info.best_block_hash,
-			last_update: Instant::now(),
-		});
+		self.pending_peers.write().insert(
+			*peer,
+			PendingPeer {
+				sent_head: chain_info.best_block_hash,
+				last_update: Instant::now(),
+			},
+		);
 
 		trace!(target: "pip", "Sending status to peer {}", peer);
 		io.send(*peer, packet::STATUS, status_packet);
@@ -737,17 +776,21 @@ impl LightProtocol {
 		};
 
 		for handler in &self.handlers {
-			handler.on_disconnect(&Ctx {
-				peer: peer,
-				io: io,
-				proto: self,
-			}, &unfulfilled)
+			handler.on_disconnect(
+				&Ctx {
+					peer: peer,
+					io: io,
+					proto: self,
+				},
+				&unfulfilled,
+			)
 		}
 	}
 
 	/// Execute the given closure with a basic context derived from the I/O context.
 	pub fn with_context<F, T>(&self, io: &IoContext, f: F) -> T
-		where F: FnOnce(&BasicContext) -> T
+	where
+		F: FnOnce(&BasicContext) -> T,
 	{
 		f(&TickCtx {
 			io: io,
@@ -779,7 +822,8 @@ impl LightProtocol {
 
 		let packet_body = {
 			let mut stream = RlpStream::new_list(3);
-			stream.append(new_params.limit())
+			stream
+				.append(new_params.limit())
 				.append(new_params.recharge_rate())
 				.append(new_params.cost_table());
 			stream.out()
@@ -822,32 +866,39 @@ impl LightProtocol {
 		let remote_flow = flow_params.map(|params| (params.create_credits(), params));
 		let local_flow = self.flow_params.read().clone();
 
-		self.peers.write().insert(*peer, Mutex::new(Peer {
-			local_credits: local_flow.create_credits(),
-			status: status.clone(),
-			capabilities: capabilities.clone(),
-			remote_flow: remote_flow,
-			sent_head: pending.sent_head,
-			last_update: pending.last_update,
-			pending_requests: RequestSet::default(),
-			failed_requests: Vec::new(),
-			propagated_transactions: HashSet::new(),
-			skip_update: false,
-			local_flow: local_flow,
-			awaiting_acknowledge: None,
-		}));
+		self.peers.write().insert(
+			*peer,
+			Mutex::new(Peer {
+				local_credits: local_flow.create_credits(),
+				status: status.clone(),
+				capabilities: capabilities.clone(),
+				remote_flow: remote_flow,
+				sent_head: pending.sent_head,
+				last_update: pending.last_update,
+				pending_requests: RequestSet::default(),
+				failed_requests: Vec::new(),
+				propagated_transactions: HashSet::new(),
+				skip_update: false,
+				local_flow: local_flow,
+				awaiting_acknowledge: None,
+			}),
+		);
 
-		let any_kept = self.handlers.iter().map(
-			|handler| handler.on_connect(
-				&Ctx {
-					peer: *peer,
-					io: io,
-					proto: self,
-				},
-				&status,
-				&capabilities
-			)
-		).fold(PeerStatus::Kept, PeerStatus::bitor);
+		let any_kept = self
+			.handlers
+			.iter()
+			.map(|handler| {
+				handler.on_connect(
+					&Ctx {
+						peer: *peer,
+						io: io,
+						proto: self,
+					},
+					&status,
+					&capabilities,
+				)
+			})
+			.fold(PeerStatus::Kept, PeerStatus::bitor);
 
 		if any_kept == PeerStatus::Unkept {
 			Err(Error::RejectedByHandlers)
@@ -860,7 +911,7 @@ impl LightProtocol {
 	fn announcement(&self, peer: &PeerId, io: &IoContext, data: Rlp) -> Result<(), Error> {
 		if !self.peers.read().contains_key(peer) {
 			debug!(target: "pip", "Ignoring announcement from unknown peer");
-			return Ok(())
+			return Ok(());
 		}
 
 		let announcement = status::parse_announcement(data)?;
@@ -891,11 +942,14 @@ impl LightProtocol {
 		}
 
 		for handler in &self.handlers {
-			handler.on_announcement(&Ctx {
-				peer: *peer,
-				io: io,
-				proto: self,
-			}, &announcement);
+			handler.on_announcement(
+				&Ctx {
+					peer: *peer,
+					io: io,
+					proto: self,
+				},
+				&announcement,
+			);
 		}
 
 		Ok(())
@@ -906,15 +960,15 @@ impl LightProtocol {
 		// the maximum amount of requests we'll fill in a single packet.
 		const MAX_REQUESTS: usize = 256;
 
-		use ::request::Builder;
-		use ::request::CompleteRequest;
+		use request::Builder;
+		use request::CompleteRequest;
 
 		let peers = self.peers.read();
 		let peer = match peers.get(peer_id) {
 			Some(peer) => peer,
 			None => {
 				debug!(target: "pip", "Ignoring request from unknown peer");
-				return Ok(())
+				return Ok(());
 			}
 		};
 		let mut peer = peer.lock();
@@ -928,12 +982,18 @@ impl LightProtocol {
 		// deserialize requests, check costs and request validity.
 		peer.local_flow.recharge(&mut peer.local_credits);
 
-		peer.local_credits.deduct_cost(peer.local_flow.base_cost())?;
+		peer.local_credits
+			.deduct_cost(peer.local_flow.base_cost())?;
 		for request_rlp in raw.at(1)?.iter().take(MAX_REQUESTS) {
 			let request: Request = request_rlp.as_val()?;
-			let cost = peer.local_flow.compute_cost(&request).ok_or(Error::NotServer)?;
+			let cost = peer
+				.local_flow
+				.compute_cost(&request)
+				.ok_or(Error::NotServer)?;
 			peer.local_credits.deduct_cost(cost)?;
-			request_builder.push(request).map_err(|_| Error::BadBackReference)?;
+			request_builder
+				.push(request)
+				.map_err(|_| Error::BadBackReference)?;
 		}
 
 		let requests = request_builder.build();
@@ -944,16 +1004,34 @@ impl LightProtocol {
 		let responses = requests.respond_to_all(|complete_req| {
 			let _timer = self.load_distribution.begin_timer(&complete_req);
 			match complete_req {
-				CompleteRequest::Headers(req) => self.provider.block_headers(req).map(Response::Headers),
-				CompleteRequest::HeaderProof(req) => self.provider.header_proof(req).map(Response::HeaderProof),
-				CompleteRequest::TransactionIndex(req) => self.provider.transaction_index(req).map(Response::TransactionIndex),
+				CompleteRequest::Headers(req) => {
+					self.provider.block_headers(req).map(Response::Headers)
+				}
+				CompleteRequest::HeaderProof(req) => {
+					self.provider.header_proof(req).map(Response::HeaderProof)
+				}
+				CompleteRequest::TransactionIndex(req) => self
+					.provider
+					.transaction_index(req)
+					.map(Response::TransactionIndex),
 				CompleteRequest::Body(req) => self.provider.block_body(req).map(Response::Body),
-				CompleteRequest::Receipts(req) => self.provider.block_receipts(req).map(Response::Receipts),
-				CompleteRequest::Account(req) => self.provider.account_proof(req).map(Response::Account),
-				CompleteRequest::Storage(req) => self.provider.storage_proof(req).map(Response::Storage),
+				CompleteRequest::Receipts(req) => {
+					self.provider.block_receipts(req).map(Response::Receipts)
+				}
+				CompleteRequest::Account(req) => {
+					self.provider.account_proof(req).map(Response::Account)
+				}
+				CompleteRequest::Storage(req) => {
+					self.provider.storage_proof(req).map(Response::Storage)
+				}
 				CompleteRequest::Code(req) => self.provider.contract_code(req).map(Response::Code),
-				CompleteRequest::Execution(req) => self.provider.transaction_proof(req).map(Response::Execution),
-				CompleteRequest::Signal(req) => self.provider.epoch_signal(req).map(Response::Signal),
+				CompleteRequest::Execution(req) => self
+					.provider
+					.transaction_proof(req)
+					.map(Response::Execution),
+				CompleteRequest::Signal(req) => {
+					self.provider.epoch_signal(req).map(Response::Signal)
+				}
 			}
 		});
 
@@ -963,7 +1041,10 @@ impl LightProtocol {
 		io.respond(packet::RESPONSE, {
 			let mut stream = RlpStream::new_list(3);
 			let cur_credits = peer.local_credits.current();
-			stream.append(&req_id).append(&cur_credits).append_list(&responses);
+			stream
+				.append(&req_id)
+				.append(&cur_credits)
+				.append_list(&responses);
 			stream.out()
 		});
 		Ok(())
@@ -978,11 +1059,15 @@ impl LightProtocol {
 		};
 
 		for handler in &self.handlers {
-			handler.on_responses(&Ctx {
-				io: io,
-				proto: self,
-				peer: *peer,
-			}, req_id, &responses);
+			handler.on_responses(
+				&Ctx {
+					io: io,
+					proto: self,
+					peer: *peer,
+				},
+				req_id,
+				&responses,
+			);
 		}
 
 		Ok(())
@@ -998,7 +1083,8 @@ impl LightProtocol {
 		trace!(target: "pip", "Received an update to request credit params from peer {}", peer_id);
 
 		{
-			let &mut (ref mut credits, ref mut old_params) = peer.remote_flow.as_mut().ok_or(Error::NotServer)?;
+			let &mut (ref mut credits, ref mut old_params) =
+				peer.remote_flow.as_mut().ok_or(Error::NotServer)?;
 			old_params.recharge(credits);
 
 			let new_params = FlowParams::new(
@@ -1024,7 +1110,12 @@ impl LightProtocol {
 	}
 
 	// handle an acknowledgement of request credits update.
-	fn acknowledge_update(&self, peer_id: &PeerId, _io: &IoContext, _raw: Rlp) -> Result<(), Error> {
+	fn acknowledge_update(
+		&self,
+		peer_id: &PeerId,
+		_io: &IoContext,
+		_raw: Rlp,
+	) -> Result<(), Error> {
 		let peers = self.peers.read();
 		let peer = peers.get(peer_id).ok_or(Error::UnknownPeer)?;
 		let mut peer = peer.lock();
@@ -1037,7 +1128,8 @@ impl LightProtocol {
 		};
 
 		let old_limit = *peer.local_flow.limit();
-		peer.local_credits.maintain_ratio(old_limit, *new_params.limit());
+		peer.local_credits
+			.maintain_ratio(old_limit, *new_params.limit());
 		peer.local_flow = new_params;
 		Ok(())
 	}
@@ -1046,19 +1138,23 @@ impl LightProtocol {
 	fn relay_transactions(&self, peer: &PeerId, io: &IoContext, data: Rlp) -> Result<(), Error> {
 		const MAX_TRANSACTIONS: usize = 256;
 
-		let txs: Vec<_> = data.iter()
+		let txs: Vec<_> = data
+			.iter()
 			.take(MAX_TRANSACTIONS)
 			.map(|x| x.as_val::<UnverifiedTransaction>())
-			.collect::<Result<_,_>>()?;
+			.collect::<Result<_, _>>()?;
 
 		debug!(target: "pip", "Received {} transactions to relay from peer {}", txs.len(), peer);
 
 		for handler in &self.handlers {
-			handler.on_transactions(&Ctx {
-				peer: *peer,
-				io: io,
-				proto: self,
-			}, &txs);
+			handler.on_transactions(
+				&Ctx {
+					peer: *peer,
+					io: io,
+					proto: self,
+				},
+				&txs,
+			);
 		}
 
 		Ok(())

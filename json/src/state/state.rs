@@ -18,7 +18,7 @@
 
 use bytes::Bytes;
 use hash::H256;
-use state::{Env, AccountState, Transaction, Log};
+use state::{AccountState, Env, Log, Transaction};
 
 /// State test deserialization.
 #[derive(Debug, PartialEq, Deserialize)]
@@ -26,21 +26,21 @@ pub struct State {
 	/// Environment.
 	pub env: Env,
 	/// Output.
-	#[serde(rename="out")]
+	#[serde(rename = "out")]
 	pub output: Bytes,
 	/// Pre state.
-	#[serde(rename="pre")]
+	#[serde(rename = "pre")]
 	pub pre_state: AccountState,
 	/// Post state.
-	#[serde(rename="post")]
+	#[serde(rename = "post")]
 	pub post_state: AccountState,
 	/// Post state root.
-	#[serde(rename="postStateRoot")]
+	#[serde(rename = "postStateRoot")]
 	pub post_state_root: H256,
 	/// Transaction.
 	pub transaction: Transaction,
 	/// Logs.
-	pub logs: Vec<Log>
+	pub logs: Vec<Log>,
 }
 
 #[cfg(test)]

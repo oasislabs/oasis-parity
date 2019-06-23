@@ -16,13 +16,13 @@
 
 //! Generic poll manager for Pub-Sub.
 
-use std::sync::Arc;
-use std::sync::atomic::{self, AtomicBool};
 use parking_lot::Mutex;
+use std::sync::atomic::{self, AtomicBool};
+use std::sync::Arc;
 
 use jsonrpc_core::futures::future::{self, Either};
 use jsonrpc_core::futures::sync::mpsc;
-use jsonrpc_core::futures::{Sink, Future};
+use jsonrpc_core::futures::{Future, Sink};
 use jsonrpc_core::{self as core, MetaIoHandler};
 use jsonrpc_pubsub::SubscriptionId;
 
@@ -65,9 +65,15 @@ impl<S: core::Middleware<Metadata>> GenericPollManager<S> {
 	}
 
 	/// Subscribes to update from polling given method.
-	pub fn subscribe(&mut self, metadata: Metadata, method: String, params: core::Params)
-		-> (SubscriptionId, mpsc::Receiver<Result<core::Value, core::Error>>)
-	{
+	pub fn subscribe(
+		&mut self,
+		metadata: Metadata,
+		method: String,
+		params: core::Params,
+	) -> (
+		SubscriptionId,
+		mpsc::Receiver<Result<core::Value, core::Error>>,
+	) {
 		let (sink, stream) = mpsc::channel(1);
 		let subscription = Subscription {
 			metadata,
@@ -82,12 +88,18 @@ impl<S: core::Middleware<Metadata>> GenericPollManager<S> {
 
 	pub fn unsubscribe(&mut self, id: &SubscriptionId) -> bool {
 		debug!(target: "pubsub", "Removing subscription: {:?}", id);
-		self.subscribers.remove(id).map(|subscription| {
-			subscription.last_result.0.store(true, atomic::Ordering::SeqCst);
-		}).is_some()
+		self.subscribers
+			.remove(id)
+			.map(|subscription| {
+				subscription
+					.last_result
+					.0
+					.store(true, atomic::Ordering::SeqCst);
+			})
+			.is_some()
 	}
 
-	pub fn tick(&self) -> Box<Future<Item=(), Error=()> + Send> {
+	pub fn tick(&self) -> Box<Future<Item = (), Error = ()> + Send> {
 		let mut futures = Vec::new();
 		// poll all subscriptions
 		for (id, subscription) in self.subscribers.iter() {
@@ -98,7 +110,9 @@ impl<S: core::Middleware<Metadata>> GenericPollManager<S> {
 				params: Some(subscription.params.clone()),
 			};
 			trace!(target: "pubsub", "Polling method: {:?}", call);
-			let result = self.rpc.handle_call(call.into(), subscription.metadata.clone());
+			let result = self
+				.rpc
+				.handle_call(call.into(), subscription.metadata.clone());
 
 			let last_result = subscription.last_result.clone();
 			let sender = subscription.sink.clone();
@@ -106,7 +120,7 @@ impl<S: core::Middleware<Metadata>> GenericPollManager<S> {
 			let result = result.and_then(move |response| {
 				// quick check if the subscription is still valid
 				if last_result.0.load(atomic::Ordering::SeqCst) {
-					return Either::B(future::ok(()))
+					return Either::B(future::ok(()));
 				}
 
 				let mut last_result = last_result.1.lock();
@@ -138,10 +152,10 @@ impl<S: core::Middleware<Metadata>> GenericPollManager<S> {
 mod tests {
 	use std::sync::atomic::{self, AtomicBool};
 
-	use jsonrpc_core::{MetaIoHandler, NoopMiddleware, Value, Params};
-	use jsonrpc_core::futures::{Future, Stream};
-	use jsonrpc_pubsub::SubscriptionId;
 	use http::tokio_core::reactor;
+	use jsonrpc_core::futures::{Future, Stream};
+	use jsonrpc_core::{MetaIoHandler, NoopMiddleware, Params, Value};
+	use jsonrpc_pubsub::SubscriptionId;
 
 	use super::GenericPollManager;
 

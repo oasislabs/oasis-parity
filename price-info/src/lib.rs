@@ -36,8 +36,8 @@ use std::io;
 use std::str;
 
 use fetch::{Client as FetchClient, Fetch};
-use futures::{Future, Stream};
 use futures::future::{self, Either};
+use futures::{Future, Stream};
 use futures_cpupool::CpuPool;
 use serde_json::Value;
 
@@ -62,11 +62,15 @@ pub enum Error {
 }
 
 impl From<io::Error> for Error {
-	fn from(err: io::Error) -> Self { Error::Io(err) }
+	fn from(err: io::Error) -> Self {
+		Error::Io(err)
+	}
 }
 
 impl From<fetch::Error> for Error {
-	fn from(err: fetch::Error) -> Self { Error::Fetch(err) }
+	fn from(err: fetch::Error) -> Self {
+		Error::Fetch(err)
+	}
 }
 
 /// A client to get the current ETH price using an external API.
@@ -79,8 +83,8 @@ pub struct Client<F = FetchClient> {
 impl<F> fmt::Debug for Client<F> {
 	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
 		fmt.debug_struct("price_info::Client")
-		   .field("api_endpoint", &self.api_endpoint)
-		   .finish()
+			.field("api_endpoint", &self.api_endpoint)
+			.finish()
 	}
 }
 
@@ -94,16 +98,24 @@ impl<F: Fetch> Client<F> {
 	/// Creates a new instance of the `Client` given a `fetch::Client`.
 	pub fn new(fetch: F, pool: CpuPool) -> Client<F> {
 		let api_endpoint = "https://api.etherscan.io/api?module=stats&action=ethprice".to_owned();
-		Client { pool, api_endpoint, fetch }
+		Client {
+			pool,
+			api_endpoint,
+			fetch,
+		}
 	}
 
 	/// Gets the current ETH price and calls `set_price` with the result.
 	pub fn get<G: FnOnce(PriceInfo) + Sync + Send + 'static>(&self, set_price: G) {
-		let future = self.fetch.get(&self.api_endpoint, fetch::Abort::default())
+		let future = self
+			.fetch
+			.get(&self.api_endpoint, fetch::Abort::default())
 			.from_err()
 			.and_then(|response| {
 				if !response.is_success() {
-					let s = Error::StatusCode(response.status().canonical_reason().unwrap_or("unknown"));
+					let s = Error::StatusCode(
+						response.status().canonical_reason().unwrap_or("unknown"),
+					);
 					return Either::A(future::err(s));
 				}
 				Either::B(response.concat2().from_err())
@@ -122,7 +134,7 @@ impl<F: Fetch> Client<F> {
 					Some(ethusd) => {
 						set_price(PriceInfo { ethusd });
 						Ok(())
-					},
+					}
 					None => Err(Error::UnexpectedResponse(body_str.map(From::from))),
 				}
 			})
@@ -136,11 +148,11 @@ impl<F: Fetch> Client<F> {
 
 #[cfg(test)]
 mod test {
-	use std::sync::Arc;
-	use futures_cpupool::CpuPool;
-	use Client;
-	use std::sync::atomic::{AtomicBool, Ordering};
 	use fake_fetch::FakeFetch;
+	use futures_cpupool::CpuPool;
+	use std::sync::atomic::{AtomicBool, Ordering};
+	use std::sync::Arc;
+	use Client;
 
 	fn price_info_ok(response: &str) -> Client<FakeFetch<String>> {
 		Client::new(FakeFetch::new(Some(response.to_owned())), CpuPool::new(1))
@@ -168,7 +180,6 @@ mod test {
 
 		// when
 		price_info.get(|price| {
-
 			// then
 			assert_eq!(price.ethusd, 209.55);
 		});

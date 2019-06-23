@@ -14,30 +14,36 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+use super::{Crypto, Uuid, Version, H160};
+use serde::de::{DeserializeOwned, Error, MapAccess, Visitor};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_json;
 use std::fmt;
 use std::io::{Read, Write};
-use serde::{Serialize, Serializer, Deserialize, Deserializer};
-use serde::de::{Error, Visitor, MapAccess, DeserializeOwned};
-use serde_json;
-use super::{Uuid, Version, Crypto, H160};
 
 /// Public opaque type representing serializable `KeyFile`.
 #[derive(Debug, PartialEq)]
 pub struct OpaqueKeyFile {
-	key_file: KeyFile
+	key_file: KeyFile,
 }
 
 impl Serialize for OpaqueKeyFile {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
 		S: Serializer,
 	{
 		self.key_file.serialize(serializer)
 	}
 }
 
-impl<T> From<T> for OpaqueKeyFile where T: Into<KeyFile> {
+impl<T> From<T> for OpaqueKeyFile
+where
+	T: Into<KeyFile>,
+{
 	fn from(val: T) -> Self {
-		OpaqueKeyFile { key_file: val.into() }
+		OpaqueKeyFile {
+			key_file: val.into(),
+		}
 	}
 }
 
@@ -62,7 +68,8 @@ enum KeyFileField {
 
 impl<'a> Deserialize<'a> for KeyFileField {
 	fn deserialize<D>(deserializer: D) -> Result<KeyFileField, D::Error>
-		where D: Deserializer<'a>
+	where
+		D: Deserializer<'a>,
 	{
 		deserializer.deserialize_any(KeyFileFieldVisitor)
 	}
@@ -78,7 +85,8 @@ impl<'a> Visitor<'a> for KeyFileFieldVisitor {
 	}
 
 	fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-		where E: Error
+	where
+		E: Error,
 	{
 		match value {
 			"id" => Ok(KeyFileField::Id),
@@ -95,22 +103,25 @@ impl<'a> Visitor<'a> for KeyFileFieldVisitor {
 
 impl<'a> Deserialize<'a> for KeyFile {
 	fn deserialize<D>(deserializer: D) -> Result<KeyFile, D::Error>
-		where D: Deserializer<'a>
+	where
+		D: Deserializer<'a>,
 	{
 		static FIELDS: &'static [&'static str] = &["id", "version", "crypto", "Crypto", "address"];
 		deserializer.deserialize_struct("KeyFile", FIELDS, KeyFileVisitor)
 	}
 }
 
-fn none_if_empty<'a, T>(v: Option<serde_json::Value>) -> Option<T> where
-	T: DeserializeOwned
+fn none_if_empty<'a, T>(v: Option<serde_json::Value>) -> Option<T>
+where
+	T: DeserializeOwned,
 {
-	v.and_then(|v| if v.is_null() {
-		None
-	} else {
-		serde_json::from_value(v).ok()
+	v.and_then(|v| {
+		if v.is_null() {
+			None
+		} else {
+			serde_json::from_value(v).ok()
+		}
 	})
-
 }
 
 struct KeyFileVisitor;
@@ -122,7 +133,8 @@ impl<'a> Visitor<'a> for KeyFileVisitor {
 	}
 
 	fn visit_map<V>(self, mut visitor: V) -> Result<Self::Value, V::Error>
-		where V: MapAccess<'a>
+	where
+		V: MapAccess<'a>,
 	{
 		let mut id = None;
 		let mut version = None;
@@ -133,13 +145,23 @@ impl<'a> Visitor<'a> for KeyFileVisitor {
 
 		loop {
 			match visitor.next_key()? {
-				Some(KeyFileField::Id) => { id = Some(visitor.next_value()?); }
-				Some(KeyFileField::Version) => { version = Some(visitor.next_value()?); }
-				Some(KeyFileField::Crypto) => { crypto = Some(visitor.next_value()?); }
-				Some(KeyFileField::Address) => { address = Some(visitor.next_value()?); }
-				Some(KeyFileField::Name) => { name = none_if_empty(visitor.next_value().ok()) }
-				Some(KeyFileField::Meta) => { meta = none_if_empty(visitor.next_value().ok()) }
-				None => { break; }
+				Some(KeyFileField::Id) => {
+					id = Some(visitor.next_value()?);
+				}
+				Some(KeyFileField::Version) => {
+					version = Some(visitor.next_value()?);
+				}
+				Some(KeyFileField::Crypto) => {
+					crypto = Some(visitor.next_value()?);
+				}
+				Some(KeyFileField::Address) => {
+					address = Some(visitor.next_value()?);
+				}
+				Some(KeyFileField::Name) => name = none_if_empty(visitor.next_value().ok()),
+				Some(KeyFileField::Meta) => meta = none_if_empty(visitor.next_value().ok()),
+				None => {
+					break;
+				}
 			}
 		}
 
@@ -177,20 +199,26 @@ impl<'a> Visitor<'a> for KeyFileVisitor {
 }
 
 impl KeyFile {
-	pub fn load<R>(reader: R) -> Result<Self, serde_json::Error> where R: Read {
+	pub fn load<R>(reader: R) -> Result<Self, serde_json::Error>
+	where
+		R: Read,
+	{
 		serde_json::from_reader(reader)
 	}
 
-	pub fn write<W>(&self, writer: &mut W) -> Result<(), serde_json::Error> where W: Write {
+	pub fn write<W>(&self, writer: &mut W) -> Result<(), serde_json::Error>
+	where
+		W: Write,
+	{
 		serde_json::to_writer(writer, self)
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use std::str::FromStr;
+	use json::{Aes128Ctr, Cipher, Crypto, Kdf, KeyFile, Scrypt, Uuid, Version};
 	use serde_json;
-	use json::{KeyFile, Uuid, Version, Crypto, Cipher, Aes128Ctr, Kdf, Scrypt};
+	use std::str::FromStr;
 
 	#[test]
 	fn basic_keyfile() {
@@ -227,7 +255,8 @@ mod tests {
 				cipher: Cipher::Aes128Ctr(Aes128Ctr {
 					iv: "b5a7ec855ec9e2c405371356855fec83".into(),
 				}),
-				ciphertext: "7203da0676d141b138cd7f8e1a4365f59cc1aa6978dc5443f364ca943d7cb4bc".into(),
+				ciphertext: "7203da0676d141b138cd7f8e1a4365f59cc1aa6978dc5443f364ca943d7cb4bc"
+					.into(),
 				kdf: Kdf::Scrypt(Scrypt {
 					n: 262144,
 					dklen: 32,
@@ -278,7 +307,8 @@ mod tests {
 				cipher: Cipher::Aes128Ctr(Aes128Ctr {
 					iv: "b5a7ec855ec9e2c405371356855fec83".into(),
 				}),
-				ciphertext: "7203da0676d141b138cd7f8e1a4365f59cc1aa6978dc5443f364ca943d7cb4bc".into(),
+				ciphertext: "7203da0676d141b138cd7f8e1a4365f59cc1aa6978dc5443f364ca943d7cb4bc"
+					.into(),
 				kdf: Kdf::Scrypt(Scrypt {
 					n: 262144,
 					dklen: 32,
@@ -306,7 +336,8 @@ mod tests {
 				cipher: Cipher::Aes128Ctr(Aes128Ctr {
 					iv: "b5a7ec855ec9e2c405371356855fec83".into(),
 				}),
-				ciphertext: "7203da0676d141b138cd7f8e1a4365f59cc1aa6978dc5443f364ca943d7cb4bc".into(),
+				ciphertext: "7203da0676d141b138cd7f8e1a4365f59cc1aa6978dc5443f364ca943d7cb4bc"
+					.into(),
 				kdf: Kdf::Scrypt(Scrypt {
 					n: 262144,
 					dklen: 32,

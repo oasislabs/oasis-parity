@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use shared;
 use keccak::{keccak_256, H256};
+use shared;
 
 use std::cell::Cell;
 
@@ -78,7 +78,10 @@ mod tests {
 	#[test]
 	fn test_seed_compute_once() {
 		let seed_compute = SeedHashCompute::new();
-		let hash = [241, 175, 44, 134, 39, 121, 245, 239, 228, 236, 43, 160, 195, 152, 46, 7, 199, 5, 253, 147, 241, 206, 98, 43, 3, 104, 17, 40, 192, 79, 106, 162];
+		let hash = [
+			241, 175, 44, 134, 39, 121, 245, 239, 228, 236, 43, 160, 195, 152, 46, 7, 199, 5, 253,
+			147, 241, 206, 98, 43, 3, 104, 17, 40, 192, 79, 106, 162,
+		];
 		assert_eq!(seed_compute.hash_block_number(486382), hash);
 	}
 
@@ -93,7 +96,10 @@ mod tests {
 		let seed_compute = SeedHashCompute::new();
 		// calculating an older value first shouldn't affect the result
 		let _ = seed_compute.hash_block_number(50000);
-		let hash = [241, 175, 44, 134, 39, 121, 245, 239, 228, 236, 43, 160, 195, 152, 46, 7, 199, 5, 253, 147, 241, 206, 98, 43, 3, 104, 17, 40, 192, 79, 106, 162];
+		let hash = [
+			241, 175, 44, 134, 39, 121, 245, 239, 228, 236, 43, 160, 195, 152, 46, 7, 199, 5, 253,
+			147, 241, 206, 98, 43, 3, 104, 17, 40, 192, 79, 106, 162,
+		];
 		assert_eq!(seed_compute.hash_block_number(486382), hash);
 	}
 
@@ -102,7 +108,10 @@ mod tests {
 		let seed_compute = SeedHashCompute::new();
 		// calculating an newer value first shouldn't affect the result
 		let _ = seed_compute.hash_block_number(972764);
-		let hash = [241, 175, 44, 134, 39, 121, 245, 239, 228, 236, 43, 160, 195, 152, 46, 7, 199, 5, 253, 147, 241, 206, 98, 43, 3, 104, 17, 40, 192, 79, 106, 162];
+		let hash = [
+			241, 175, 44, 134, 39, 121, 245, 239, 228, 236, 43, 160, 195, 152, 46, 7, 199, 5, 253,
+			147, 241, 206, 98, 43, 3, 104, 17, 40, 192, 79, 106, 162,
+		];
 		assert_eq!(seed_compute.hash_block_number(486382), hash);
 	}
 

@@ -30,14 +30,16 @@ mod vault_key_file;
 mod version;
 
 pub use self::bytes::Bytes;
-pub use self::cipher::{Cipher, CipherSer, CipherSerParams, Aes128Ctr};
-pub use self::crypto::{Crypto, CipherText};
+pub use self::cipher::{Aes128Ctr, Cipher, CipherSer, CipherSerParams};
+pub use self::crypto::{CipherText, Crypto};
 pub use self::error::Error;
 pub use self::hash::{H128, H160, H256};
 pub use self::id::Uuid;
-pub use self::kdf::{Kdf, KdfSer, Prf, Pbkdf2, Scrypt, KdfSerParams};
+pub use self::kdf::{Kdf, KdfSer, KdfSerParams, Pbkdf2, Prf, Scrypt};
 pub use self::key_file::{KeyFile, OpaqueKeyFile};
-pub use self::presale::{PresaleWallet, Encseed};
+pub use self::presale::{Encseed, PresaleWallet};
 pub use self::vault_file::VaultFile;
-pub use self::vault_key_file::{VaultKeyFile, VaultKeyMeta, insert_vault_name_to_json_meta, remove_vault_name_from_json_meta};
+pub use self::vault_key_file::{
+	insert_vault_name_to_json_meta, remove_vault_name_from_json_meta, VaultKeyFile, VaultKeyMeta,
+};
 pub use self::version::Version;

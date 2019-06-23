@@ -19,20 +19,20 @@
 
 use ethcore::blockchain_info::BlockChainInfo;
 use ethcore::client::{EachBlockWith, TestBlockChainClient};
-use ethcore::ids::BlockId;
 use ethcore::encoded;
-use network::{PeerId, NodeId};
+use ethcore::ids::BlockId;
+use network::{NodeId, PeerId};
 use transaction::{Action, PendingTransaction};
 
 use net::context::IoContext;
 use net::status::{Capabilities, Status};
-use net::{LightProtocol, Params, packet, Peer};
+use net::{packet, LightProtocol, Params, Peer};
 use provider::Provider;
 use request;
 use request::*;
 
+use ethereum_types::{Address, H256, U256};
 use rlp::{Rlp, RlpStream};
-use ethereum_types::{H256, U256, Address};
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -115,9 +115,10 @@ impl Provider for TestProvider {
 		self.0.client.block_header(id)
 	}
 
-	fn transaction_index(&self, req: request::CompleteTransactionIndexRequest)
-		-> Option<request::TransactionIndexResponse>
-	{
+	fn transaction_index(
+		&self,
+		req: request::CompleteTransactionIndexRequest,
+	) -> Option<request::TransactionIndexResponse> {
 		Some(request::TransactionIndexResponse {
 			num: 100,
 			hash: req.hash,
@@ -129,11 +130,17 @@ impl Provider for TestProvider {
 		self.0.client.block_body(req)
 	}
 
-	fn block_receipts(&self, req: request::CompleteReceiptsRequest) -> Option<request::ReceiptsResponse> {
+	fn block_receipts(
+		&self,
+		req: request::CompleteReceiptsRequest,
+	) -> Option<request::ReceiptsResponse> {
 		self.0.client.block_receipts(req)
 	}
 
-	fn account_proof(&self, req: request::CompleteAccountRequest) -> Option<request::AccountResponse> {
+	fn account_proof(
+		&self,
+		req: request::CompleteAccountRequest,
+	) -> Option<request::AccountResponse> {
 		// sort of a leaf node
 		let mut stream = RlpStream::new_list(2);
 		stream.append(&req.address_hash).append_empty_data();
@@ -146,7 +153,10 @@ impl Provider for TestProvider {
 		})
 	}
 
-	fn storage_proof(&self, req: request::CompleteStorageRequest) -> Option<request::StorageResponse> {
+	fn storage_proof(
+		&self,
+		req: request::CompleteStorageRequest,
+	) -> Option<request::StorageResponse> {
 		Some(StorageResponse {
 			proof: vec![::rlp::encode(&req.key_hash).into_vec()],
 			value: req.key_hash | req.address_hash,
@@ -155,19 +165,33 @@ impl Provider for TestProvider {
 
 	fn contract_code(&self, req: request::CompleteCodeRequest) -> Option<request::CodeResponse> {
 		Some(CodeResponse {
-			code: req.block_hash.iter().chain(req.code_hash.iter()).cloned().collect(),
+			code: req
+				.block_hash
+				.iter()
+				.chain(req.code_hash.iter())
+				.cloned()
+				.collect(),
 		})
 	}
 
-	fn header_proof(&self, _req: request::CompleteHeaderProofRequest) -> Option<request::HeaderProofResponse> {
+	fn header_proof(
+		&self,
+		_req: request::CompleteHeaderProofRequest,
+	) -> Option<request::HeaderProofResponse> {
 		None
 	}
 
-	fn transaction_proof(&self, _req: request::CompleteExecutionRequest) -> Option<request::ExecutionResponse> {
+	fn transaction_proof(
+		&self,
+		_req: request::CompleteExecutionRequest,
+	) -> Option<request::ExecutionResponse> {
 		None
 	}
 
-	fn epoch_signal(&self, _req: request::CompleteSignalRequest) -> Option<request::SignalResponse> {
+	fn epoch_signal(
+		&self,
+		_req: request::CompleteSignalRequest,
+	) -> Option<request::SignalResponse> {
 		Some(request::SignalResponse {
 			signal: vec![1, 2, 3, 4],
 		})
@@ -198,12 +222,15 @@ fn setup(capabilities: Capabilities) -> (Arc<TestProviderInner>, LightProtocol) 
 		client: TestBlockChainClient::new(),
 	});
 
-	let proto = LightProtocol::new(Arc::new(TestProvider(provider.clone())), Params {
-		network_id: 2,
-		config: Default::default(),
-		capabilities: capabilities,
-		sample_store: None,
-	});
+	let proto = LightProtocol::new(
+		Arc::new(TestProvider(provider.clone())),
+		Params {
+			network_id: 2,
+			config: Default::default(),
+			capabilities: capabilities,
+			sample_store: None,
+		},
+	);
 
 	(provider, proto)
 }
@@ -314,17 +341,26 @@ fn get_block_headers() {
 	let request_body = make_packet(req_id, &requests);
 
 	let response = {
-		let headers: Vec<_> = (0..10).map(|i| provider.client.block_header(BlockId::Number(i + 1)).unwrap()).collect();
+		let headers: Vec<_> = (0..10)
+			.map(|i| {
+				provider
+					.client
+					.block_header(BlockId::Number(i + 1))
+					.unwrap()
+			})
+			.collect();
 		assert_eq!(headers.len(), 10);
 
-		let new_creds = *flow_params.limit() - flow_params.compute_cost_multi(requests.requests()).unwrap();
+		let new_creds =
+			*flow_params.limit() - flow_params.compute_cost_multi(requests.requests()).unwrap();
 
-		let response = vec![Response::Headers(HeadersResponse {
-			headers: headers,
-		})];
+		let response = vec![Response::Headers(HeadersResponse { headers: headers })];
 
 		let mut stream = RlpStream::new_list(3);
-		stream.append(&req_id).append(&new_creds).append_list(&response);
+		stream
+			.append(&req_id)
+			.append(&new_creds)
+			.append_list(&response);
 
 		stream.out()
 	};
@@ -357,23 +393,34 @@ fn get_block_bodies() {
 	let mut bodies = Vec::new();
 
 	for i in 0..10 {
-		let hash = provider.client.block_header(BlockId::Number(i)).unwrap().hash();
-		builder.push(Request::Body(IncompleteBodyRequest {
-			hash: hash.into(),
-		})).unwrap();
-		bodies.push(Response::Body(provider.client.block_body(CompleteBodyRequest {
-			hash: hash,
-		}).unwrap()));
+		let hash = provider
+			.client
+			.block_header(BlockId::Number(i))
+			.unwrap()
+			.hash();
+		builder
+			.push(Request::Body(IncompleteBodyRequest { hash: hash.into() }))
+			.unwrap();
+		bodies.push(Response::Body(
+			provider
+				.client
+				.block_body(CompleteBodyRequest { hash: hash })
+				.unwrap(),
+		));
 	}
 	let req_id = 111;
 	let requests = builder.build();
 	let request_body = make_packet(req_id, &requests);
 
 	let response = {
-		let new_creds = *flow_params.limit() - flow_params.compute_cost_multi(requests.requests()).unwrap();
+		let new_creds =
+			*flow_params.limit() - flow_params.compute_cost_multi(requests.requests()).unwrap();
 
 		let mut response_stream = RlpStream::new_list(3);
-		response_stream.append(&req_id).append(&new_creds).append_list(&bodies);
+		response_stream
+			.append(&req_id)
+			.append(&new_creds)
+			.append_list(&bodies);
 		response_stream.out()
 	};
 
@@ -404,7 +451,13 @@ fn get_block_receipts() {
 	// find the first 10 block hashes starting with `f` because receipts are only provided
 	// by the test client in that case.
 	let block_hashes: Vec<H256> = (0..1000)
-		.map(|i| provider.client.block_header(BlockId::Number(i)).unwrap().hash())
+		.map(|i| {
+			provider
+				.client
+				.block_header(BlockId::Number(i))
+				.unwrap()
+				.hash()
+		})
 		.filter(|hash| format!("{}", hash).starts_with("0xf"))
 		.take(10)
 		.collect();
@@ -412,10 +465,17 @@ fn get_block_receipts() {
 	let mut builder = Builder::default();
 	let mut receipts = Vec::new();
 	for hash in block_hashes.iter().cloned() {
-		builder.push(Request::Receipts(IncompleteReceiptsRequest { hash: hash.into() })).unwrap();
-		receipts.push(Response::Receipts(provider.client.block_receipts(CompleteReceiptsRequest {
-			hash: hash
-		}).unwrap()));
+		builder
+			.push(Request::Receipts(IncompleteReceiptsRequest {
+				hash: hash.into(),
+			}))
+			.unwrap();
+		receipts.push(Response::Receipts(
+			provider
+				.client
+				.block_receipts(CompleteReceiptsRequest { hash: hash })
+				.unwrap(),
+		));
 	}
 
 	let req_id = 111;
@@ -425,10 +485,14 @@ fn get_block_receipts() {
 	let response = {
 		assert_eq!(receipts.len(), 10);
 
-		let new_creds = *flow_params.limit() - flow_params.compute_cost_multi(requests.requests()).unwrap();
+		let new_creds =
+			*flow_params.limit() - flow_params.compute_cost_multi(requests.requests()).unwrap();
 
 		let mut response_stream = RlpStream::new_list(3);
-		response_stream.append(&req_id).append(&new_creds).append_list(&receipts);
+		response_stream
+			.append(&req_id)
+			.append(&new_creds)
+			.append_list(&receipts);
 		response_stream.out()
 	};
 
@@ -458,36 +522,52 @@ fn get_state_proofs() {
 	let key2: H256 = U256::from(99988887).into();
 
 	let mut builder = Builder::default();
-	builder.push(Request::Account(IncompleteAccountRequest {
-		block_hash: H256::default().into(),
-		address_hash: key1.into(),
-	})).unwrap();
-	builder.push(Request::Storage(IncompleteStorageRequest {
-		block_hash: H256::default().into(),
-		address_hash: key1.into(),
-		key_hash: key2.into(),
-	})).unwrap();
+	builder
+		.push(Request::Account(IncompleteAccountRequest {
+			block_hash: H256::default().into(),
+			address_hash: key1.into(),
+		}))
+		.unwrap();
+	builder
+		.push(Request::Storage(IncompleteStorageRequest {
+			block_hash: H256::default().into(),
+			address_hash: key1.into(),
+			key_hash: key2.into(),
+		}))
+		.unwrap();
 
 	let requests = builder.build();
 
 	let request_body = make_packet(req_id, &requests);
 	let response = {
 		let responses = vec![
-			Response::Account(provider.account_proof(CompleteAccountRequest {
-				block_hash: H256::default(),
-				address_hash: key1,
-			}).unwrap()),
-			Response::Storage(provider.storage_proof(CompleteStorageRequest {
-				block_hash: H256::default(),
-				address_hash: key1,
-				key_hash: key2,
-			}).unwrap()),
+			Response::Account(
+				provider
+					.account_proof(CompleteAccountRequest {
+						block_hash: H256::default(),
+						address_hash: key1,
+					})
+					.unwrap(),
+			),
+			Response::Storage(
+				provider
+					.storage_proof(CompleteStorageRequest {
+						block_hash: H256::default(),
+						address_hash: key1,
+						key_hash: key2,
+					})
+					.unwrap(),
+			),
 		];
 
-		let new_creds = *flow_params.limit() - flow_params.compute_cost_multi(requests.requests()).unwrap();
+		let new_creds =
+			*flow_params.limit() - flow_params.compute_cost_multi(requests.requests()).unwrap();
 
 		let mut response_stream = RlpStream::new_list(3);
-		response_stream.append(&req_id).append(&new_creds).append_list(&responses);
+		response_stream
+			.append(&req_id)
+			.append(&new_creds)
+			.append_list(&responses);
 		response_stream.out()
 	};
 
@@ -526,11 +606,15 @@ fn get_contract_code() {
 			code: key1.iter().chain(key2.iter()).cloned().collect(),
 		})];
 
-		let new_creds = *flow_params.limit() - flow_params.compute_cost_multi(requests.requests()).unwrap();
+		let new_creds =
+			*flow_params.limit() - flow_params.compute_cost_multi(requests.requests()).unwrap();
 
 		let mut response_stream = RlpStream::new_list(3);
 
-		response_stream.append(&req_id).append(&new_creds).append_list(&response);
+		response_stream
+			.append(&req_id)
+			.append(&new_creds)
+			.append_list(&response);
 		response_stream.out()
 	};
 
@@ -572,7 +656,10 @@ fn epoch_signal() {
 		let new_creds = limit - cost;
 
 		let mut response_stream = RlpStream::new_list(3);
-		response_stream.append(&req_id).append(&new_creds).append_list(&response);
+		response_stream
+			.append(&req_id)
+			.append(&new_creds)
+			.append_list(&response);
 
 		response_stream.out()
 	};
@@ -618,7 +705,10 @@ fn proof_of_execution() {
 		let new_creds = limit - cost;
 
 		let mut response_stream = RlpStream::new_list(3);
-		response_stream.append(&req_id).append(&new_creds).begin_list(0);
+		response_stream
+			.append(&req_id)
+			.append(&new_creds)
+			.begin_list(0);
 
 		response_stream.out()
 	};
@@ -665,20 +755,23 @@ fn id_guard() {
 	pending_requests.insert(req_id_1, req.clone(), 0.into(), Instant::now());
 	pending_requests.insert(req_id_2, req, 1.into(), Instant::now());
 
-	proto.peers.write().insert(peer_id, ::parking_lot::Mutex::new(Peer {
-		local_credits: flow_params.create_credits(),
-		status: status(provider.client.chain_info()),
-		capabilities: capabilities.clone(),
-		remote_flow: Some((flow_params.create_credits(), (&*flow_params).clone())),
-		sent_head: provider.client.chain_info().best_block_hash,
-		last_update: Instant::now(),
-		pending_requests: pending_requests,
-		failed_requests: Vec::new(),
-		propagated_transactions: Default::default(),
-		skip_update: false,
-		local_flow: flow_params,
-		awaiting_acknowledge: None,
-	}));
+	proto.peers.write().insert(
+		peer_id,
+		::parking_lot::Mutex::new(Peer {
+			local_credits: flow_params.create_credits(),
+			status: status(provider.client.chain_info()),
+			capabilities: capabilities.clone(),
+			remote_flow: Some((flow_params.create_credits(), (&*flow_params).clone())),
+			sent_head: provider.client.chain_info().best_block_hash,
+			last_update: Instant::now(),
+			pending_requests: pending_requests,
+			failed_requests: Vec::new(),
+			propagated_transactions: Default::default(),
+			skip_update: false,
+			local_flow: flow_params,
+			awaiting_acknowledge: None,
+		}),
+	);
 
 	// first, malformed responses.
 	{
@@ -688,7 +781,9 @@ fn id_guard() {
 		stream.begin_list(2).append(&125usize).append(&3usize);
 
 		let packet = stream.out();
-		assert!(proto.response(&peer_id, &Expect::Nothing, Rlp::new(&packet)).is_err());
+		assert!(proto
+			.response(&peer_id, &Expect::Nothing, Rlp::new(&packet))
+			.is_err());
 	}
 
 	// next, do an unexpected response.
@@ -699,7 +794,9 @@ fn id_guard() {
 		stream.begin_list(0);
 
 		let packet = stream.out();
-		assert!(proto.response(&peer_id, &Expect::Nothing, Rlp::new(&packet)).is_err());
+		assert!(proto
+			.response(&peer_id, &Expect::Nothing, Rlp::new(&packet))
+			.is_err());
 	}
 
 	// lastly, do a valid (but empty) response.
@@ -710,13 +807,18 @@ fn id_guard() {
 		stream.begin_list(0);
 
 		let packet = stream.out();
-		assert!(proto.response(&peer_id, &Expect::Nothing, Rlp::new(&packet)).is_ok());
+		assert!(proto
+			.response(&peer_id, &Expect::Nothing, Rlp::new(&packet))
+			.is_ok());
 	}
 
 	let peers = proto.peers.read();
 	if let Some(ref peer_info) = peers.get(&peer_id) {
 		let peer_info = peer_info.lock();
-		assert!(peer_info.pending_requests.collect_ids::<Vec<_>>().is_empty());
+		assert!(peer_info
+			.pending_requests
+			.collect_ids::<Vec<_>>()
+			.is_empty());
 		assert_eq!(peer_info.failed_requests, &[req_id_1]);
 	}
 }
@@ -739,9 +841,8 @@ fn get_transaction_index() {
 	let req_id = 112;
 	let key1: H256 = U256::from(11223344).into();
 
-	let request = Request::TransactionIndex(IncompleteTransactionIndexRequest {
-		hash: key1.into(),
-	});
+	let request =
+		Request::TransactionIndex(IncompleteTransactionIndexRequest { hash: key1.into() });
 
 	let requests = encode_single(request.clone());
 	let request_body = make_packet(req_id, &requests);
@@ -752,11 +853,15 @@ fn get_transaction_index() {
 			index: 55,
 		})];
 
-		let new_creds = *flow_params.limit() - flow_params.compute_cost_multi(requests.requests()).unwrap();
+		let new_creds =
+			*flow_params.limit() - flow_params.compute_cost_multi(requests.requests()).unwrap();
 
 		let mut response_stream = RlpStream::new_list(3);
 
-		response_stream.append(&req_id).append(&new_creds).append_list(&response);
+		response_stream
+			.append(&req_id)
+			.append(&new_creds)
+			.append_list(&response);
 		response_stream.out()
 	};
 

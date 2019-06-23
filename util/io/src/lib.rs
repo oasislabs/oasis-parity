@@ -73,13 +73,13 @@
 extern crate mio;
 #[macro_use]
 extern crate log as rlog;
-extern crate slab;
 extern crate crossbeam;
-extern crate parking_lot;
-extern crate num_cpus;
-extern crate timer;
 extern crate fnv;
+extern crate num_cpus;
+extern crate parking_lot;
+extern crate slab;
 extern crate time;
+extern crate timer;
 
 #[cfg(feature = "mio")]
 mod service_mio;
@@ -88,12 +88,12 @@ mod service_non_mio;
 #[cfg(feature = "mio")]
 mod worker;
 
-use std::cell::Cell;
-use std::{fmt, error};
 #[cfg(feature = "mio")]
 use mio::deprecated::{EventLoop, NotifyError};
 #[cfg(feature = "mio")]
 use mio::Token;
+use std::cell::Cell;
+use std::{error, fmt};
 
 thread_local! {
 	/// Stack size
@@ -137,16 +137,25 @@ impl From<::std::io::Error> for IoError {
 }
 
 #[cfg(feature = "mio")]
-impl<Message> From<NotifyError<service_mio::IoMessage<Message>>> for IoError where Message: Send {
+impl<Message> From<NotifyError<service_mio::IoMessage<Message>>> for IoError
+where
+	Message: Send,
+{
 	fn from(_err: NotifyError<service_mio::IoMessage<Message>>) -> IoError {
-		IoError::Mio(::std::io::Error::new(::std::io::ErrorKind::ConnectionAborted, "Network IO notification error"))
+		IoError::Mio(::std::io::Error::new(
+			::std::io::ErrorKind::ConnectionAborted,
+			"Network IO notification error",
+		))
 	}
 }
 
 /// Generic IO handler.
 /// All the handler function are called from within IO event loop.
 /// `Message` type is used as notification data
-pub trait IoHandler<Message>: Send + Sync where Message: Send + Sync + 'static {
+pub trait IoHandler<Message>: Send + Sync
+where
+	Message: Send + Sync + 'static,
+{
 	/// Initialize the handler
 	fn initialize(&self, _io: &IoContext<Message>) {}
 	/// Timer function called after a timeout created with `HandlerIo::timeout`.
@@ -164,27 +173,46 @@ pub trait IoHandler<Message>: Send + Sync where Message: Send + Sync + 'static {
 	fn stream_writable(&self, _io: &IoContext<Message>, _stream: StreamToken) {}
 	/// Register a new stream with the event loop
 	#[cfg(feature = "mio")]
-	fn register_stream(&self, _stream: StreamToken, _reg: Token, _event_loop: &mut EventLoop<IoManager<Message>>) {}
+	fn register_stream(
+		&self,
+		_stream: StreamToken,
+		_reg: Token,
+		_event_loop: &mut EventLoop<IoManager<Message>>,
+	) {
+	}
 	/// Re-register a stream with the event loop
 	#[cfg(feature = "mio")]
-	fn update_stream(&self, _stream: StreamToken, _reg: Token, _event_loop: &mut EventLoop<IoManager<Message>>) {}
+	fn update_stream(
+		&self,
+		_stream: StreamToken,
+		_reg: Token,
+		_event_loop: &mut EventLoop<IoManager<Message>>,
+	) {
+	}
 	/// Deregister a stream. Called whenstream is removed from event loop
 	#[cfg(feature = "mio")]
-	fn deregister_stream(&self, _stream: StreamToken, _event_loop: &mut EventLoop<IoManager<Message>>) {}
+	fn deregister_stream(
+		&self,
+		_stream: StreamToken,
+		_event_loop: &mut EventLoop<IoManager<Message>>,
+	) {
+	}
 }
 
 #[cfg(feature = "mio")]
-pub use service_mio::{TimerToken, StreamToken, IoContext, IoService, IoChannel, IoManager, TOKENS_PER_HANDLER};
+pub use service_mio::{
+	IoChannel, IoContext, IoManager, IoService, StreamToken, TimerToken, TOKENS_PER_HANDLER,
+};
 #[cfg(not(feature = "mio"))]
-pub use service_non_mio::{TimerToken, IoContext, IoService, IoChannel, TOKENS_PER_HANDLER};
+pub use service_non_mio::{IoChannel, IoContext, IoService, TimerToken, TOKENS_PER_HANDLER};
 
 #[cfg(test)]
 mod tests {
-	use std::sync::Arc;
+	use super::*;
 	use std::sync::atomic;
+	use std::sync::Arc;
 	use std::thread;
 	use std::time::Duration;
-	use super::*;
 
 	// Mio's behaviour is too unstable for this test. Sometimes we have to wait a few milliseconds,
 	// sometimes more than 5 seconds for the message to arrive.
@@ -197,7 +225,7 @@ mod tests {
 
 		#[derive(Clone)]
 		struct MyMessage {
-			data: u32
+			data: u32,
 		}
 
 		impl IoHandler<MyMessage> for MyHandler {
@@ -224,12 +252,13 @@ mod tests {
 
 		#[derive(Clone)]
 		struct MyMessage {
-			data: u32
+			data: u32,
 		}
 
 		impl IoHandler<MyMessage> for MyHandler {
 			fn initialize(&self, io: &IoContext<MyMessage>) {
-				io.register_timer_once(1234, Duration::from_millis(500)).unwrap();
+				io.register_timer_once(1234, Duration::from_millis(500))
+					.unwrap();
 			}
 
 			fn timeout(&self, _io: &IoContext<MyMessage>, timer: TimerToken) {
@@ -253,7 +282,7 @@ mod tests {
 
 		#[derive(Clone)]
 		struct MyMessage {
-			data: u32
+			data: u32,
 		}
 
 		impl IoHandler<MyMessage> for MyHandler {

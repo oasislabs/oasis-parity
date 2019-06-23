@@ -14,12 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::{BTreeSet, BTreeMap};
-use ethkey::{Public, Secret, Signature};
 use ethereum_types::H256;
-use key_server_cluster::{Error, NodeId, DocumentKeyShare};
+use ethkey::{Public, Secret, Signature};
+use key_server_cluster::jobs::job_session::{
+	JobExecutor, JobPartialRequestAction, JobPartialResponseAction,
+};
 use key_server_cluster::math;
-use key_server_cluster::jobs::job_session::{JobPartialRequestAction, JobPartialResponseAction, JobExecutor};
+use key_server_cluster::{DocumentKeyShare, Error, NodeId};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Signing job.
 pub struct EcdsaSigningJob {
@@ -33,7 +35,7 @@ pub struct EcdsaSigningJob {
 	nonce_public: Public,
 	/// Request id.
 	request_id: Option<Secret>,
-	/// 
+	///
 	inversed_nonce_coeff: Option<Secret>,
 	/// Message hash.
 	message_hash: Option<H256>,
@@ -43,7 +45,7 @@ pub struct EcdsaSigningJob {
 pub struct EcdsaPartialSigningRequest {
 	/// Request id.
 	pub id: Secret,
-	/// 
+	///
 	pub inversed_nonce_coeff: Secret,
 	/// Message hash to sign.
 	pub message_hash: H256,
@@ -59,7 +61,12 @@ pub struct EcdsaPartialSigningResponse {
 }
 
 impl EcdsaSigningJob {
-	pub fn new_on_slave(key_share: DocumentKeyShare, key_version: H256, nonce_public: Public, inv_nonce_share: Secret) -> Result<Self, Error> {
+	pub fn new_on_slave(
+		key_share: DocumentKeyShare,
+		key_version: H256,
+		nonce_public: Public,
+		inv_nonce_share: Secret,
+	) -> Result<Self, Error> {
 		Ok(EcdsaSigningJob {
 			key_share: key_share,
 			key_version: key_version,
@@ -71,7 +78,14 @@ impl EcdsaSigningJob {
 		})
 	}
 
-	pub fn new_on_master(key_share: DocumentKeyShare, key_version: H256, nonce_public: Public, inv_nonce_share: Secret, inversed_nonce_coeff: Secret, message_hash: H256) -> Result<Self, Error> {
+	pub fn new_on_master(
+		key_share: DocumentKeyShare,
+		key_version: H256,
+		nonce_public: Public,
+		inv_nonce_share: Secret,
+		inversed_nonce_coeff: Secret,
+		message_hash: H256,
+	) -> Result<Self, Error> {
 		Ok(EcdsaSigningJob {
 			key_share: key_share,
 			key_version: key_version,
@@ -89,7 +103,11 @@ impl JobExecutor for EcdsaSigningJob {
 	type PartialJobResponse = EcdsaPartialSigningResponse;
 	type JobResponse = Signature;
 
-	fn prepare_partial_request(&self, _node: &NodeId, nodes: &BTreeSet<NodeId>) -> Result<EcdsaPartialSigningRequest, Error> {
+	fn prepare_partial_request(
+		&self,
+		_node: &NodeId,
+		nodes: &BTreeSet<NodeId>,
+	) -> Result<EcdsaPartialSigningRequest, Error> {
 		debug_assert!(nodes.len() == self.key_share.threshold * 2 + 1);
 
 		let request_id = self.request_id.as_ref()
@@ -106,11 +124,16 @@ impl JobExecutor for EcdsaSigningJob {
 		})
 	}
 
-	fn process_partial_request(&mut self, partial_request: EcdsaPartialSigningRequest) -> Result<JobPartialRequestAction<EcdsaPartialSigningResponse>, Error> {
-		let inversed_nonce_coeff_mul_nonce = math::compute_secret_mul(&partial_request.inversed_nonce_coeff, &self.inv_nonce_share)?;
+	fn process_partial_request(
+		&mut self,
+		partial_request: EcdsaPartialSigningRequest,
+	) -> Result<JobPartialRequestAction<EcdsaPartialSigningResponse>, Error> {
+		let inversed_nonce_coeff_mul_nonce =
+			math::compute_secret_mul(&partial_request.inversed_nonce_coeff, &self.inv_nonce_share)?;
 		let key_version = self.key_share.version(&self.key_version)?;
 		let signature_r = math::compute_ecdsa_r(&self.nonce_public)?;
-		let inv_nonce_mul_secret = math::compute_secret_mul(&inversed_nonce_coeff_mul_nonce, &key_version.secret_share)?;
+		let inv_nonce_mul_secret =
+			math::compute_secret_mul(&inversed_nonce_coeff_mul_nonce, &key_version.secret_share)?;
 		let partial_signature_s = math::compute_ecdsa_s_share(
 			&inversed_nonce_coeff_mul_nonce,
 			&inv_nonce_mul_secret,
@@ -118,13 +141,19 @@ impl JobExecutor for EcdsaSigningJob {
 			&math::to_scalar(partial_request.message_hash)?,
 		)?;
 
-		Ok(JobPartialRequestAction::Respond(EcdsaPartialSigningResponse {
-			request_id: partial_request.id,
-			partial_signature_s: partial_signature_s,
-		}))
+		Ok(JobPartialRequestAction::Respond(
+			EcdsaPartialSigningResponse {
+				request_id: partial_request.id,
+				partial_signature_s: partial_signature_s,
+			},
+		))
 	}
 
-	fn check_partial_response(&mut self, _sender: &NodeId, partial_response: &EcdsaPartialSigningResponse) -> Result<JobPartialResponseAction, Error> {
+	fn check_partial_response(
+		&mut self,
+		_sender: &NodeId,
+		partial_response: &EcdsaPartialSigningResponse,
+	) -> Result<JobPartialResponseAction, Error> {
 		if Some(&partial_response.request_id) != self.request_id.as_ref() {
 			return Ok(JobPartialResponseAction::Ignore);
 		}
@@ -133,18 +162,32 @@ impl JobExecutor for EcdsaSigningJob {
 		Ok(JobPartialResponseAction::Accept)
 	}
 
-	fn compute_response(&self, partial_responses: &BTreeMap<NodeId, EcdsaPartialSigningResponse>) -> Result<Signature, Error> {
+	fn compute_response(
+		&self,
+		partial_responses: &BTreeMap<NodeId, EcdsaPartialSigningResponse>,
+	) -> Result<Signature, Error> {
 		let key_version = self.key_share.version(&self.key_version)?;
-		if partial_responses.keys().any(|n| !key_version.id_numbers.contains_key(n)) {
+		if partial_responses
+			.keys()
+			.any(|n| !key_version.id_numbers.contains_key(n))
+		{
 			return Err(Error::InvalidMessage);
 		}
 
-		let id_numbers: Vec<_> = partial_responses.keys().map(|n| key_version.id_numbers[n].clone()).collect();
-		let signature_s_shares: Vec<_> = partial_responses.values().map(|r| r.partial_signature_s.clone()).collect();
-		let signature_s = math::compute_ecdsa_s(self.key_share.threshold, &signature_s_shares, &id_numbers)?;
+		let id_numbers: Vec<_> = partial_responses
+			.keys()
+			.map(|n| key_version.id_numbers[n].clone())
+			.collect();
+		let signature_s_shares: Vec<_> = partial_responses
+			.values()
+			.map(|r| r.partial_signature_s.clone())
+			.collect();
+		let signature_s =
+			math::compute_ecdsa_s(self.key_share.threshold, &signature_s_shares, &id_numbers)?;
 		let signature_r = math::compute_ecdsa_r(&self.nonce_public)?;
 
-		let signature = math::serialize_ecdsa_signature(&self.nonce_public, signature_r, signature_s);
+		let signature =
+			math::serialize_ecdsa_signature(&self.nonce_public, signature_r, signature_s);
 
 		Ok(signature)
 	}

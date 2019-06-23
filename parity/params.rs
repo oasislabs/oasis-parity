@@ -14,17 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{str, fs, fmt};
 use std::time::Duration;
+use std::{fmt, fs, str};
 
 use ethcore::client::Mode;
 use ethcore::ethereum;
 use ethcore::spec::{Spec, SpecParams};
-use ethereum_types::{U256, Address};
+use ethereum_types::{Address, U256};
 use futures_cpupool::CpuPool;
 use hash_fetch::fetch::Client as FetchClient;
 use journaldb::Algorithm;
-use miner::gas_pricer::{GasPricer, GasPriceCalibratorOptions};
+use miner::gas_pricer::{GasPriceCalibratorOptions, GasPricer};
 use parity_version::version_data;
 use user_defaults::UserDefaults;
 
@@ -111,7 +111,9 @@ impl SpecType {
 			SpecType::Kovan => Ok(ethereum::new_kovan(params)),
 			SpecType::Dev => Ok(Spec::new_instant()),
 			SpecType::Custom(ref filename) => {
-				let file = fs::File::open(filename).map_err(|e| format!("Could not load specification file at {}: {}", filename, e))?;
+				let file = fs::File::open(filename).map_err(|e| {
+					format!("Could not load specification file at {}: {}", filename, e)
+				})?;
 				Spec::load(params, file)
 			}
 		}
@@ -226,7 +228,7 @@ pub enum GasPricerConfig {
 	Calibrated {
 		usd_per_tx: f32,
 		recalibration_period: Duration,
-	}
+	},
 }
 
 impl Default for GasPricerConfig {
@@ -242,16 +244,18 @@ impl GasPricerConfig {
 	pub fn to_gas_pricer(&self, fetch: FetchClient, p: CpuPool) -> GasPricer {
 		match *self {
 			GasPricerConfig::Fixed(u) => GasPricer::Fixed(u),
-			GasPricerConfig::Calibrated { usd_per_tx, recalibration_period, .. } => {
-				GasPricer::new_calibrated(
-					GasPriceCalibratorOptions {
-						usd_per_tx: usd_per_tx,
-						recalibration_period: recalibration_period,
-					},
-					fetch,
-					p,
-				)
-			}
+			GasPricerConfig::Calibrated {
+				usd_per_tx,
+				recalibration_period,
+				..
+			} => GasPricer::new_calibrated(
+				GasPriceCalibratorOptions {
+					usd_per_tx: usd_per_tx,
+					recalibration_period: recalibration_period,
+				},
+				fetch,
+				p,
+			),
 		}
 	}
 }
@@ -302,12 +306,15 @@ impl str::FromStr for Switch {
 			"on" => Ok(Switch::On),
 			"off" => Ok(Switch::Off),
 			"auto" => Ok(Switch::Auto),
-			other => Err(format!("Invalid switch value: {}", other))
+			other => Err(format!("Invalid switch value: {}", other)),
 		}
 	}
 }
 
-pub fn tracing_switch_to_bool(switch: Switch, user_defaults: &UserDefaults) -> Result<bool, String> {
+pub fn tracing_switch_to_bool(
+	switch: Switch,
+	user_defaults: &UserDefaults,
+) -> Result<bool, String> {
 	match (user_defaults.is_first_launch, switch, user_defaults.tracing) {
 		(false, Switch::On, false) => Err("TraceDB resync required".into()),
 		(_, Switch::On, _) => Ok(true),
@@ -316,7 +323,11 @@ pub fn tracing_switch_to_bool(switch: Switch, user_defaults: &UserDefaults) -> R
 	}
 }
 
-pub fn fatdb_switch_to_bool(switch: Switch, user_defaults: &UserDefaults, _algorithm: Algorithm) -> Result<bool, String> {
+pub fn fatdb_switch_to_bool(
+	switch: Switch,
+	user_defaults: &UserDefaults,
+	_algorithm: Algorithm,
+) -> Result<bool, String> {
 	let result = match (user_defaults.is_first_launch, switch, user_defaults.fat_db) {
 		(false, Switch::On, false) => Err("FatDB resync required".into()),
 		(_, Switch::On, _) => Ok(true),
@@ -326,15 +337,18 @@ pub fn fatdb_switch_to_bool(switch: Switch, user_defaults: &UserDefaults, _algor
 	result
 }
 
-pub fn mode_switch_to_bool(switch: Option<Mode>, user_defaults: &UserDefaults) -> Result<Mode, String> {
+pub fn mode_switch_to_bool(
+	switch: Option<Mode>,
+	user_defaults: &UserDefaults,
+) -> Result<Mode, String> {
 	Ok(switch.unwrap_or(user_defaults.mode.clone()))
 }
 
 #[cfg(test)]
 mod tests {
+	use super::{tracing_switch_to_bool, Pruning, ResealPolicy, SpecType, Switch};
 	use journaldb::Algorithm;
 	use user_defaults::UserDefaults;
-	use super::{SpecType, Pruning, ResealPolicy, Switch, tracing_switch_to_bool};
 
 	#[test]
 	fn test_spec_type_parsing() {
@@ -373,10 +387,22 @@ mod tests {
 	#[test]
 	fn test_pruning_parsing() {
 		assert_eq!(Pruning::Auto, "auto".parse().unwrap());
-		assert_eq!(Pruning::Specific(Algorithm::Archive), "archive".parse().unwrap());
-		assert_eq!(Pruning::Specific(Algorithm::EarlyMerge), "light".parse().unwrap());
-		assert_eq!(Pruning::Specific(Algorithm::OverlayRecent), "fast".parse().unwrap());
-		assert_eq!(Pruning::Specific(Algorithm::RefCounted), "basic".parse().unwrap());
+		assert_eq!(
+			Pruning::Specific(Algorithm::Archive),
+			"archive".parse().unwrap()
+		);
+		assert_eq!(
+			Pruning::Specific(Algorithm::EarlyMerge),
+			"light".parse().unwrap()
+		);
+		assert_eq!(
+			Pruning::Specific(Algorithm::OverlayRecent),
+			"fast".parse().unwrap()
+		);
+		assert_eq!(
+			Pruning::Specific(Algorithm::RefCounted),
+			"basic".parse().unwrap()
+		);
 	}
 
 	#[test]
@@ -386,10 +412,22 @@ mod tests {
 
 	#[test]
 	fn test_reseal_policy_parsing() {
-		let none = ResealPolicy { own: false, external: false };
-		let own = ResealPolicy { own: true, external: false };
-		let ext = ResealPolicy { own: false, external: true };
-		let all = ResealPolicy { own: true, external: true };
+		let none = ResealPolicy {
+			own: false,
+			external: false,
+		};
+		let own = ResealPolicy {
+			own: true,
+			external: false,
+		};
+		let ext = ResealPolicy {
+			own: false,
+			external: true,
+		};
+		let all = ResealPolicy {
+			own: true,
+			external: true,
+		};
 		assert_eq!(none, "none".parse().unwrap());
 		assert_eq!(own, "own".parse().unwrap());
 		assert_eq!(ext, "ext".parse().unwrap());
@@ -398,7 +436,10 @@ mod tests {
 
 	#[test]
 	fn test_reseal_policy_default() {
-		let all = ResealPolicy { own: true, external: true };
+		let all = ResealPolicy {
+			own: true,
+			external: true,
+		};
 		assert_eq!(all, ResealPolicy::default());
 	}
 
@@ -423,14 +464,31 @@ mod tests {
 
 	#[test]
 	fn test_switch_to_bool() {
-		assert!(!tracing_switch_to_bool(Switch::Off, &user_defaults_with_tracing(true, true)).unwrap());
-		assert!(!tracing_switch_to_bool(Switch::Off, &user_defaults_with_tracing(true, false)).unwrap());
-		assert!(!tracing_switch_to_bool(Switch::Off, &user_defaults_with_tracing(false, true)).unwrap());
-		assert!(!tracing_switch_to_bool(Switch::Off, &user_defaults_with_tracing(false, false)).unwrap());
+		assert!(
+			!tracing_switch_to_bool(Switch::Off, &user_defaults_with_tracing(true, true)).unwrap()
+		);
+		assert!(
+			!tracing_switch_to_bool(Switch::Off, &user_defaults_with_tracing(true, false)).unwrap()
+		);
+		assert!(
+			!tracing_switch_to_bool(Switch::Off, &user_defaults_with_tracing(false, true)).unwrap()
+		);
+		assert!(
+			!tracing_switch_to_bool(Switch::Off, &user_defaults_with_tracing(false, false))
+				.unwrap()
+		);
 
-		assert!(tracing_switch_to_bool(Switch::On, &user_defaults_with_tracing(true, true)).unwrap());
-		assert!(tracing_switch_to_bool(Switch::On, &user_defaults_with_tracing(true, false)).unwrap());
-		assert!(tracing_switch_to_bool(Switch::On, &user_defaults_with_tracing(false, true)).unwrap());
-		assert!(tracing_switch_to_bool(Switch::On, &user_defaults_with_tracing(false, false)).is_err());
+		assert!(
+			tracing_switch_to_bool(Switch::On, &user_defaults_with_tracing(true, true)).unwrap()
+		);
+		assert!(
+			tracing_switch_to_bool(Switch::On, &user_defaults_with_tracing(true, false)).unwrap()
+		);
+		assert!(
+			tracing_switch_to_bool(Switch::On, &user_defaults_with_tracing(false, true)).unwrap()
+		);
+		assert!(
+			tracing_switch_to_bool(Switch::On, &user_defaults_with_tracing(false, false)).is_err()
+		);
 	}
 }

@@ -14,22 +14,24 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::io;
-use std::io::{Write, BufReader, BufRead};
-use std::time::Duration;
-use std::fs::File;
-use ethereum_types::{U256, clean_0x, Address};
-use journaldb::Algorithm;
-use ethcore::client::{Mode, BlockId, VMType, DatabaseCompactionProfile, ClientConfig, VerifierType};
-use ethcore::miner::{PendingSet, Penalization};
-use miner::pool::PrioritizationStrategy;
 use cache::CacheConfig;
-use dir::DatabaseDirectories;
-use dir::helpers::replace_home;
-use upgrade::{upgrade, upgrade_data_paths};
-use sync::{validate_node_url, self};
 use db::migrate;
+use dir::helpers::replace_home;
+use dir::DatabaseDirectories;
+use ethcore::client::{
+	BlockId, ClientConfig, DatabaseCompactionProfile, Mode, VMType, VerifierType,
+};
+use ethcore::miner::{Penalization, PendingSet};
+use ethereum_types::{clean_0x, Address, U256};
+use journaldb::Algorithm;
+use miner::pool::PrioritizationStrategy;
 use path;
+use std::fs::File;
+use std::io;
+use std::io::{BufRead, BufReader, Write};
+use std::time::Duration;
+use sync::{self, validate_node_url};
+use upgrade::{upgrade, upgrade_data_paths};
 
 pub fn to_duration(s: &str) -> Result<Duration, String> {
 	to_seconds(s).map(Duration::from_secs)
@@ -37,7 +39,10 @@ pub fn to_duration(s: &str) -> Result<Duration, String> {
 
 fn to_seconds(s: &str) -> Result<u64, String> {
 	let bad = |_| {
-		format!("{}: Invalid duration given. See parity --help for more information.", s)
+		format!(
+			"{}: Invalid duration given. See parity --help for more information.",
+			s
+		)
 	};
 
 	match s {
@@ -48,9 +53,21 @@ fn to_seconds(s: &str) -> Result<u64, String> {
 		"hourly" | "1hour" | "1 hour" | "hour" => Ok(60 * 60),
 		"daily" | "1day" | "1 day" | "day" => Ok(24 * 60 * 60),
 		x if x.ends_with("seconds") => x[0..x.len() - 7].trim().parse().map_err(bad),
-		x if x.ends_with("minutes") => x[0..x.len() - 7].trim().parse::<u64>().map_err(bad).map(|x| x * 60),
-		x if x.ends_with("hours") => x[0..x.len() - 5].trim().parse::<u64>().map_err(bad).map(|x| x * 60 * 60),
-		x if x.ends_with("days") => x[0..x.len() - 4].trim().parse::<u64>().map_err(bad).map(|x| x * 24 * 60 * 60),
+		x if x.ends_with("minutes") => x[0..x.len() - 7]
+			.trim()
+			.parse::<u64>()
+			.map_err(bad)
+			.map(|x| x * 60),
+		x if x.ends_with("hours") => x[0..x.len() - 5]
+			.trim()
+			.parse::<u64>()
+			.map_err(bad)
+			.map(|x| x * 60 * 60),
+		x if x.ends_with("days") => x[0..x.len() - 4]
+			.trim()
+			.parse::<u64>()
+			.map_err(bad)
+			.map(|x| x * 24 * 60 * 60),
 		x => x.trim().parse().map_err(bad),
 	}
 }
@@ -58,10 +75,16 @@ fn to_seconds(s: &str) -> Result<u64, String> {
 pub fn to_mode(s: &str, timeout: u64, alarm: u64) -> Result<Mode, String> {
 	match s {
 		"active" => Ok(Mode::Active),
-		"passive" => Ok(Mode::Passive(Duration::from_secs(timeout), Duration::from_secs(alarm))),
+		"passive" => Ok(Mode::Passive(
+			Duration::from_secs(timeout),
+			Duration::from_secs(alarm),
+		)),
 		"dark" => Ok(Mode::Dark(Duration::from_secs(timeout))),
 		"offline" => Ok(Mode::Off),
-		_ => Err(format!("{}: Invalid value for --mode. Must be one of active, passive, dark or offline.", s)),
+		_ => Err(format!(
+			"{}: Invalid value for --mode. Must be one of active, passive, dark or offline.",
+			s
+		)),
 	}
 }
 
@@ -114,15 +137,22 @@ pub fn to_queue_penalization(time: Option<u64>) -> Result<Penalization, String> 
 
 pub fn to_address(s: Option<String>) -> Result<Address, String> {
 	match s {
-		Some(ref a) => clean_0x(a).parse().map_err(|_| format!("Invalid address: {:?}", a)),
-		None => Ok(Address::default())
+		Some(ref a) => clean_0x(a)
+			.parse()
+			.map_err(|_| format!("Invalid address: {:?}", a)),
+		None => Ok(Address::default()),
 	}
 }
 
 pub fn to_addresses(s: &Option<String>) -> Result<Vec<Address>, String> {
 	match *s {
-		Some(ref adds) if !adds.is_empty() => adds.split(',')
-			.map(|a| clean_0x(a).parse().map_err(|_| format!("Invalid address: {:?}", a)))
+		Some(ref adds) if !adds.is_empty() => adds
+			.split(',')
+			.map(|a| {
+				clean_0x(a)
+					.parse()
+					.map_err(|_| format!("Invalid address: {:?}", a))
+			})
 			.collect(),
 		_ => Ok(Vec::new()),
 	}
@@ -130,7 +160,8 @@ pub fn to_addresses(s: &Option<String>) -> Result<Vec<Address>, String> {
 
 /// Tries to parse string as a price.
 pub fn to_price(s: &str) -> Result<f32, String> {
-	s.parse::<f32>().map_err(|_| format!("Invalid transaciton price 's' given. Must be a decimal number."))
+	s.parse::<f32>()
+		.map_err(|_| format!("Invalid transaciton price 's' given. Must be a decimal number."))
 }
 
 /// Flush output buffer.
@@ -147,9 +178,15 @@ pub fn geth_ipc_path(testnet: bool) -> String {
 	}
 
 	if testnet {
-		path::ethereum::with_testnet("geth.ipc").to_str().unwrap().to_owned()
+		path::ethereum::with_testnet("geth.ipc")
+			.to_str()
+			.unwrap()
+			.to_owned()
 	} else {
-		path::ethereum::with_default("geth.ipc").to_str().unwrap().to_owned()
+		path::ethereum::with_default("geth.ipc")
+			.to_str()
+			.unwrap()
+			.to_owned()
 	}
 }
 
@@ -165,22 +202,28 @@ pub fn parity_ipc_path(base: &str, path: &str, shift: u16) -> String {
 /// Validates and formats bootnodes option.
 pub fn to_bootnodes(bootnodes: &Option<String>) -> Result<Vec<String>, String> {
 	match *bootnodes {
-		Some(ref x) if !x.is_empty() => x.split(',').map(|s| {
-			match validate_node_url(s).map(Into::into) {
+		Some(ref x) if !x.is_empty() => x
+			.split(',')
+			.map(|s| match validate_node_url(s).map(Into::into) {
 				None => Ok(s.to_owned()),
-				Some(sync::ErrorKind::AddressResolve(_)) => Err(format!("Failed to resolve hostname of a boot node: {}", s)),
-				Some(_) => Err(format!("Invalid node address format given for a boot node: {}", s)),
-			}
-		}).collect(),
+				Some(sync::ErrorKind::AddressResolve(_)) => {
+					Err(format!("Failed to resolve hostname of a boot node: {}", s))
+				}
+				Some(_) => Err(format!(
+					"Invalid node address format given for a boot node: {}",
+					s
+				)),
+			})
+			.collect(),
 		Some(_) => Ok(vec![]),
-		None => Ok(vec![])
+		None => Ok(vec![]),
 	}
 }
 
 #[cfg(test)]
 pub fn default_network_config() -> ::sync::NetworkConfiguration {
-	use sync::{NetworkConfiguration};
 	use super::network::IpFilter;
+	use sync::NetworkConfiguration;
 	NetworkConfiguration {
 		config_path: Some(replace_home(&::dir::default_data_path(), "$BASE/network")),
 		net_config_path: None,
@@ -203,20 +246,20 @@ pub fn default_network_config() -> ::sync::NetworkConfiguration {
 }
 
 pub fn to_client_config(
-		cache_config: &CacheConfig,
-		spec_name: String,
-		mode: Mode,
-		tracing: bool,
-		fat_db: bool,
-		compaction: DatabaseCompactionProfile,
-		wal: bool,
-		vm_type: VMType,
-		name: String,
-		pruning: Algorithm,
-		pruning_history: u64,
-		pruning_memory: usize,
-		check_seal: bool,
-	) -> ClientConfig {
+	cache_config: &CacheConfig,
+	spec_name: String,
+	mode: Mode,
+	tracing: bool,
+	fat_db: bool,
+	compaction: DatabaseCompactionProfile,
+	wal: bool,
+	vm_type: VMType,
+	name: String,
+	pruning: Algorithm,
+	pruning_history: u64,
+	pruning_memory: usize,
+	check_seal: bool,
+) -> ClientConfig {
 	let mut client_config = ClientConfig::default();
 
 	let mb = 1024 * 1024;
@@ -248,7 +291,11 @@ pub fn to_client_config(
 	client_config.db_wal = wal;
 	client_config.vm_type = vm_type;
 	client_config.name = name;
-	client_config.verifier_type = if check_seal { VerifierType::Canon } else { VerifierType::CanonNoSeal };
+	client_config.verifier_type = if check_seal {
+		VerifierType::Canon
+	} else {
+		VerifierType::CanonNoSeal
+	};
 	client_config.spec_name = spec_name;
 	client_config
 }
@@ -257,19 +304,18 @@ pub fn execute_upgrades(
 	base_path: &str,
 	dirs: &DatabaseDirectories,
 	pruning: Algorithm,
-	compaction_profile: &DatabaseCompactionProfile
+	compaction_profile: &DatabaseCompactionProfile,
 ) -> Result<(), String> {
-
 	upgrade_data_paths(base_path, dirs, pruning);
 
 	match upgrade(Some(&dirs.path)) {
 		Ok(upgrades_applied) if upgrades_applied > 0 => {
 			debug!("Executed {} upgrade scripts - ok", upgrades_applied);
-		},
+		}
 		Err(e) => {
 			return Err(format!("Error upgrading parity data: {:?}", e));
-		},
-		_ => {},
+		}
+		_ => {}
 	}
 
 	let client_path = dirs.db_path(pruning);
@@ -303,62 +349,115 @@ pub fn password_prompt() -> Result<String, String> {
 pub fn password_from_file(path: String) -> Result<String, String> {
 	let passwords = passwords_from_files(&[path])?;
 	// use only first password from the file
-	passwords.get(0).map(String::to_owned)
+	passwords
+		.get(0)
+		.map(String::to_owned)
 		.ok_or_else(|| "Password file seems to be empty.".to_owned())
 }
 
 /// Reads passwords from files. Treats each line as a separate password.
 pub fn passwords_from_files(files: &[String]) -> Result<Vec<String>, String> {
-	let passwords = files.iter().map(|filename| {
-		let file = File::open(filename).map_err(|_| format!("{} Unable to read password file. Ensure it exists and permissions are correct.", filename))?;
-		let reader = BufReader::new(&file);
-		let lines = reader.lines()
-			.filter_map(|l| l.ok())
-			.map(|pwd| pwd.trim().to_owned())
-			.collect::<Vec<String>>();
-		Ok(lines)
-	}).collect::<Result<Vec<Vec<String>>, String>>();
+	let passwords = files
+		.iter()
+		.map(|filename| {
+			let file = File::open(filename).map_err(|_| {
+				format!("{} Unable to read password file. Ensure it exists and permissions are correct.", filename)
+			})?;
+			let reader = BufReader::new(&file);
+			let lines = reader
+				.lines()
+				.filter_map(|l| l.ok())
+				.map(|pwd| pwd.trim().to_owned())
+				.collect::<Vec<String>>();
+			Ok(lines)
+		})
+		.collect::<Result<Vec<Vec<String>>, String>>();
 	Ok(passwords?.into_iter().flat_map(|x| x).collect())
 }
 
 #[cfg(test)]
 mod tests {
-	use std::time::Duration;
+	use super::{
+		geth_ipc_path, password_from_file, to_address, to_addresses, to_block_id, to_bootnodes,
+		to_duration, to_mode, to_pending_set, to_price, to_u256,
+	};
+	use ethcore::client::{BlockId, Mode};
+	use ethcore::miner::PendingSet;
+	use ethereum_types::U256;
 	use std::fs::File;
 	use std::io::Write;
+	use std::time::Duration;
 	use tempdir::TempDir;
-	use ethereum_types::U256;
-	use ethcore::client::{Mode, BlockId};
-	use ethcore::miner::PendingSet;
-	use super::{to_duration, to_mode, to_block_id, to_u256, to_pending_set, to_address, to_addresses, to_price, geth_ipc_path, to_bootnodes, password_from_file};
 
 	#[test]
 	fn test_to_duration() {
-		assert_eq!(to_duration("twice-daily").unwrap(), Duration::from_secs(12 * 60 * 60));
-		assert_eq!(to_duration("half-hourly").unwrap(), Duration::from_secs(30 * 60));
+		assert_eq!(
+			to_duration("twice-daily").unwrap(),
+			Duration::from_secs(12 * 60 * 60)
+		);
+		assert_eq!(
+			to_duration("half-hourly").unwrap(),
+			Duration::from_secs(30 * 60)
+		);
 		assert_eq!(to_duration("1second").unwrap(), Duration::from_secs(1));
 		assert_eq!(to_duration("2seconds").unwrap(), Duration::from_secs(2));
 		assert_eq!(to_duration("15seconds").unwrap(), Duration::from_secs(15));
 		assert_eq!(to_duration("1minute").unwrap(), Duration::from_secs(1 * 60));
-		assert_eq!(to_duration("2minutes").unwrap(), Duration::from_secs(2 * 60));
-		assert_eq!(to_duration("15minutes").unwrap(), Duration::from_secs(15 * 60));
+		assert_eq!(
+			to_duration("2minutes").unwrap(),
+			Duration::from_secs(2 * 60)
+		);
+		assert_eq!(
+			to_duration("15minutes").unwrap(),
+			Duration::from_secs(15 * 60)
+		);
 		assert_eq!(to_duration("hourly").unwrap(), Duration::from_secs(60 * 60));
-		assert_eq!(to_duration("daily").unwrap(), Duration::from_secs(24 * 60 * 60));
-		assert_eq!(to_duration("1hour").unwrap(), Duration::from_secs(1 * 60 * 60));
-		assert_eq!(to_duration("2hours").unwrap(), Duration::from_secs(2 * 60 * 60));
-		assert_eq!(to_duration("15hours").unwrap(), Duration::from_secs(15 * 60 * 60));
-		assert_eq!(to_duration("1day").unwrap(), Duration::from_secs(1 * 24 * 60 * 60));
-		assert_eq!(to_duration("2days").unwrap(), Duration::from_secs(2 * 24 *60 * 60));
-		assert_eq!(to_duration("15days").unwrap(), Duration::from_secs(15 * 24 * 60 * 60));
-		assert_eq!(to_duration("15 days").unwrap(), Duration::from_secs(15 * 24 * 60 * 60));
+		assert_eq!(
+			to_duration("daily").unwrap(),
+			Duration::from_secs(24 * 60 * 60)
+		);
+		assert_eq!(
+			to_duration("1hour").unwrap(),
+			Duration::from_secs(1 * 60 * 60)
+		);
+		assert_eq!(
+			to_duration("2hours").unwrap(),
+			Duration::from_secs(2 * 60 * 60)
+		);
+		assert_eq!(
+			to_duration("15hours").unwrap(),
+			Duration::from_secs(15 * 60 * 60)
+		);
+		assert_eq!(
+			to_duration("1day").unwrap(),
+			Duration::from_secs(1 * 24 * 60 * 60)
+		);
+		assert_eq!(
+			to_duration("2days").unwrap(),
+			Duration::from_secs(2 * 24 * 60 * 60)
+		);
+		assert_eq!(
+			to_duration("15days").unwrap(),
+			Duration::from_secs(15 * 24 * 60 * 60)
+		);
+		assert_eq!(
+			to_duration("15 days").unwrap(),
+			Duration::from_secs(15 * 24 * 60 * 60)
+		);
 		assert_eq!(to_duration("2  seconds").unwrap(), Duration::from_secs(2));
 	}
 
 	#[test]
 	fn test_to_mode() {
 		assert_eq!(to_mode("active", 0, 0).unwrap(), Mode::Active);
-		assert_eq!(to_mode("passive", 10, 20).unwrap(), Mode::Passive(Duration::from_secs(10), Duration::from_secs(20)));
-		assert_eq!(to_mode("dark", 20, 30).unwrap(), Mode::Dark(Duration::from_secs(20)));
+		assert_eq!(
+			to_mode("passive", 10, 20).unwrap(),
+			Mode::Passive(Duration::from_secs(10), Duration::from_secs(20))
+		);
+		assert_eq!(
+			to_mode("dark", 20, 30).unwrap(),
+			Mode::Dark(Duration::from_secs(20))
+		);
 		assert!(to_mode("other", 20, 30).is_err());
 	}
 
@@ -369,8 +468,13 @@ mod tests {
 		assert_eq!(to_block_id("2").unwrap(), BlockId::Number(2));
 		assert_eq!(to_block_id("15").unwrap(), BlockId::Number(15));
 		assert_eq!(
-			to_block_id("9fc84d84f6a785dc1bd5abacfcf9cbdd3b6afb80c0f799bfb2fd42c44a0c224e").unwrap(),
-			BlockId::Hash("9fc84d84f6a785dc1bd5abacfcf9cbdd3b6afb80c0f799bfb2fd42c44a0c224e".parse().unwrap())
+			to_block_id("9fc84d84f6a785dc1bd5abacfcf9cbdd3b6afb80c0f799bfb2fd42c44a0c224e")
+				.unwrap(),
+			BlockId::Hash(
+				"9fc84d84f6a785dc1bd5abacfcf9cbdd3b6afb80c0f799bfb2fd42c44a0c224e"
+					.parse()
+					.unwrap()
+			)
 		);
 	}
 
@@ -386,7 +490,10 @@ mod tests {
 	fn test_pending_set() {
 		assert_eq!(to_pending_set("cheap").unwrap(), PendingSet::AlwaysQueue);
 		assert_eq!(to_pending_set("strict").unwrap(), PendingSet::AlwaysSealing);
-		assert_eq!(to_pending_set("lenient").unwrap(), PendingSet::SealingOrElseQueue);
+		assert_eq!(
+			to_pending_set("lenient").unwrap(),
+			PendingSet::SealingOrElseQueue
+		);
 		assert!(to_pending_set("othe").is_err());
 	}
 
@@ -405,7 +512,11 @@ mod tests {
 
 	#[test]
 	fn test_to_addresses() {
-		let addresses = to_addresses(&Some("0xD9A111feda3f362f55Ef1744347CDC8Dd9964a41,D9A111feda3f362f55Ef1744347CDC8Dd9964a42".into())).unwrap();
+		let addresses = to_addresses(&Some(
+			"0xD9A111feda3f362f55Ef1744347CDC8Dd9964a41,D9A111feda3f362f55Ef1744347CDC8Dd9964a42"
+				.into(),
+		))
+		.unwrap();
 		assert_eq!(
 			addresses,
 			vec![
@@ -421,7 +532,12 @@ mod tests {
 		let path = tempdir.path().join("file");
 		let mut file = File::create(&path).unwrap();
 		file.write_all(b"a bc ").unwrap();
-		assert_eq!(password_from_file(path.to_str().unwrap().into()).unwrap().as_bytes(), b"a bc");
+		assert_eq!(
+			password_from_file(path.to_str().unwrap().into())
+				.unwrap()
+				.as_bytes(),
+			b"a bc"
+		);
 	}
 
 	#[test]
@@ -429,13 +545,19 @@ mod tests {
 		let tempdir = TempDir::new("").unwrap();
 		let path = tempdir.path().join("file");
 		let mut file = File::create(path.as_path()).unwrap();
-		file.write_all(br#"    password with trailing whitespace
+		file.write_all(
+			br#"    password with trailing whitespace
 those passwords should be
 ignored
 but the first password is trimmed
 
-"#).unwrap();
-		assert_eq!(&password_from_file(path.to_str().unwrap().into()).unwrap(), "password with trailing whitespace");
+"#,
+		)
+		.unwrap();
+		assert_eq!(
+			&password_from_file(path.to_str().unwrap().into()).unwrap(),
+			"password with trailing whitespace"
+		);
 	}
 
 	#[test]
@@ -456,8 +578,20 @@ but the first password is trimmed
 	#[cfg(not(windows))]
 	fn test_geth_ipc_path() {
 		use path;
-		assert_eq!(geth_ipc_path(true), path::ethereum::with_testnet("geth.ipc").to_str().unwrap().to_owned());
-		assert_eq!(geth_ipc_path(false), path::ethereum::with_default("geth.ipc").to_str().unwrap().to_owned());
+		assert_eq!(
+			geth_ipc_path(true),
+			path::ethereum::with_testnet("geth.ipc")
+				.to_str()
+				.unwrap()
+				.to_owned()
+		);
+		assert_eq!(
+			geth_ipc_path(false),
+			path::ethereum::with_default("geth.ipc")
+				.to_str()
+				.unwrap()
+				.to_owned()
+		);
 	}
 
 	#[test]
@@ -467,7 +601,13 @@ but the first password is trimmed
 
 		assert_eq!(to_bootnodes(&Some("".into())), Ok(vec![]));
 		assert_eq!(to_bootnodes(&None), Ok(vec![]));
-		assert_eq!(to_bootnodes(&Some(one_bootnode.into())), Ok(vec![one_bootnode.into()]));
-		assert_eq!(to_bootnodes(&Some(two_bootnodes.into())), Ok(vec![one_bootnode.into(), one_bootnode.into()]));
+		assert_eq!(
+			to_bootnodes(&Some(one_bootnode.into())),
+			Ok(vec![one_bootnode.into()])
+		);
+		assert_eq!(
+			to_bootnodes(&Some(two_bootnodes.into())),
+			Ok(vec![one_bootnode.into(), one_bootnode.into()])
+		);
 	}
 }

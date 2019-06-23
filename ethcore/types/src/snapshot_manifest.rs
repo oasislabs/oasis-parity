@@ -16,9 +16,9 @@
 
 //! Snapshot manifest type definition
 
-use ethereum_types::H256;
-use rlp::{Rlp, RlpStream, DecoderError};
 use bytes::Bytes;
+use ethereum_types::H256;
+use rlp::{DecoderError, Rlp, RlpStream};
 
 /// Manifest data.
 #[derive(Debug, Clone, PartialEq, Eq)]

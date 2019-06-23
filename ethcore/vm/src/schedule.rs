@@ -177,7 +177,7 @@ impl Default for WasmCosts {
 			initial_mem_cost: 4096,
 			grow_mem: 0,
 			memcpy: 1,
-			max_stack_height: 4096*1024,
+			max_stack_height: 4096 * 1024,
 			opcodes_mul: 1,
 			opcodes_div: 1,
 		}
@@ -208,7 +208,12 @@ impl Schedule {
 
 	/// Schedule for the post-EIP-150-era of the Ethereum main net.
 	/// NOTE: This is the schedule used by the Oasis runtime.
-	pub fn new_post_eip150(max_code_size: usize, fix_exp: bool, no_empty: bool, kill_empty: bool) -> Schedule {
+	pub fn new_post_eip150(
+		max_code_size: usize,
+		fix_exp: bool,
+		no_empty: bool,
+		kill_empty: bool,
+	) -> Schedule {
 		Schedule {
 			exceptional_failed_code_deposit: true,
 			have_delegate_call: true,
@@ -220,7 +225,7 @@ impl Schedule {
 			max_depth: 1024,
 			tier_step_gas: [0, 2, 3, 5, 8, 10, 20, 0],
 			exp_gas: 10,
-			exp_byte_gas: if fix_exp {50} else {10},
+			exp_byte_gas: if fix_exp { 50 } else { 10 },
 			sha3_gas: 30,
 			sha3_word_gas: 6,
 			sload_gas: 200,
@@ -340,35 +345,66 @@ impl Schedule {
 	/// May panic if there is no wasm schedule
 	pub fn wasm(&self) -> &WasmCosts {
 		// *** Prefer PANIC here instead of silently breaking consensus! ***
-		self.wasm.as_ref().expect("Wasm schedule expected to exist while checking wasm contract. Misconfigured client?")
+		self.wasm.as_ref().expect(
+			"Wasm schedule expected to exist while checking wasm contract. Misconfigured client?",
+		)
 	}
 
 	/// Gas price for setting new value to storage (`storage==0`, `new!=0`), prorated for expiry.
 	pub fn prorated_sstore_set_gas(&self, duration_secs: u64, bytes_len: u64) -> U256 {
-		Self::prorated_sstore_gas(self.sstore_set_gas, self.default_storage_duration, duration_secs, bytes_len, false)
+		Self::prorated_sstore_gas(
+			self.sstore_set_gas,
+			self.default_storage_duration,
+			duration_secs,
+			bytes_len,
+			false,
+		)
 	}
 
 	/// Gas price for altering value in storage, prorated for expiry.
 	pub fn prorated_sstore_reset_gas(&self, duration_secs: u64, bytes_len: u64) -> U256 {
-		Self::prorated_sstore_gas(self.sstore_reset_gas, self.default_storage_duration, duration_secs, bytes_len, false)
+		Self::prorated_sstore_gas(
+			self.sstore_reset_gas,
+			self.default_storage_duration,
+			duration_secs,
+			bytes_len,
+			false,
+		)
 	}
 
 	/// Gas refund for `SSTORE` clearing (when `storage!=0`, `new==0`), prorated for expiry.
 	pub fn prorated_sstore_refund_gas(&self, duration_secs: u64, bytes_len: u64) -> U256 {
-		Self::prorated_sstore_gas(self.sstore_refund_gas, self.default_storage_duration, duration_secs, bytes_len, true)
+		Self::prorated_sstore_gas(
+			self.sstore_refund_gas,
+			self.default_storage_duration,
+			duration_secs,
+			bytes_len,
+			true,
+		)
 	}
 
 	/// Calculates prorated gas price for SSTORE based on expiry.
-	fn prorated_sstore_gas(default_gas: usize, default_storage_duration: u64, duration_secs: u64, bytes_len: u64, refund: bool) -> U256 {
+	fn prorated_sstore_gas(
+		default_gas: usize,
+		default_storage_duration: u64,
+		duration_secs: u64,
+		bytes_len: u64,
+		refund: bool,
+	) -> U256 {
 		let duration = U256::from(duration_secs);
 		let default_gas = U256::from(default_gas);
 		let default_storage_duration = U256::from(default_storage_duration);
 		// prorated gas cost <- duration * default_gas * bytes_len / (default_storage_duration / 32)
 		// cannot overflow as duration and default_gas are converted from u64s
-		let mut gas = default_gas * duration * U256::from(bytes_len) / (default_storage_duration * U256::from(32));
+		let mut gas = default_gas * duration * U256::from(bytes_len)
+			/ (default_storage_duration * U256::from(32));
 
 		// if this is a charge (not a refund), round up
-		if !refund && duration * default_gas * U256::from(bytes_len) % (default_storage_duration * U256::from(32)) != U256::from(0) {
+		if !refund
+			&& duration * default_gas * U256::from(bytes_len)
+				% (default_storage_duration * U256::from(32))
+				!= U256::from(0)
+		{
 			gas = gas + U256::from(1)
 		}
 

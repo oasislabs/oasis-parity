@@ -14,11 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use ethereum_types::{H256, U256, Address};
 use bytes::Bytes;
+use ethereum_types::{Address, H256, U256};
+use ethkey::Signature;
 use hash::keccak;
 use rlp::Encodable;
-use ethkey::Signature;
 use transaction::signature::{add_chain_replay_protection, check_replay_protection};
 
 /// Message with private transaction encrypted
@@ -62,7 +62,9 @@ impl SignedPrivateTransaction {
 		}
 	}
 
-	pub fn standard_v(&self) -> u8 { check_replay_protection(self.v) }
+	pub fn standard_v(&self) -> u8 {
+		check_replay_protection(self.v)
+	}
 
 	/// Construct a signature object from the sig.
 	pub fn signature(&self) -> Signature {

@@ -18,9 +18,9 @@
 extern crate elastic_array;
 extern crate ethereum_types;
 
-use std::collections::HashMap;
 use elastic_array::ElasticArray128;
 use ethereum_types::H256;
+use std::collections::HashMap;
 
 /// `HashDB` value type.
 pub type DBValue = ElasticArray128<u8>;

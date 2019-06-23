@@ -16,8 +16,8 @@
 
 //! Peer status and capabilities.
 
-use rlp::{DecoderError, Encodable, Decodable, RlpStream, Rlp};
 use ethereum_types::{H256, U256};
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 
 use super::request_credits::FlowParams;
 
@@ -77,7 +77,7 @@ impl Key {
 			"flowControl/BL" => Some(Key::BufferLimit),
 			"flowControl/MRC" => Some(Key::BufferCostTable),
 			"flowControl/MRR" => Some(Key::BufferRechargeRate),
-			_ => None
+			_ => None,
 		}
 	}
 }
@@ -101,7 +101,9 @@ impl<'a> Parser<'a> {
 		trace!(target: "les", "Expecting key {}", key.as_str());
 		let pre_pos = self.pos;
 		if let Some((k, val)) = self.get_next()? {
-			if k == key { return Ok(val) }
+			if k == key {
+				return Ok(val);
+			}
 		}
 
 		self.pos = pre_pos;
@@ -116,7 +118,7 @@ impl<'a> Parser<'a> {
 
 			self.pos += 1;
 			match Key::from_str(&k) {
-				Some(key) => return Ok(Some((key , pair.at(1)?))),
+				Some(key) => return Ok(Some((key, pair.at(1)?))),
 				None => continue,
 			}
 		}
@@ -208,11 +210,10 @@ impl Capabilities {
 ///   - chain status
 ///   - serving capabilities
 ///   - request credit parameters
-pub fn parse_handshake(rlp: Rlp) -> Result<(Status, Capabilities, Option<FlowParams>), DecoderError> {
-	let mut parser = Parser {
-		pos: 0,
-		rlp: rlp,
-	};
+pub fn parse_handshake(
+	rlp: Rlp,
+) -> Result<(Status, Capabilities, Option<FlowParams>), DecoderError> {
+	let mut parser = Parser { pos: 0, rlp: rlp };
 
 	let status = Status {
 		protocol_version: parser.expect(Key::ProtocolVersion)?,
@@ -234,7 +235,7 @@ pub fn parse_handshake(rlp: Rlp) -> Result<(Status, Capabilities, Option<FlowPar
 	let flow_params = match (
 		parser.expect(Key::BufferLimit),
 		parser.expect(Key::BufferCostTable),
-		parser.expect(Key::BufferRechargeRate)
+		parser.expect(Key::BufferRechargeRate),
 	) {
 		(Ok(bl), Ok(bct), Ok(brr)) => Some(FlowParams::new(bl, bct, brr)),
 		_ => None,
@@ -244,7 +245,11 @@ pub fn parse_handshake(rlp: Rlp) -> Result<(Status, Capabilities, Option<FlowPar
 }
 
 /// Write a handshake, given status, capabilities, and flow parameters.
-pub fn write_handshake(status: &Status, capabilities: &Capabilities, flow_params: Option<&FlowParams>) -> Vec<u8> {
+pub fn write_handshake(
+	status: &Status,
+	capabilities: &Capabilities,
+	flow_params: Option<&FlowParams>,
+) -> Vec<u8> {
 	let mut pairs = Vec::new();
 	pairs.push(encode_pair(Key::ProtocolVersion, &status.protocol_version));
 	pairs.push(encode_pair(Key::NetworkId, &(status.network_id as u64)));
@@ -269,7 +274,10 @@ pub fn write_handshake(status: &Status, capabilities: &Capabilities, flow_params
 	if let Some(flow_params) = flow_params {
 		pairs.push(encode_pair(Key::BufferLimit, flow_params.limit()));
 		pairs.push(encode_pair(Key::BufferCostTable, flow_params.cost_table()));
-		pairs.push(encode_pair(Key::BufferRechargeRate, flow_params.recharge_rate()));
+		pairs.push(encode_pair(
+			Key::BufferRechargeRate,
+			flow_params.recharge_rate(),
+		));
 	}
 
 	let mut stream = RlpStream::new_list(pairs.len());
@@ -318,13 +326,12 @@ pub fn parse_announcement(rlp: Rlp) -> Result<Announcement, DecoderError> {
 		tx_relay: false,
 	};
 
-	let mut parser = Parser {
-		pos: 4,
-		rlp: rlp,
-	};
+	let mut parser = Parser { pos: 4, rlp: rlp };
 
 	while let Some((key, item)) = parser.get_next()? {
-		if Some(key) <= last_key { return Err(DecoderError::Custom("Invalid announcement key ordering")) }
+		if Some(key) <= last_key {
+			return Err(DecoderError::Custom("Invalid announcement key ordering"));
+		}
 		last_key = Some(key);
 
 		match key {
@@ -371,10 +378,10 @@ pub fn write_announcement(announcement: &Announcement) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use super::super::request_credits::FlowParams;
-	use ethereum_types::{U256, H256};
-	use rlp::{RlpStream, Rlp};
+	use super::*;
+	use ethereum_types::{H256, U256};
+	use rlp::{Rlp, RlpStream};
 
 	#[test]
 	fn full_handshake() {
@@ -395,16 +402,12 @@ mod tests {
 			tx_relay: true,
 		};
 
-		let flow_params = FlowParams::new(
-			1_000_000.into(),
-			Default::default(),
-			1000.into(),
-		);
+		let flow_params = FlowParams::new(1_000_000.into(), Default::default(), 1000.into());
 
 		let handshake = write_handshake(&status, &capabilities, Some(&flow_params));
 
-		let (read_status, read_capabilities, read_flow)
-			= parse_handshake(Rlp::new(&handshake)).unwrap();
+		let (read_status, read_capabilities, read_flow) =
+			parse_handshake(Rlp::new(&handshake)).unwrap();
 
 		assert_eq!(read_status, status);
 		assert_eq!(read_capabilities, capabilities);
@@ -430,16 +433,12 @@ mod tests {
 			tx_relay: true,
 		};
 
-		let flow_params = FlowParams::new(
-			1_000_000.into(),
-			Default::default(),
-			1000.into(),
-		);
+		let flow_params = FlowParams::new(1_000_000.into(), Default::default(), 1000.into());
 
 		let handshake = write_handshake(&status, &capabilities, Some(&flow_params));
 
-		let (read_status, read_capabilities, read_flow)
-			= parse_handshake(Rlp::new(&handshake)).unwrap();
+		let (read_status, read_capabilities, read_flow) =
+			parse_handshake(Rlp::new(&handshake)).unwrap();
 
 		assert_eq!(read_status, status);
 		assert_eq!(read_capabilities, capabilities);
@@ -465,11 +464,7 @@ mod tests {
 			tx_relay: true,
 		};
 
-		let flow_params = FlowParams::new(
-			1_000_000.into(),
-			Default::default(),
-			1000.into(),
-		);
+		let flow_params = FlowParams::new(1_000_000.into(), Default::default(), 1000.into());
 
 		let handshake = write_handshake(&status, &capabilities, Some(&flow_params));
 		let interleaved = {
@@ -488,8 +483,8 @@ mod tests {
 			stream.out()
 		};
 
-		let (read_status, read_capabilities, read_flow)
-			= parse_handshake(Rlp::new(&interleaved)).unwrap();
+		let (read_status, read_capabilities, read_flow) =
+			parse_handshake(Rlp::new(&interleaved)).unwrap();
 
 		assert_eq!(read_status, status);
 		assert_eq!(read_capabilities, capabilities);
@@ -517,7 +512,7 @@ mod tests {
 
 	#[test]
 	fn keys_out_of_order() {
-		use super::{Key, encode_pair, encode_flag};
+		use super::{encode_flag, encode_pair, Key};
 
 		let mut stream = RlpStream::new_list(6);
 		stream
@@ -565,8 +560,8 @@ mod tests {
 
 		let handshake = write_handshake(&status, &capabilities, None);
 
-		let (read_status, read_capabilities, read_flow)
-			= parse_handshake(Rlp::new(&handshake)).unwrap();
+		let (read_status, read_capabilities, read_flow) =
+			parse_handshake(Rlp::new(&handshake)).unwrap();
 
 		assert_eq!(read_status, status);
 		assert_eq!(read_capabilities, capabilities);

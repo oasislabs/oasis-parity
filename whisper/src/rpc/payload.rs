@@ -33,8 +33,8 @@
 //!
 //! AES-256-GCM will append 12 bytes of metadata to the front of the message.
 
-use ethereum_types::H256;
 use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
+use ethereum_types::H256;
 use ethkey::{Public, Secret};
 use tiny_keccak::keccak256;
 
@@ -66,9 +66,9 @@ fn num_padding_length_bytes(padding_len: usize) -> Option<usize> {
 	let bits = 64 - (padding_len as u64).leading_zeros();
 	match bits {
 		0 => Some(0),
-		0 ... 8 => Some(1),
-		0 ... 16 => Some(2),
-		0 ... 24 => Some(3),
+		0...8 => Some(1),
+		0...16 => Some(2),
+		0...24 => Some(3),
 		_ => None,
 	}
 }
@@ -108,8 +108,8 @@ pub fn encode(params: EncodeParams) -> Result<Vec<u8>, &'static str> {
 	const VEC_WRITE_INFALLIBLE: &'static str = "writing to a Vec<u8> can never fail; qed";
 
 	let padding_len = params.padding.map_or(0, |x| x.len());
-	let padding_len_bytes = num_padding_length_bytes(padding_len)
-		.ok_or_else(|| "padding size too long")?;
+	let padding_len_bytes =
+		num_padding_length_bytes(padding_len).ok_or_else(|| "padding size too long")?;
 
 	let signature = params.sign_with.map(|secret| {
 		let hash = H256(keccak256(params.message));
@@ -126,10 +126,7 @@ pub fn encode(params: EncodeParams) -> Result<Vec<u8>, &'static str> {
 		let mut flags = Flags::empty();
 
 		// 1 byte each for flags and version.
-		let mut plaintext_size = 2
-			+ padding_len_bytes
-			+ padding_len
-			+ params.message.len();
+		let mut plaintext_size = 2 + padding_len_bytes + padding_len + params.message.len();
 
 		flags.bits = (padding_len_bytes << 6) as u8;
 		debug_assert_eq!(padding_length_bytes(flags), padding_len_bytes);
@@ -148,7 +145,8 @@ pub fn encode(params: EncodeParams) -> Result<Vec<u8>, &'static str> {
 	plaintext.push(flags.bits);
 
 	if let Some(padding) = params.padding {
-		plaintext.write_uint::<BigEndian>(padding_len as u64, padding_len_bytes)
+		plaintext
+			.write_uint::<BigEndian>(padding_len as u64, padding_len_bytes)
 			.expect(VEC_WRITE_INFALLIBLE);
 
 		plaintext.extend(padding)
@@ -175,12 +173,12 @@ pub fn decode(payload: &[u8]) -> Result<Decoded, &'static str> {
 		let mut next_slice = |len| {
 			let end = offset + len;
 			if payload.len() >= end {
-				let slice = &payload[offset .. end];
+				let slice = &payload[offset..end];
 				offset = end;
 
 				Ok(slice)
 			} else {
-				return Err("unexpected end of payload")
+				return Err("unexpected end of payload");
 			}
 		};
 
@@ -192,10 +190,8 @@ pub fn decode(payload: &[u8]) -> Result<Decoded, &'static str> {
 
 		let padding_len_bytes = padding_length_bytes(flags);
 		let padding = if padding_len_bytes != 0 {
-			let padding_len = BigEndian::read_uint(
-				next_slice(padding_len_bytes)?,
-				padding_len_bytes,
-			);
+			let padding_len =
+				BigEndian::read_uint(next_slice(padding_len_bytes)?, padding_len_bytes);
 
 			Some(next_slice(padding_len as usize)?)
 		} else {
@@ -245,14 +241,17 @@ pub fn decode(payload: &[u8]) -> Result<Decoded, &'static str> {
 
 #[cfg(test)]
 mod tests {
-	use ethkey::{Generator, Random};
 	use super::*;
+	use ethkey::{Generator, Random};
 
 	#[test]
 	fn padding_len_bytes_sanity() {
 		const U24_MAX: usize = (1 << 24) - 1;
 
-		assert_eq!(padding_length_bytes(FLAG_PAD_LEN_HIGH | FLAG_PAD_LEN_LOW), 3);
+		assert_eq!(
+			padding_length_bytes(FLAG_PAD_LEN_HIGH | FLAG_PAD_LEN_LOW),
+			3
+		);
 		assert_eq!(padding_length_bytes(FLAG_PAD_LEN_HIGH), 2);
 		assert_eq!(padding_length_bytes(FLAG_PAD_LEN_LOW), 1);
 		assert_eq!(padding_length_bytes(Flags::empty()), 0);
@@ -262,10 +261,16 @@ mod tests {
 
 		assert_eq!(num_padding_length_bytes(U24_MAX), Some(3));
 
-		assert_eq!(num_padding_length_bytes(u16::max_value() as usize + 1), Some(3));
+		assert_eq!(
+			num_padding_length_bytes(u16::max_value() as usize + 1),
+			Some(3)
+		);
 		assert_eq!(num_padding_length_bytes(u16::max_value() as usize), Some(2));
 
-		assert_eq!(num_padding_length_bytes(u8::max_value() as usize + 1), Some(2));
+		assert_eq!(
+			num_padding_length_bytes(u8::max_value() as usize + 1),
+			Some(2)
+		);
 		assert_eq!(num_padding_length_bytes(u8::max_value() as usize), Some(1));
 
 		assert_eq!(num_padding_length_bytes(1), Some(1));
@@ -279,7 +284,8 @@ mod tests {
 			message: &message,
 			padding: None,
 			sign_with: None,
-		}).unwrap();
+		})
+		.unwrap();
 
 		let decoded = decode(&encoded).unwrap();
 
@@ -292,7 +298,8 @@ mod tests {
 			message: &[],
 			padding: None,
 			sign_with: None,
-		}).unwrap();
+		})
+		.unwrap();
 
 		let decoded = decode(&encoded).unwrap();
 
@@ -308,7 +315,8 @@ mod tests {
 			message: &message,
 			padding: None,
 			sign_with: Some(key_pair.secret()),
-		}).unwrap();
+		})
+		.unwrap();
 
 		let decoded = decode(&encoded).unwrap();
 
@@ -326,7 +334,8 @@ mod tests {
 			message: &message,
 			padding: Some(&padding),
 			sign_with: None,
-		}).unwrap();
+		})
+		.unwrap();
 
 		let decoded = decode(&encoded).unwrap();
 
@@ -345,7 +354,8 @@ mod tests {
 			message: &message,
 			padding: Some(&padding),
 			sign_with: Some(key_pair.secret()),
-		}).unwrap();
+		})
+		.unwrap();
 
 		let decoded = decode(&encoded).unwrap();
 

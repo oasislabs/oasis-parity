@@ -22,17 +22,22 @@ macro_rules! println_stderr(
 );
 
 macro_rules! return_if_parse_error {
-	($e:expr) => (
+	($e:expr) => {
 		match $e {
-			Err(clap_error @ ClapError { kind: ClapErrorKind::ValueValidation, .. }) => {
+			Err(
+				clap_error @ ClapError {
+					kind: ClapErrorKind::ValueValidation,
+					..
+				},
+			) => {
 				return Err(clap_error);
-			},
+				}
 
 			// Otherwise, if $e is ClapErrorKind::ArgumentNotFound or Ok(),
 			// then convert to Option
-			_ => $e.ok()
-		}
-	)
+			_ => $e.ok(),
+			}
+	};
 }
 
 macro_rules! if_option {
@@ -54,46 +59,46 @@ macro_rules! if_vec {
 }
 
 macro_rules! if_option_vec {
-	(Option<Vec<String>>, THEN {$then:expr} ELSE {$otherwise:expr}) => (
+	(Option<Vec<String>>, THEN {$then:expr} ELSE {$otherwise:expr}) => {
 		$then
-	);
-	(Option<$type:ty>, THEN {$then:expr} ELSE {$otherwise:expr}) => (
+	};
+	(Option<$type:ty>, THEN {$then:expr} ELSE {$otherwise:expr}) => {
 		$otherwise
-	);
+	};
 }
 
 macro_rules! inner_option_type {
-	(Option<$type:ty>) => (
+	(Option<$type:ty>) => {
 		$type
-	)
+	};
 }
 
 macro_rules! inner_vec_type {
-	(Vec<$type:ty>) => (
+	(Vec<$type:ty>) => {
 		$type
-	)
+	};
 }
 
 macro_rules! inner_option_vec_type {
-	(Option<Vec<String>>) => (
+	(Option<Vec<String>>) => {
 		String
-	)
+	};
 }
 
 macro_rules! usage_with_ident {
-	($name:expr, $usage:expr, $help:expr) => (
+	($name:expr, $usage:expr, $help:expr) => {
 		if $usage.contains("<") {
-			format!("<{}> {} '{}'",$name, $usage, $help)
+			format!("<{}> {} '{}'", $name, $usage, $help)
 		} else {
-			format!("[{}] {} '{}'",$name, $usage, $help)
-		}
-	);
+			format!("[{}] {} '{}'", $name, $usage, $help)
+			}
+	};
 }
 
 macro_rules! underscore_to_hyphen {
-	($e:expr) => (
+	($e:expr) => {
 		str::replace($e, "_", "-")
-	)
+	};
 }
 
 macro_rules! usage {

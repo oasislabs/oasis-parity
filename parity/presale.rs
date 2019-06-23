@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use ethcore::ethstore::{PresaleWallet, EthStore};
-use ethcore::ethstore::accounts_dir::RootDiskDirectory;
 use ethcore::account_provider::{AccountProvider, AccountProviderSettings};
-use helpers::{password_prompt, password_from_file};
+use ethcore::ethstore::accounts_dir::RootDiskDirectory;
+use ethcore::ethstore::{EthStore, PresaleWallet};
+use helpers::{password_from_file, password_prompt};
 use params::SpecType;
 
 #[derive(Debug, PartialEq)]
@@ -38,8 +38,11 @@ pub fn execute(cmd: ImportWallet) -> Result<String, String> {
 	let dir = Box::new(RootDiskDirectory::create(cmd.path).unwrap());
 	let secret_store = Box::new(EthStore::open_with_iterations(dir, cmd.iterations).unwrap());
 	let acc_provider = AccountProvider::new(secret_store, AccountProviderSettings::default());
-	let wallet = PresaleWallet::open(cmd.wallet_path).map_err(|_| "Unable to open presale wallet.")?;
+	let wallet =
+		PresaleWallet::open(cmd.wallet_path).map_err(|_| "Unable to open presale wallet.")?;
 	let kp = wallet.decrypt(&password).map_err(|_| "Invalid password.")?;
-	let address = acc_provider.insert_account(kp.secret().clone(), &password).unwrap();
+	let address = acc_provider
+		.insert_account(kp.secret().clone(), &password)
+		.unwrap();
 	Ok(format!("{:?}", address))
 }

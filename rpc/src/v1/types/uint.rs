@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::str::FromStr;
-use std::fmt;
+use ethereum_types::{U128 as EthU128, U256 as EthU256};
 use serde;
-use ethereum_types::{U256 as EthU256, U128 as EthU128};
+use std::fmt;
+use std::str::FromStr;
 
 macro_rules! impl_uint {
 	($name: ident, $other: ident, $size: expr) => {
@@ -25,9 +25,12 @@ macro_rules! impl_uint {
 		#[derive(Debug, Default, Clone, Copy, PartialEq, Hash)]
 		pub struct $name($other);
 
-		impl Eq for $name { }
+		impl Eq for $name {}
 
-		impl<T> From<T> for $name where $other: From<T> {
+		impl<T> From<T> for $name
+		where
+			$other: From<T>,
+		{
 			fn from(o: T) -> Self {
 				$name($other::from(o))
 			}
@@ -61,19 +64,28 @@ macro_rules! impl_uint {
 
 		impl<'a> serde::Deserialize<'a> for $name {
 			fn deserialize<D>(deserializer: D) -> Result<$name, D::Error>
-			where D: serde::Deserializer<'a> {
+			where
+				D: serde::Deserializer<'a>,
+			{
 				struct UintVisitor;
 
 				impl<'b> serde::de::Visitor<'b> for UintVisitor {
 					type Value = $name;
 
 					fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-						write!(formatter, "a 0x-prefixed, hex-encoded number of length {}", $size*16)
+						write!(
+							formatter,
+							"a 0x-prefixed, hex-encoded number of length {}",
+							$size * 16
+						)
 					}
 
-					fn visit_str<E>(self, value: &str) -> Result<Self::Value, E> where E: serde::de::Error {
-						if value.len() < 2  || !value.starts_with("0x") {
-							return Err(E::custom("expected a hex-encoded numbers with 0x prefix"))
+					fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+					where
+						E: serde::de::Error,
+					{
+						if value.len() < 2 || !value.starts_with("0x") {
+							return Err(E::custom("expected a hex-encoded numbers with 0x prefix"));
 						}
 
 						// 0x + len
@@ -81,10 +93,15 @@ macro_rules! impl_uint {
 							return Err(E::invalid_length(value.len() - 2, &self));
 						}
 
-						$other::from_str(&value[2..]).map($name).map_err(|e| E::custom(&format!("invalid hex value: {:?}", e)))
+						$other::from_str(&value[2..])
+							.map($name)
+							.map_err(|e| E::custom(&format!("invalid hex value: {:?}", e)))
 					}
 
-					fn visit_string<E>(self, value: String) -> Result<Self::Value, E> where E: serde::de::Error {
+					fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+					where
+						E: serde::de::Error,
+					{
 						self.visit_str(&value)
 					}
 				}
@@ -92,8 +109,7 @@ macro_rules! impl_uint {
 				deserializer.deserialize_any(UintVisitor)
 			}
 		}
-
-	}
+	};
 }
 
 impl_uint!(U128, EthU128, 2);
@@ -101,19 +117,28 @@ impl_uint!(U256, EthU256, 4);
 impl_uint!(U64, u64, 1);
 
 impl serde::Serialize for U128 {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
 		serializer.serialize_str(&format!("{:#x}", self))
 	}
 }
 
 impl serde::Serialize for U256 {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
 		serializer.serialize_str(&format!("{:#x}", self))
 	}
 }
 
 impl serde::Serialize for U64 {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
 		serializer.serialize_str(&format!("{:#x}", self))
 	}
 }

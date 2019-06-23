@@ -30,10 +30,10 @@ pub struct NodeKind {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Availability {
 	/// A personal node, not intended to be available to everyone.
-	#[serde(rename="personal")]
+	#[serde(rename = "personal")]
 	Personal,
 	/// A public, open node.
-	#[serde(rename="public")]
+	#[serde(rename = "public")]
 	Public,
 }
 
@@ -41,17 +41,17 @@ pub enum Availability {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Capability {
 	/// A full node stores the full state and fully enacts incoming blocks.
-	#[serde(rename="full")]
+	#[serde(rename = "full")]
 	Full,
 	/// A light node does a minimal header sync and fetches data as needed
 	/// from the network.
-	#[serde(rename="light")]
+	#[serde(rename = "light")]
 	Light,
 }
 
 #[cfg(test)]
 mod tests {
-	use super::{NodeKind, Availability, Capability};
+	use super::{Availability, Capability, NodeKind};
 	use serde_json;
 
 	#[test]
@@ -59,11 +59,23 @@ mod tests {
 		let personal = r#""personal""#;
 		let public = r#""public""#;
 
-		assert_eq!(serde_json::to_string(&Availability::Personal).unwrap(), personal);
-		assert_eq!(serde_json::to_string(&Availability::Public).unwrap(), public);
+		assert_eq!(
+			serde_json::to_string(&Availability::Personal).unwrap(),
+			personal
+		);
+		assert_eq!(
+			serde_json::to_string(&Availability::Public).unwrap(),
+			public
+		);
 
-		assert_eq!(serde_json::from_str::<Availability>(personal).unwrap(), Availability::Personal);
-		assert_eq!(serde_json::from_str::<Availability>(public).unwrap(), Availability::Public);
+		assert_eq!(
+			serde_json::from_str::<Availability>(personal).unwrap(),
+			Availability::Personal
+		);
+		assert_eq!(
+			serde_json::from_str::<Availability>(public).unwrap(),
+			Availability::Public
+		);
 	}
 
 	#[test]
@@ -74,8 +86,14 @@ mod tests {
 		assert_eq!(serde_json::to_string(&Capability::Light).unwrap(), light);
 		assert_eq!(serde_json::to_string(&Capability::Full).unwrap(), full);
 
-		assert_eq!(serde_json::from_str::<Capability>(light).unwrap(), Capability::Light);
-		assert_eq!(serde_json::from_str::<Capability>(full).unwrap(), Capability::Full);
+		assert_eq!(
+			serde_json::from_str::<Capability>(light).unwrap(),
+			Capability::Light
+		);
+		assert_eq!(
+			serde_json::from_str::<Capability>(full).unwrap(),
+			Capability::Full
+		);
 	}
 
 	#[test]

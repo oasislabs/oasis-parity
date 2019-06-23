@@ -29,9 +29,9 @@
 
 use std::cmp;
 
+use super::{PrioritizationStrategy, VerifiedTransaction};
 use ethereum_types::U256;
 use txpool;
-use super::{PrioritizationStrategy, VerifiedTransaction};
 
 /// Transaction with the same (sender, nonce) can be replaced only if
 /// `new_gas_price > old_gas_price + old_gas_price >> SHIFT`
@@ -52,9 +52,13 @@ impl txpool::Scoring<VerifiedTransaction> for NonceAndGasPrice {
 		old.transaction.nonce.cmp(&other.transaction.nonce)
 	}
 
-	fn choose(&self, old: &VerifiedTransaction, new: &VerifiedTransaction) -> txpool::scoring::Choice {
+	fn choose(
+		&self,
+		old: &VerifiedTransaction,
+		new: &VerifiedTransaction,
+	) -> txpool::scoring::Choice {
 		if old.transaction.nonce != new.transaction.nonce {
-			return txpool::scoring::Choice::InsertNew
+			return txpool::scoring::Choice::InsertNew;
 		}
 
 		let old_gp = old.transaction.gas_price;
@@ -68,11 +72,16 @@ impl txpool::Scoring<VerifiedTransaction> for NonceAndGasPrice {
 		}
 	}
 
-	fn update_scores(&self, txs: &[txpool::Transaction<VerifiedTransaction>], scores: &mut [U256], change: txpool::scoring::Change) {
+	fn update_scores(
+		&self,
+		txs: &[txpool::Transaction<VerifiedTransaction>],
+		scores: &mut [U256],
+		change: txpool::scoring::Change,
+	) {
 		use self::txpool::scoring::Change;
 
 		match change {
-			Change::Culled(_) => {},
+			Change::Culled(_) => {}
 			Change::RemovedAt(_) => {}
 			Change::InsertedAt(i) | Change::ReplacedAt(i) => {
 				assert!(i < txs.len());
@@ -85,7 +94,7 @@ impl txpool::Scoring<VerifiedTransaction> for NonceAndGasPrice {
 					super::Priority::Regular => 0,
 				};
 				scores[i] = scores[i] << boost;
-			},
+			}
 			// We are only sending an event in case of penalization.
 			// So just lower the priority of all non-local transactions.
 			Change::Event(_) => {
@@ -95,7 +104,7 @@ impl txpool::Scoring<VerifiedTransaction> for NonceAndGasPrice {
 						*score = *score >> 3;
 					}
 				}
-			},
+			}
 		}
 	}
 
@@ -103,7 +112,7 @@ impl txpool::Scoring<VerifiedTransaction> for NonceAndGasPrice {
 		if old.sender == new.sender {
 			// prefer earliest transaction
 			if new.transaction.nonce < old.transaction.nonce {
-				return true
+				return true;
 			}
 		}
 
@@ -124,8 +133,8 @@ impl txpool::Scoring<VerifiedTransaction> for NonceAndGasPrice {
 mod tests {
 	use super::*;
 
-	use std::sync::Arc;
 	use pool::tests::tx::{Tx, TxExt};
+	use std::sync::Arc;
 	use txpool::Scoring;
 
 	#[test]
@@ -157,51 +166,107 @@ mod tests {
 		// given
 		let scoring = NonceAndGasPrice(PrioritizationStrategy::GasPriceOnly);
 		let (tx1, tx2, tx3) = Tx::default().signed_triple();
-		let transactions = vec![tx1, tx2, tx3].into_iter().enumerate().map(|(i, tx)| {
-			let mut verified = tx.verified();
-			verified.priority = match i {
-				0 => ::pool::Priority::Local,
-				1 => ::pool::Priority::Retracted,
-				_ => ::pool::Priority::Regular,
-			};
-			txpool::Transaction {
-				insertion_id: 0,
-				transaction: Arc::new(verified),
-			}
-		}).collect::<Vec<_>>();
+		let transactions = vec![tx1, tx2, tx3]
+			.into_iter()
+			.enumerate()
+			.map(|(i, tx)| {
+				let mut verified = tx.verified();
+				verified.priority = match i {
+					0 => ::pool::Priority::Local,
+					1 => ::pool::Priority::Retracted,
+					_ => ::pool::Priority::Regular,
+				};
+				txpool::Transaction {
+					insertion_id: 0,
+					transaction: Arc::new(verified),
+				}
+			})
+			.collect::<Vec<_>>();
 		let initial_scores = vec![U256::from(0), 0.into(), 0.into()];
 
 		// No update required
 		let mut scores = initial_scores.clone();
-		scoring.update_scores(&transactions, &mut *scores, txpool::scoring::Change::Culled(0));
-		scoring.update_scores(&transactions, &mut *scores, txpool::scoring::Change::Culled(1));
-		scoring.update_scores(&transactions, &mut *scores, txpool::scoring::Change::Culled(2));
+		scoring.update_scores(
+			&transactions,
+			&mut *scores,
+			txpool::scoring::Change::Culled(0),
+		);
+		scoring.update_scores(
+			&transactions,
+			&mut *scores,
+			txpool::scoring::Change::Culled(1),
+		);
+		scoring.update_scores(
+			&transactions,
+			&mut *scores,
+			txpool::scoring::Change::Culled(2),
+		);
 		assert_eq!(scores, initial_scores);
 		let mut scores = initial_scores.clone();
-		scoring.update_scores(&transactions, &mut *scores, txpool::scoring::Change::RemovedAt(0));
-		scoring.update_scores(&transactions, &mut *scores, txpool::scoring::Change::RemovedAt(1));
-		scoring.update_scores(&transactions, &mut *scores, txpool::scoring::Change::RemovedAt(2));
+		scoring.update_scores(
+			&transactions,
+			&mut *scores,
+			txpool::scoring::Change::RemovedAt(0),
+		);
+		scoring.update_scores(
+			&transactions,
+			&mut *scores,
+			txpool::scoring::Change::RemovedAt(1),
+		);
+		scoring.update_scores(
+			&transactions,
+			&mut *scores,
+			txpool::scoring::Change::RemovedAt(2),
+		);
 		assert_eq!(scores, initial_scores);
 
 		// Compute score at given index
 		let mut scores = initial_scores.clone();
-		scoring.update_scores(&transactions, &mut *scores, txpool::scoring::Change::InsertedAt(0));
+		scoring.update_scores(
+			&transactions,
+			&mut *scores,
+			txpool::scoring::Change::InsertedAt(0),
+		);
 		assert_eq!(scores, vec![32768.into(), 0.into(), 0.into()]);
-		scoring.update_scores(&transactions, &mut *scores, txpool::scoring::Change::InsertedAt(1));
+		scoring.update_scores(
+			&transactions,
+			&mut *scores,
+			txpool::scoring::Change::InsertedAt(1),
+		);
 		assert_eq!(scores, vec![32768.into(), 1024.into(), 0.into()]);
-		scoring.update_scores(&transactions, &mut *scores, txpool::scoring::Change::InsertedAt(2));
+		scoring.update_scores(
+			&transactions,
+			&mut *scores,
+			txpool::scoring::Change::InsertedAt(2),
+		);
 		assert_eq!(scores, vec![32768.into(), 1024.into(), 1.into()]);
 
 		let mut scores = initial_scores.clone();
-		scoring.update_scores(&transactions, &mut *scores, txpool::scoring::Change::ReplacedAt(0));
+		scoring.update_scores(
+			&transactions,
+			&mut *scores,
+			txpool::scoring::Change::ReplacedAt(0),
+		);
 		assert_eq!(scores, vec![32768.into(), 0.into(), 0.into()]);
-		scoring.update_scores(&transactions, &mut *scores, txpool::scoring::Change::ReplacedAt(1));
+		scoring.update_scores(
+			&transactions,
+			&mut *scores,
+			txpool::scoring::Change::ReplacedAt(1),
+		);
 		assert_eq!(scores, vec![32768.into(), 1024.into(), 0.into()]);
-		scoring.update_scores(&transactions, &mut *scores, txpool::scoring::Change::ReplacedAt(2));
+		scoring.update_scores(
+			&transactions,
+			&mut *scores,
+			txpool::scoring::Change::ReplacedAt(2),
+		);
 		assert_eq!(scores, vec![32768.into(), 1024.into(), 1.into()]);
 
 		// Check penalization
-		scoring.update_scores(&transactions, &mut *scores, txpool::scoring::Change::Event(()));
+		scoring.update_scores(
+			&transactions,
+			&mut *scores,
+			txpool::scoring::Change::Event(()),
+		);
 		assert_eq!(scores, vec![32768.into(), 128.into(), 0.into()]);
 	}
 }

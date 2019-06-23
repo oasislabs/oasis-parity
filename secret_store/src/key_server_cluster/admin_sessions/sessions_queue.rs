@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+use key_server_cluster::{Error, KeyStorage, SessionId};
+use std::collections::{BTreeSet, VecDeque};
 use std::sync::Arc;
-use std::collections::{VecDeque, BTreeSet};
-use key_server_cluster::{Error, SessionId, KeyStorage};
 
 /// Queue of share change sessions.
 pub struct SessionsQueue {

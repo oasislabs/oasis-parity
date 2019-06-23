@@ -16,9 +16,9 @@
 
 //! Evm interface.
 
-use std::{ops, cmp, fmt};
 use ethereum_types::{U128, U256, U512};
-use vm::{Ext, Result, ReturnData, GasLeft, Error};
+use std::{cmp, fmt, ops};
+use vm::{Error, Ext, GasLeft, Result, ReturnData};
 
 /// Finalization result. Gas Left: either it is a known value, or it needs to be computed by processing
 /// a return instruction.
@@ -44,22 +44,41 @@ pub trait Finalize {
 impl Finalize for Result<GasLeft> {
 	fn finalize<E: Ext>(self, ext: E) -> Result<FinalizationResult> {
 		match self {
-			Ok(GasLeft::Known(gas_left)) => Ok(FinalizationResult { gas_left: gas_left, apply_state: true, return_data: ReturnData::empty() }),
-			Ok(GasLeft::NeedsReturn {gas_left, data, apply_state}) => ext.ret(&gas_left, &data, apply_state).map(|gas_left| FinalizationResult {
+			Ok(GasLeft::Known(gas_left)) => Ok(FinalizationResult {
 				gas_left: gas_left,
-				apply_state: apply_state,
-				return_data: data,
+				apply_state: true,
+				return_data: ReturnData::empty(),
 			}),
+			Ok(GasLeft::NeedsReturn {
+				gas_left,
+				data,
+				apply_state,
+			}) => ext
+				.ret(&gas_left, &data, apply_state)
+				.map(|gas_left| FinalizationResult {
+					gas_left: gas_left,
+					apply_state: apply_state,
+					return_data: data,
+				}),
 			Err(err) => Err(err),
 		}
 	}
 }
 
 /// Cost calculation type. For low-gas usage we calculate costs using usize instead of U256
-pub trait CostType: Sized + From<usize> + Copy
-	+ ops::Mul<Output=Self> + ops::Div<Output=Self> + ops::Add<Output=Self> +ops::Sub<Output=Self>
-	+ ops::Shr<usize, Output=Self> + ops::Shl<usize, Output=Self>
-	+ cmp::Ord + fmt::Debug {
+pub trait CostType:
+	Sized
+	+ From<usize>
+	+ Copy
+	+ ops::Mul<Output = Self>
+	+ ops::Div<Output = Self>
+	+ ops::Add<Output = Self>
+	+ ops::Sub<Output = Self>
+	+ ops::Shr<usize, Output = Self>
+	+ ops::Shl<usize, Output = Self>
+	+ cmp::Ord
+	+ fmt::Debug
+{
 	/// Converts this cost into `U256`
 	fn as_u256(&self) -> U256;
 	/// Tries to fit `U256` into this `Cost` type
@@ -101,10 +120,7 @@ impl CostType for U256 {
 		let U512(parts) = x;
 		let overflow = (parts[4] | parts[5] | parts[6] | parts[7]) > 0;
 		let U512(parts) = x >> shr;
-		(
-			U256([parts[0], parts[1], parts[2], parts[3]]),
-			overflow
-		)
+		(U256([parts[0], parts[1], parts[2], parts[3]]), overflow)
 	}
 }
 
@@ -149,8 +165,8 @@ impl CostType for usize {
 
 #[cfg(test)]
 mod tests {
-	use ethereum_types::U256;
 	use super::CostType;
+	use ethereum_types::U256;
 
 	#[test]
 	fn should_calculate_overflow_mul_shr_without_overflow() {

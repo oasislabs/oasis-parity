@@ -16,13 +16,13 @@
 
 //! Auto-updates minimal gas price requirement.
 
-use std::time::{Instant, Duration};
+use std::time::{Duration, Instant};
 
 use ansi_term::Colour;
 use ethereum_types::U256;
 use futures_cpupool::CpuPool;
-use price_info::{Client as PriceInfoClient, PriceInfo};
 use price_info::fetch::Client as FetchClient;
+use price_info::{Client as PriceInfoClient, PriceInfo};
 
 /// Options for the dynamic gas price recalibrator.
 #[derive(Debug, PartialEq)]
@@ -74,7 +74,11 @@ pub enum GasPricer {
 
 impl GasPricer {
 	/// Create a new Calibrated `GasPricer`.
-	pub fn new_calibrated(options: GasPriceCalibratorOptions, fetch: FetchClient, p: CpuPool) -> GasPricer {
+	pub fn new_calibrated(
+		options: GasPriceCalibratorOptions,
+		fetch: FetchClient,
+		p: CpuPool,
+	) -> GasPricer {
 		GasPricer::Calibrated(GasPriceCalibrator {
 			options: options,
 			next_calibration: Instant::now(),

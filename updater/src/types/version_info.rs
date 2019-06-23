@@ -16,11 +16,11 @@
 
 //! Types used in the public API
 
-use std::fmt;
-use semver::Version;
 use ethereum_types::H160;
-use version::raw_package_info;
+use semver::Version;
+use std::fmt;
 use types::ReleaseTrack;
+use version::raw_package_info;
 
 /// Version information of a particular release.
 #[derive(Debug, Clone, PartialEq)]
@@ -35,7 +35,11 @@ pub struct VersionInfo {
 
 impl fmt::Display for VersionInfo {
 	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-		write!(f, "{}.{}.{}-{}-{}", self.version.major, self.version.minor, self.version.patch, self.track, self.hash)
+		write!(
+			f,
+			"{}.{}.{}-{}-{}",
+			self.version.major, self.version.minor, self.version.patch, self.track, self.hash
+		)
 	}
 }
 
@@ -45,7 +49,13 @@ impl VersionInfo {
 		let raw = raw_package_info();
 		VersionInfo {
 			track: raw.0.into(),
-			version: { let mut v = Version::parse(raw.1).expect("Environment variables are known to be valid; qed"); v.build = vec![]; v.pre = vec![]; v },
+			version: {
+				let mut v = Version::parse(raw.1)
+					.expect("Environment variables are known to be valid; qed");
+				v.build = vec![];
+				v.pre = vec![];
+				v
+			},
 			hash: raw.2.parse::<H160>().unwrap_or_else(|_| H160::zero()),
 		}
 	}

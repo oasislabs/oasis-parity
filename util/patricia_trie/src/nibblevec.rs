@@ -36,15 +36,19 @@ impl NibbleVec {
 	pub fn new() -> Self {
 		NibbleVec {
 			inner: ElasticArray36::new(),
-			len: 0
+			len: 0,
 		}
 	}
 
 	/// Length of the `NibbleVec`
-	pub fn len(&self) -> usize { self.len }
+	pub fn len(&self) -> usize {
+		self.len
+	}
 
 	/// Retrurns true if `NibbleVec` has zero length
-	pub fn is_empty(&self) -> bool { self.len == 0 }
+	pub fn is_empty(&self) -> bool {
+		self.len == 0
+	}
 
 	/// Try to get the nibble at the given offset.
 	pub fn at(&self, idx: usize) -> u8 {
@@ -62,7 +66,10 @@ impl NibbleVec {
 		if self.len % 2 == 0 {
 			self.inner.push(nibble << 4);
 		} else {
-			*self.inner.last_mut().expect("len != 0 since len % 2 != 0; inner has a last element; qed") |= nibble;
+			*self
+				.inner
+				.last_mut()
+				.expect("len != 0 since len % 2 != 0; inner has a last element; qed") |= nibble;
 		}
 
 		self.len += 1;
@@ -74,7 +81,10 @@ impl NibbleVec {
 			return None;
 		}
 
-		let byte = self.inner.pop().expect("len != 0; inner has last elem; qed");
+		let byte = self
+			.inner
+			.pop()
+			.expect("len != 0; inner has last elem; qed");
 		let nibble = if self.len % 2 == 0 {
 			self.inner.push(byte & 0xF0);
 			byte & 0x0F

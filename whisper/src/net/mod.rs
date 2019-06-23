@@ -16,19 +16,19 @@
 
 //! Whisper messaging system as a DevP2P subprotocol.
 
-use std::collections::{HashMap, HashSet};
 use std::cmp::Ordering;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
-use std::time::{Duration, SystemTime};
 use std::sync::Arc;
+use std::time::{Duration, SystemTime};
 
 use ethereum_types::{H256, H512};
 use network::{self, NetworkContext, NodeId, PeerId, ProtocolId, TimerToken};
 use ordered_float::OrderedFloat;
 use parking_lot::{Mutex, RwLock};
-use rlp::{DecoderError, RlpStream, Rlp};
+use rlp::{DecoderError, Rlp, RlpStream};
 
-use message::{Message, Error as MessageError};
+use message::{Error as MessageError, Message};
 
 #[cfg(test)]
 mod tests;
@@ -45,9 +45,7 @@ pub const PROTOCOL_VERSION: usize = 6;
 const PACKET_COUNT: u8 = 128;
 
 /// Supported protocol versions.
-pub const SUPPORTED_VERSIONS: &'static [(u8, u8)] = &[
-	(PROTOCOL_VERSION as u8, PACKET_COUNT)
-];
+pub const SUPPORTED_VERSIONS: &'static [(u8, u8)] = &[(PROTOCOL_VERSION as u8, PACKET_COUNT)];
 
 // maximum tolerated delay between messages packets.
 const MAX_TOLERATED_DELAY: Duration = Duration::from_millis(5000);
@@ -186,7 +184,9 @@ impl Messages {
 	// call `reserve` before inserting a bunch.
 	//
 	fn insert(&mut self, message: Message) -> bool {
-		if !self.known.insert(message.hash().clone()) { return false }
+		if !self.known.insert(message.hash().clone()) {
+			return false;
+		}
 
 		let work_proved = OrderedFloat(message.work_proved());
 
@@ -197,22 +197,30 @@ impl Messages {
 			let diff = size_upon_insertion - self.ideal_size;
 			let mut found_diff = 0;
 			for entry in self.sorted.iter().rev() {
-				if found_diff >= diff { break }
+				if found_diff >= diff {
+					break;
+				}
 
 				// if we encounter a message with at least the PoW we're looking
 				// at, don't push that message out.
-				if entry.work_proved >= work_proved { return false }
+				if entry.work_proved >= work_proved {
+					return false;
+				}
 				found_diff += self.slab[entry.slab_id].encoded_size();
 			}
 
 			// message larger than ideal size.
-			if found_diff < diff { return false }
+			if found_diff < diff {
+				return false;
+			}
 
 			while found_diff > 0 {
 				let entry = self.sorted.pop()
 					.expect("found_diff built by traversing entries; therefore that many entries exist; qed");
 
-				let message = self.slab.remove(entry.slab_id)
+				let message = self
+					.slab
+					.remove(entry.slab_id)
 					.expect("sorted entry slab IDs always filled; qed");
 
 				found_diff -= message.encoded_size();
@@ -227,8 +235,13 @@ impl Messages {
 
 		self.cumulative_size += message.encoded_size();
 
-		if !self.slab.has_available() { self.slab.reserve_exact(1) }
-		let id = self.slab.insert(message).expect("just ensured enough space in slab; qed");
+		if !self.slab.has_available() {
+			self.slab.reserve_exact(1)
+		}
+		let id = self
+			.slab
+			.insert(message)
+			.expect("just ensured enough space in slab; qed");
 
 		let sorted_entry = SortedEntry {
 			slab_id: id,
@@ -254,13 +267,18 @@ impl Messages {
 			let removed = &mut self.removed_hashes;
 
 			// first pass, we look just at expired entries.
-			let all_expired = self.sorted.iter()
+			let all_expired = self
+				.sorted
+				.iter()
 				.filter(|entry| entry.expiry <= now)
 				.map(|x| (true, x));
 
 			// second pass, we look at entries which aren't expired but in order
 			// by PoW
-			let low_proof = self.sorted.iter().rev()
+			let low_proof = self
+				.sorted
+				.iter()
+				.rev()
 				.filter(|entry| entry.expiry > now)
 				.map(|x| (false, x));
 
@@ -268,11 +286,12 @@ impl Messages {
 				// break once we've removed all expired entries
 				// or have taken enough low-work entries.
 				if !is_expired && *cumulative_size <= *ideal_size {
-					break
+					break;
 				}
 
-				let message = slab.remove(entry.slab_id)
-					.expect("references to ID kept upon creation; only destroyed upon removal; qed");
+				let message = slab.remove(entry.slab_id).expect(
+					"references to ID kept upon creation; only destroyed upon removal; qed",
+				);
 
 				known.remove(message.hash());
 				removed.push(message.hash().clone());
@@ -336,14 +355,21 @@ impl Peer {
 
 	// whether this peer will accept the message.
 	fn will_accept(&self, message: &Message) -> bool {
-		if self.known_messages.contains(message.hash()) { return false }
+		if self.known_messages.contains(message.hash()) {
+			return false;
+		}
 
 		// only parity peers will accept multitopic messages.
-		if message.envelope().is_multitopic() && !self.is_parity { return false }
-		if message.work_proved() < self.pow_requirement { return false }
+		if message.envelope().is_multitopic() && !self.is_parity {
+			return false;
+		}
+		if message.work_proved() < self.pow_requirement {
+			return false;
+		}
 
-		self.topic_filter.as_ref()
-			.map_or(true, |filter| &(filter & message.bloom()) == message.bloom())
+		self.topic_filter.as_ref().map_or(true, |filter| {
+			&(filter & message.bloom()) == message.bloom()
+		})
 	}
 
 	// note a message as known. returns false if it was already
@@ -394,7 +420,10 @@ pub trait Context {
 	fn send(&self, PeerId, u8, Vec<u8>);
 }
 
-impl<T> Context for T where T: ?Sized + NetworkContext {
+impl<T> Context for T
+where
+	T: ?Sized + NetworkContext,
+{
 	fn disconnect_peer(&self, peer: PeerId) {
 		NetworkContext::disconnect_peer(self, peer);
 	}
@@ -438,10 +467,13 @@ impl<T> Network<T> {
 
 	/// Post a message to the whisper network to be relayed.
 	pub fn post_message<C: ?Sized + Context>(&self, message: Message, context: &C) -> bool
-		where T: MessageHandler
+	where
+		T: MessageHandler,
 	{
 		let ok = self.messages.write().insert(message);
-		if ok { self.rally(context) }
+		if ok {
+			self.rally(context)
+		}
 		ok
 	}
 
@@ -477,7 +509,7 @@ impl<T: MessageHandler> Network<T> {
 
 			// check timeouts and skip peers who we can't send a rally to.
 			match peer_data.state {
-				State::Unconfirmed(ref time)  => {
+				State::Unconfirmed(ref time) => {
 					punish_timeout(time);
 					continue;
 				}
@@ -489,7 +521,9 @@ impl<T: MessageHandler> Network<T> {
 			stream.begin_unbounded_list();
 
 			for message in messages.iter() {
-				if !peer_data.will_accept(message) { continue }
+				if !peer_data.will_accept(message) {
+					continue;
+				}
 
 				if stream.estimate_size(message.encoded_size()) > MAX_MESSAGES_PACKET_SIZE {
 					break;
@@ -506,9 +540,7 @@ impl<T: MessageHandler> Network<T> {
 	}
 
 	// handle status packet from peer.
-	fn on_status(&self, peer: &PeerId, _status: Rlp)
-		-> Result<(), Error>
-	{
+	fn on_status(&self, peer: &PeerId, _status: Rlp) -> Result<(), Error> {
 		let peers = self.peers.read();
 
 		match peers.get(peer) {
@@ -523,9 +555,7 @@ impl<T: MessageHandler> Network<T> {
 		}
 	}
 
-	fn on_messages(&self, peer: &PeerId, message_packet: Rlp)
-		-> Result<(), Error>
-	{
+	fn on_messages(&self, peer: &PeerId, message_packet: Rlp) -> Result<(), Error> {
 		let mut messages_vec = {
 			let peers = self.peers.read();
 			let peer = match peers.get(peer) {
@@ -543,10 +573,14 @@ impl<T: MessageHandler> Network<T> {
 			}
 
 			let now = SystemTime::now();
-			let mut messages_vec = message_packet.iter().map(|rlp| Message::decode(rlp, now))
+			let mut messages_vec = message_packet
+				.iter()
+				.map(|rlp| Message::decode(rlp, now))
 				.collect::<Result<Vec<_>, _>>()?;
 
-			if messages_vec.is_empty() { return Ok(()) }
+			if messages_vec.is_empty() {
+				return Ok(());
+			}
 
 			// disallow duplicates in packet.
 			messages_vec.retain(|message| peer.note_known(&message));
@@ -568,10 +602,8 @@ impl<T: MessageHandler> Network<T> {
 		Ok(())
 	}
 
-	fn on_pow_requirement(&self, peer: &PeerId, requirement: Rlp)
-		-> Result<(), Error>
-	{
-		use byteorder::{ByteOrder, BigEndian};
+	fn on_pow_requirement(&self, peer: &PeerId, requirement: Rlp) -> Result<(), Error> {
+		use byteorder::{BigEndian, ByteOrder};
 
 		let peers = self.peers.read();
 		match peers.get(peer) {
@@ -604,9 +636,7 @@ impl<T: MessageHandler> Network<T> {
 		Ok(())
 	}
 
-	fn on_topic_filter(&self, peer: &PeerId, filter: Rlp)
-		-> Result<(), Error>
-	{
+	fn on_topic_filter(&self, peer: &PeerId, filter: Rlp) -> Result<(), Error> {
 		let peers = self.peers.read();
 		match peers.get(peer) {
 			Some(peer) => {
@@ -643,19 +673,22 @@ impl<T: MessageHandler> Network<T> {
 			Some(version) => version as usize,
 			None => {
 				io.disable_peer(*peer);
-				return
+				return;
 			}
 		};
 
-		self.peers.write().insert(*peer, Mutex::new(Peer {
-			node_key: node_key,
-			state: State::Unconfirmed(SystemTime::now()),
-			known_messages: HashSet::new(),
-			topic_filter: None,
-			pow_requirement: 0f64,
-			is_parity: io.protocol_version(PARITY_PROTOCOL_ID, *peer).is_some(),
-			_protocol_version: version,
-		}));
+		self.peers.write().insert(
+			*peer,
+			Mutex::new(Peer {
+				node_key: node_key,
+				state: State::Unconfirmed(SystemTime::now()),
+				known_messages: HashSet::new(),
+				topic_filter: None,
+				pow_requirement: 0f64,
+				is_parity: io.protocol_version(PARITY_PROTOCOL_ID, *peer).is_some(),
+				_protocol_version: version,
+			}),
+		);
 
 		io.send(*peer, packet::STATUS, ::rlp::EMPTY_LIST_RLP.to_vec());
 	}
@@ -716,13 +749,13 @@ impl<T: MessageHandler> ::network::NetworkProtocolHandler for Network<T> {
 pub struct ParityExtensions;
 
 impl ::network::NetworkProtocolHandler for ParityExtensions {
-	fn initialize(&self, _io: &NetworkContext) { }
+	fn initialize(&self, _io: &NetworkContext) {}
 
-	fn read(&self, _io: &NetworkContext, _peer: &PeerId, _id: u8, _msg: &[u8]) { }
+	fn read(&self, _io: &NetworkContext, _peer: &PeerId, _id: u8, _msg: &[u8]) {}
 
-	fn connected(&self, _io: &NetworkContext, _peer: &PeerId) { }
+	fn connected(&self, _io: &NetworkContext, _peer: &PeerId) {}
 
-	fn disconnected(&self, _io: &NetworkContext, _peer: &PeerId) { }
+	fn disconnected(&self, _io: &NetworkContext, _peer: &PeerId) {}
 
-	fn timeout(&self, _io: &NetworkContext, _timer: TimerToken) { }
+	fn timeout(&self, _io: &NetworkContext, _timer: TimerToken) {}
 }

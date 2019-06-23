@@ -18,16 +18,16 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use endpoint::Endpoints;
+use fetch::Fetch;
 use futures_cpupool::CpuPool;
 use proxypac::ProxyPac;
 use web::Web;
-use fetch::Fetch;
 use WebProxyTokens;
 
 mod app;
 mod cache;
-pub mod fs;
 pub mod fetcher;
+pub mod fs;
 pub mod manifest;
 
 pub use self::app::App;
@@ -57,13 +57,10 @@ pub fn all_endpoints<F: Fetch>(
 		}
 	}
 
-	pages.insert(
-		"proxy".into(),
-		ProxyPac::boxed(dapps_domain.to_owned())
-	);
+	pages.insert("proxy".into(), ProxyPac::boxed(dapps_domain.to_owned()));
 	pages.insert(
 		WEB_PATH.into(),
-		Web::boxed(web_proxy_tokens.clone(), fetch.clone(), pool.clone())
+		Web::boxed(web_proxy_tokens.clone(), fetch.clone(), pool.clone()),
 	);
 
 	(local_endpoints, pages)

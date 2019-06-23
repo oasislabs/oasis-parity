@@ -23,8 +23,8 @@ use jsonrpc_core::MetaIoHandler;
 use rand;
 use ws;
 
-use v1::{extractors, informant};
 use tests::helpers::{GuardedAuthCodes, Server};
+use v1::{extractors, informant};
 
 /// Setup a mock signer for tests
 pub fn serve() -> (Server<ws::Server>, usize, GuardedAuthCodes) {
@@ -34,17 +34,20 @@ pub fn serve() -> (Server<ws::Server>, usize, GuardedAuthCodes) {
 	let authcodes = GuardedAuthCodes::new();
 	let stats = Arc::new(informant::RpcStats::default());
 
-	let res = Server::new(|remote| ::start_ws(
-		&address,
-		io,
-		remote,
-		ws::DomainsValidation::Disabled,
-		ws::DomainsValidation::Disabled,
-		5,
-		extractors::WsExtractor::new(Some(&authcodes.path)),
-		extractors::WsExtractor::new(Some(&authcodes.path)),
-		extractors::WsStats::new(stats),
-	).unwrap());
+	let res = Server::new(|remote| {
+		::start_ws(
+			&address,
+			io,
+			remote,
+			ws::DomainsValidation::Disabled,
+			ws::DomainsValidation::Disabled,
+			5,
+			extractors::WsExtractor::new(Some(&authcodes.path)),
+			extractors::WsExtractor::new(Some(&authcodes.path)),
+			extractors::WsStats::new(stats),
+		)
+		.unwrap()
+	});
 
 	(res, port, authcodes)
 }
@@ -56,10 +59,10 @@ pub fn request(server: Server<ws::Server>, request: &str) -> http_client::Respon
 
 #[cfg(test)]
 mod testing {
-	use std::time;
-	use hash::keccak;
+	use super::{request, serve};
 	use devtools::http_client;
-	use super::{serve, request};
+	use hash::keccak;
+	use std::time;
 
 	#[test]
 	fn should_not_redirect_to_parity_host() {
@@ -67,14 +70,18 @@ mod testing {
 		let (server, port, _) = serve();
 
 		// when
-		let response = request(server,
-			&format!("\
+		let response = request(
+			server,
+			&format!(
+				"\
 				GET / HTTP/1.1\r\n\
 				Host: 127.0.0.1:{}\r\n\
 				Connection: close\r\n\
 				\r\n\
 				{{}}
-			", port)
+			",
+				port
+			),
 		);
 
 		// then
@@ -87,8 +94,10 @@ mod testing {
 		let (server, port, _) = serve();
 
 		// when
-		let response = request(server,
-			&format!("\
+		let response = request(
+			server,
+			&format!(
+				"\
 				GET / HTTP/1.1\r\n\
 				Host: 127.0.0.1:{}\r\n\
 				Connection: Upgrade\r\n\
@@ -97,7 +106,9 @@ mod testing {
 				Sec-WebSocket-Version: 13\r\n\
 				\r\n\
 				{{}}
-			", port)
+			",
+				port
+			),
 		);
 
 		// then
@@ -114,8 +125,10 @@ mod testing {
 		let timestamp = time::UNIX_EPOCH.elapsed().unwrap().as_secs();
 
 		// when
-		let response = request(server,
-			&format!("\
+		let response = request(
+			server,
+			&format!(
+				"\
 				GET / HTTP/1.1\r\n\
 				Host: 127.0.0.1:{}\r\n\
 				Connection: Close\r\n\
@@ -125,14 +138,17 @@ mod testing {
 				\r\n\
 				{{}}
 			",
-			port,
-			keccak(format!("{}:{}", code, timestamp)),
-			timestamp,
-			)
+				port,
+				keccak(format!("{}:{}", code, timestamp)),
+				timestamp,
+			),
 		);
 
 		// then
-		assert_eq!(response.status, "HTTP/1.1 101 Switching Protocols".to_owned());
+		assert_eq!(
+			response.status,
+			"HTTP/1.1 101 Switching Protocols".to_owned()
+		);
 	}
 
 	#[test]
@@ -144,8 +160,10 @@ mod testing {
 		assert!(authcodes.is_empty());
 
 		// when
-		let response1 = http_client::request(server.addr(),
-			&format!("\
+		let response1 = http_client::request(
+			server.addr(),
+			&format!(
+				"\
 				GET / HTTP/1.1\r\n\
 				Host: 127.0.0.1:{}\r\n\
 				Connection: Close\r\n\
@@ -155,13 +173,15 @@ mod testing {
 				\r\n\
 				{{}}
 			",
-			port,
-			keccak(format!("{}:{}", code, timestamp)),
-			timestamp,
-			)
+				port,
+				keccak(format!("{}:{}", code, timestamp)),
+				timestamp,
+			),
 		);
-		let response2 = http_client::request(server.addr(),
-			&format!("\
+		let response2 = http_client::request(
+			server.addr(),
+			&format!(
+				"\
 				GET / HTTP/1.1\r\n\
 				Host: 127.0.0.1:{}\r\n\
 				Connection: Close\r\n\
@@ -171,14 +191,17 @@ mod testing {
 				\r\n\
 				{{}}
 			",
-			port,
-			keccak(format!("{}:{}", code, timestamp)),
-			timestamp,
-			)
+				port,
+				keccak(format!("{}:{}", code, timestamp)),
+				timestamp,
+			),
 		);
 
 		// then
-		assert_eq!(response1.status, "HTTP/1.1 101 Switching Protocols".to_owned());
+		assert_eq!(
+			response1.status,
+			"HTTP/1.1 101 Switching Protocols".to_owned()
+		);
 		assert_eq!(response2.status, "HTTP/1.1 403 Forbidden".to_owned());
 		http_client::assert_security_headers_present(&response2.headers, None);
 	}

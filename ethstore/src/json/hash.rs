@@ -14,11 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{ops, fmt, str};
-use rustc_hex::{FromHex, ToHex};
-use serde::{Serialize, Serializer, Deserialize, Deserializer};
-use serde::de::{Visitor, Error as SerdeError};
 use super::Error;
+use rustc_hex::{FromHex, ToHex};
+use serde::de::{Error as SerdeError, Visitor};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::{fmt, ops, str};
 
 macro_rules! impl_hash {
 	($name: ident, $size: expr) => {
@@ -49,14 +49,18 @@ macro_rules! impl_hash {
 
 		impl Serialize for $name {
 			fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-			where S: Serializer {
+			where
+				S: Serializer,
+			{
 				serializer.serialize_str(&self.0.to_hex())
 			}
 		}
 
 		impl<'a> Deserialize<'a> for $name {
 			fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-			where D: Deserializer<'a> {
+			where
+				D: Deserializer<'a>,
+			{
 				struct HashVisitor;
 
 				impl<'b> Visitor<'b> for HashVisitor {
@@ -66,11 +70,17 @@ macro_rules! impl_hash {
 						write!(formatter, "a hex-encoded {}", stringify!($name))
 					}
 
-					fn visit_str<E>(self, value: &str) -> Result<Self::Value, E> where E: SerdeError {
+					fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+					where
+						E: SerdeError,
+					{
 						value.parse().map_err(SerdeError::custom)
 					}
 
-					fn visit_string<E>(self, value: String) -> Result<Self::Value, E> where E: SerdeError {
+					fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+					where
+						E: SerdeError,
+					{
 						self.visit_str(value.as_ref())
 					}
 				}
@@ -96,7 +106,11 @@ macro_rules! impl_hash {
 
 		impl From<&'static str> for $name {
 			fn from(s: &'static str) -> Self {
-				s.parse().expect(&format!("invalid string literal for {}: '{}'", stringify!($name), s))
+				s.parse().expect(&format!(
+					"invalid string literal for {}: '{}'",
+					stringify!($name),
+					s
+				))
 			}
 		}
 
@@ -111,7 +125,7 @@ macro_rules! impl_hash {
 				self.0
 			}
 		}
-	}
+	};
 }
 
 impl_hash!(H128, 16);

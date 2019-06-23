@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::fmt;
 use instructions;
+use std::fmt;
 
 /// Stack trait with VM-friendly API
 pub trait Stack<T> {
@@ -39,19 +39,19 @@ pub trait Stack<T> {
 
 pub struct VecStack<S> {
 	stack: Vec<S>,
-	logs: [S; instructions::MAX_NO_OF_TOPICS]
+	logs: [S; instructions::MAX_NO_OF_TOPICS],
 }
 
-impl<S : Copy> VecStack<S> {
+impl<S: Copy> VecStack<S> {
 	pub fn with_capacity(capacity: usize, zero: S) -> Self {
 		VecStack {
 			stack: Vec::with_capacity(capacity),
-			logs: [zero; instructions::MAX_NO_OF_TOPICS]
+			logs: [zero; instructions::MAX_NO_OF_TOPICS],
 		}
 	}
 }
 
-impl<S : fmt::Display> Stack<S> for VecStack<S> {
+impl<S: fmt::Display> Stack<S> for VecStack<S> {
 	fn peek(&self, no_from_top: usize) -> &S {
 		&self.stack[self.stack.len() - no_from_top - 1]
 	}
@@ -69,7 +69,7 @@ impl<S : fmt::Display> Stack<S> for VecStack<S> {
 		let val = self.stack.pop();
 		match val {
 			Some(x) => x,
-			None => panic!("Tried to pop from empty stack.")
+			None => panic!("Tried to pop from empty stack."),
 		}
 	}
 
@@ -91,7 +91,10 @@ impl<S : fmt::Display> Stack<S> for VecStack<S> {
 	}
 
 	fn peek_top(&self, no_from_top: usize) -> &[S] {
-		assert!(self.stack.len() >= no_from_top, "peek_top asked for more items than exist.");
-		&self.stack[self.stack.len() - no_from_top .. self.stack.len()]
+		assert!(
+			self.stack.len() >= no_from_top,
+			"peek_top asked for more items than exist."
+		);
+		&self.stack[self.stack.len() - no_from_top..self.stack.len()]
 	}
 }

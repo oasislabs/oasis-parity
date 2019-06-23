@@ -31,7 +31,12 @@ pub mod keccak_512 {
 		// This is safe since `keccak_*` uses an internal buffer and copies the result to the output. This
 		// means that we can reuse the input buffer for both input and output.
 		unsafe {
-			hash::keccak_512_unchecked(input.as_mut_ptr(), input.len(), input.as_ptr(), input.len());
+			hash::keccak_512_unchecked(
+				input.as_mut_ptr(),
+				input.len(),
+				input.as_ptr(),
+				input.len(),
+			);
 		}
 	}
 }
@@ -50,7 +55,12 @@ pub mod keccak_256 {
 		// This is safe since `keccak_*` uses an internal buffer and copies the result to the output. This
 		// means that we can reuse the input buffer for both input and output.
 		unsafe {
-			hash::keccak_256_unchecked(input.as_mut_ptr(), input.len(), input.as_ptr(), input.len());
+			hash::keccak_256_unchecked(
+				input.as_mut_ptr(),
+				input.len(),
+				input.as_ptr(),
+				input.len(),
+			);
 		}
 	}
 }

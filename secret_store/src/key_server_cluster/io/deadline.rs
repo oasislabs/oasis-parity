@@ -14,17 +14,26 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+use futures::{Async, Future, Poll, Select};
 use std::io;
 use std::time::Duration;
-use futures::{Future, Select, Poll, Async};
 use tokio_core::reactor::{Handle, Timeout};
 
-type DeadlineBox<F> = Box<Future<Item = DeadlineStatus<<F as Future>::Item>, Error = <F as Future>::Error> + Send>;
+type DeadlineBox<F> =
+	Box<Future<Item = DeadlineStatus<<F as Future>::Item>, Error = <F as Future>::Error> + Send>;
 
 /// Complete a passed future or fail if it is not completed within timeout.
-pub fn deadline<F, T>(duration: Duration, handle: &Handle, future: F) -> Result<Deadline<F>, io::Error>
-	where F: Future<Item = T, Error = io::Error> + Send + 'static, T: 'static {
-	let timeout: DeadlineBox<F> = Box::new(Timeout::new(duration, handle)?.map(|_| DeadlineStatus::Timeout));
+pub fn deadline<F, T>(
+	duration: Duration,
+	handle: &Handle,
+	future: F,
+) -> Result<Deadline<F>, io::Error>
+where
+	F: Future<Item = T, Error = io::Error> + Send + 'static,
+	T: 'static,
+{
+	let timeout: DeadlineBox<F> =
+		Box::new(Timeout::new(duration, handle)?.map(|_| DeadlineStatus::Timeout));
 	let future: DeadlineBox<F> = Box::new(future.map(DeadlineStatus::Meet));
 	let deadline = Deadline {
 		future: timeout.select(future),
@@ -42,11 +51,17 @@ pub enum DeadlineStatus<T> {
 }
 
 /// Future, which waits for passed future completion within given period, or fails with timeout.
-pub struct Deadline<F> where F: Future {
+pub struct Deadline<F>
+where
+	F: Future,
+{
 	future: Select<DeadlineBox<F>, DeadlineBox<F>>,
 }
 
-impl<F, T> Future for Deadline<F> where F: Future<Item = T, Error = io::Error> {
+impl<F, T> Future for Deadline<F>
+where
+	F: Future<Item = T, Error = io::Error>,
+{
 	type Item = DeadlineStatus<T>;
 	type Error = io::Error;
 
@@ -61,10 +76,10 @@ impl<F, T> Future for Deadline<F> where F: Future<Item = T, Error = io::Error> {
 
 #[cfg(test)]
 mod tests {
-	use std::time::Duration;
-	use futures::{Future, done};
-	use tokio_core::reactor::Core;
 	use super::{deadline, DeadlineStatus};
+	use futures::{done, Future};
+	use std::time::Duration;
+	use tokio_core::reactor::Core;
 
 	#[test]
 	fn deadline_result_works() {

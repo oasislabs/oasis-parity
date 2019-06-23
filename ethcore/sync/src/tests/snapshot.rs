@@ -14,16 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+use super::helpers::*;
+use bytes::Bytes;
+use ethcore::client::EachBlockWith;
+use ethcore::header::BlockNumber;
+use ethcore::snapshot::{ManifestData, RestorationStatus, SnapshotService};
+use ethereum_types::H256;
+use hash::keccak;
+use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::sync::Arc;
-use hash::keccak;
-use ethereum_types::H256;
-use parking_lot::Mutex;
-use bytes::Bytes;
-use ethcore::snapshot::{SnapshotService, ManifestData, RestorationStatus};
-use ethcore::header::BlockNumber;
-use ethcore::client::EachBlockWith;
-use super::helpers::*;
 use {SyncConfig, WarpSync};
 
 pub struct TestSnapshotService {
@@ -46,11 +46,19 @@ impl TestSnapshotService {
 		}
 	}
 
-	pub fn new_with_snapshot(num_chunks: usize, block_hash: H256, block_number: BlockNumber) -> TestSnapshotService {
+	pub fn new_with_snapshot(
+		num_chunks: usize,
+		block_hash: H256,
+		block_number: BlockNumber,
+	) -> TestSnapshotService {
 		let num_state_chunks = num_chunks / 2;
 		let num_block_chunks = num_chunks - num_state_chunks;
-		let state_chunks: Vec<Bytes> = (0..num_state_chunks).map(|_| H256::random().to_vec()).collect();
-		let block_chunks: Vec<Bytes> = (0..num_block_chunks).map(|_| H256::random().to_vec()).collect();
+		let state_chunks: Vec<Bytes> = (0..num_state_chunks)
+			.map(|_| H256::random().to_vec())
+			.collect();
+		let block_chunks: Vec<Bytes> = (0..num_block_chunks)
+			.map(|_| H256::random().to_vec())
+			.collect();
 		let manifest = ManifestData {
 			version: 2,
 			state_hashes: state_chunks.iter().map(|data| keccak(data)).collect(),
@@ -59,7 +67,10 @@ impl TestSnapshotService {
 			block_number: block_number,
 			block_hash: block_hash,
 		};
-		let mut chunks: HashMap<H256, Bytes> = state_chunks.into_iter().map(|data| (keccak(&data), data)).collect();
+		let mut chunks: HashMap<H256, Bytes> = state_chunks
+			.into_iter()
+			.map(|data| (keccak(&data), data))
+			.collect();
 		chunks.extend(block_chunks.into_iter().map(|data| (keccak(&data), data)));
 		TestSnapshotService {
 			manifest: Some(manifest),
@@ -90,8 +101,13 @@ impl SnapshotService for TestSnapshotService {
 
 	fn status(&self) -> RestorationStatus {
 		match *self.restoration_manifest.lock() {
-			Some(ref manifest) if self.state_restoration_chunks.lock().len() == manifest.state_hashes.len() &&
-				self.block_restoration_chunks.lock().len() == manifest.block_hashes.len() => RestorationStatus::Inactive,
+			Some(ref manifest)
+				if self.state_restoration_chunks.lock().len() == manifest.state_hashes.len()
+					&& self.block_restoration_chunks.lock().len()
+						== manifest.block_hashes.len() =>
+			{
+				RestorationStatus::Inactive
+			}
 			Some(ref manifest) => RestorationStatus::Ongoing {
 				state_chunks: manifest.state_hashes.len() as u32,
 				block_chunks: manifest.block_hashes.len() as u32,
@@ -123,13 +139,23 @@ impl SnapshotService for TestSnapshotService {
 	}
 
 	fn restore_state_chunk(&self, hash: H256, chunk: Bytes) {
-		if self.restoration_manifest.lock().as_ref().map_or(false, |m| m.state_hashes.iter().any(|h| h == &hash)) {
+		if self
+			.restoration_manifest
+			.lock()
+			.as_ref()
+			.map_or(false, |m| m.state_hashes.iter().any(|h| h == &hash))
+		{
 			self.state_restoration_chunks.lock().insert(hash, chunk);
 		}
 	}
 
 	fn restore_block_chunk(&self, hash: H256, chunk: Bytes) {
-		if self.restoration_manifest.lock().as_ref().map_or(false, |m| m.block_hashes.iter().any(|h| h == &hash)) {
+		if self
+			.restoration_manifest
+			.lock()
+			.as_ref()
+			.map_or(false, |m| m.block_hashes.iter().any(|h| h == &hash))
+		{
 			self.block_restoration_chunks.lock().insert(hash, chunk);
 		}
 	}
@@ -145,12 +171,42 @@ fn snapshot_sync() {
 	let mut config = SyncConfig::default();
 	config.warp_sync = WarpSync::Enabled;
 	let mut net = TestNet::new_with_config(5, config);
-	let snapshot_service = Arc::new(TestSnapshotService::new_with_snapshot(16, H256::new(), 500000));
+	let snapshot_service = Arc::new(TestSnapshotService::new_with_snapshot(
+		16,
+		H256::new(),
+		500000,
+	));
 	for i in 0..4 {
 		net.peer_mut(i).snapshot_service = snapshot_service.clone();
 		net.peer(i).chain.add_blocks(1, EachBlockWith::Nothing);
 	}
 	net.sync_steps(50);
-	assert_eq!(net.peer(4).snapshot_service.state_restoration_chunks.lock().len(), net.peer(0).snapshot_service.manifest.as_ref().unwrap().state_hashes.len());
-	assert_eq!(net.peer(4).snapshot_service.block_restoration_chunks.lock().len(), net.peer(0).snapshot_service.manifest.as_ref().unwrap().block_hashes.len());
+	assert_eq!(
+		net.peer(4)
+			.snapshot_service
+			.state_restoration_chunks
+			.lock()
+			.len(),
+		net.peer(0)
+			.snapshot_service
+			.manifest
+			.as_ref()
+			.unwrap()
+			.state_hashes
+			.len()
+	);
+	assert_eq!(
+		net.peer(4)
+			.snapshot_service
+			.block_restoration_chunks
+			.lock()
+			.len(),
+		net.peer(0)
+			.snapshot_service
+			.manifest
+			.as_ref()
+			.unwrap()
+			.block_hashes
+			.len()
+	);
 }

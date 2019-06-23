@@ -16,24 +16,24 @@
 
 //! Test implementation of miner service.
 
-use std::sync::Arc;
 use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
 
 use bytes::Bytes;
 use ethcore::account_provider::SignError as AccountError;
-use ethcore::block::{Block, SealedBlock, IsBlock};
-use ethcore::client::{Nonce, PrepareOpenBlock, StateClient, EngineInfo};
+use ethcore::block::{Block, IsBlock, SealedBlock};
+use ethcore::client::{EngineInfo, Nonce, PrepareOpenBlock, StateClient};
 use ethcore::engines::EthEngine;
 use ethcore::error::Error;
 use ethcore::header::{BlockNumber, Header};
 use ethcore::ids::BlockId;
-use ethcore::miner::{MinerService, AuthoringParams};
+use ethcore::miner::{AuthoringParams, MinerService};
 use ethcore::receipt::{Receipt, RichReceipt};
-use ethereum_types::{H256, U256, Address};
+use ethereum_types::{Address, H256, U256};
 use miner::pool::local_transactions::Status as LocalTransactionStatus;
-use miner::pool::{verifier, VerifiedTransaction, QueueStatus};
-use parking_lot::{RwLock, Mutex};
-use transaction::{self, UnverifiedTransaction, SignedTransaction, PendingTransaction};
+use miner::pool::{verifier, QueueStatus, VerifiedTransaction};
+use parking_lot::{Mutex, RwLock};
+use transaction::{self, PendingTransaction, SignedTransaction, UnverifiedTransaction};
 use txpool;
 
 /// Test miner service.
@@ -136,28 +136,34 @@ impl MinerService for TestMinerService {
 	}
 
 	/// Imports transactions to transaction queue.
-	fn import_external_transactions<C: Nonce + Sync>(&self, chain: &C, transactions: Vec<UnverifiedTransaction>)
-		-> Vec<Result<(), transaction::Error>>
-	{
+	fn import_external_transactions<C: Nonce + Sync>(
+		&self,
+		chain: &C,
+		transactions: Vec<UnverifiedTransaction>,
+	) -> Vec<Result<(), transaction::Error>> {
 		// lets assume that all txs are valid
-		let transactions: Vec<_> = transactions.into_iter().map(|tx| SignedTransaction::new(tx).unwrap()).collect();
-		self.imported_transactions.lock().extend_from_slice(&transactions);
+		let transactions: Vec<_> = transactions
+			.into_iter()
+			.map(|tx| SignedTransaction::new(tx).unwrap())
+			.collect();
+		self.imported_transactions
+			.lock()
+			.extend_from_slice(&transactions);
 
 		for sender in transactions.iter().map(|tx| tx.sender()) {
 			let nonce = self.next_nonce(chain, &sender);
 			self.next_nonces.write().insert(sender, nonce);
 		}
 
-		transactions
-			.iter()
-			.map(|_| Ok(()))
-			.collect()
+		transactions.iter().map(|_| Ok(())).collect()
 	}
 
 	/// Imports transactions to transaction queue.
-	fn import_own_transaction<C: Nonce + Sync>(&self, chain: &C, pending: PendingTransaction)
-		-> Result<(), transaction::Error> {
-
+	fn import_own_transaction<C: Nonce + Sync>(
+		&self,
+		chain: &C,
+		pending: PendingTransaction,
+	) -> Result<(), transaction::Error> {
 		// keep the pending nonces up to date
 		let sender = pending.transaction.sender();
 		let nonce = self.next_nonce(chain, &sender);
@@ -170,7 +176,15 @@ impl MinerService for TestMinerService {
 	}
 
 	/// Called when blocks are imported to chain, updates transactions queue.
-	fn chain_new_blocks<C>(&self, _chain: &C, _imported: &[H256], _invalid: &[H256], _enacted: &[H256], _retracted: &[H256], _is_internal: bool) {
+	fn chain_new_blocks<C>(
+		&self,
+		_chain: &C,
+		_imported: &[H256],
+		_invalid: &[H256],
+		_enacted: &[H256],
+		_retracted: &[H256],
+		_is_internal: bool,
+	) {
 		unimplemented!();
 	}
 
@@ -179,25 +193,37 @@ impl MinerService for TestMinerService {
 		unimplemented!();
 	}
 
-	fn work_package<C: PrepareOpenBlock>(&self, chain: &C) -> Option<(H256, BlockNumber, u64, U256)> {
+	fn work_package<C: PrepareOpenBlock>(
+		&self,
+		chain: &C,
+	) -> Option<(H256, BlockNumber, u64, U256)> {
 		let params = self.authoring_params();
-		let open_block = chain.prepare_open_block(params.author, params.gas_range_target, params.extra_data);
+		let open_block =
+			chain.prepare_open_block(params.author, params.gas_range_target, params.extra_data);
 		let closed = open_block.close();
 		let header = closed.header();
 
-		Some((header.hash(), header.number(), header.timestamp(), *header.difficulty()))
+		Some((
+			header.hash(),
+			header.number(),
+			header.timestamp(),
+			*header.difficulty(),
+		))
 	}
 
 	fn transaction(&self, hash: &H256) -> Option<Arc<VerifiedTransaction>> {
-		self.pending_transactions.lock().get(hash).cloned().map(|tx| {
-			Arc::new(VerifiedTransaction::from_pending_block_transaction(tx))
-		})
+		self.pending_transactions
+			.lock()
+			.get(hash)
+			.cloned()
+			.map(|tx| Arc::new(VerifiedTransaction::from_pending_block_transaction(tx)))
 	}
 
 	fn remove_transaction(&self, hash: &H256) -> Option<Arc<VerifiedTransaction>> {
-		self.pending_transactions.lock().remove(hash).map(|tx| {
-			Arc::new(VerifiedTransaction::from_pending_block_transaction(tx))
-		})
+		self.pending_transactions
+			.lock()
+			.remove(hash)
+			.map(|tx| Arc::new(VerifiedTransaction::from_pending_block_transaction(tx)))
 	}
 
 	fn pending_transactions(&self, _best_block: BlockNumber) -> Option<Vec<SignedTransaction>> {
@@ -205,7 +231,11 @@ impl MinerService for TestMinerService {
 	}
 
 	fn local_transactions(&self) -> BTreeMap<H256, LocalTransactionStatus> {
-		self.local_transactions.lock().iter().map(|(hash, stats)| (*hash, stats.clone())).collect()
+		self.local_transactions
+			.lock()
+			.iter()
+			.map(|(hash, stats)| (*hash, stats.clone()))
+			.collect()
 	}
 
 	fn ready_transactions<C>(&self, _chain: &C) -> Vec<Arc<VerifiedTransaction>> {
@@ -213,15 +243,20 @@ impl MinerService for TestMinerService {
 	}
 
 	fn queued_transactions(&self) -> Vec<Arc<VerifiedTransaction>> {
-		self.pending_transactions.lock().values().cloned().map(|tx| {
-			Arc::new(VerifiedTransaction::from_pending_block_transaction(tx))
-		}).collect()
+		self.pending_transactions
+			.lock()
+			.values()
+			.cloned()
+			.map(|tx| Arc::new(VerifiedTransaction::from_pending_block_transaction(tx)))
+			.collect()
 	}
 
 	fn pending_receipt(&self, _best_block: BlockNumber, hash: &H256) -> Option<RichReceipt> {
 		// Not much point implementing this since the logic is complex and the only thing it relies on is pending_receipts, which is already tested.
-		self.pending_receipts(0).unwrap().get(hash).map(|r|
-			RichReceipt {
+		self.pending_receipts(0)
+			.unwrap()
+			.get(hash)
+			.map(|r| RichReceipt {
 				transaction_hash: Default::default(),
 				transaction_index: Default::default(),
 				cumulative_gas_used: r.gas_used.clone(),
@@ -230,8 +265,7 @@ impl MinerService for TestMinerService {
 				logs: r.logs.clone(),
 				log_bloom: r.log_bloom,
 				outcome: r.outcome.clone(),
-			}
-		)
+			})
 	}
 
 	fn pending_receipts(&self, _best_block: BlockNumber) -> Option<BTreeMap<H256, Receipt>> {
@@ -239,7 +273,11 @@ impl MinerService for TestMinerService {
 	}
 
 	fn next_nonce<C: Nonce + Sync>(&self, _chain: &C, address: &Address) -> U256 {
-		self.next_nonces.read().get(address).cloned().unwrap_or_default()
+		self.next_nonces
+			.read()
+			.get(address)
+			.cloned()
+			.unwrap_or_default()
 	}
 
 	fn is_currently_sealing(&self) -> bool {

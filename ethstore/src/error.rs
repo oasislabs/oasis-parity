@@ -14,11 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::fmt;
-use std::io::Error as IoError;
-use ethkey::{self, Error as EthKeyError};
 use crypto::{self, Error as EthCryptoError};
 use ethkey::DerivationError;
+use ethkey::{self, Error as EthKeyError};
+use std::fmt;
+use std::io::Error as IoError;
 
 /// Account-related errors.
 #[derive(Debug)]

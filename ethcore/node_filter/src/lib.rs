@@ -42,10 +42,10 @@ use std::sync::Weak;
 use lru_cache::LruCache;
 use parking_lot::Mutex;
 
-use ethcore::client::{BlockChainClient, BlockId};
-use ethereum_types::{H256, Address};
-use network::{ConnectionFilter, ConnectionDirection};
 use devp2p::NodeId;
+use ethcore::client::{BlockChainClient, BlockId};
+use ethereum_types::{Address, H256};
+use network::{ConnectionDirection, ConnectionFilter};
 
 use_contract!(peer_set, "PeerSet", "res/peer_set.json");
 
@@ -72,7 +72,12 @@ impl NodeFilter {
 }
 
 impl ConnectionFilter for NodeFilter {
-	fn connection_allowed(&self, own_id: &NodeId, connecting_id: &NodeId, _direction: ConnectionDirection) -> bool {
+	fn connection_allowed(
+		&self,
+		own_id: &NodeId,
+		connecting_id: &NodeId,
+		_direction: ConnectionDirection,
+	) -> bool {
 		let client = match self.client.upgrade() {
 			Some(client) => client,
 			None => return false,
@@ -96,9 +101,13 @@ impl ConnectionFilter for NodeFilter {
 		let id_low = H256::from_slice(&connecting_id[0..32]);
 		let id_high = H256::from_slice(&connecting_id[32..64]);
 
-		let allowed = self.contract.functions()
+		let allowed = self
+			.contract
+			.functions()
 			.connection_allowed()
-			.call(own_low, own_high, id_low, id_high, &|data| client.call_contract(BlockId::Latest, address, data))
+			.call(own_low, own_high, id_low, id_high, &|data| {
+				client.call_contract(BlockId::Latest, address, data)
+			})
 			.unwrap_or_else(|e| {
 				debug!("Error callling peer set contract: {:?}", e);
 				false
@@ -111,13 +120,13 @@ impl ConnectionFilter for NodeFilter {
 
 #[cfg(test)]
 mod test {
-	use std::sync::{Arc, Weak};
-	use ethcore::spec::Spec;
+	use super::NodeFilter;
 	use ethcore::client::{BlockChainClient, Client, ClientConfig};
 	use ethcore::miner::Miner;
-	use network::{ConnectionDirection, ConnectionFilter, NodeId};
+	use ethcore::spec::Spec;
 	use io::IoChannel;
-	use super::NodeFilter;
+	use network::{ConnectionDirection, ConnectionFilter, NodeId};
+	use std::sync::{Arc, Weak};
 	use tempdir::TempDir;
 
 	/// Contract code: https://gist.github.com/arkpar/467dbcc73cbb85b0997a7a10ffa0695f
@@ -127,7 +136,9 @@ mod test {
 		let data = include_bytes!("../res/node_filter.json");
 		let tempdir = TempDir::new("").unwrap();
 		let spec = Spec::load(&tempdir.path(), &data[..]).unwrap();
-		let client_db = Arc::new(::kvdb_memorydb::create(::ethcore::db::NUM_COLUMNS.unwrap_or(0)));
+		let client_db = Arc::new(::kvdb_memorydb::create(
+			::ethcore::db::NUM_COLUMNS.unwrap_or(0),
+		));
 
 		let client = Client::new(
 			ClientConfig::default(),
@@ -135,8 +146,12 @@ mod test {
 			client_db,
 			Arc::new(Miner::new_for_tests(&spec, None)),
 			IoChannel::disconnected(),
-		).unwrap();
-		let filter = NodeFilter::new(Arc::downgrade(&client) as Weak<BlockChainClient>, contract_addr);
+		)
+		.unwrap();
+		let filter = NodeFilter::new(
+			Arc::downgrade(&client) as Weak<BlockChainClient>,
+			contract_addr,
+		);
 		let self1: NodeId = "00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002".into();
 		let self2: NodeId = "00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003".into();
 		let node1: NodeId = "00000000000000000000000000000000000000000000000000000000000000110000000000000000000000000000000000000000000000000000000000000012".into();

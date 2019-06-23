@@ -27,9 +27,7 @@ pub struct EchoHandler {
 
 impl EchoHandler {
 	pub fn new(request: hyper::Request) -> Self {
-		EchoHandler {
-			request,
-		}
+		EchoHandler { request }
 	}
 }
 

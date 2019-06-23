@@ -14,12 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::io::{Read, Write};
+use super::{Crypto, Uuid, Version, H160};
 use serde::de::Error;
 use serde_json;
-use serde_json::value::Value;
 use serde_json::error;
-use super::{Uuid, Version, Crypto, H160};
+use serde_json::value::Value;
+use std::io::{Read, Write};
 
 /// Meta key name for vault field
 const VAULT_NAME_META_KEY: &'static str = "vault";
@@ -49,7 +49,10 @@ pub struct VaultKeyMeta {
 }
 
 /// Insert vault name to the JSON meta field
-pub fn insert_vault_name_to_json_meta(meta: &str, vault_name: &str) -> Result<String, error::Error> {
+pub fn insert_vault_name_to_json_meta(
+	meta: &str,
+	vault_name: &str,
+) -> Result<String, error::Error> {
 	let mut meta = if meta.is_empty() {
 		Value::Object(serde_json::Map::new())
 	} else {
@@ -57,10 +60,15 @@ pub fn insert_vault_name_to_json_meta(meta: &str, vault_name: &str) -> Result<St
 	};
 
 	if let Some(meta_obj) = meta.as_object_mut() {
-		meta_obj.insert(VAULT_NAME_META_KEY.to_owned(), Value::String(vault_name.to_owned()));
+		meta_obj.insert(
+			VAULT_NAME_META_KEY.to_owned(),
+			Value::String(vault_name.to_owned()),
+		);
 		serde_json::to_string(meta_obj)
 	} else {
-		Err(error::Error::custom("Meta is expected to be a serialized JSON object"))
+		Err(error::Error::custom(
+			"Meta is expected to be a serialized JSON object",
+		))
 	}
 }
 
@@ -76,16 +84,24 @@ pub fn remove_vault_name_from_json_meta(meta: &str) -> Result<String, error::Err
 		meta_obj.remove(VAULT_NAME_META_KEY);
 		serde_json::to_string(meta_obj)
 	} else {
-		Err(error::Error::custom("Meta is expected to be a serialized JSON object"))
+		Err(error::Error::custom(
+			"Meta is expected to be a serialized JSON object",
+		))
 	}
 }
 
 impl VaultKeyFile {
-	pub fn load<R>(reader: R) -> Result<Self, serde_json::Error> where R: Read {
+	pub fn load<R>(reader: R) -> Result<Self, serde_json::Error>
+	where
+		R: Read,
+	{
 		serde_json::from_reader(reader)
 	}
 
-	pub fn write<W>(&self, writer: &mut W) -> Result<(), serde_json::Error> where W: Write {
+	pub fn write<W>(&self, writer: &mut W) -> Result<(), serde_json::Error>
+	where
+		W: Write,
+	{
 		serde_json::to_writer(writer, self)
 	}
 }
@@ -103,9 +119,11 @@ impl VaultKeyMeta {
 
 #[cfg(test)]
 mod test {
+	use json::{
+		insert_vault_name_to_json_meta, remove_vault_name_from_json_meta, Aes128Ctr, Cipher,
+		Crypto, Kdf, Pbkdf2, Prf, VaultKeyFile, Version,
+	};
 	use serde_json;
-	use json::{VaultKeyFile, Version, Crypto, Cipher, Aes128Ctr, Kdf, Pbkdf2, Prf,
-		insert_vault_name_to_json_meta, remove_vault_name_from_json_meta};
 
 	#[test]
 	fn to_and_from_json() {
@@ -148,8 +166,14 @@ mod test {
 
 	#[test]
 	fn vault_name_inserted_to_json_meta() {
-		assert_eq!(insert_vault_name_to_json_meta(r#""#, "MyVault").unwrap(), r#"{"vault":"MyVault"}"#);
-		assert_eq!(insert_vault_name_to_json_meta(r#"{"tags":["kalabala"]}"#, "MyVault").unwrap(), r#"{"tags":["kalabala"],"vault":"MyVault"}"#);
+		assert_eq!(
+			insert_vault_name_to_json_meta(r#""#, "MyVault").unwrap(),
+			r#"{"vault":"MyVault"}"#
+		);
+		assert_eq!(
+			insert_vault_name_to_json_meta(r#"{"tags":["kalabala"]}"#, "MyVault").unwrap(),
+			r#"{"tags":["kalabala"],"vault":"MyVault"}"#
+		);
 	}
 
 	#[test]
@@ -160,8 +184,14 @@ mod test {
 
 	#[test]
 	fn vault_name_removed_from_json_meta() {
-		assert_eq!(remove_vault_name_from_json_meta(r#"{"vault":"MyVault"}"#).unwrap(), r#"{}"#);
-		assert_eq!(remove_vault_name_from_json_meta(r#"{"tags":["kalabala"],"vault":"MyVault"}"#).unwrap(), r#"{"tags":["kalabala"]}"#);
+		assert_eq!(
+			remove_vault_name_from_json_meta(r#"{"vault":"MyVault"}"#).unwrap(),
+			r#"{}"#
+		);
+		assert_eq!(
+			remove_vault_name_from_json_meta(r#"{"tags":["kalabala"],"vault":"MyVault"}"#).unwrap(),
+			r#"{"tags":["kalabala"]}"#
+		);
 	}
 
 	#[test]

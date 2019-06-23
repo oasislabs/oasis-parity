@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+use parking_lot::{Condvar, Mutex};
 use std::collections::VecDeque;
-use parking_lot::{Mutex, Condvar};
 
 #[derive(Default)]
 /// General deque-based tasks queue.
@@ -26,7 +26,10 @@ pub struct TasksQueue<Task: Clone> {
 	service_tasks: Mutex<VecDeque<Task>>,
 }
 
-impl<Task> TasksQueue<Task> where Task: Clone {
+impl<Task> TasksQueue<Task>
+where
+	Task: Clone,
+{
 	/// Create new tasks queue.
 	pub fn new() -> Self {
 		TasksQueue {
@@ -56,7 +59,7 @@ impl<Task> TasksQueue<Task> where Task: Clone {
 	}
 
 	/// Push task to the back of queue.
-	pub fn push_many<I: Iterator<Item=Task>>(&self, tasks: I) {
+	pub fn push_many<I: Iterator<Item = Task>>(&self, tasks: I) {
 		let mut service_tasks = self.service_tasks.lock();
 		let previous_len = service_tasks.len();
 		service_tasks.extend(tasks);
@@ -72,7 +75,8 @@ impl<Task> TasksQueue<Task> where Task: Clone {
 			self.service_event.wait(&mut service_tasks);
 		}
 
-		service_tasks.pop_front()
+		service_tasks
+			.pop_front()
 			.expect("service_event is only fired when there are new tasks; qed")
 	}
 }

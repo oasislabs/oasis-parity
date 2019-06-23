@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use ethereum_types::Address;
-use rlp::DecoderError;
-use trie::TrieError;
 use ethcore::account_provider::SignError;
 use ethcore::error::{Error as EthcoreError, ExecutionError};
-use transaction::Error as TransactionError;
+use ethereum_types::Address;
 use ethkey::Error as KeyError;
+use rlp::DecoderError;
+use transaction::Error as TransactionError;
+use trie::TrieError;
 
 error_chain! {
 	foreign_links {
@@ -200,7 +200,10 @@ impl From<EthcoreError> for Error {
 	}
 }
 
-impl<E> From<Box<E>> for Error where Error: From<E> {
+impl<E> From<Box<E>> for Error
+where
+	Error: From<E>,
+{
 	fn from(err: Box<E>) -> Error {
 		Error::from(*err)
 	}

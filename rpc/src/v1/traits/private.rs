@@ -18,8 +18,10 @@
 
 use jsonrpc_core::Error;
 
-use v1::types::{Bytes, PrivateTransactionReceipt, H160, H256, U256, BlockNumber,
-	PrivateTransactionReceiptAndTransaction, CallRequest};
+use v1::types::{
+	BlockNumber, Bytes, CallRequest, PrivateTransactionReceipt,
+	PrivateTransactionReceiptAndTransaction, H160, H256, U256,
+};
 
 build_rpc_trait! {
 	/// Private transaction management RPC interface.

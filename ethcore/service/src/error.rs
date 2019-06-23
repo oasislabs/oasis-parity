@@ -15,8 +15,8 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 use ethcore;
-use io;
 use ethcore_private_tx;
+use io;
 
 error_chain! {
 	links {

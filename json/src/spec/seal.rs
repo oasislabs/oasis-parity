@@ -16,9 +16,9 @@
 
 //! Spec seal deserialization.
 
+use bytes::Bytes;
 use hash::*;
 use uint::Uint;
-use bytes::Bytes;
 
 /// Ethereum seal.
 #[derive(Debug, PartialEq, Deserialize)]
@@ -26,7 +26,7 @@ pub struct Ethereum {
 	/// Seal nonce.
 	pub nonce: H64,
 	/// Seal mix hash.
-	#[serde(rename="mixHash")]
+	#[serde(rename = "mixHash")]
 	pub mix_hash: H256,
 }
 
@@ -54,27 +54,27 @@ pub struct TendermintSeal {
 #[derive(Debug, PartialEq, Deserialize)]
 pub enum Seal {
 	/// Ethereum seal.
-	#[serde(rename="ethereum")]
+	#[serde(rename = "ethereum")]
 	Ethereum(Ethereum),
 	/// AuthorityRound seal.
-	#[serde(rename="authorityRound")]
+	#[serde(rename = "authorityRound")]
 	AuthorityRound(AuthorityRoundSeal),
 	/// Tendermint seal.
-	#[serde(rename="tendermint")]
+	#[serde(rename = "tendermint")]
 	Tendermint(TendermintSeal),
 	/// Generic seal.
-	#[serde(rename="generic")]
+	#[serde(rename = "generic")]
 	Generic(Bytes),
 }
 
 #[cfg(test)]
 mod tests {
-	use serde_json;
-	use hash::*;
 	use bytes::Bytes;
+	use ethereum_types::{H256 as Eth256, H520 as Eth520, H64 as Eth64, U256};
+	use hash::*;
+	use serde_json;
+	use spec::{AuthorityRoundSeal, Ethereum, Seal, TendermintSeal};
 	use uint::Uint;
-	use ethereum_types::{U256, H64 as Eth64, H256 as Eth256, H520 as Eth520};
-	use spec::{Ethereum, AuthorityRoundSeal, TendermintSeal, Seal};
 
 	#[test]
 	fn seal_deserialization() {
@@ -104,15 +104,25 @@ mod tests {
 		assert_eq!(deserialized.len(), 4);
 
 		// [0]
-		assert_eq!(deserialized[0], Seal::Ethereum(Ethereum {
-			nonce: H64(Eth64::from("0x0000000000000042")),
-			mix_hash: H256(Eth256::from("0x1000000000000000000000000000000000000000000000000000000000000001"))
-		}));
+		assert_eq!(
+			deserialized[0],
+			Seal::Ethereum(Ethereum {
+				nonce: H64(Eth64::from("0x0000000000000042")),
+				mix_hash: H256(Eth256::from(
+					"0x1000000000000000000000000000000000000000000000000000000000000001"
+				))
+			})
+		);
 
 		// [1]
-		assert_eq!(deserialized[1], Seal::Generic(Bytes::new(vec![
-			0xe0, 0x11, 0xbb, 0xe8, 0xdb, 0x4e, 0x34, 0x7b, 0x4e, 0x8c, 0x93, 0x7c, 0x1c, 0x83, 0x70, 0xe4,
-			0xb5, 0xed, 0x33, 0xad, 0xb3, 0xdb, 0x69, 0xcb, 0xdb, 0x7a, 0x38, 0xe1, 0xe5, 0x0b, 0x1b, 0x82, 0xfa])));
+		assert_eq!(
+			deserialized[1],
+			Seal::Generic(Bytes::new(vec![
+				0xe0, 0x11, 0xbb, 0xe8, 0xdb, 0x4e, 0x34, 0x7b, 0x4e, 0x8c, 0x93, 0x7c, 0x1c, 0x83,
+				0x70, 0xe4, 0xb5, 0xed, 0x33, 0xad, 0xb3, 0xdb, 0x69, 0xcb, 0xdb, 0x7a, 0x38, 0xe1,
+				0xe5, 0x0b, 0x1b, 0x82, 0xfa
+			]))
+		);
 
 		// [2]
 		assert_eq!(deserialized[2], Seal::AuthorityRound(AuthorityRoundSeal {

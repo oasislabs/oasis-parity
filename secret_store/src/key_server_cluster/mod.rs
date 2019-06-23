@@ -16,25 +16,29 @@
 
 use super::types::ServerKeyId;
 
-pub use super::traits::NodeKeyPair;
-pub use super::types::{Error, NodeId, Requester, EncryptedDocumentKeyShadow};
-pub use super::acl_storage::AclStorage;
-pub use super::key_storage::{KeyStorage, DocumentKeyShare, DocumentKeyShareVersion};
-pub use super::key_server_set::{is_migration_required, KeyServerSet, KeyServerSetSnapshot, KeyServerSetMigration};
-pub use super::serialization::{SerializableSignature, SerializableH256, SerializableSecret, SerializablePublic,
-	SerializableRequester, SerializableMessageHash, SerializableAddress};
-pub use self::cluster::{ClusterCore, ClusterConfiguration, ClusterClient};
-pub use self::cluster_sessions::{ClusterSession, ClusterSessionsListener};
 #[cfg(test)]
 pub use self::cluster::tests::DummyClusterClient;
+pub use self::cluster::{ClusterClient, ClusterConfiguration, ClusterCore};
+pub use self::cluster_sessions::{ClusterSession, ClusterSessionsListener};
+pub use super::acl_storage::AclStorage;
+pub use super::key_server_set::{
+	is_migration_required, KeyServerSet, KeyServerSetMigration, KeyServerSetSnapshot,
+};
+pub use super::key_storage::{DocumentKeyShare, DocumentKeyShareVersion, KeyStorage};
+pub use super::serialization::{
+	SerializableAddress, SerializableH256, SerializableMessageHash, SerializablePublic,
+	SerializableRequester, SerializableSecret, SerializableSignature,
+};
+pub use super::traits::NodeKeyPair;
+pub use super::types::{EncryptedDocumentKeyShadow, Error, NodeId, Requester};
 
-#[cfg(test)]
-pub use super::node_key_pair::PlainNodeKeyPair;
-#[cfg(test)]
-pub use super::key_storage::tests::DummyKeyStorage;
 pub use super::acl_storage::DummyAclStorage;
 #[cfg(test)]
 pub use super::key_server_set::tests::MapKeyServerSet;
+#[cfg(test)]
+pub use super::key_storage::tests::DummyKeyStorage;
+#[cfg(test)]
+pub use super::node_key_pair::PlainNodeKeyPair;
 
 pub type SessionId = ServerKeyId;
 

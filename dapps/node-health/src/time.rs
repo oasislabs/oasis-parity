@@ -31,15 +31,15 @@
 //! drift = ((T2 - T1) + (T3 - T4)) / 2.
 //!
 
-use std::io;
-use std::{fmt, mem, time};
 use std::collections::VecDeque;
+use std::io;
 use std::sync::atomic::{self, AtomicUsize};
 use std::sync::Arc;
+use std::{fmt, mem, time};
 
-use futures::{self, Future};
 use futures::future::{self, IntoFuture};
-use futures_cpupool::{CpuPool, CpuFuture};
+use futures::{self, Future};
+use futures_cpupool::{CpuFuture, CpuPool};
 use ntp;
 use parking_lot::RwLock;
 use time_crate::{Duration, Timespec};
@@ -68,17 +68,21 @@ impl fmt::Display for Error {
 }
 
 impl From<io::Error> for Error {
-	fn from(err: io::Error) -> Self { Error::Io(format!("{}", err)) }
+	fn from(err: io::Error) -> Self {
+		Error::Io(format!("{}", err))
+	}
 }
 
 impl From<ntp::errors::Error> for Error {
-	fn from(err: ntp::errors::Error) -> Self { Error::Ntp(format!("{}", err)) }
+	fn from(err: ntp::errors::Error) -> Self {
+		Error::Ntp(format!("{}", err))
+	}
 }
 
 /// NTP time drift checker.
 pub trait Ntp {
 	/// Returned Future.
-	type Future: IntoFuture<Item=Duration, Error=Error>;
+	type Future: IntoFuture<Item = Duration, Error = Error>;
 
 	/// Returns the current time drift.
 	fn drift(&self) -> Self::Future;
@@ -108,7 +112,8 @@ impl Server {
 	}
 
 	fn update_next_call(&self, delay: usize) {
-		*self.next_call.write() = time::Instant::now() + time::Duration::from_secs(delay as u64 * SERVER_MAX_POLL_INTERVAL_SECS);
+		*self.next_call.write() = time::Instant::now()
+			+ time::Duration::from_secs(delay as u64 * SERVER_MAX_POLL_INTERVAL_SECS);
 	}
 }
 
@@ -131,8 +136,7 @@ pub struct SimpleNtp {
 
 impl fmt::Debug for SimpleNtp {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		f
-			.debug_struct("SimpleNtp")
+		f.debug_struct("SimpleNtp")
 			.field("addresses", &self.addresses)
 			.finish()
 	}
@@ -148,39 +152,38 @@ impl SimpleNtp {
 }
 
 impl Ntp for SimpleNtp {
-	type Future = future::Either<
-		CpuFuture<Duration, Error>,
-		future::FutureResult<Duration, Error>,
-	>;
+	type Future = future::Either<CpuFuture<Duration, Error>, future::FutureResult<Duration, Error>>;
 
 	fn drift(&self) -> Self::Future {
 		use self::future::Either::{A, B};
 
 		let server = self.addresses.iter().find(|server| server.is_available());
-		server.map(|server| {
-			let server = server.clone();
-			A(self.pool.spawn_fn(move || {
-				debug!(target: "dapps", "Fetching time from {}.", server.address);
+		server
+			.map(|server| {
+				let server = server.clone();
+				A(self.pool.spawn_fn(move || {
+					debug!(target: "dapps", "Fetching time from {}.", server.address);
 
-				match ntp::request(&server.address) {
-					Ok(packet) => {
-						let dest_time = ::time_crate::now_utc().to_timespec();
-						let orig_time = Timespec::from(packet.orig_time);
-						let recv_time = Timespec::from(packet.recv_time);
-						let transmit_time = Timespec::from(packet.transmit_time);
+					match ntp::request(&server.address) {
+						Ok(packet) => {
+							let dest_time = ::time_crate::now_utc().to_timespec();
+							let orig_time = Timespec::from(packet.orig_time);
+							let recv_time = Timespec::from(packet.recv_time);
+							let transmit_time = Timespec::from(packet.transmit_time);
 
-						let drift = ((recv_time - orig_time) + (transmit_time - dest_time)) / 2;
+							let drift = ((recv_time - orig_time) + (transmit_time - dest_time)) / 2;
 
-						server.report_success();
-						Ok(drift)
-					},
-					Err(err) => {
-						server.report_failure();
-						Err(err.into())
-					},
-				}
-			}))
-		}).unwrap_or_else(|| B(future::err(Error::NoServersAvailable)))
+							server.report_success();
+							Ok(drift)
+						}
+						Err(err) => {
+							server.report_failure();
+							Err(err.into())
+						}
+					}
+				}))
+			})
+			.unwrap_or_else(|| B(future::err(Error::NoServersAvailable)))
 	}
 }
 
@@ -209,19 +212,19 @@ impl TimeChecker<SimpleNtp> {
 	pub fn new<T: AsRef<str>>(ntp_addresses: &[T], pool: CpuPool) -> Self {
 		let last_result = Arc::new(RwLock::new(
 			// Assume everything is ok at the very beginning.
-			(time::Instant::now(), vec![Ok(0)].into())
+			(time::Instant::now(), vec![Ok(0)].into()),
 		));
 
 		let ntp = SimpleNtp::new(ntp_addresses, pool);
 
-		TimeChecker {
-			ntp,
-			last_result,
-		}
+		TimeChecker { ntp, last_result }
 	}
 }
 
-impl<N: Ntp> TimeChecker<N> where <N::Future as IntoFuture>::Future: Send + 'static {
+impl<N: Ntp> TimeChecker<N>
+where
+	<N::Future as IntoFuture>::Future: Send + 'static,
+{
 	/// Updates the time
 	pub fn update(&self) -> BoxFuture<i64, Error> {
 		trace!(target: "dapps", "Updating time from NTP.");
@@ -237,14 +240,13 @@ impl<N: Ntp> TimeChecker<N> where <N::Future as IntoFuture>::Future: Send + 'sta
 			// Update the results.
 			let mut results = mem::replace(&mut last_result.write().1, VecDeque::new());
 			let has_all_results = results.len() >= MAX_RESULTS;
-			let valid_till = time::Instant::now() + time::Duration::from_secs(
-				match res {
+			let valid_till = time::Instant::now()
+				+ time::Duration::from_secs(match res {
 					Ok(time) if has_all_results && time < MAX_DRIFT => UPDATE_TIMEOUT_OK_SECS,
 					Ok(_) if has_all_results => UPDATE_TIMEOUT_WARN_SECS,
 					Err(_) if has_all_results => UPDATE_TIMEOUT_ERR_SECS,
 					_ => UPDATE_TIMEOUT_INCOMPLETE_SECS,
-				}
-			);
+				});
 
 			trace!(target: "dapps", "New time drift received: {:?}", res);
 			// Push the result.
@@ -274,7 +276,7 @@ impl<N: Ntp> TimeChecker<N> where <N::Future as IntoFuture>::Future: Send + 'sta
 	}
 }
 
-fn select_result<'a, T: Iterator<Item=&'a Result<i64, Error>>>(results: T) -> Result<i64, Error> {
+fn select_result<'a, T: Iterator<Item = &'a Result<i64, Error>>>(results: T) -> Result<i64, Error> {
 	let mut min = None;
 	for res in results {
 		min = Some(match (min.take(), res) {
@@ -289,13 +291,13 @@ fn select_result<'a, T: Iterator<Item=&'a Result<i64, Error>>>(results: T) -> Re
 
 #[cfg(test)]
 mod tests {
-	use std::sync::Arc;
+	use super::{Error, Ntp, TimeChecker};
+	use futures::{future, Future};
+	use parking_lot::RwLock;
 	use std::cell::{Cell, RefCell};
+	use std::sync::Arc;
 	use std::time::Instant;
 	use time::Duration;
-	use futures::{future, Future};
-	use super::{Ntp, TimeChecker, Error};
-	use parking_lot::RwLock;
 
 	#[derive(Clone)]
 	struct FakeNtp(RefCell<Vec<Duration>>, Cell<u64>);
@@ -303,7 +305,8 @@ mod tests {
 		fn new() -> FakeNtp {
 			FakeNtp(
 				RefCell::new(vec![Duration::milliseconds(150)]),
-				Cell::new(0))
+				Cell::new(0),
+			)
 		}
 	}
 
@@ -312,14 +315,20 @@ mod tests {
 
 		fn drift(&self) -> Self::Future {
 			self.1.set(self.1.get() + 1);
-			future::ok(self.0.borrow_mut().pop().expect("Unexpected call to drift()."))
+			future::ok(
+				self.0
+					.borrow_mut()
+					.pop()
+					.expect("Unexpected call to drift()."),
+			)
 		}
 	}
 
 	fn time_checker() -> TimeChecker<FakeNtp> {
-		let last_result = Arc::new(RwLock::new(
-			(Instant::now(), vec![Err(Error::Ntp("NTP server unavailable".into()))].into())
-		));
+		let last_result = Arc::new(RwLock::new((
+			Instant::now(),
+			vec![Err(Error::Ntp("NTP server unavailable".into()))].into(),
+		)));
 
 		TimeChecker {
 			ntp: FakeNtp::new(),

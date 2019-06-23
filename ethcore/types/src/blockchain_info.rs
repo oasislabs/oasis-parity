@@ -18,9 +18,9 @@
 
 use std::fmt;
 
-use ethereum_types::{U256, H256};
+use ethereum_types::{H256, U256};
 use security_level::SecurityLevel;
-use {BlockNumber};
+use BlockNumber;
 
 /// Information about the blockchain gathered together.
 #[derive(Clone, Debug)]
@@ -54,7 +54,12 @@ impl BlockChainInfo {
 		if self.ancient_block_number.is_none() || self.first_block_number.is_none() {
 			SecurityLevel::FullProofOfWork
 		} else {
-			SecurityLevel::PartialProofOfWork(self.best_block_number - self.first_block_number.expect("Guard condition means this is not none"))
+			SecurityLevel::PartialProofOfWork(
+				self.best_block_number
+					- self
+						.first_block_number
+						.expect("Guard condition means this is not none"),
+			)
 		}
 	}
 }

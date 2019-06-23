@@ -16,24 +16,24 @@
 
 extern crate siphasher;
 
+use siphasher::sip::SipHasher;
 use std::cmp;
-use std::mem;
+use std::collections::HashSet;
 use std::f64;
 use std::hash::{Hash, Hasher};
-use std::collections::HashSet;
-use siphasher::sip::SipHasher;
+use std::mem;
 
 /// BitVec structure with journalling
 /// Every time any of the blocks is getting set it's index is tracked
 /// and can be then drained by `drain` method
 struct BitVecJournal {
-    elems: Vec<u64>,
-    journal: HashSet<usize>,
+	elems: Vec<u64>,
+	journal: HashSet<usize>,
 }
 
 impl BitVecJournal {
 	pub fn new(size: usize) -> BitVecJournal {
-		let extra = if size % 64 > 0  { 1 } else { 0 };
+		let extra = if size % 64 > 0 { 1 } else { 0 };
 		BitVecJournal {
 			elems: vec![0u64; size / 64 + extra],
 			journal: HashSet::new(),
@@ -63,11 +63,16 @@ impl BitVecJournal {
 
 	pub fn drain(&mut self) -> Vec<(usize, u64)> {
 		let journal = mem::replace(&mut self.journal, HashSet::new()).into_iter();
-		journal.map(|idx| (idx, self.elems[idx])).collect::<Vec<(usize, u64)>>()
+		journal
+			.map(|idx| (idx, self.elems[idx]))
+			.collect::<Vec<(usize, u64)>>()
 	}
 
 	pub fn saturation(&self) -> f64 {
-		self.elems.iter().fold(0u64, |acc, e| acc + e.count_ones() as u64) as f64 / (self.elems.len() * 64) as f64
+		self.elems
+			.iter()
+			.fold(0u64, |acc, e| acc + e.count_ones() as u64) as f64
+			/ (self.elems.len() * 64) as f64
 	}
 }
 
@@ -127,7 +132,8 @@ impl Bloom {
 
 	/// Records the presence of an item.
 	pub fn set<T>(&mut self, item: T)
-		where T: Hash
+	where
+		T: Hash,
 	{
 		let base_hash = Bloom::sip_hash(&item);
 		for k_i in 0..self.k_num {
@@ -139,7 +145,8 @@ impl Bloom {
 	/// Check if an item is present in the set.
 	/// There can be false positives, but no false negatives.
 	pub fn check<T>(&self, item: T) -> bool
-		where T: Hash
+	where
+		T: Hash,
 	{
 		let base_hash = Bloom::sip_hash(&item);
 		for k_i in 0..self.k_num {
@@ -169,7 +176,8 @@ impl Bloom {
 	}
 
 	fn sip_hash<T>(item: &T) -> u64
-		where T: Hash
+	where
+		T: Hash,
 	{
 		let mut sip = SipHasher::new();
 		item.hash(&mut sip);
@@ -203,8 +211,8 @@ impl Bloom {
 /// Returns the tuple of (bloom part index, bloom part value) where each one is representing
 /// an index of bloom parts that was updated since the last drain
 pub struct BloomJournal {
-    pub hash_functions: u32,
-    pub entries: Vec<(usize, u64)>,
+	pub hash_functions: u32,
+	pub entries: Vec<(usize, u64)>,
 }
 
 #[cfg(test)]
@@ -244,14 +252,30 @@ mod tests {
 
 	#[test]
 	fn hash_backward_compatibility_for_new() {
-		let ss = vec!["you", "should", "not", "break", "hash", "backward", "compatibility"];
+		let ss = vec![
+			"you",
+			"should",
+			"not",
+			"break",
+			"hash",
+			"backward",
+			"compatibility",
+		];
 		let mut bloom = Bloom::new(16, 8);
 		for s in ss.iter() {
 			bloom.set(&s);
 		}
 
-		let drained_elems: HashSet<u64> = bloom.drain_journal().entries.into_iter().map(|t| t.1).collect();
-		let expected: HashSet<u64> = [2094615114573771027u64, 244675582389208413u64].iter().cloned().collect();
+		let drained_elems: HashSet<u64> = bloom
+			.drain_journal()
+			.entries
+			.into_iter()
+			.map(|t| t.1)
+			.collect();
+		let expected: HashSet<u64> = [2094615114573771027u64, 244675582389208413u64]
+			.iter()
+			.cloned()
+			.collect();
 		assert_eq!(drained_elems, expected);
 		assert_eq!(bloom.k_num, 12);
 	}
@@ -262,7 +286,15 @@ mod tests {
 		let k_num = 12;
 		let bloom = Bloom::from_parts(&stored_state, k_num);
 
-		let ss = vec!["you", "should", "not", "break", "hash", "backward", "compatibility"];
+		let ss = vec![
+			"you",
+			"should",
+			"not",
+			"break",
+			"hash",
+			"backward",
+			"compatibility",
+		];
 		let tt = vec!["this", "doesnot", "exist"];
 		for s in ss.iter() {
 			assert!(bloom.check(&s));
@@ -270,6 +302,5 @@ mod tests {
 		for s in tt.iter() {
 			assert!(!bloom.check(&s));
 		}
-
 	}
 }

@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use {multihash, cid, http};
 use route::Out;
+use {cid, http, multihash};
 
 pub type Result<T> = ::std::result::Result<T, Error>;
 
@@ -27,7 +27,7 @@ pub enum ServerError {
 	/// Other `hyper` error
 	Other(http::hyper::error::Error),
 	/// Invalid --ipfs-api-interface
-	InvalidInterface
+	InvalidInterface,
 }
 
 #[derive(Debug, PartialEq)]

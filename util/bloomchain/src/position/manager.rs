@@ -32,13 +32,16 @@ impl Manager {
 		}
 
 		let mut level_sizes = vec![1];
-		level_sizes.extend_from_slice(&(1..).into_iter()
-			.scan(1, |acc, _| {
-				*acc = *acc * index_size;
-				Some(*acc)
-			})
-			.take(levels - 1)
-			.collect::<Vec<usize>>());
+		level_sizes.extend_from_slice(
+			&(1..)
+				.into_iter()
+				.scan(1, |acc, _| {
+					*acc = *acc * index_size;
+					Some(*acc)
+				})
+				.take(levels - 1)
+				.collect::<Vec<usize>>(),
+		);
 
 		Manager {
 			index_size: index_size,
@@ -73,8 +76,8 @@ impl Manager {
 
 		(0..self.index_size)
 			.map(|i| Position {
-				level: new_level, 
-				index: offset + i
+				level: new_level,
+				index: offset + i,
 			})
 			.collect()
 	}
@@ -92,8 +95,8 @@ impl Manager {
 
 #[cfg(test)]
 mod tests {
-	use position::Position;
 	use super::*;
+	use position::Position;
 	#[test]
 	fn test_level_size() {
 		let indexer = Manager::new(16, 3);
@@ -149,7 +152,7 @@ mod tests {
 
 		let mut ebis = vec![];
 		for i in 16..32 {
-			ebis.push(Position { level: 1, index: i});
+			ebis.push(Position { level: 1, index: i });
 		}
 
 		let bis = indexer.lower_level_positions(&bi);

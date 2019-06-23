@@ -16,12 +16,12 @@
 
 use std::sync::{atomic, Arc};
 
+use jsonrpc_core::futures::{self, Future, Stream};
 use jsonrpc_core::{self as core, MetaIoHandler};
-use jsonrpc_core::futures::{self, Stream, Future};
 use jsonrpc_pubsub::Session;
 
 use parity_reactor::EventLoop;
-use v1::{PubSub, PubSubClient, Metadata};
+use v1::{Metadata, PubSub, PubSubClient};
 
 fn rpc() -> MetaIoHandler<Metadata, core::NoopMiddleware> {
 	let mut io = MetaIoHandler::default();
@@ -52,9 +52,13 @@ fn should_subscribe_to_a_method() {
 	metadata.session = Some(Arc::new(Session::new(sender)));
 
 	// Subscribe
-	let request = r#"{"jsonrpc": "2.0", "method": "parity_subscribe", "params": ["hello", []], "id": 1}"#;
+	let request =
+		r#"{"jsonrpc": "2.0", "method": "parity_subscribe", "params": ["hello", []], "id": 1}"#;
 	let response = r#"{"jsonrpc":"2.0","result":"0x416d77337e24399d","id":1}"#;
-	assert_eq!(io.handle_request_sync(request, metadata.clone()), Some(response.to_owned()));
+	assert_eq!(
+		io.handle_request_sync(request, metadata.clone()),
+		Some(response.to_owned())
+	);
 
 	// Check notifications
 	let (res, receiver) = receiver.into_future().wait().unwrap();
@@ -70,7 +74,10 @@ fn should_subscribe_to_a_method() {
 	// And unsubscribe
 	let request = r#"{"jsonrpc": "2.0", "method": "parity_unsubscribe", "params": ["0x416d77337e24399d"], "id": 1}"#;
 	let response = r#"{"jsonrpc":"2.0","result":true,"id":1}"#;
-	assert_eq!(io.handle_request_sync(request, metadata), Some(response.to_owned()));
+	assert_eq!(
+		io.handle_request_sync(request, metadata),
+		Some(response.to_owned())
+	);
 
 	let (res, _receiver) = receiver.into_future().wait().unwrap();
 	assert_eq!(res, None);

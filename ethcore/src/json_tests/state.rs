@@ -15,10 +15,10 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::test_common::*;
-use pod_state::PodState;
-use trace;
 use client::{EvmTestClient, EvmTestError, TransactResult};
 use ethjson;
+use pod_state::PodState;
+use trace;
 use transaction::SignedTransaction;
 use vm::EnvInfo;
 
@@ -38,7 +38,10 @@ pub fn json_chain_test(json_data: &[u8]) -> Vec<String> {
 				let spec = match EvmTestClient::spec_from_json(&spec_name) {
 					Some(spec) => spec,
 					None => {
-						println!("   - {} | {:?} Ignoring tests because of missing spec", name, spec_name);
+						println!(
+							"   - {} | {:?} Ignoring tests because of missing spec",
+							name, spec_name
+						);
 						continue;
 					}
 				};
@@ -47,40 +50,53 @@ pub fn json_chain_test(json_data: &[u8]) -> Vec<String> {
 					let info = format!("   - {} | {:?} ({}/{}) ...", name, spec_name, i + 1, total);
 
 					let post_root: H256 = state.hash.into();
-					let transaction: SignedTransaction = multitransaction.select(&state.indexes).into();
+					let transaction: SignedTransaction =
+						multitransaction.select(&state.indexes).into();
 
 					let result = || -> Result<_, EvmTestError> {
-						Ok(EvmTestClient::from_pod_state(spec, pre.clone())?
-							.transact(&env, transaction, trace::NoopTracer, trace::NoopVMTracer))
+						Ok(EvmTestClient::from_pod_state(spec, pre.clone())?.transact(
+							&env,
+							transaction,
+							trace::NoopTracer,
+							trace::NoopVMTracer,
+						))
 					};
 					match result() {
 						Err(err) => {
 							println!("{} !!! Unexpected internal error: {:?}", info, err);
 							flushln!("{} fail", info);
 							failed.push(name.clone());
-						},
+						}
 						Ok(TransactResult::Ok { state_root, .. }) if state_root != post_root => {
-							println!("{} !!! State mismatch (got: {}, expect: {}", info, state_root, post_root);
+							println!(
+								"{} !!! State mismatch (got: {}, expect: {}",
+								info, state_root, post_root
+							);
 							flushln!("{} fail", info);
 							failed.push(name.clone());
-						},
-						Ok(TransactResult::Err { state_root, ref error }) if state_root != post_root => {
-							println!("{} !!! State mismatch (got: {}, expect: {}", info, state_root, post_root);
+						}
+						Ok(TransactResult::Err {
+							state_root,
+							ref error,
+						}) if state_root != post_root => {
+							println!(
+								"{} !!! State mismatch (got: {}, expect: {}",
+								info, state_root, post_root
+							);
 							println!("{} !!! Execution error: {:?}", info, error);
 							flushln!("{} fail", info);
 							failed.push(name.clone());
-						},
+						}
 						Ok(TransactResult::Err { error, .. }) => {
 							flushln!("{} ok ({:?})", info, error);
-						},
+						}
 						Ok(_) => {
 							flushln!("{} ok", info);
-						},
+						}
 					}
 				}
 			}
 		}
-
 	}
 
 	if !failed.is_empty() {
@@ -96,42 +112,42 @@ mod state_tests {
 		json_chain_test(json_data)
 	}
 
-	declare_test!{GeneralStateTest_stAttackTest, "GeneralStateTests/stAttackTest/"}
-	declare_test!{GeneralStateTest_stBadOpcodeTest, "GeneralStateTests/stBadOpcode/"}
-	declare_test!{GeneralStateTest_stCallCodes, "GeneralStateTests/stCallCodes/"}
-	declare_test!{GeneralStateTest_stCallDelegateCodesCallCodeHomestead, "GeneralStateTests/stCallDelegateCodesCallCodeHomestead/"}
-	declare_test!{GeneralStateTest_stCallDelegateCodesHomestead, "GeneralStateTests/stCallDelegateCodesHomestead/"}
-	declare_test!{GeneralStateTest_stChangedEIP150, "GeneralStateTests/stChangedEIP150/"}
-	declare_test!{GeneralStateTest_stCodeSizeLimit, "GeneralStateTests/stCodeSizeLimit/"}
-	declare_test!{GeneralStateTest_stCreateTest, "GeneralStateTests/stCreateTest/"}
-	declare_test!{GeneralStateTest_stDelegatecallTestHomestead, "GeneralStateTests/stDelegatecallTestHomestead/"}
-	declare_test!{GeneralStateTest_stEIP150singleCodeGasPrices, "GeneralStateTests/stEIP150singleCodeGasPrices/"}
-	declare_test!{GeneralStateTest_stEIP150Specific, "GeneralStateTests/stEIP150Specific/"}
-	declare_test!{GeneralStateTest_stEIP158Specific, "GeneralStateTests/stEIP158Specific/"}
-	declare_test!{GeneralStateTest_stExample, "GeneralStateTests/stExample/"}
-	declare_test!{GeneralStateTest_stHomesteadSpecific, "GeneralStateTests/stHomesteadSpecific/"}
-	declare_test!{GeneralStateTest_stInitCodeTest, "GeneralStateTests/stInitCodeTest/"}
-	declare_test!{GeneralStateTest_stLogTests, "GeneralStateTests/stLogTests/"}
-	declare_test!{GeneralStateTest_stMemExpandingEIP150Calls, "GeneralStateTests/stMemExpandingEIP150Calls/"}
-	declare_test!{heavy => GeneralStateTest_stMemoryStressTest, "GeneralStateTests/stMemoryStressTest/"}
-	declare_test!{GeneralStateTest_stMemoryTest, "GeneralStateTests/stMemoryTest/"}
-	declare_test!{GeneralStateTest_stNonZeroCallsTest, "GeneralStateTests/stNonZeroCallsTest/"}
-	declare_test!{GeneralStateTest_stPreCompiledContracts, "GeneralStateTests/stPreCompiledContracts/"}
-	declare_test!{heavy => GeneralStateTest_stQuadraticComplexityTest, "GeneralStateTests/stQuadraticComplexityTest/"}
-	declare_test!{GeneralStateTest_stRandom, "GeneralStateTests/stRandom/"}
-	declare_test!{GeneralStateTest_stRecursiveCreate, "GeneralStateTests/stRecursiveCreate/"}
-	declare_test!{GeneralStateTest_stRefundTest, "GeneralStateTests/stRefundTest/"}
-	declare_test!{GeneralStateTest_stReturnDataTest, "GeneralStateTests/stReturnDataTest/"}
-	declare_test!{GeneralStateTest_stRevertTest, "GeneralStateTests/stRevertTest/"}
-	declare_test!{GeneralStateTest_stSolidityTest, "GeneralStateTests/stSolidityTest/"}
-	declare_test!{GeneralStateTest_stSpecialTest, "GeneralStateTests/stSpecialTest/"}
-	declare_test!{GeneralStateTest_stStackTests, "GeneralStateTests/stStackTests/"}
-	declare_test!{GeneralStateTest_stStaticCall, "GeneralStateTests/stStaticCall/"}
-	declare_test!{GeneralStateTest_stSystemOperationsTest, "GeneralStateTests/stSystemOperationsTest/"}
-	declare_test!{GeneralStateTest_stTransactionTest, "GeneralStateTests/stTransactionTest/"}
-	declare_test!{GeneralStateTest_stTransitionTest, "GeneralStateTests/stTransitionTest/"}
-	declare_test!{GeneralStateTest_stWalletTest, "GeneralStateTests/stWalletTest/"}
-	declare_test!{GeneralStateTest_stZeroCallsRevert, "GeneralStateTests/stZeroCallsRevert/"}
-	declare_test!{GeneralStateTest_stZeroCallsTest, "GeneralStateTests/stZeroCallsTest/"}
-	declare_test!{GeneralStateTest_stZeroKnowledge, "GeneralStateTests/stZeroKnowledge/"}
+	declare_test! {GeneralStateTest_stAttackTest, "GeneralStateTests/stAttackTest/"}
+	declare_test! {GeneralStateTest_stBadOpcodeTest, "GeneralStateTests/stBadOpcode/"}
+	declare_test! {GeneralStateTest_stCallCodes, "GeneralStateTests/stCallCodes/"}
+	declare_test! {GeneralStateTest_stCallDelegateCodesCallCodeHomestead, "GeneralStateTests/stCallDelegateCodesCallCodeHomestead/"}
+	declare_test! {GeneralStateTest_stCallDelegateCodesHomestead, "GeneralStateTests/stCallDelegateCodesHomestead/"}
+	declare_test! {GeneralStateTest_stChangedEIP150, "GeneralStateTests/stChangedEIP150/"}
+	declare_test! {GeneralStateTest_stCodeSizeLimit, "GeneralStateTests/stCodeSizeLimit/"}
+	declare_test! {GeneralStateTest_stCreateTest, "GeneralStateTests/stCreateTest/"}
+	declare_test! {GeneralStateTest_stDelegatecallTestHomestead, "GeneralStateTests/stDelegatecallTestHomestead/"}
+	declare_test! {GeneralStateTest_stEIP150singleCodeGasPrices, "GeneralStateTests/stEIP150singleCodeGasPrices/"}
+	declare_test! {GeneralStateTest_stEIP150Specific, "GeneralStateTests/stEIP150Specific/"}
+	declare_test! {GeneralStateTest_stEIP158Specific, "GeneralStateTests/stEIP158Specific/"}
+	declare_test! {GeneralStateTest_stExample, "GeneralStateTests/stExample/"}
+	declare_test! {GeneralStateTest_stHomesteadSpecific, "GeneralStateTests/stHomesteadSpecific/"}
+	declare_test! {GeneralStateTest_stInitCodeTest, "GeneralStateTests/stInitCodeTest/"}
+	declare_test! {GeneralStateTest_stLogTests, "GeneralStateTests/stLogTests/"}
+	declare_test! {GeneralStateTest_stMemExpandingEIP150Calls, "GeneralStateTests/stMemExpandingEIP150Calls/"}
+	declare_test! {heavy => GeneralStateTest_stMemoryStressTest, "GeneralStateTests/stMemoryStressTest/"}
+	declare_test! {GeneralStateTest_stMemoryTest, "GeneralStateTests/stMemoryTest/"}
+	declare_test! {GeneralStateTest_stNonZeroCallsTest, "GeneralStateTests/stNonZeroCallsTest/"}
+	declare_test! {GeneralStateTest_stPreCompiledContracts, "GeneralStateTests/stPreCompiledContracts/"}
+	declare_test! {heavy => GeneralStateTest_stQuadraticComplexityTest, "GeneralStateTests/stQuadraticComplexityTest/"}
+	declare_test! {GeneralStateTest_stRandom, "GeneralStateTests/stRandom/"}
+	declare_test! {GeneralStateTest_stRecursiveCreate, "GeneralStateTests/stRecursiveCreate/"}
+	declare_test! {GeneralStateTest_stRefundTest, "GeneralStateTests/stRefundTest/"}
+	declare_test! {GeneralStateTest_stReturnDataTest, "GeneralStateTests/stReturnDataTest/"}
+	declare_test! {GeneralStateTest_stRevertTest, "GeneralStateTests/stRevertTest/"}
+	declare_test! {GeneralStateTest_stSolidityTest, "GeneralStateTests/stSolidityTest/"}
+	declare_test! {GeneralStateTest_stSpecialTest, "GeneralStateTests/stSpecialTest/"}
+	declare_test! {GeneralStateTest_stStackTests, "GeneralStateTests/stStackTests/"}
+	declare_test! {GeneralStateTest_stStaticCall, "GeneralStateTests/stStaticCall/"}
+	declare_test! {GeneralStateTest_stSystemOperationsTest, "GeneralStateTests/stSystemOperationsTest/"}
+	declare_test! {GeneralStateTest_stTransactionTest, "GeneralStateTests/stTransactionTest/"}
+	declare_test! {GeneralStateTest_stTransitionTest, "GeneralStateTests/stTransitionTest/"}
+	declare_test! {GeneralStateTest_stWalletTest, "GeneralStateTests/stWalletTest/"}
+	declare_test! {GeneralStateTest_stZeroCallsRevert, "GeneralStateTests/stZeroCallsRevert/"}
+	declare_test! {GeneralStateTest_stZeroCallsTest, "GeneralStateTests/stZeroCallsTest/"}
+	declare_test! {GeneralStateTest_stZeroKnowledge, "GeneralStateTests/stZeroKnowledge/"}
 }

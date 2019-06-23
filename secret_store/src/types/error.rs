@@ -15,10 +15,10 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::fmt;
-use std::net;
 use std::io::Error as IoError;
+use std::net;
 
-use {ethkey, crypto, kvdb};
+use {crypto, ethkey, kvdb};
 
 /// Secret store error.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -132,26 +132,41 @@ impl fmt::Display for Error {
 		match *self {
 			Error::InvalidNodeAddress => write!(f, "invalid node address has been passed"),
 			Error::InvalidNodeId => write!(f, "invalid node id has been passed"),
-			Error::DuplicateSessionId => write!(f, "session with the same id is already registered"),
+			Error::DuplicateSessionId => {
+				write!(f, "session with the same id is already registered")
+			}
 			Error::NoActiveSessionWithId => write!(f, "no active session with given id"),
 			Error::NotEnoughNodesForThreshold => write!(f, "not enough nodes for passed threshold"),
-			Error::TooEarlyForRequest => write!(f, "session is not yet ready to process this request"),
-			Error::InvalidStateForRequest => write!(f, "session is in invalid state for processing this request"),
+			Error::TooEarlyForRequest => {
+				write!(f, "session is not yet ready to process this request")
+			}
+			Error::InvalidStateForRequest => {
+				write!(f, "session is in invalid state for processing this request")
+			}
 			Error::InvalidNodeForRequest => write!(f, "invalid node for this request"),
 			Error::InvalidMessage => write!(f, "invalid message is received"),
 			Error::InvalidMessageVersion => write!(f, "unsupported message is received"),
 			Error::ReplayProtection => write!(f, "replay message is received"),
-			Error::NodeDisconnected => write!(f, "node required for this operation is currently disconnected"),
-			Error::ServerKeyAlreadyGenerated => write!(f, "Server key with this ID is already generated"),
+			Error::NodeDisconnected => write!(
+				f,
+				"node required for this operation is currently disconnected"
+			),
+			Error::ServerKeyAlreadyGenerated => {
+				write!(f, "Server key with this ID is already generated")
+			}
 			Error::ServerKeyIsNotFound => write!(f, "Server key with this ID is not found"),
-			Error::DocumentKeyAlreadyStored => write!(f, "Document key with this ID is already stored"),
+			Error::DocumentKeyAlreadyStored => {
+				write!(f, "Document key with this ID is already stored")
+			}
 			Error::DocumentKeyIsNotFound => write!(f, "Document key with this ID is not found"),
 			Error::ConsensusUnreachable => write!(f, "Consensus unreachable"),
 			Error::ConsensusTemporaryUnreachable => write!(f, "Consensus temporary unreachable"),
 			Error::AccessDenied => write!(f, "Access denied"),
 			Error::ExclusiveSessionActive => write!(f, "Exclusive session active"),
 			Error::HasActiveSessions => write!(f, "Unable to start exclusive session"),
-			Error::InsufficientRequesterData(ref e) => write!(f, "Insufficient requester data: {}", e),
+			Error::InsufficientRequesterData(ref e) => {
+				write!(f, "Insufficient requester data: {}", e)
+			}
 			Error::EthKey(ref e) => write!(f, "cryptographic error {}", e),
 			Error::Hyper(ref msg) => write!(f, "Hyper error: {}", msg),
 			Error::Serde(ref msg) => write!(f, "Serialization error: {}", msg),

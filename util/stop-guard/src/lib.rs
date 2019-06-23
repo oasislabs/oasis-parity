@@ -16,8 +16,8 @@
 
 //! Stop guard mod
 
-use std::sync::Arc;
 use std::sync::atomic::*;
+use std::sync::Arc;
 
 /// Stop guard that will set a stop flag on drop
 pub struct StopGuard {
@@ -28,7 +28,7 @@ impl StopGuard {
 	/// Create a stop guard
 	pub fn new() -> StopGuard {
 		StopGuard {
-			flag: Arc::new(AtomicBool::new(false))
+			flag: Arc::new(AtomicBool::new(false)),
 		}
 	}
 

@@ -16,10 +16,10 @@
 
 //! State test transaction deserialization.
 
-use uint::Uint;
 use bytes::Bytes;
 use hash::{Address, H256};
 use maybe::MaybeEmpty;
+use uint::Uint;
 
 /// State test transaction deserialization.
 #[derive(Debug, PartialEq, Deserialize)]
@@ -27,15 +27,15 @@ pub struct Transaction {
 	/// Transaction data.
 	pub data: Bytes,
 	/// Gas limit.
-	#[serde(rename="gasLimit")]
+	#[serde(rename = "gasLimit")]
 	pub gas_limit: Uint,
 	/// Gas price.
-	#[serde(rename="gasPrice")]
+	#[serde(rename = "gasPrice")]
 	pub gas_price: Uint,
 	/// Nonce.
 	pub nonce: Uint,
 	/// Secret key.
-	#[serde(rename="secretKey")]
+	#[serde(rename = "secretKey")]
 	pub secret: Option<H256>,
 	/// To.
 	pub to: MaybeEmpty<Address>,

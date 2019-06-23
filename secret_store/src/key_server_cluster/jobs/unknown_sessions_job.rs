@@ -14,10 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+use key_server_cluster::jobs::job_session::{
+	JobExecutor, JobPartialRequestAction, JobPartialResponseAction,
+};
+use key_server_cluster::{Error, KeyStorage, NodeId, SessionId};
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
-use std::collections::{BTreeSet, BTreeMap};
-use key_server_cluster::{Error, NodeId, SessionId, KeyStorage};
-use key_server_cluster::jobs::job_session::{JobPartialRequestAction, JobPartialResponseAction, JobExecutor};
 
 /// Unknown sessions report job.
 pub struct UnknownSessionsJob {
@@ -48,28 +50,52 @@ impl JobExecutor for UnknownSessionsJob {
 	type PartialJobResponse = BTreeSet<SessionId>;
 	type JobResponse = BTreeMap<SessionId, BTreeSet<NodeId>>;
 
-	fn prepare_partial_request(&self, _node: &NodeId, _nodes: &BTreeSet<NodeId>) -> Result<NodeId, Error> {
+	fn prepare_partial_request(
+		&self,
+		_node: &NodeId,
+		_nodes: &BTreeSet<NodeId>,
+	) -> Result<NodeId, Error> {
 		Ok(self.target_node_id.clone().expect("prepare_partial_request is only called on master nodes; this field is filled on master nodes in constructor; qed"))
 	}
 
-	fn process_partial_request(&mut self, partial_request: NodeId) -> Result<JobPartialRequestAction<BTreeSet<SessionId>>, Error> {
-		Ok(JobPartialRequestAction::Respond(self.key_storage.iter()
-			.filter(|&(_, ref key_share)| !key_share.versions.last().map(|v| v.id_numbers.contains_key(&partial_request)).unwrap_or(true))
-			.map(|(id, _)| id.clone())
-			.collect()))
+	fn process_partial_request(
+		&mut self,
+		partial_request: NodeId,
+	) -> Result<JobPartialRequestAction<BTreeSet<SessionId>>, Error> {
+		Ok(JobPartialRequestAction::Respond(
+			self.key_storage
+				.iter()
+				.filter(|&(_, ref key_share)| {
+					!key_share
+						.versions
+						.last()
+						.map(|v| v.id_numbers.contains_key(&partial_request))
+						.unwrap_or(true)
+				})
+				.map(|(id, _)| id.clone())
+				.collect(),
+		))
 	}
 
-	fn check_partial_response(&mut self, _sender: &NodeId, _partial_response: &BTreeSet<SessionId>) -> Result<JobPartialResponseAction, Error> {
+	fn check_partial_response(
+		&mut self,
+		_sender: &NodeId,
+		_partial_response: &BTreeSet<SessionId>,
+	) -> Result<JobPartialResponseAction, Error> {
 		Ok(JobPartialResponseAction::Accept)
 	}
 
 	// TODO [Opt]:
 	// currently ALL unknown sessions are sent at once - it is better to limit messages by size/len => add partial-partial responses
-	fn compute_response(&self, partial_responses: &BTreeMap<NodeId, BTreeSet<SessionId>>) -> Result<BTreeMap<SessionId, BTreeSet<NodeId>>, Error> {
+	fn compute_response(
+		&self,
+		partial_responses: &BTreeMap<NodeId, BTreeSet<SessionId>>,
+	) -> Result<BTreeMap<SessionId, BTreeSet<NodeId>>, Error> {
 		let mut result: BTreeMap<SessionId, BTreeSet<NodeId>> = BTreeMap::new();
 		for (node_id, node_sessions) in partial_responses {
 			for node_session in node_sessions {
-				result.entry(node_session.clone())
+				result
+					.entry(node_session.clone())
 					.or_insert_with(Default::default)
 					.insert(node_id.clone());
 			}

@@ -1,4 +1,4 @@
-use byteorder::{ByteOrder, BigEndian};
+use byteorder::{BigEndian, ByteOrder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
@@ -122,10 +122,14 @@ mod tests {
 
 	#[test]
 	fn test_valid_header() {
-		let data = make_data_payload(1, json!({
-			"confidential": true,
-			"expiry": 1577836800,
-		}).to_string());
+		let data = make_data_payload(
+			1,
+			json!({
+				"confidential": true,
+				"expiry": 1577836800,
+			})
+			.to_string(),
+		);
 
 		let contract = OasisContract::from_code(&data).unwrap().unwrap();
 
@@ -136,9 +140,13 @@ mod tests {
 
 	#[test]
 	fn test_confidential_only() {
-		let data = make_data_payload(1, json!({
-			"confidential": true,
-		}).to_string());
+		let data = make_data_payload(
+			1,
+			json!({
+				"confidential": true,
+			})
+			.to_string(),
+		);
 
 		let contract = OasisContract::from_code(&data).unwrap().unwrap();
 
@@ -148,9 +156,13 @@ mod tests {
 
 	#[test]
 	fn test_expiry_only() {
-		let data = make_data_payload(1, json!({
-			"expiry": 1577836800,
-		}).to_string());
+		let data = make_data_payload(
+			1,
+			json!({
+				"expiry": 1577836800,
+			})
+			.to_string(),
+		);
 
 		let contract = OasisContract::from_code(&data).unwrap().unwrap();
 
@@ -160,10 +172,14 @@ mod tests {
 
 	#[test]
 	fn test_invalid_version() {
-		let data = make_data_payload(2, json!({
-			"confidential": true,
-			"expiry": 1577836800,
-		}).to_string());
+		let data = make_data_payload(
+			2,
+			json!({
+				"confidential": true,
+				"expiry": 1577836800,
+			})
+			.to_string(),
+		);
 
 		let result = OasisContract::from_code(&data);
 		assert!(result.is_err());
@@ -171,11 +187,15 @@ mod tests {
 
 	#[test]
 	fn test_invalid_key() {
-		let data = make_data_payload(1, json!({
-			"expiry": 1577836800,
-			"unknown": "something",
-			"blah": "blah",
-		}).to_string());
+		let data = make_data_payload(
+			1,
+			json!({
+				"expiry": 1577836800,
+				"unknown": "something",
+				"blah": "blah",
+			})
+			.to_string(),
+		);
 
 		let result = OasisContract::from_code(&data);
 		assert!(result.is_err());
@@ -183,9 +203,10 @@ mod tests {
 
 	#[test]
 	fn test_duplicate_key() {
-		let data = make_data_payload(1,
-			"{\"expiry\":1577836800,\"confidential\":true,\"expiry\":1577836801}"
-			.to_string());
+		let data = make_data_payload(
+			1,
+			"{\"expiry\":1577836800,\"confidential\":true,\"expiry\":1577836801}".to_string(),
+		);
 
 		let result = OasisContract::from_code(&data);
 		assert!(result.is_err());
@@ -228,19 +249,27 @@ mod tests {
 	#[test]
 	fn test_invalid_values() {
 		// create a header with incorrect confidential type
-		let invalid_confidential = make_data_payload(1, json!({
-			"confidential": "true",
-			"expiry": 1577836800,
-		}).to_string());
+		let invalid_confidential = make_data_payload(
+			1,
+			json!({
+				"confidential": "true",
+				"expiry": 1577836800,
+			})
+			.to_string(),
+		);
 
 		let result = OasisContract::from_code(&invalid_confidential[..]);
 		assert!(result.is_err());
 
 		// create a header with incorrect expiry type
-		let invalid_expiry = make_data_payload(1, json!({
-			"confidential": true,
-			"expiry": "1577836800",
-		}).to_string());
+		let invalid_expiry = make_data_payload(
+			1,
+			json!({
+				"confidential": true,
+				"expiry": "1577836800",
+			})
+			.to_string(),
+		);
 
 		let result = OasisContract::from_code(&invalid_expiry[..]);
 		assert!(result.is_err());

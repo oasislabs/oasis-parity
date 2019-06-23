@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use position::Position;
 use bloom::Bloom;
+use position::Position;
 
 /// Readonly `Bloom` database.
 pub trait BloomDatabase {

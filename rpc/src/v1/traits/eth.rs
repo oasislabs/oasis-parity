@@ -15,12 +15,12 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Eth rpc interface.
-use jsonrpc_core::{Result, BoxFuture};
+use jsonrpc_core::{BoxFuture, Result};
 use jsonrpc_macros::Trailing;
 
-use v1::types::{RichBlock, BlockNumber, Bytes, CallRequest, Filter, FilterChanges, Index};
+use v1::types::{BlockNumber, Bytes, CallRequest, Filter, FilterChanges, Index, RichBlock};
 use v1::types::{Log, Receipt, Transaction, Work};
-use v1::types::{H64, H160, H256, U256};
+use v1::types::{H160, H256, H64, U256};
 
 build_rpc_trait! {
 	/// Eth rpc interface.

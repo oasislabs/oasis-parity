@@ -16,11 +16,11 @@
 
 //! Blockchain test deserializer.
 
-use std::collections::BTreeMap;
-use std::io::Read;
+use blockchain::blockchain::BlockChain;
 use serde_json;
 use serde_json::Error;
-use blockchain::blockchain::BlockChain;
+use std::collections::BTreeMap;
+use std::io::Read;
 
 /// Blockchain test deserializer.
 #[derive(Debug, PartialEq, Deserialize)]
@@ -37,7 +37,10 @@ impl IntoIterator for Test {
 
 impl Test {
 	/// Loads test from json.
-	pub fn load<R>(reader: R) -> Result<Self, Error> where R: Read {
+	pub fn load<R>(reader: R) -> Result<Self, Error>
+	where
+		R: Read,
+	{
 		serde_json::from_reader(reader)
 	}
 }

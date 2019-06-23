@@ -18,7 +18,7 @@
 
 use ethcore::{encoded, header::Header};
 use ethereum_types::H256;
-use light::request::{HashOrNumber, CompleteHeadersRequest as HeadersRequest};
+use light::request::{CompleteHeadersRequest as HeadersRequest, HashOrNumber};
 use rlp::DecoderError;
 use std::fmt;
 
@@ -48,16 +48,19 @@ impl fmt::Display for BasicError {
 		write!(f, "Header response verification error: ")?;
 
 		match *self {
-			BasicError::WrongSkip(ref exp, ref got)
-				=> write!(f, "wrong skip (expected {}, got {:?})", exp, got),
-			BasicError::WrongStartNumber(ref exp, ref got)
-				=> write!(f, "wrong start number (expected {}, got {})", exp, got),
-			BasicError::WrongStartHash(ref exp, ref got)
-				=> write!(f, "wrong start hash (expected {}, got {})", exp, got),
-			BasicError::TooManyHeaders(ref max, ref got)
-				=> write!(f, "too many headers (max {}, got {})", max, got),
-			BasicError::Decoder(ref err)
-				=> write!(f, "{}", err),
+			BasicError::WrongSkip(ref exp, ref got) => {
+				write!(f, "wrong skip (expected {}, got {:?})", exp, got)
+			}
+			BasicError::WrongStartNumber(ref exp, ref got) => {
+				write!(f, "wrong start number (expected {}, got {})", exp, got)
+			}
+			BasicError::WrongStartHash(ref exp, ref got) => {
+				write!(f, "wrong start hash (expected {}, got {})", exp, got)
+			}
+			BasicError::TooManyHeaders(ref max, ref got) => {
+				write!(f, "too many headers (max {}, got {})", max, got)
+			}
+			BasicError::Decoder(ref err) => write!(f, "{}", err),
 		}
 	}
 }
@@ -71,8 +74,11 @@ pub trait Constraint {
 }
 
 /// Do basic verification of provided headers against a request.
-pub fn verify(headers: &[encoded::Header], request: &HeadersRequest) -> Result<Vec<Header>, BasicError> {
-	let headers: Result<Vec<_>, _> = headers.iter().map(|h| h.decode() ).collect();
+pub fn verify(
+	headers: &[encoded::Header],
+	request: &HeadersRequest,
+) -> Result<Vec<Header>, BasicError> {
+	let headers: Result<Vec<_>, _> = headers.iter().map(|h| h.decode()).collect();
 	match headers {
 		Ok(headers) => {
 			let reverse = request.reverse;
@@ -86,8 +92,8 @@ pub fn verify(headers: &[encoded::Header], request: &HeadersRequest) -> Result<V
 			SkipsBetween(request.skip).verify(&headers, reverse)?;
 
 			Ok(headers)
-		},
-		Err(e) => Err(e.into())
+		}
+		Err(e) => Err(e.into()),
 	}
 }
 
@@ -129,11 +135,19 @@ impl Constraint for SkipsBetween {
 
 	fn verify(&self, headers: &[Header], reverse: bool) -> Result<(), BasicError> {
 		for pair in headers.windows(2) {
-			let (low, high) = if reverse { (&pair[1], &pair[0]) } else { (&pair[0], &pair[1]) };
-			if low.number() >= high.number() { return Err(BasicError::WrongSkip(self.0, None)) }
+			let (low, high) = if reverse {
+				(&pair[1], &pair[0])
+			} else {
+				(&pair[0], &pair[1])
+			};
+			if low.number() >= high.number() {
+				return Err(BasicError::WrongSkip(self.0, None));
+			}
 
 			let skip = (high.number() - low.number()) - 1;
-			if skip != self.0 { return Err(BasicError::WrongSkip(self.0, Some(skip))) }
+			if skip != self.0 {
+				return Err(BasicError::WrongSkip(self.0, Some(skip)));
+			}
 		}
 
 		Ok(())
@@ -146,7 +160,7 @@ impl Constraint for Max {
 	fn verify(&self, headers: &[Header], _reverse: bool) -> Result<(), BasicError> {
 		match headers.len() > self.0 {
 			true => Err(BasicError::TooManyHeaders(self.0, headers.len())),
-			false => Ok(())
+			false => Ok(()),
 		}
 	}
 }
@@ -169,18 +183,21 @@ mod tests {
 		};
 
 		let mut parent_hash = None;
-		let headers: Vec<_> = (0..25).map(|x| x + 10).map(|x| {
-			let mut header = Header::default();
-			header.set_number(x);
+		let headers: Vec<_> = (0..25)
+			.map(|x| x + 10)
+			.map(|x| {
+				let mut header = Header::default();
+				header.set_number(x);
 
-			if let Some(parent_hash) = parent_hash {
-				header.set_parent_hash(parent_hash);
-			}
+				if let Some(parent_hash) = parent_hash {
+					header.set_parent_hash(parent_hash);
+				}
 
-			parent_hash = Some(header.hash());
+				parent_hash = Some(header.hash());
 
-			encoded::Header::new(::rlp::encode(&header).into_vec())
-		}).collect();
+				encoded::Header::new(::rlp::encode(&header).into_vec())
+			})
+			.collect();
 
 		assert!(verify(&headers, &request).is_ok());
 	}
@@ -195,18 +212,22 @@ mod tests {
 		};
 
 		let mut parent_hash = None;
-		let headers: Vec<_> = (0..25).map(|x| x + 10).rev().map(|x| {
-			let mut header = Header::default();
-			header.set_number(x);
+		let headers: Vec<_> = (0..25)
+			.map(|x| x + 10)
+			.rev()
+			.map(|x| {
+				let mut header = Header::default();
+				header.set_number(x);
 
-			if let Some(parent_hash) = parent_hash {
-				header.set_parent_hash(parent_hash);
-			}
+				if let Some(parent_hash) = parent_hash {
+					header.set_parent_hash(parent_hash);
+				}
 
-			parent_hash = Some(header.hash());
+				parent_hash = Some(header.hash());
 
-			encoded::Header::new(::rlp::encode(&header).into_vec())
-		}).collect();
+				encoded::Header::new(::rlp::encode(&header).into_vec())
+			})
+			.collect();
 
 		assert!(verify(&headers, &request).is_ok());
 	}
@@ -221,20 +242,26 @@ mod tests {
 		};
 
 		let mut parent_hash = None;
-		let headers: Vec<_> = (0..25).map(|x| x + 10).map(|x| {
-			let mut header = Header::default();
-			header.set_number(x);
+		let headers: Vec<_> = (0..25)
+			.map(|x| x + 10)
+			.map(|x| {
+				let mut header = Header::default();
+				header.set_number(x);
 
-			if let Some(parent_hash) = parent_hash {
-				header.set_parent_hash(parent_hash);
-			}
+				if let Some(parent_hash) = parent_hash {
+					header.set_parent_hash(parent_hash);
+				}
 
-			parent_hash = Some(header.hash());
+				parent_hash = Some(header.hash());
 
-			encoded::Header::new(::rlp::encode(&header).into_vec())
-		}).collect();
+				encoded::Header::new(::rlp::encode(&header).into_vec())
+			})
+			.collect();
 
-		assert_eq!(verify(&headers, &request), Err(BasicError::TooManyHeaders(20, 25)));
+		assert_eq!(
+			verify(&headers, &request),
+			Err(BasicError::TooManyHeaders(20, 25))
+		);
 	}
 
 	#[test]
@@ -246,13 +273,20 @@ mod tests {
 			reverse: false,
 		};
 
-		let headers: Vec<_> = (0..25).map(|x| x * 3).map(|x| x + 10).map(|x| {
-			let mut header = Header::default();
-			header.set_number(x);
+		let headers: Vec<_> = (0..25)
+			.map(|x| x * 3)
+			.map(|x| x + 10)
+			.map(|x| {
+				let mut header = Header::default();
+				header.set_number(x);
 
-			encoded::Header::new(::rlp::encode(&header).into_vec())
-		}).collect();
+				encoded::Header::new(::rlp::encode(&header).into_vec())
+			})
+			.collect();
 
-		assert_eq!(verify(&headers, &request), Err(BasicError::WrongSkip(5, Some(2))));
+		assert_eq!(
+			verify(&headers, &request),
+			Err(BasicError::WrongSkip(5, Some(2)))
+		);
 	}
 }

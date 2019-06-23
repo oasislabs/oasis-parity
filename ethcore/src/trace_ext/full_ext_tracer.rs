@@ -15,11 +15,11 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::convert::Into;
-use std::fmt;  // debug use: Display trait
+use std::fmt; // debug use: Display trait
 use std::sync::{Arc, Mutex};
 use std::vec;
 
-use ethereum_types::{H256, Address};
+use ethereum_types::{Address, H256};
 
 use trace_ext::ext_tracer::ExtTracer;
 
@@ -77,7 +77,7 @@ impl SubTrace {
 
 impl Into<FullExtTracer> for SubTrace {
 	fn into(self) -> FullExtTracer {
-		FullExtTracer{ inner: self }
+		FullExtTracer { inner: self }
 	}
 }
 
@@ -111,11 +111,13 @@ pub enum FullTracerRecord {
 impl FullExtTracer {
 	/// Create a new FullExtTracer to trace the execution.
 	pub fn new() -> Self {
-                // At the top-level, there is no contract address associated with the trace
-	        // since the executor just uses it to do a single `call` into the contract
-	        // being executed.  We use Address::zero() to indicate that this is a top-level
-	        // subtrace.
-		FullExtTracer{ inner: SubTrace::new(&Address::zero()) }
+		// At the top-level, there is no contract address associated with the trace
+		// since the executor just uses it to do a single `call` into the contract
+		// being executed.  We use Address::zero() to indicate that this is a top-level
+		// subtrace.
+		FullExtTracer {
+			inner: SubTrace::new(&Address::zero()),
+		}
 	}
 
 	/// Extract the externalities trace from the FullExtTracer.
@@ -127,7 +129,7 @@ impl FullExtTracer {
 			Internal::Call(st) => st.drain(),
 			_ => {
 				panic!("internal error, not a call at top level");
-			},
+			}
 		}
 	}
 }
@@ -139,7 +141,7 @@ fn trace_fmt(trace: &Vec<FullTracerRecord>, f: &mut fmt::Formatter) -> fmt::Resu
 	for rec in trace.iter() {
 		match write!(f, "{}{}", sep, rec) {
 			Err(e) => return Err(e),
-			_ => ()
+			_ => (),
 		};
 		sep = ", ".into();
 	}

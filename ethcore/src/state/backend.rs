@@ -21,14 +21,14 @@
 //! should become general over time to the point where not even a
 //! merkle trie is strictly necessary.
 
-use std::collections::{HashSet, HashMap};
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use state::Account;
 // use parking_lot::Mutex;
 use ethereum_types::{Address, H256};
+use hashdb::{AsHashDB, DBValue, HashDB};
 use memorydb::MemoryDB;
-use hashdb::{AsHashDB, HashDB, DBValue};
 
 /// State backend. See module docs for more details.
 pub trait Backend: Send {
@@ -55,7 +55,8 @@ pub trait Backend: Send {
 	/// is known not to exist.
 	/// `None` is returned if the entry is not cached.
 	fn get_cached<F, U>(&self, a: &Address, f: F) -> Option<U>
-		where F: FnOnce(Option<&mut Account>) -> U;
+	where
+		F: FnOnce(Option<&mut Account>) -> U;
 
 	/// Get cached code based on hash.
 	fn get_cached_code(&self, hash: &H256) -> Option<Arc<Vec<u8>>>;
@@ -81,13 +82,17 @@ impl ProofCheck {
 	/// Create a new `ProofCheck` backend from the given state items.
 	pub fn new(proof: &[DBValue]) -> Self {
 		let mut db = MemoryDB::new();
-		for item in proof { db.insert(item); }
+		for item in proof {
+			db.insert(item);
+		}
 		ProofCheck(db)
 	}
 }
 
 impl HashDB for ProofCheck {
-	fn keys(&self) -> HashMap<H256, i32> { self.0.keys() }
+	fn keys(&self) -> HashMap<H256, i32> {
+		self.0.keys()
+	}
 	fn get(&self, key: &H256) -> Option<DBValue> {
 		self.0.get(key)
 	}
@@ -104,23 +109,34 @@ impl HashDB for ProofCheck {
 		self.0.emplace(key, value)
 	}
 
-	fn remove(&mut self, _key: &H256) { }
+	fn remove(&mut self, _key: &H256) {}
 }
 
 impl Backend for ProofCheck {
-	fn as_hashdb(&self) -> &HashDB { self }
-	fn as_hashdb_mut(&mut self) -> &mut HashDB { self }
+	fn as_hashdb(&self) -> &HashDB {
+		self
+	}
+	fn as_hashdb_mut(&mut self) -> &mut HashDB {
+		self
+	}
 	fn add_to_account_cache(&mut self, _addr: Address, _data: Option<Account>, _modified: bool) {}
 	fn cache_code(&self, _hash: H256, _code: Arc<Vec<u8>>) {}
-	fn get_cached_account(&self, _addr: &Address) -> Option<Option<Account>> { None }
+	fn get_cached_account(&self, _addr: &Address) -> Option<Option<Account>> {
+		None
+	}
 	fn get_cached<F, U>(&self, _a: &Address, _f: F) -> Option<U>
-		where F: FnOnce(Option<&mut Account>) -> U
+	where
+		F: FnOnce(Option<&mut Account>) -> U,
 	{
 		None
 	}
-	fn get_cached_code(&self, _hash: &H256) -> Option<Arc<Vec<u8>>> { None }
+	fn get_cached_code(&self, _hash: &H256) -> Option<Arc<Vec<u8>>> {
+		None
+	}
 	fn note_non_null_account(&self, _address: &Address) {}
-	fn is_known_null(&self, _address: &Address) -> bool { false }
+	fn is_known_null(&self, _address: &Address) -> bool {
+		false
+	}
 }
 
 /// Proving state backend.
@@ -129,7 +145,7 @@ impl Backend for ProofCheck {
 ///
 /// This doesn't cache anything or rely on the canonical state caches.
 pub struct Proving<H: AsHashDB> {
-	base: H, // state we're proving values from.
+	base: H,           // state we're proving values from.
 	changed: MemoryDB, // changed state via insertions.
 	proof: Mutex<HashSet<DBValue>>,
 }
@@ -147,7 +163,7 @@ impl<H: AsHashDB + Send + Sync> HashDB for Proving<H> {
 				self.proof.lock().unwrap().insert(val.clone());
 				Some(val)
 			}
-			None => self.changed.get(key)
+			None => self.changed.get(key),
 		}
 	}
 
@@ -180,21 +196,28 @@ impl<H: AsHashDB + Send + Sync> Backend for Proving<H> {
 		self
 	}
 
-	fn add_to_account_cache(&mut self, _: Address, _: Option<Account>, _: bool) { }
+	fn add_to_account_cache(&mut self, _: Address, _: Option<Account>, _: bool) {}
 
-	fn cache_code(&self, _: H256, _: Arc<Vec<u8>>) { }
+	fn cache_code(&self, _: H256, _: Arc<Vec<u8>>) {}
 
-	fn get_cached_account(&self, _: &Address) -> Option<Option<Account>> { None }
+	fn get_cached_account(&self, _: &Address) -> Option<Option<Account>> {
+		None
+	}
 
 	fn get_cached<F, U>(&self, _: &Address, _: F) -> Option<U>
-		where F: FnOnce(Option<&mut Account>) -> U
+	where
+		F: FnOnce(Option<&mut Account>) -> U,
 	{
 		None
 	}
 
-	fn get_cached_code(&self, _: &H256) -> Option<Arc<Vec<u8>>> { None }
-	fn note_non_null_account(&self, _: &Address) { }
-	fn is_known_null(&self, _: &Address) -> bool { false }
+	fn get_cached_code(&self, _: &H256) -> Option<Arc<Vec<u8>>> {
+		None
+	}
+	fn note_non_null_account(&self, _: &Address) {}
+	fn is_known_null(&self, _: &Address) -> bool {
+		false
+	}
 }
 
 impl<H: AsHashDB> Proving<H> {
@@ -239,21 +262,28 @@ impl<H: AsHashDB + Send + Sync> Backend for Basic<H> {
 		self.0.as_hashdb_mut()
 	}
 
-	fn add_to_account_cache(&mut self, _: Address, _: Option<Account>, _: bool) { }
+	fn add_to_account_cache(&mut self, _: Address, _: Option<Account>, _: bool) {}
 
-	fn cache_code(&self, _: H256, _: Arc<Vec<u8>>) { }
+	fn cache_code(&self, _: H256, _: Arc<Vec<u8>>) {}
 
-	fn get_cached_account(&self, _: &Address) -> Option<Option<Account>> { None }
+	fn get_cached_account(&self, _: &Address) -> Option<Option<Account>> {
+		None
+	}
 
 	fn get_cached<F, U>(&self, _: &Address, _: F) -> Option<U>
-		where F: FnOnce(Option<&mut Account>) -> U
+	where
+		F: FnOnce(Option<&mut Account>) -> U,
 	{
 		None
 	}
 
-	fn get_cached_code(&self, _: &H256) -> Option<Arc<Vec<u8>>> { None }
-	fn note_non_null_account(&self, _: &Address) { }
-	fn is_known_null(&self, _: &Address) -> bool { false }
+	fn get_cached_code(&self, _: &H256) -> Option<Arc<Vec<u8>>> {
+		None
+	}
+	fn note_non_null_account(&self, _: &Address) {}
+	fn is_known_null(&self, _: &Address) -> bool {
+		false
+	}
 }
 
 pub trait CloneWrapped: AsHashDB + Send + Sync {
@@ -286,19 +316,26 @@ impl Backend for Wrapped {
 		self.0.as_hashdb_mut()
 	}
 
-	fn add_to_account_cache(&mut self, _: Address, _: Option<Account>, _: bool) { }
+	fn add_to_account_cache(&mut self, _: Address, _: Option<Account>, _: bool) {}
 
-	fn cache_code(&self, _: H256, _: Arc<Vec<u8>>) { }
+	fn cache_code(&self, _: H256, _: Arc<Vec<u8>>) {}
 
-	fn get_cached_account(&self, _: &Address) -> Option<Option<Account>> { None }
+	fn get_cached_account(&self, _: &Address) -> Option<Option<Account>> {
+		None
+	}
 
 	fn get_cached<F, U>(&self, _: &Address, _: F) -> Option<U>
-		where F: FnOnce(Option<&mut Account>) -> U
+	where
+		F: FnOnce(Option<&mut Account>) -> U,
 	{
 		None
 	}
 
-	fn get_cached_code(&self, _: &H256) -> Option<Arc<Vec<u8>>> { None }
-	fn note_non_null_account(&self, _: &Address) { }
-	fn is_known_null(&self, _: &Address) -> bool { false }
+	fn get_cached_code(&self, _: &H256) -> Option<Arc<Vec<u8>>> {
+		None
+	}
+	fn note_non_null_account(&self, _: &Address) {}
+	fn is_known_null(&self, _: &Address) -> bool {
+		false
+	}
 }

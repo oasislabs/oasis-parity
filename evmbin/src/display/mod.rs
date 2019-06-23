@@ -19,8 +19,8 @@
 use std::time::Duration;
 
 pub mod json;
-pub mod std_json;
 pub mod simple;
+pub mod std_json;
 
 /// Formats duration into human readable format.
 pub fn format_time(time: &Duration) -> String {

@@ -15,8 +15,8 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 // use rcrypto::ripemd160;
-use ripemd160;
 use ring::digest::{self, Context, SHA256, SHA512};
+use ripemd160;
 use std::marker::PhantomData;
 use std::ops::Deref;
 
@@ -33,19 +33,25 @@ impl<T> Deref for Digest<T> {
 	fn deref(&self) -> &Self::Target {
 		match self.0 {
 			InnerDigest::Ring(ref d) => d.as_ref(),
-			InnerDigest::Ripemd160(ref d) => &d[..]
+			InnerDigest::Ripemd160(ref d) => &d[..],
 		}
 	}
 }
 
 /// Single-step sha256 digest computation.
 pub fn sha256(data: &[u8]) -> Digest<Sha256> {
-	Digest(InnerDigest::Ring(digest::digest(&SHA256, data)), PhantomData)
+	Digest(
+		InnerDigest::Ring(digest::digest(&SHA256, data)),
+		PhantomData,
+	)
 }
 
 /// Single-step sha512 digest computation.
 pub fn sha512(data: &[u8]) -> Digest<Sha512> {
-	Digest(InnerDigest::Ring(digest::digest(&SHA512, data)), PhantomData)
+	Digest(
+		InnerDigest::Ring(digest::digest(&SHA512, data)),
+		PhantomData,
+	)
 }
 
 /// Single-step ripemd160 digest computation.
@@ -64,7 +70,7 @@ pub struct Hasher<T>(Inner, PhantomData<T>);
 
 enum Inner {
 	Ring(Context),
-	Ripemd160(ripemd160::Ripemd160)
+	Ripemd160(ripemd160::Ripemd160),
 }
 
 impl Hasher<Sha256> {

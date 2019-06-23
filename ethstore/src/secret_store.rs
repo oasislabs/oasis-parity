@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+use ethereum_types::H256;
+use ethkey::{Address, Message, Public, Secret, Signature};
+use json::{OpaqueKeyFile, Uuid};
+use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
-use std::cmp::Ordering;
-use ethkey::{Address, Message, Signature, Secret, Public};
 use Error;
-use json::{Uuid, OpaqueKeyFile};
-use ethereum_types::H256;
 use OpaqueSecret;
 
 /// Key directory reference
@@ -43,7 +43,11 @@ pub struct StoreAccountRef {
 
 impl PartialOrd for StoreAccountRef {
 	fn partial_cmp(&self, other: &StoreAccountRef) -> Option<Ordering> {
-		Some(self.address.cmp(&other.address).then_with(|| self.vault.cmp(&other.vault)))
+		Some(
+			self.address
+				.cmp(&other.address)
+				.then_with(|| self.vault.cmp(&other.vault)),
+		)
 	}
 }
 
@@ -56,25 +60,72 @@ impl ::std::borrow::Borrow<Address> for StoreAccountRef {
 /// Simple Secret Store API
 pub trait SimpleSecretStore: Send + Sync {
 	/// Inserts new accounts to the store (or vault) with given password.
-	fn insert_account(&self, vault: SecretVaultRef, secret: Secret, password: &str) -> Result<StoreAccountRef, Error>;
+	fn insert_account(
+		&self,
+		vault: SecretVaultRef,
+		secret: Secret,
+		password: &str,
+	) -> Result<StoreAccountRef, Error>;
 	/// Inserts new derived account to the store (or vault) with given password.
-	fn insert_derived(&self, vault: SecretVaultRef, account_ref: &StoreAccountRef, password: &str, derivation: Derivation) -> Result<StoreAccountRef, Error>;
+	fn insert_derived(
+		&self,
+		vault: SecretVaultRef,
+		account_ref: &StoreAccountRef,
+		password: &str,
+		derivation: Derivation,
+	) -> Result<StoreAccountRef, Error>;
 	/// Changes accounts password.
-	fn change_password(&self, account: &StoreAccountRef, old_password: &str, new_password: &str) -> Result<(), Error>;
+	fn change_password(
+		&self,
+		account: &StoreAccountRef,
+		old_password: &str,
+		new_password: &str,
+	) -> Result<(), Error>;
 	/// Exports key details for account.
-	fn export_account(&self, account: &StoreAccountRef, password: &str) -> Result<OpaqueKeyFile, Error>;
+	fn export_account(
+		&self,
+		account: &StoreAccountRef,
+		password: &str,
+	) -> Result<OpaqueKeyFile, Error>;
 	/// Entirely removes account from the store and underlying storage.
 	fn remove_account(&self, account: &StoreAccountRef, password: &str) -> Result<(), Error>;
 	/// Generates new derived account.
-	fn generate_derived(&self, account_ref: &StoreAccountRef, password: &str, derivation: Derivation) -> Result<Address, Error>;
+	fn generate_derived(
+		&self,
+		account_ref: &StoreAccountRef,
+		password: &str,
+		derivation: Derivation,
+	) -> Result<Address, Error>;
 	/// Sign a message with given account.
-	fn sign(&self, account: &StoreAccountRef, password: &str, message: &Message) -> Result<Signature, Error>;
+	fn sign(
+		&self,
+		account: &StoreAccountRef,
+		password: &str,
+		message: &Message,
+	) -> Result<Signature, Error>;
 	/// Sign a message with derived account.
-	fn sign_derived(&self, account_ref: &StoreAccountRef, password: &str, derivation: Derivation, message: &Message) -> Result<Signature, Error>;
+	fn sign_derived(
+		&self,
+		account_ref: &StoreAccountRef,
+		password: &str,
+		derivation: Derivation,
+		message: &Message,
+	) -> Result<Signature, Error>;
 	/// Decrypt a messages with given account.
-	fn decrypt(&self, account: &StoreAccountRef, password: &str, shared_mac: &[u8], message: &[u8]) -> Result<Vec<u8>, Error>;
+	fn decrypt(
+		&self,
+		account: &StoreAccountRef,
+		password: &str,
+		shared_mac: &[u8],
+		message: &[u8],
+	) -> Result<Vec<u8>, Error>;
 	/// Agree on shared key.
-	fn agree(&self, account: &StoreAccountRef, password: &str, other: &Public) -> Result<Secret, Error>;
+	fn agree(
+		&self,
+		account: &StoreAccountRef,
+		password: &str,
+		other: &Public,
+	) -> Result<Secret, Error>;
 
 	/// Returns all accounts in this secret store.
 	fn accounts(&self) -> Result<Vec<StoreAccountRef>, Error>;
@@ -95,7 +146,11 @@ pub trait SimpleSecretStore: Send + Sync {
 	/// Change vault password
 	fn change_vault_password(&self, name: &str, new_password: &str) -> Result<(), Error>;
 	/// Cnage account' vault
-	fn change_account_vault(&self, vault: SecretVaultRef, account: StoreAccountRef) -> Result<StoreAccountRef, Error>;
+	fn change_account_vault(
+		&self,
+		vault: SecretVaultRef,
+		account: StoreAccountRef,
+	) -> Result<StoreAccountRef, Error>;
 	/// Get vault metadata string.
 	fn get_vault_meta(&self, name: &str) -> Result<String, Error>;
 	/// Set vault metadata string.
@@ -104,21 +159,42 @@ pub trait SimpleSecretStore: Send + Sync {
 
 /// Secret Store API
 pub trait SecretStore: SimpleSecretStore {
-
 	/// Returns a raw opaque Secret that can be later used to sign a message.
 	fn raw_secret(&self, account: &StoreAccountRef, password: &str) -> Result<OpaqueSecret, Error>;
 
 	/// Signs a message with raw secret.
-	fn sign_with_secret(&self, secret: &OpaqueSecret, message: &Message) -> Result<Signature, Error> {
+	fn sign_with_secret(
+		&self,
+		secret: &OpaqueSecret,
+		message: &Message,
+	) -> Result<Signature, Error> {
 		Ok(::ethkey::sign(&secret.0, message)?)
 	}
 
 	/// Imports presale wallet
-	fn import_presale(&self, vault: SecretVaultRef, json: &[u8], password: &str) -> Result<StoreAccountRef, Error>;
+	fn import_presale(
+		&self,
+		vault: SecretVaultRef,
+		json: &[u8],
+		password: &str,
+	) -> Result<StoreAccountRef, Error>;
 	/// Imports existing JSON wallet
-	fn import_wallet(&self, vault: SecretVaultRef, json: &[u8], password: &str, gen_id: bool) -> Result<StoreAccountRef, Error>;
+	fn import_wallet(
+		&self,
+		vault: SecretVaultRef,
+		json: &[u8],
+		password: &str,
+		gen_id: bool,
+	) -> Result<StoreAccountRef, Error>;
 	/// Copies account between stores and vaults.
-	fn copy_account(&self, new_store: &SimpleSecretStore, new_vault: SecretVaultRef, account: &StoreAccountRef, password: &str, new_password: &str) -> Result<(), Error>;
+	fn copy_account(
+		&self,
+		new_store: &SimpleSecretStore,
+		new_vault: SecretVaultRef,
+		account: &StoreAccountRef,
+		password: &str,
+		new_password: &str,
+	) -> Result<(), Error>;
 	/// Checks if password matches given account.
 	fn test_password(&self, account: &StoreAccountRef, password: &str) -> Result<bool, Error>;
 
@@ -142,7 +218,12 @@ pub trait SecretStore: SimpleSecretStore {
 	/// Lists all found geth accounts.
 	fn list_geth_accounts(&self, testnet: bool) -> Vec<Address>;
 	/// Imports geth accounts to the store/vault.
-	fn import_geth_accounts(&self, vault: SecretVaultRef, desired: Vec<Address>, testnet: bool) -> Result<Vec<StoreAccountRef>, Error>;
+	fn import_geth_accounts(
+		&self,
+		vault: SecretVaultRef,
+		desired: Vec<Address>,
+		testnet: bool,
+	) -> Result<Vec<StoreAccountRef>, Error>;
 }
 
 impl StoreAccountRef {

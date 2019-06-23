@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
-use std::collections::{HashMap, HashSet};
-use std::time::Duration;
-use parking_lot::{Mutex, RwLock};
-use ethcore::client::{BlockId, ChainNotify, ChainRoute, CallContract, RegistryInfo};
-use ethereum_types::{H256, Address};
 use bytes::Bytes;
+use ethcore::client::{BlockId, CallContract, ChainNotify, ChainRoute, RegistryInfo};
+use ethereum_types::{Address, H256};
+use parking_lot::{Mutex, RwLock};
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+use std::time::Duration;
 use trusted_client::TrustedClient;
 use types::{Error, ServerKeyId};
 
@@ -63,7 +63,9 @@ impl OnChainAclStorage {
 			contract: Mutex::new(CachedContract::new(trusted_client)),
 		});
 		client
-			.ok_or_else(|| Error::Internal("Constructing OnChainAclStorage without active Client".into()))?
+			.ok_or_else(|| {
+				Error::Internal("Constructing OnChainAclStorage without active Client".into())
+			})?
 			.add_notify(acl_storage.clone());
 		Ok(acl_storage)
 	}
@@ -76,7 +78,15 @@ impl AclStorage for OnChainAclStorage {
 }
 
 impl ChainNotify for OnChainAclStorage {
-	fn new_blocks(&self, _imported: Vec<H256>, _invalid: Vec<H256>, route: ChainRoute, _sealed: Vec<H256>, _proposed: Vec<Bytes>, _duration: Duration) {
+	fn new_blocks(
+		&self,
+		_imported: Vec<H256>,
+		_invalid: Vec<H256>,
+		route: ChainRoute,
+		_sealed: Vec<H256>,
+		_proposed: Vec<Bytes>,
+		_duration: Duration,
+	) {
 		if !route.enacted().is_empty() || !route.retracted().is_empty() {
 			self.contract.lock().update()
 		}
@@ -94,12 +104,17 @@ impl CachedContract {
 
 	pub fn update(&mut self) {
 		if let Some(client) = self.client.get() {
-			match client.registry_address(ACL_CHECKER_CONTRACT_REGISTRY_NAME.to_owned(), BlockId::Latest) {
-				Some(new_contract_addr) if Some(new_contract_addr).as_ref() != self.contract_addr.as_ref() => {
+			match client.registry_address(
+				ACL_CHECKER_CONTRACT_REGISTRY_NAME.to_owned(),
+				BlockId::Latest,
+			) {
+				Some(new_contract_addr)
+					if Some(new_contract_addr).as_ref() != self.contract_addr.as_ref() =>
+				{
 					trace!(target: "secretstore", "Configuring for ACL checker contract from {}", new_contract_addr);
 					self.contract_addr = Some(new_contract_addr);
-				},
-				Some(_) | None => ()
+				}
+				Some(_) | None => (),
 			}
 		}
 	}
@@ -109,16 +124,24 @@ impl CachedContract {
 			// call contract to check access
 			match self.contract_addr {
 				Some(contract_address) => {
-					let do_call = |data| client.call_contract(BlockId::Latest, contract_address, data);
-					self.contract.functions()
+					let do_call =
+						|data| client.call_contract(BlockId::Latest, contract_address, data);
+					self.contract
+						.functions()
 						.check_permissions()
 						.call(requester, document.clone(), &do_call)
-						.map_err(|e| Error::Internal(format!("ACL checker call error: {}", e.to_string())))
-				},
-				None => Err(Error::Internal("ACL checker contract is not configured".to_owned())),
+						.map_err(|e| {
+							Error::Internal(format!("ACL checker call error: {}", e.to_string()))
+						})
+				}
+				None => Err(Error::Internal(
+					"ACL checker contract is not configured".to_owned(),
+				)),
 			}
 		} else {
-			Err(Error::Internal("Calling ACL contract without trusted blockchain client".into()))
+			Err(Error::Internal(
+				"Calling ACL contract without trusted blockchain client".into(),
+			))
 		}
 	}
 }
@@ -127,7 +150,8 @@ impl DummyAclStorage {
 	/// Prohibit given requestor access to given documents
 	#[cfg(test)]
 	pub fn prohibit(&self, requester: Address, document: ServerKeyId) {
-		self.prohibited.write()
+		self.prohibited
+			.write()
 			.entry(requester)
 			.or_insert_with(Default::default)
 			.insert(document);
@@ -136,7 +160,9 @@ impl DummyAclStorage {
 
 impl AclStorage for DummyAclStorage {
 	fn check(&self, requester: Address, document: &ServerKeyId) -> Result<bool, Error> {
-		Ok(self.prohibited.read()
+		Ok(self
+			.prohibited
+			.read()
 			.get(&requester)
 			.map(|docs| !docs.contains(document))
 			.unwrap_or(true))

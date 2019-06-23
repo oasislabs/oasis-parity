@@ -16,18 +16,18 @@
 
 //! Disk-backed `HashDB` implementation.
 
-use std::collections::HashMap;
-use std::collections::hash_map::Entry;
-use std::sync::Arc;
-use rlp::{encode, decode};
-use hashdb::*;
 use super::memorydb::*;
 use super::{DB_PREFIX_LEN, LATEST_ERA_KEY};
-use traits::JournalDB;
-use kvdb::{KeyValueDB, DBTransaction};
-use ethereum_types::H256;
-use error::{BaseDataError, UtilError};
 use bytes::Bytes;
+use error::{BaseDataError, UtilError};
+use ethereum_types::H256;
+use hashdb::*;
+use kvdb::{DBTransaction, KeyValueDB};
+use rlp::{decode, encode};
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
+use std::sync::Arc;
+use traits::JournalDB;
 
 /// Implementation of the `HashDB` trait for a disk-backed database with a memory overlay
 /// and latent-removal semantics.
@@ -46,7 +46,8 @@ pub struct ArchiveDB {
 impl ArchiveDB {
 	/// Create a new instance from a key-value db.
 	pub fn new(backing: Arc<KeyValueDB>, column: Option<u32>) -> ArchiveDB {
-		let latest_era = backing.get(column, &LATEST_ERA_KEY)
+		let latest_era = backing
+			.get(column, &LATEST_ERA_KEY)
 			.expect("Low-level database error.")
 			.map(|val| decode::<u64>(&val).expect("decoding db value failed"));
 		ArchiveDB {
@@ -58,13 +59,17 @@ impl ArchiveDB {
 	}
 
 	fn payload(&self, key: &H256) -> Option<DBValue> {
-		self.backing.get(self.column, key).expect("Low-level database error. Some issue with your hard disk?")
+		self.backing
+			.get(self.column, key)
+			.expect("Low-level database error. Some issue with your hard disk?")
 	}
 }
 
 impl HashDB for ArchiveDB {
 	fn keys(&self) -> HashMap<H256, i32> {
-		let mut ret: HashMap<H256, i32> = self.backing.iter(self.column)
+		let mut ret: HashMap<H256, i32> = self
+			.backing
+			.iter(self.column)
 			.map(|(key, _)| (H256::from_slice(&*key), 1))
 			.collect();
 
@@ -72,7 +77,7 @@ impl HashDB for ArchiveDB {
 			match ret.entry(key) {
 				Entry::Occupied(mut entry) => {
 					*entry.get_mut() += refs;
-				},
+				}
 				Entry::Vacant(entry) => {
 					entry.insert(refs);
 				}
@@ -125,7 +130,12 @@ impl JournalDB for ArchiveDB {
 		self.latest_era.is_none()
 	}
 
-	fn journal_under(&mut self, batch: &mut DBTransaction, now: u64, _id: &H256) -> Result<u32, UtilError> {
+	fn journal_under(
+		&mut self,
+		batch: &mut DBTransaction,
+		now: u64,
+		_id: &H256,
+	) -> Result<u32, UtilError> {
 		let mut inserts = 0usize;
 		let mut deletes = 0usize;
 
@@ -148,7 +158,12 @@ impl JournalDB for ArchiveDB {
 		Ok((inserts + deletes) as u32)
 	}
 
-	fn mark_canonical(&mut self, _batch: &mut DBTransaction, _end_era: u64, _canon_id: &H256) -> Result<u32, UtilError> {
+	fn mark_canonical(
+		&mut self,
+		_batch: &mut DBTransaction,
+		_end_era: u64,
+		_canon_id: &H256,
+	) -> Result<u32, UtilError> {
 		// keep everything! it's an archive, after all.
 		Ok(0)
 	}
@@ -179,13 +194,19 @@ impl JournalDB for ArchiveDB {
 		Ok((inserts + deletes) as u32)
 	}
 
-	fn latest_era(&self) -> Option<u64> { self.latest_era }
-
-	fn state(&self, id: &H256) -> Option<Bytes> {
-		self.backing.get_by_prefix(self.column, &id[0..DB_PREFIX_LEN]).map(|b| b.into_vec())
+	fn latest_era(&self) -> Option<u64> {
+		self.latest_era
 	}
 
-	fn is_pruned(&self) -> bool { false }
+	fn state(&self, id: &H256) -> Option<Bytes> {
+		self.backing
+			.get_by_prefix(self.column, &id[0..DB_PREFIX_LEN])
+			.map(|b| b.into_vec())
+	}
+
+	fn is_pruned(&self) -> bool {
+		false
+	}
 
 	fn backing(&self) -> &Arc<KeyValueDB> {
 		&self.backing
@@ -199,9 +220,9 @@ impl JournalDB for ArchiveDB {
 #[cfg(test)]
 mod tests {
 
-	use keccak::keccak;
-	use hashdb::{HashDB, DBValue};
 	use super::*;
+	use hashdb::{DBValue, HashDB};
+	use keccak::keccak;
 	use {kvdb_memorydb, JournalDB};
 
 	#[test]
@@ -212,16 +233,22 @@ mod tests {
 		let x = jdb.insert(b"X");
 		jdb.commit_batch(1, &keccak(b"1"), None).unwrap();
 		jdb.commit_batch(2, &keccak(b"2"), None).unwrap();
-		jdb.commit_batch(3, &keccak(b"1002a"), Some((1, keccak(b"1")))).unwrap();
-		jdb.commit_batch(4, &keccak(b"1003a"), Some((2, keccak(b"2")))).unwrap();
+		jdb.commit_batch(3, &keccak(b"1002a"), Some((1, keccak(b"1"))))
+			.unwrap();
+		jdb.commit_batch(4, &keccak(b"1003a"), Some((2, keccak(b"2"))))
+			.unwrap();
 
 		jdb.remove(&x);
-		jdb.commit_batch(3, &keccak(b"1002b"), Some((1, keccak(b"1")))).unwrap();
+		jdb.commit_batch(3, &keccak(b"1002b"), Some((1, keccak(b"1"))))
+			.unwrap();
 		let x = jdb.insert(b"X");
-		jdb.commit_batch(4, &keccak(b"1003b"), Some((2, keccak(b"2")))).unwrap();
+		jdb.commit_batch(4, &keccak(b"1003b"), Some((2, keccak(b"2"))))
+			.unwrap();
 
-		jdb.commit_batch(5, &keccak(b"1004a"), Some((3, keccak(b"1002a")))).unwrap();
-		jdb.commit_batch(6, &keccak(b"1005a"), Some((4, keccak(b"1003a")))).unwrap();
+		jdb.commit_batch(5, &keccak(b"1004a"), Some((3, keccak(b"1002a"))))
+			.unwrap();
+		jdb.commit_batch(6, &keccak(b"1005a"), Some((4, keccak(b"1003a"))))
+			.unwrap();
 
 		assert!(jdb.contains(&x));
 	}
@@ -238,9 +265,11 @@ mod tests {
 		assert!(jdb.contains(&h));
 		jdb.commit_batch(2, &keccak(b"2"), None).unwrap();
 		assert!(jdb.contains(&h));
-		jdb.commit_batch(3, &keccak(b"3"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(3, &keccak(b"3"), Some((0, keccak(b"0"))))
+			.unwrap();
 		assert!(jdb.contains(&h));
-		jdb.commit_batch(4, &keccak(b"4"), Some((1, keccak(b"1")))).unwrap();
+		jdb.commit_batch(4, &keccak(b"4"), Some((1, keccak(b"1"))))
+			.unwrap();
 		assert!(jdb.contains(&h));
 	}
 
@@ -272,22 +301,26 @@ mod tests {
 		jdb.remove(&foo);
 		jdb.remove(&bar);
 		let baz = jdb.insert(b"baz");
-		jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0"))))
+			.unwrap();
 		assert!(jdb.contains(&foo));
 		assert!(jdb.contains(&bar));
 		assert!(jdb.contains(&baz));
 
 		let foo = jdb.insert(b"foo");
 		jdb.remove(&baz);
-		jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1")))).unwrap();
+		jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1"))))
+			.unwrap();
 		assert!(jdb.contains(&foo));
 		assert!(jdb.contains(&baz));
 
 		jdb.remove(&foo);
-		jdb.commit_batch(3, &keccak(b"3"), Some((2, keccak(b"2")))).unwrap();
+		jdb.commit_batch(3, &keccak(b"3"), Some((2, keccak(b"2"))))
+			.unwrap();
 		assert!(jdb.contains(&foo));
 
-		jdb.commit_batch(4, &keccak(b"4"), Some((3, keccak(b"3")))).unwrap();
+		jdb.commit_batch(4, &keccak(b"4"), Some((3, keccak(b"3"))))
+			.unwrap();
 	}
 
 	#[test]
@@ -303,16 +336,19 @@ mod tests {
 
 		jdb.remove(&foo);
 		let baz = jdb.insert(b"baz");
-		jdb.commit_batch(1, &keccak(b"1a"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(1, &keccak(b"1a"), Some((0, keccak(b"0"))))
+			.unwrap();
 
 		jdb.remove(&bar);
-		jdb.commit_batch(1, &keccak(b"1b"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(1, &keccak(b"1b"), Some((0, keccak(b"0"))))
+			.unwrap();
 
 		assert!(jdb.contains(&foo));
 		assert!(jdb.contains(&bar));
 		assert!(jdb.contains(&baz));
 
-		jdb.commit_batch(2, &keccak(b"2b"), Some((1, keccak(b"1b")))).unwrap();
+		jdb.commit_batch(2, &keccak(b"2b"), Some((1, keccak(b"1b"))))
+			.unwrap();
 		assert!(jdb.contains(&foo));
 	}
 
@@ -326,12 +362,15 @@ mod tests {
 		assert!(jdb.contains(&foo));
 
 		jdb.remove(&foo);
-		jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0"))))
+			.unwrap();
 		jdb.insert(b"foo");
 		assert!(jdb.contains(&foo));
-		jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1")))).unwrap();
+		jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1"))))
+			.unwrap();
 		assert!(jdb.contains(&foo));
-		jdb.commit_batch(3, &keccak(b"2"), Some((0, keccak(b"2")))).unwrap();
+		jdb.commit_batch(3, &keccak(b"2"), Some((0, keccak(b"2"))))
+			.unwrap();
 		assert!(jdb.contains(&foo));
 	}
 
@@ -342,13 +381,16 @@ mod tests {
 		jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
 
 		let foo = jdb.insert(b"foo");
-		jdb.commit_batch(1, &keccak(b"1a"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(1, &keccak(b"1a"), Some((0, keccak(b"0"))))
+			.unwrap();
 
 		jdb.insert(b"foo");
-		jdb.commit_batch(1, &keccak(b"1b"), Some((0, keccak(b"0")))).unwrap();
+		jdb.commit_batch(1, &keccak(b"1b"), Some((0, keccak(b"0"))))
+			.unwrap();
 		assert!(jdb.contains(&foo));
 
-		jdb.commit_batch(2, &keccak(b"2a"), Some((1, keccak(b"1a")))).unwrap();
+		jdb.commit_batch(2, &keccak(b"2a"), Some((1, keccak(b"1a"))))
+			.unwrap();
 		assert!(jdb.contains(&foo));
 	}
 
@@ -369,14 +411,16 @@ mod tests {
 		{
 			let mut jdb = ArchiveDB::new(shared_db.clone(), None);
 			jdb.remove(&foo);
-			jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0")))).unwrap();
+			jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0"))))
+				.unwrap();
 		}
 
 		{
 			let mut jdb = ArchiveDB::new(shared_db, None);
 			assert!(jdb.contains(&foo));
 			assert!(jdb.contains(&bar));
-			jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1")))).unwrap();
+			jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1"))))
+				.unwrap();
 		}
 	}
 
@@ -389,23 +433,28 @@ mod tests {
 			// history is 1
 			let foo = jdb.insert(b"foo");
 			jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
-			jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0")))).unwrap();
+			jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0"))))
+				.unwrap();
 
 			// foo is ancient history.
 
 			jdb.insert(b"foo");
-			jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1")))).unwrap();
+			jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1"))))
+				.unwrap();
 			foo
 		};
 
 		{
 			let mut jdb = ArchiveDB::new(shared_db, None);
 			jdb.remove(&foo);
-			jdb.commit_batch(3, &keccak(b"3"), Some((2, keccak(b"2")))).unwrap();
+			jdb.commit_batch(3, &keccak(b"3"), Some((2, keccak(b"2"))))
+				.unwrap();
 			assert!(jdb.contains(&foo));
 			jdb.remove(&foo);
-			jdb.commit_batch(4, &keccak(b"4"), Some((3, keccak(b"3")))).unwrap();
-			jdb.commit_batch(5, &keccak(b"5"), Some((4, keccak(b"4")))).unwrap();
+			jdb.commit_batch(4, &keccak(b"4"), Some((3, keccak(b"3"))))
+				.unwrap();
+			jdb.commit_batch(5, &keccak(b"5"), Some((4, keccak(b"4"))))
+				.unwrap();
 		}
 	}
 
@@ -420,16 +469,19 @@ mod tests {
 			jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
 			jdb.remove(&foo);
 			let baz = jdb.insert(b"baz");
-			jdb.commit_batch(1, &keccak(b"1a"), Some((0, keccak(b"0")))).unwrap();
+			jdb.commit_batch(1, &keccak(b"1a"), Some((0, keccak(b"0"))))
+				.unwrap();
 
 			jdb.remove(&bar);
-			jdb.commit_batch(1, &keccak(b"1b"), Some((0, keccak(b"0")))).unwrap();
+			jdb.commit_batch(1, &keccak(b"1b"), Some((0, keccak(b"0"))))
+				.unwrap();
 			(foo, bar, baz)
 		};
 
 		{
 			let mut jdb = ArchiveDB::new(shared_db, None);
-			jdb.commit_batch(2, &keccak(b"2b"), Some((1, keccak(b"1b")))).unwrap();
+			jdb.commit_batch(2, &keccak(b"2b"), Some((1, keccak(b"1b"))))
+				.unwrap();
 			assert!(jdb.contains(&foo));
 		}
 	}

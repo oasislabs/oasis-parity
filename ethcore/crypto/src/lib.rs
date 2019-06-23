@@ -17,8 +17,8 @@
 //! Crypto utils used ethstore and network.
 
 // extern crate crypto as rcrypto;
-extern crate ripemd160;
 extern crate ethereum_types;
+extern crate ripemd160;
 #[macro_use]
 extern crate quick_error;
 extern crate ring;
@@ -44,10 +44,15 @@ pub const KEY_LENGTH_AES: usize = KEY_LENGTH / 2;
 pub const DEFAULT_MAC: [u8; 2] = [0, 0];
 
 pub trait Keccak256<T> {
-	fn keccak256(&self) -> T where T: Sized;
+	fn keccak256(&self) -> T
+	where
+		T: Sized;
 }
 
-impl<T> Keccak256<[u8; 32]> for T where T: AsRef<[u8]> {
+impl<T> Keccak256<[u8; 32]> for T
+where
+	T: AsRef<[u8]>,
+{
 	fn keccak256(&self) -> [u8; 32] {
 		let mut keccak = Keccak::new_keccak256();
 		let mut result = [0u8; 32];

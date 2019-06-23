@@ -19,9 +19,9 @@
 use std::collections::HashMap;
 use std::io;
 
-use ethereum_types::{H256, U256};
 use bytes::ToPretty;
 use ethcore::trace;
+use ethereum_types::{H256, U256};
 
 use display;
 use info as vm;
@@ -67,12 +67,18 @@ impl<T: Writer> Informant<T> {
 
 impl<T: Writer> Informant<T> {
 	fn stack(&self) -> String {
-		let items = self.stack.iter().map(|i| format!("\"0x{:x}\"", i)).collect::<Vec<_>>();
+		let items = self
+			.stack
+			.iter()
+			.map(|i| format!("\"0x{:x}\"", i))
+			.collect::<Vec<_>>();
 		format!("[{}]", items.join(","))
 	}
 
 	fn storage(&self) -> String {
-		let vals = self.storage.iter()
+		let vals = self
+			.storage
+			.iter()
 			.map(|(k, v)| format!("\"0x{:?}\": \"0x{:?}\"", k, v))
 			.collect::<Vec<_>>();
 		format!("{{{}}}", vals.join(","))
@@ -86,7 +92,8 @@ impl<T: Writer> vm::Informant for Informant<T> {
 			"{{\"test\":\"{name}\",\"action\":\"{action}\"}}",
 			name = name,
 			action = action,
-		).expect("The sink must be writeable.");
+		)
+		.expect("The sink must be writeable.");
 	}
 
 	fn set_gas(&mut self, _gas: U256) {}
@@ -101,15 +108,13 @@ impl<T: Writer> vm::Informant for Informant<T> {
 					gas = success.gas_used,
 					time = display::as_micros(&success.time),
 				);
-			},
-			Err(failure) => {
-				println!(
-					"{{\"error\":\"{error}\",\"gasUsed\":\"{gas:x}\",\"time\":{time}}}",
-					error = failure.error,
-					gas = failure.gas_used,
-					time = display::as_micros(&failure.time),
-				)
-			},
+			}
+			Err(failure) => println!(
+				"{{\"error\":\"{error}\",\"gasUsed\":\"{gas:x}\",\"time\":{time}}}",
+				error = failure.error,
+				gas = failure.gas_used,
+				time = display::as_micros(&failure.time),
+			),
 		}
 	}
 }
@@ -138,14 +143,20 @@ impl<T: Writer> trace::VMTracer for Informant<T> {
 		true
 	}
 
-	fn trace_prepare_execute(&mut self, _pc: usize, _instruction: u8, _gas_cost: U256) {
-	}
+	fn trace_prepare_execute(&mut self, _pc: usize, _instruction: u8, _gas_cost: U256) {}
 
-	fn trace_executed(&mut self, _gas_used: U256, stack_push: &[U256], _mem_diff: Option<(usize, &[u8])>, store_diff: Option<(U256, U256)>) {
+	fn trace_executed(
+		&mut self,
+		_gas_used: U256,
+		stack_push: &[U256],
+		_mem_diff: Option<(usize, &[u8])>,
+		store_diff: Option<(U256, U256)>,
+	) {
 		let info = ::evm::INSTRUCTIONS[self.instruction as usize];
 
 		let len = self.stack.len();
-		self.stack.truncate(if len > info.args { len - info.args } else { 0 });
+		self.stack
+			.truncate(if len > info.args { len - info.args } else { 0 });
 		self.stack.extend_from_slice(stack_push);
 
 		if let Some((pos, val)) = store_diff {
@@ -153,7 +164,10 @@ impl<T: Writer> trace::VMTracer for Informant<T> {
 		}
 	}
 
-	fn prepare_subtrace(&self, code: &[u8]) -> Self where Self: Sized {
+	fn prepare_subtrace(&self, code: &[u8]) -> Self
+	where
+		Self: Sized,
+	{
 		let mut vm = Informant::new(self.sink.clone());
 		vm.depth = self.depth + 1;
 		vm.code = code.to_vec();
@@ -162,20 +176,24 @@ impl<T: Writer> trace::VMTracer for Informant<T> {
 
 	fn done_subtrace(&mut self, _sub: Self) {}
 
-	fn drain(self) -> Option<Self::Output> { None }
+	fn drain(self) -> Option<Self::Output> {
+		None
+	}
 }
 
 #[cfg(test)]
 mod tests {
-	use std::sync::{Arc, Mutex};
 	use super::*;
 	use info::tests::run_test;
+	use std::sync::{Arc, Mutex};
 
 	#[derive(Debug, Clone, Default)]
 	struct TestWriter(pub Arc<Mutex<Vec<u8>>>);
 
 	impl Writer for TestWriter {
-		fn clone(&self) -> Self { Clone::clone(self) }
+		fn clone(&self) -> Self {
+			Clone::clone(self)
+		}
 	}
 
 	impl io::Write for TestWriter {

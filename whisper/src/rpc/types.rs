@@ -19,19 +19,21 @@
 use std::fmt;
 use std::ops::Deref;
 
-use ethereum_types::{H32, H64, H128, H256, H264, H512, H1024};
-use hex::{ToHex, FromHex};
+use ethereum_types::{H1024, H128, H256, H264, H32, H512, H64};
+use hex::{FromHex, ToHex};
 
-use serde::{Serialize, Serializer, Deserialize, Deserializer};
 use serde::de::{Error, Visitor};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// Helper trait for generic hex bytes encoding.
-pub trait HexEncodable: Sized + ::std::ops::Deref<Target=[u8]> {
+pub trait HexEncodable: Sized + ::std::ops::Deref<Target = [u8]> {
 	fn from_bytes(bytes: Vec<u8>) -> Option<Self>;
 }
 
 impl HexEncodable for Vec<u8> {
-	fn from_bytes(bytes: Vec<u8>) -> Option<Self> { Some(bytes) }
+	fn from_bytes(bytes: Vec<u8>) -> Option<Self> {
+		Some(bytes)
+	}
 }
 
 macro_rules! impl_hex_for_hash {
@@ -66,16 +68,22 @@ impl<T> From<T> for HexEncode<T> {
 
 impl<T> HexEncode<T> {
 	/// Create a new wrapper from the inner value.
-	pub fn new(x: T) -> Self { HexEncode(x) }
+	pub fn new(x: T) -> Self {
+		HexEncode(x)
+	}
 
 	/// Consume the wrapper, yielding the inner value.
-	pub fn into_inner(self) -> T { self.0 }
+	pub fn into_inner(self) -> T {
+		self.0
+	}
 }
 
 impl<T> Deref for HexEncode<T> {
 	type Target = T;
 
-	fn deref(&self) -> &T { &self.0 }
+	fn deref(&self) -> &T {
+		&self.0
+	}
 }
 
 /// Hex-encoded arbitrary-byte vector.
@@ -109,7 +117,8 @@ impl<T: HexEncodable> Serialize for HexEncode<T> {
 
 impl<'a, T: 'a + HexEncodable> Deserialize<'a> for HexEncode<T> {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-		where D: Deserializer<'a>
+	where
+		D: Deserializer<'a>,
 	{
 		deserializer.deserialize_any(HexEncodeVisitor::<T>(::std::marker::PhantomData))
 	}
@@ -137,7 +146,10 @@ impl<'a, T: HexEncodable> Visitor<'a> for HexEncodeVisitor<T> {
 			.map(HexEncode)
 	}
 
-	fn visit_string<E>(self, value: String) -> Result<Self::Value, E> where E: Error {
+	fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+	where
+		E: Error,
+	{
 		self.visit_str(value.as_ref())
 	}
 }
@@ -146,9 +158,9 @@ impl<'a, T: HexEncodable> Visitor<'a> for HexEncodeVisitor<T> {
 /// or broadcast over the topics.
 #[derive(Deserialize)]
 pub enum Receiver {
-	#[serde(rename="public")]
+	#[serde(rename = "public")]
 	Public(Public),
-	#[serde(rename="identity")]
+	#[serde(rename = "identity")]
 	Identity(Identity),
 }
 
@@ -257,8 +269,8 @@ pub struct NodeInfo {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use serde_json;
 	use hex::FromHex;
+	use serde_json;
 
 	#[test]
 	fn test_bytes_serialize() {

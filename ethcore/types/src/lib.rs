@@ -16,14 +16,14 @@
 
 //! Types used in the public API
 
-extern crate ethereum_types;
 extern crate ethcore_bytes as bytes;
+extern crate ethereum_types;
 extern crate ethjson;
 extern crate rlp;
 #[macro_use]
 extern crate rlp_derive;
-extern crate keccak_hash as hash;
 extern crate heapsize;
+extern crate keccak_hash as hash;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde;
@@ -32,6 +32,7 @@ extern crate serde;
 extern crate rustc_hex;
 
 pub mod account_diff;
+pub mod ancestry_action;
 pub mod basic_account;
 pub mod block_status;
 pub mod blockchain_info;
@@ -48,7 +49,6 @@ pub mod state_diff;
 pub mod trace_filter;
 pub mod tree_route;
 pub mod verification_queue_info;
-pub mod ancestry_action;
 
 /// Type for block number.
 pub type BlockNumber = u64;

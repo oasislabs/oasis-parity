@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::io;
-use std::sync::Arc;
-use std::path::PathBuf;
 use std::collections::HashSet;
+use std::io;
+use std::path::PathBuf;
+use std::sync::Arc;
 
 use dapps;
 use dir::default_data_path;
@@ -25,13 +25,13 @@ use dir::helpers::replace_home;
 use helpers::parity_ipc_path;
 use jsonrpc_core::MetaIoHandler;
 use parity_reactor::TokioRemote;
-use parity_rpc::informant::{RpcStats, Middleware};
-use parity_rpc::{self as rpc, Metadata, DomainsValidation};
+use parity_rpc::informant::{Middleware, RpcStats};
+use parity_rpc::{self as rpc, DomainsValidation, Metadata};
 use rpc_apis::{self, ApiSet};
 
-pub use parity_rpc::{IpcServer, HttpServer, RequestMiddleware};
-pub use parity_rpc::ws::Server as WsServer;
 pub use parity_rpc::informant::CpuPool;
+pub use parity_rpc::ws::Server as WsServer;
+pub use parity_rpc::{HttpServer, IpcServer, RequestMiddleware};
 
 pub const DAPPS_DOMAIN: &'static str = "web3.site";
 
@@ -113,7 +113,11 @@ impl Default for WsConfiguration {
 			port: 8546,
 			apis: ApiSet::UnsafeContext,
 			max_connections: 100,
-			origins: Some(vec!["parity://*".into(),"chrome-extension://*".into(), "moz-extension://*".into()]),
+			origins: Some(vec![
+				"parity://*".into(),
+				"chrome-extension://*".into(),
+				"moz-extension://*".into(),
+			]),
 			hosts: Some(Vec::new()),
 			signer_path: replace_home(&data_dir, "$BASE/signer").into(),
 			support_token_api: true,
@@ -128,7 +132,12 @@ impl WsConfiguration {
 	}
 }
 
-fn address(enabled: bool, bind_iface: &str, bind_port: u16, hosts: &Option<Vec<String>>) -> Option<rpc::Host> {
+fn address(
+	enabled: bool,
+	bind_iface: &str,
+	bind_port: u16,
+	hosts: &Option<Vec<String>>,
+) -> Option<rpc::Host> {
 	if !enabled {
 		return None;
 	}
@@ -156,13 +165,19 @@ pub fn new_ws<D: rpc_apis::Dependencies>(
 
 	let domain = DAPPS_DOMAIN;
 	let url = format!("{}:{}", conf.interface, conf.port);
-	let addr = url.parse().map_err(|_| format!("Invalid WebSockets listen host/port given: {}", url))?;
+	let addr = url
+		.parse()
+		.map_err(|_| format!("Invalid WebSockets listen host/port given: {}", url))?;
 
 	let full_handler = setup_apis(rpc_apis::ApiSet::SafeContext, deps);
 	let handler = {
 		let mut handler = MetaIoHandler::with_middleware((
 			rpc::WsDispatcher::new(full_handler),
-			Middleware::new(deps.stats.clone(), deps.apis.activity_notifier(), deps.pool.clone())
+			Middleware::new(
+				deps.stats.clone(),
+				deps.apis.activity_notifier(),
+				deps.pool.clone(),
+			),
 		));
 		let apis = conf.apis.list_apis();
 		deps.apis.extend_with_set(&mut handler, &apis);
@@ -179,8 +194,8 @@ pub fn new_ws<D: rpc_apis::Dependencies>(
 		true => {
 			signer_path = ::signer::codes_path(&conf.signer_path);
 			Some(signer_path.as_path())
-		},
-		false => None
+		}
+		false => None,
 	};
 	let start_result = rpc::start_ws(
 		&addr,
@@ -216,7 +231,9 @@ pub fn new_http<D: rpc_apis::Dependencies>(
 
 	let domain = DAPPS_DOMAIN;
 	let url = format!("{}:{}", conf.interface, conf.port);
-	let addr = url.parse().map_err(|_| format!("Invalid {} listen host/port given: {}", id, url))?;
+	let addr = url
+		.parse()
+		.map_err(|_| format!("Invalid {} listen host/port given: {}", id, url))?;
 	let handler = setup_apis(conf.apis, deps);
 	let remote = deps.remote.clone();
 
@@ -245,7 +262,7 @@ pub fn new_http<D: rpc_apis::Dependencies>(
 
 pub fn new_ipc<D: rpc_apis::Dependencies>(
 	conf: IpcConfiguration,
-	dependencies: &Dependencies<D>
+	dependencies: &Dependencies<D>,
 ) -> Result<Option<IpcServer>, String> {
 	if !conf.enabled {
 		return Ok(None);
@@ -258,8 +275,13 @@ pub fn new_ipc<D: rpc_apis::Dependencies>(
 	// Windows pipe paths are not on the FS.
 	if !cfg!(windows) {
 		if let Some(dir) = path.parent() {
-			::std::fs::create_dir_all(&dir)
-				.map_err(|err| format!("Unable to create IPC directory at {}: {}", dir.display(), err))?;
+			::std::fs::create_dir_all(&dir).map_err(|err| {
+				format!(
+					"Unable to create IPC directory at {}: {}",
+					dir.display(),
+					err
+				)
+			})?;
 		}
 	}
 
@@ -270,10 +292,16 @@ pub fn new_ipc<D: rpc_apis::Dependencies>(
 }
 
 fn into_domains<T: From<String>>(items: Option<Vec<String>>) -> DomainsValidation<T> {
-	items.map(|vals| vals.into_iter().map(T::from).collect()).into()
+	items
+		.map(|vals| vals.into_iter().map(T::from).collect())
+		.into()
 }
 
-fn with_domain(items: Option<Vec<String>>, domain: &str, dapps_address: &Option<rpc::Host>) -> Option<Vec<String>> {
+fn with_domain(
+	items: Option<Vec<String>>,
+	domain: &str,
+	dapps_address: &Option<rpc::Host>,
+) -> Option<Vec<String>> {
 	fn extract_port(s: &str) -> Option<u16> {
 		s.split(':').nth(1).and_then(|s| s.parse().ok())
 	}
@@ -298,12 +326,18 @@ fn with_domain(items: Option<Vec<String>>, domain: &str, dapps_address: &Option<
 	})
 }
 
-pub fn setup_apis<D>(apis: ApiSet, deps: &Dependencies<D>) -> MetaIoHandler<Metadata, Middleware<D::Notifier>>
-	where D: rpc_apis::Dependencies
+pub fn setup_apis<D>(
+	apis: ApiSet,
+	deps: &Dependencies<D>,
+) -> MetaIoHandler<Metadata, Middleware<D::Notifier>>
+where
+	D: rpc_apis::Dependencies,
 {
-	let mut handler = MetaIoHandler::with_middleware(
-		Middleware::new(deps.stats.clone(), deps.apis.activity_notifier(), deps.pool.clone())
-	);
+	let mut handler = MetaIoHandler::with_middleware(Middleware::new(
+		deps.stats.clone(),
+		deps.apis.activity_notifier(),
+		deps.pool.clone(),
+	));
 	let apis = apis.list_apis();
 	deps.apis.extend_with_set(&mut handler, &apis);
 
@@ -317,8 +351,17 @@ mod tests {
 	#[test]
 	fn should_return_proper_address() {
 		assert_eq!(address(false, "localhost", 8180, &None), None);
-		assert_eq!(address(true, "localhost", 8180, &None), Some("localhost:8180".into()));
-		assert_eq!(address(true, "localhost", 8180, &Some(vec!["host:443".into()])), Some("host:443".into()));
-		assert_eq!(address(true, "localhost", 8180, &Some(vec!["host".into()])), Some("host".into()));
+		assert_eq!(
+			address(true, "localhost", 8180, &None),
+			Some("localhost:8180".into())
+		);
+		assert_eq!(
+			address(true, "localhost", 8180, &Some(vec!["host:443".into()])),
+			Some("host:443".into())
+		);
+		assert_eq!(
+			address(true, "localhost", 8180, &Some(vec!["host".into()])),
+			Some("host".into())
+		);
 	}
 }

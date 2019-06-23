@@ -17,7 +17,7 @@
 //! Web3 rpc interface.
 use jsonrpc_core::Result;
 
-use v1::types::{H256, Bytes};
+use v1::types::{Bytes, H256};
 
 build_rpc_trait! {
 	/// Web3 rpc interface.

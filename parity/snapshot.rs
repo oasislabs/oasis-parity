@@ -16,27 +16,27 @@
 
 //! Snapshot and restoration commands.
 
-use std::time::Duration;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
-use hash::keccak;
 use ethcore::account_provider::AccountProvider;
-use ethcore::snapshot::{Progress, RestorationStatus, SnapshotService as SS};
-use ethcore::snapshot::io::{SnapshotReader, PackedReader, PackedWriter};
-use ethcore::snapshot::service::Service as SnapshotService;
-use ethcore::client::{Mode, DatabaseCompactionProfile, VMType};
-use ethcore::miner::Miner;
+use ethcore::client::{DatabaseCompactionProfile, Mode, VMType};
 use ethcore::ids::BlockId;
+use ethcore::miner::Miner;
+use ethcore::snapshot::io::{PackedReader, PackedWriter, SnapshotReader};
+use ethcore::snapshot::service::Service as SnapshotService;
+use ethcore::snapshot::{Progress, RestorationStatus, SnapshotService as SS};
 use ethcore_service::ClientService;
+use hash::keccak;
 
 use cache::CacheConfig;
-use params::{SpecType, Pruning, Switch, tracing_switch_to_bool, fatdb_switch_to_bool};
-use helpers::{to_client_config, execute_upgrades};
-use dir::Directories;
-use user_defaults::UserDefaults;
-use ethcore_private_tx;
 use db;
+use dir::Directories;
+use ethcore_private_tx;
+use helpers::{execute_upgrades, to_client_config};
+use params::{fatdb_switch_to_bool, tracing_switch_to_bool, Pruning, SpecType, Switch};
+use user_defaults::UserDefaults;
 
 /// Kinds of snapshot commands.
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -44,7 +44,7 @@ pub enum Kind {
 	/// Take a snapshot.
 	Take,
 	/// Restore a snapshot.
-	Restore
+	Restore,
 }
 
 /// Command for snapshot creation or restoration.
@@ -67,42 +67,63 @@ pub struct SnapshotCommand {
 
 // helper for reading chunks from arbitrary reader and feeding them into the
 // service.
-fn restore_using<R: SnapshotReader>(snapshot: Arc<SnapshotService>, reader: &R, recover: bool) -> Result<(), String> {
+fn restore_using<R: SnapshotReader>(
+	snapshot: Arc<SnapshotService>,
+	reader: &R,
+	recover: bool,
+) -> Result<(), String> {
 	let manifest = reader.manifest();
 
-	info!("Restoring to block #{} (0x{:?})", manifest.block_number, manifest.block_hash);
+	info!(
+		"Restoring to block #{} (0x{:?})",
+		manifest.block_number, manifest.block_hash
+	);
 
-	snapshot.init_restore(manifest.clone(), recover).map_err(|e| {
-		format!("Failed to begin restoration: {}", e)
-	})?;
+	snapshot
+		.init_restore(manifest.clone(), recover)
+		.map_err(|e| format!("Failed to begin restoration: {}", e))?;
 
 	let (num_state, num_blocks) = (manifest.state_hashes.len(), manifest.block_hashes.len());
 
 	let informant_handle = snapshot.clone();
 	::std::thread::spawn(move || {
- 		while let RestorationStatus::Ongoing { state_chunks_done, block_chunks_done, .. } = informant_handle.status() {
- 			info!("Processed {}/{} state chunks and {}/{} block chunks.",
- 				state_chunks_done, num_state, block_chunks_done, num_blocks);
- 			::std::thread::sleep(Duration::from_secs(5));
- 		}
- 	});
+		while let RestorationStatus::Ongoing {
+			state_chunks_done,
+			block_chunks_done,
+			..
+		} = informant_handle.status()
+		{
+			info!(
+				"Processed {}/{} state chunks and {}/{} block chunks.",
+				state_chunks_done, num_state, block_chunks_done, num_blocks
+			);
+			::std::thread::sleep(Duration::from_secs(5));
+		}
+	});
 
- 	info!("Restoring state");
- 	for &state_hash in &manifest.state_hashes {
- 		if snapshot.status() == RestorationStatus::Failed {
- 			return Err("Restoration failed".into());
- 		}
+	info!("Restoring state");
+	for &state_hash in &manifest.state_hashes {
+		if snapshot.status() == RestorationStatus::Failed {
+			return Err("Restoration failed".into());
+		}
 
- 		let chunk = reader.chunk(state_hash)
-			.map_err(|e| format!("Encountered error while reading chunk {:?}: {}", state_hash, e))?;
+		let chunk = reader.chunk(state_hash).map_err(|e| {
+			format!(
+				"Encountered error while reading chunk {:?}: {}",
+				state_hash, e
+			)
+		})?;
 
 		let hash = keccak(&chunk);
 		if hash != state_hash {
-			return Err(format!("Mismatched chunk hash. Expected {:?}, got {:?}", state_hash, hash));
+			return Err(format!(
+				"Mismatched chunk hash. Expected {:?}, got {:?}",
+				state_hash, hash
+			));
 		}
 
- 		snapshot.feed_state_chunk(state_hash, &chunk);
- 	}
+		snapshot.feed_state_chunk(state_hash, &chunk);
+	}
 
 	info!("Restoring blocks");
 	for &block_hash in &manifest.block_hashes {
@@ -110,19 +131,30 @@ fn restore_using<R: SnapshotReader>(snapshot: Arc<SnapshotService>, reader: &R, 
 			return Err("Restoration failed".into());
 		}
 
- 		let chunk = reader.chunk(block_hash)
-			.map_err(|e| format!("Encountered error while reading chunk {:?}: {}", block_hash, e))?;
+		let chunk = reader.chunk(block_hash).map_err(|e| {
+			format!(
+				"Encountered error while reading chunk {:?}: {}",
+				block_hash, e
+			)
+		})?;
 
 		let hash = keccak(&chunk);
 		if hash != block_hash {
-			return Err(format!("Mismatched chunk hash. Expected {:?}, got {:?}", block_hash, hash));
+			return Err(format!(
+				"Mismatched chunk hash. Expected {:?}, got {:?}",
+				block_hash, hash
+			));
 		}
 		snapshot.feed_block_chunk(block_hash, &chunk);
 	}
 
 	match snapshot.status() {
-		RestorationStatus::Ongoing { .. } => Err("Snapshot file is incomplete and missing chunks.".into()),
-		RestorationStatus::Initializing { .. } => Err("Snapshot restoration is still initializing.".into()),
+		RestorationStatus::Ongoing { .. } => {
+			Err("Snapshot file is incomplete and missing chunks.".into())
+		}
+		RestorationStatus::Initializing { .. } => {
+			Err("Snapshot restoration is still initializing.".into())
+		}
 		RestorationStatus::Failed => Err("Snapshot restoration failed.".into()),
 		RestorationStatus::Inactive => {
 			info!("Restoration complete.");
@@ -141,7 +173,9 @@ impl SnapshotCommand {
 		let genesis_hash = spec.genesis_header().hash();
 
 		// database paths
-		let db_dirs = self.dirs.database(genesis_hash, None, spec.data_dir.clone());
+		let db_dirs = self
+			.dirs
+			.database(genesis_hash, None, spec.data_dir.clone());
 
 		// user defaults path
 		let user_defaults_path = db_dirs.user_defaults_path();
@@ -179,7 +213,7 @@ impl SnapshotCommand {
 			algorithm,
 			self.pruning_history,
 			self.pruning_memory,
-			true
+			true,
 		);
 
 		let client_db = db::open_client_db(&client_path, &client_config)?;
@@ -198,7 +232,8 @@ impl SnapshotCommand {
 			Arc::new(AccountProvider::transient_provider()),
 			Box::new(ethcore_private_tx::NoopEncryptor),
 			Default::default(),
-		).map_err(|e| format!("Client service error: {:?}", e))?;
+		)
+		.map_err(|e| format!("Client service error: {:?}", e))?;
 
 		Ok(service)
 	}
@@ -208,7 +243,9 @@ impl SnapshotCommand {
 		let service = self.start_service()?;
 
 		warn!("Snapshot restoration is experimental and the format may be subject to change.");
-		warn!("On encountering an unexpected error, please ensure that you have a recent snapshot.");
+		warn!(
+			"On encountering an unexpected error, please ensure that you have a recent snapshot."
+		);
 
 		let snapshot = service.snapshot_service();
 
@@ -237,7 +274,10 @@ impl SnapshotCommand {
 
 	/// Take a snapshot from the head of the chain.
 	pub fn take_snapshot(self) -> Result<(), String> {
-		let file_path = self.file_path.clone().ok_or("No file path provided.".to_owned())?;
+		let file_path = self
+			.file_path
+			.clone()
+			.ok_or("No file path provided.".to_owned())?;
 		let file_path: PathBuf = file_path.into();
 		let block_at = self.block_at;
 		let service = self.start_service()?;
@@ -258,22 +298,32 @@ impl SnapshotCommand {
 				if cur_size != last_size {
 					last_size = cur_size;
 					let bytes = ::informant::format_bytes(p.size());
-					info!("Snapshot: {} accounts {} blocks {}", p.accounts(), p.blocks(), bytes);
+					info!(
+						"Snapshot: {} accounts {} blocks {}",
+						p.accounts(),
+						p.blocks(),
+						bytes
+					);
 				}
 
 				::std::thread::sleep(Duration::from_secs(5));
 			}
- 		});
+		});
 
 		if let Err(e) = service.client().take_snapshot(writer, block_at, &*progress) {
 			let _ = ::std::fs::remove_file(&file_path);
-			return Err(format!("Encountered fatal error while creating snapshot: {}", e));
+			return Err(format!(
+				"Encountered fatal error while creating snapshot: {}",
+				e
+			));
 		}
 
 		info!("snapshot creation complete");
 
 		assert!(progress.done());
-		informant_handle.join().map_err(|_| "failed to join logger thread")?;
+		informant_handle
+			.join()
+			.map_err(|_| "failed to join logger thread")?;
 
 		Ok(())
 	}

@@ -41,7 +41,7 @@
 use std::cmp;
 use std::collections::HashMap;
 
-use ethereum_types::{U256, H160 as Address};
+use ethereum_types::{H160 as Address, U256};
 use transaction;
 use txpool::{self, VerifiedTransaction as PoolVerifiedTransaction};
 
@@ -59,11 +59,7 @@ pub struct State<C> {
 
 impl<C> State<C> {
 	/// Create new State checker, given client interface.
-	pub fn new(
-		state: C,
-		stale_id: Option<usize>,
-		max_nonce: Option<U256>,
-	) -> Self {
+	pub fn new(state: C, stale_id: Option<usize>, max_nonce: Option<U256>) -> Self {
 		State {
 			nonces: Default::default(),
 			state,
@@ -79,8 +75,8 @@ impl<C: NonceClient> txpool::Ready<VerifiedTransaction> for State<C> {
 		match self.max_nonce {
 			Some(nonce) if tx.transaction.nonce > nonce => {
 				return txpool::Readiness::Future;
-			},
-			_ => {},
+			}
+			_ => {}
 		}
 
 		let sender = tx.sender();
@@ -97,7 +93,7 @@ impl<C: NonceClient> txpool::Ready<VerifiedTransaction> for State<C> {
 			cmp::Ordering::Equal => {
 				*nonce = *nonce + U256::one();
 				txpool::Readiness::Ready
-			},
+			}
 		}
 	}
 }
@@ -112,18 +108,19 @@ pub struct Condition {
 impl Condition {
 	/// Create a new condition checker given current block number and UTC timestamp.
 	pub fn new(block_number: u64, now: u64) -> Self {
-		Condition {
-			block_number,
-			now,
-		}
+		Condition { block_number, now }
 	}
 }
 
 impl txpool::Ready<VerifiedTransaction> for Condition {
 	fn is_ready(&mut self, tx: &VerifiedTransaction) -> txpool::Readiness {
 		match tx.transaction.condition {
-			Some(transaction::Condition::Number(block)) if block > self.block_number => txpool::Readiness::Future,
-			Some(transaction::Condition::Timestamp(time)) if time > self.now => txpool::Readiness::Future,
+			Some(transaction::Condition::Number(block)) if block > self.block_number => {
+				txpool::Readiness::Future
+			}
+			Some(transaction::Condition::Timestamp(time)) if time > self.now => {
+				txpool::Readiness::Future
+			}
 			_ => txpool::Readiness::Ready,
 		}
 	}
@@ -132,9 +129,9 @@ impl txpool::Ready<VerifiedTransaction> for Condition {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use txpool::Ready;
 	use pool::tests::client::TestClient;
 	use pool::tests::tx::{Tx, TxExt};
+	use txpool::Ready;
 
 	#[test]
 	fn should_return_correct_state_readiness() {
@@ -143,8 +140,14 @@ mod tests {
 		let (tx1, tx2, tx3) = (tx1.verified(), tx2.verified(), tx3.verified());
 
 		// when
-		assert_eq!(State::new(TestClient::new(), None, None).is_ready(&tx3), txpool::Readiness::Future);
-		assert_eq!(State::new(TestClient::new(), None, None).is_ready(&tx2), txpool::Readiness::Future);
+		assert_eq!(
+			State::new(TestClient::new(), None, None).is_ready(&tx3),
+			txpool::Readiness::Future
+		);
+		assert_eq!(
+			State::new(TestClient::new(), None, None).is_ready(&tx2),
+			txpool::Readiness::Future
+		);
 
 		let mut ready = State::new(TestClient::new(), None, None);
 
@@ -197,15 +200,36 @@ mod tests {
 		// given
 		let tx = Tx::default().signed();
 		let v = |tx: transaction::PendingTransaction| TestClient::new().verify(tx);
-		let tx1 = v(transaction::PendingTransaction::new(tx.clone(), transaction::Condition::Number(5).into()));
-		let tx2 = v(transaction::PendingTransaction::new(tx.clone(), transaction::Condition::Timestamp(3).into()));
+		let tx1 = v(transaction::PendingTransaction::new(
+			tx.clone(),
+			transaction::Condition::Number(5).into(),
+		));
+		let tx2 = v(transaction::PendingTransaction::new(
+			tx.clone(),
+			transaction::Condition::Timestamp(3).into(),
+		));
 		let tx3 = v(transaction::PendingTransaction::new(tx.clone(), None));
 
 		// when/then
-		assert_eq!(Condition::new(0, 0).is_ready(&tx1), txpool::Readiness::Future);
-		assert_eq!(Condition::new(0, 0).is_ready(&tx2), txpool::Readiness::Future);
-		assert_eq!(Condition::new(0, 0).is_ready(&tx3), txpool::Readiness::Ready);
-		assert_eq!(Condition::new(5, 0).is_ready(&tx1), txpool::Readiness::Ready);
-		assert_eq!(Condition::new(0, 3).is_ready(&tx2), txpool::Readiness::Ready);
+		assert_eq!(
+			Condition::new(0, 0).is_ready(&tx1),
+			txpool::Readiness::Future
+		);
+		assert_eq!(
+			Condition::new(0, 0).is_ready(&tx2),
+			txpool::Readiness::Future
+		);
+		assert_eq!(
+			Condition::new(0, 0).is_ready(&tx3),
+			txpool::Readiness::Ready
+		);
+		assert_eq!(
+			Condition::new(5, 0).is_ready(&tx1),
+			txpool::Readiness::Ready
+		);
+		assert_eq!(
+			Condition::new(0, 3).is_ready(&tx2),
+			txpool::Readiness::Ready
+		);
 	}
 }

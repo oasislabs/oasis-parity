@@ -16,8 +16,8 @@
 
 //! Tendermint params deserialization.
 
-use uint::Uint;
 use super::ValidatorSet;
+use uint::Uint;
 
 /// Tendermint params deserialization.
 #[derive(Debug, PartialEq, Deserialize)]
@@ -25,19 +25,19 @@ pub struct TendermintParams {
 	/// Valid validators.
 	pub validators: ValidatorSet,
 	/// Propose step timeout in milliseconds.
-	#[serde(rename="timeoutPropose")]
+	#[serde(rename = "timeoutPropose")]
 	pub timeout_propose: Option<Uint>,
 	/// Prevote step timeout in milliseconds.
-	#[serde(rename="timeoutPrevote")]
+	#[serde(rename = "timeoutPrevote")]
 	pub timeout_prevote: Option<Uint>,
 	/// Precommit step timeout in milliseconds.
-	#[serde(rename="timeoutPrecommit")]
+	#[serde(rename = "timeoutPrecommit")]
 	pub timeout_precommit: Option<Uint>,
 	/// Commit step timeout in milliseconds.
-	#[serde(rename="timeoutCommit")]
+	#[serde(rename = "timeoutCommit")]
 	pub timeout_commit: Option<Uint>,
 	/// Reward per block.
-	#[serde(rename="blockReward")]
+	#[serde(rename = "blockReward")]
 	pub block_reward: Option<Uint>,
 }
 
@@ -50,9 +50,9 @@ pub struct Tendermint {
 
 #[cfg(test)]
 mod tests {
-	use serde_json;
 	use ethereum_types::H160;
 	use hash::Address;
+	use serde_json;
 	use spec::tendermint::Tendermint;
 	use spec::validator_set::ValidatorSet;
 
@@ -67,7 +67,9 @@ mod tests {
 		}"#;
 
 		let deserialized: Tendermint = serde_json::from_str(s).unwrap();
-		let vs = ValidatorSet::List(vec![Address(H160::from("0xc6d9d2cd449a754c494264e1809c50e34d64562b"))]);
+		let vs = ValidatorSet::List(vec![Address(H160::from(
+			"0xc6d9d2cd449a754c494264e1809c50e34d64562b",
+		))]);
 		assert_eq!(deserialized.params.validators, vs);
 	}
 }

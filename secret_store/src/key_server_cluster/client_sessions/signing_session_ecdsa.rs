@@ -14,27 +14,38 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::{BTreeSet, BTreeMap};
-use std::collections::btree_map::Entry;
-use std::sync::Arc;
-use parking_lot::{Mutex, Condvar};
-use ethkey::{Public, Secret, Signature, sign};
 use ethereum_types::H256;
-use key_server_cluster::{Error, NodeId, SessionId, SessionMeta, AclStorage, DocumentKeyShare, Requester};
-use key_server_cluster::cluster::{Cluster};
-use key_server_cluster::cluster_sessions::{SessionIdWithSubSession, ClusterSession};
-use key_server_cluster::generation_session::{SessionImpl as GenerationSession, SessionParams as GenerationSessionParams,
-	SessionState as GenerationSessionState};
-use key_server_cluster::math;
-use key_server_cluster::message::{Message, EcdsaSigningMessage, EcdsaSigningConsensusMessage, EcdsaSignatureNonceGenerationMessage,
-	EcdsaInversionNonceGenerationMessage, EcdsaInversionZeroGenerationMessage, EcdsaSigningInversedNonceCoeffShare,
-	EcdsaRequestPartialSignature, EcdsaPartialSignature, EcdsaSigningSessionCompleted, GenerationMessage,
-	ConsensusMessage, EcdsaSigningSessionError, InitializeConsensusSession, ConfirmConsensusInitialization,
-	EcdsaSigningSessionDelegation, EcdsaSigningSessionDelegationCompleted};
+use ethkey::{sign, Public, Secret, Signature};
+use key_server_cluster::cluster::Cluster;
+use key_server_cluster::cluster_sessions::{ClusterSession, SessionIdWithSubSession};
+use key_server_cluster::generation_session::{
+	SessionImpl as GenerationSession, SessionParams as GenerationSessionParams,
+	SessionState as GenerationSessionState,
+};
+use key_server_cluster::jobs::consensus_session::{
+	ConsensusSession, ConsensusSessionParams, ConsensusSessionState,
+};
 use key_server_cluster::jobs::job_session::JobTransport;
 use key_server_cluster::jobs::key_access_job::KeyAccessJob;
-use key_server_cluster::jobs::signing_job_ecdsa::{EcdsaPartialSigningRequest, EcdsaPartialSigningResponse, EcdsaSigningJob};
-use key_server_cluster::jobs::consensus_session::{ConsensusSessionParams, ConsensusSessionState, ConsensusSession};
+use key_server_cluster::jobs::signing_job_ecdsa::{
+	EcdsaPartialSigningRequest, EcdsaPartialSigningResponse, EcdsaSigningJob,
+};
+use key_server_cluster::math;
+use key_server_cluster::message::{
+	ConfirmConsensusInitialization, ConsensusMessage, EcdsaInversionNonceGenerationMessage,
+	EcdsaInversionZeroGenerationMessage, EcdsaPartialSignature, EcdsaRequestPartialSignature,
+	EcdsaSignatureNonceGenerationMessage, EcdsaSigningConsensusMessage,
+	EcdsaSigningInversedNonceCoeffShare, EcdsaSigningMessage, EcdsaSigningSessionCompleted,
+	EcdsaSigningSessionDelegation, EcdsaSigningSessionDelegationCompleted,
+	EcdsaSigningSessionError, GenerationMessage, InitializeConsensusSession, Message,
+};
+use key_server_cluster::{
+	AclStorage, DocumentKeyShare, Error, NodeId, Requester, SessionId, SessionMeta,
+};
+use parking_lot::{Condvar, Mutex};
+use std::collections::btree_map::Entry;
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 /// Distributed ECDSA-signing session.
 /// Based on "A robust threshold elliptic curve digital signature providing a new verifiable secret sharing scheme" paper.
@@ -63,7 +74,8 @@ struct SessionCore {
 }
 
 /// Signing consensus session type.
-type SigningConsensusSession = ConsensusSession<KeyAccessJob, SigningConsensusTransport, EcdsaSigningJob, SigningJobTransport>;
+type SigningConsensusSession =
+	ConsensusSession<KeyAccessJob, SigningConsensusTransport, EcdsaSigningJob, SigningJobTransport>;
 
 /// Mutable session data.
 struct SessionData {
@@ -133,7 +145,9 @@ struct SigningConsensusTransport {
 }
 
 /// Signing key generation transport.
-struct NonceGenerationTransport<F: Fn(SessionId, Secret, u64, GenerationMessage) -> EcdsaSigningMessage + Send + Sync> {
+struct NonceGenerationTransport<
+	F: Fn(SessionId, Secret, u64, GenerationMessage) -> EcdsaSigningMessage + Send + Sync,
+> {
 	/// Session id.
 	id: SessionId,
 	/// Session access key.
@@ -171,7 +185,14 @@ enum DelegationStatus {
 impl SessionImpl {
 	/// Create new signing session.
 	pub fn new(params: SessionParams, requester: Option<Requester>) -> Result<Self, Error> {
-		debug_assert_eq!(params.meta.threshold, params.key_share.as_ref().map(|ks| ks.threshold).unwrap_or_default());
+		debug_assert_eq!(
+			params.meta.threshold,
+			params
+				.key_share
+				.as_ref()
+				.map(|ks| ks.threshold)
+				.unwrap_or_default()
+		);
 
 		let consensus_transport = SigningConsensusTransport {
 			id: params.meta.id.clone(),
@@ -191,8 +212,14 @@ impl SessionImpl {
 				connected_nodes_count: params.meta.connected_nodes_count,
 			},
 			consensus_executor: match requester {
-				Some(requester) => KeyAccessJob::new_on_master(params.meta.id.clone(), params.acl_storage.clone(), requester),
-				None => KeyAccessJob::new_on_slave(params.meta.id.clone(), params.acl_storage.clone()),
+				Some(requester) => KeyAccessJob::new_on_master(
+					params.meta.id.clone(),
+					params.acl_storage.clone(),
+					requester,
+				),
+				None => {
+					KeyAccessJob::new_on_slave(params.meta.id.clone(), params.acl_storage.clone())
+				}
 			},
 			consensus_transport: consensus_transport,
 		})?;
@@ -223,8 +250,10 @@ impl SessionImpl {
 
 	/// Wait for session completion.
 	pub fn wait(&self) -> Result<Signature, Error> {
-		Self::wait_session(&self.core.completed, &self.data, None, |data| data.result.clone())
-			.expect("wait_session returns Some if called without timeout; qed")
+		Self::wait_session(&self.core.completed, &self.data, None, |data| {
+			data.result.clone()
+		})
+		.expect("wait_session returns Some if called without timeout; qed")
 	}
 
 	/// Delegate session to other node.
@@ -234,11 +263,16 @@ impl SessionImpl {
 		}
 
 		let mut data = self.data.lock();
-		if data.consensus_session.state() != ConsensusSessionState::WaitingForInitialization || data.delegation_status.is_some() {
+		if data.consensus_session.state() != ConsensusSessionState::WaitingForInitialization
+			|| data.delegation_status.is_some()
+		{
 			return Err(Error::InvalidStateForRequest);
 		}
 
-		data.consensus_session.consensus_job_mut().executor_mut().set_has_key_share(false);
+		data.consensus_session
+			.consensus_job_mut()
+			.executor_mut()
+			.set_has_key_share(false);
 		self.core.cluster.send(&master, Message::EcdsaSigning(EcdsaSigningMessage::EcdsaSigningSessionDelegation(EcdsaSigningSessionDelegation {
 			session: self.core.meta.id.clone().into(),
 			sub_session: self.core.access_key.clone().into(),
@@ -251,7 +285,6 @@ impl SessionImpl {
 		})))?;
 		data.delegation_status = Some(DelegationStatus::DelegatedTo(master));
 		Ok(())
-
 	}
 
 	/// Initialize signing session on master node.
@@ -267,17 +300,24 @@ impl SessionImpl {
 		// select nodes to participate in consensus etablish session
 		let mut data = self.data.lock();
 		let non_isolated_nodes = self.core.cluster.nodes();
-		let mut consensus_nodes: BTreeSet<_> = key_version.id_numbers.keys()
+		let mut consensus_nodes: BTreeSet<_> = key_version
+			.id_numbers
+			.keys()
 			.filter(|n| non_isolated_nodes.contains(*n))
 			.cloned()
 			.chain(::std::iter::once(self.core.meta.self_node_id.clone()))
 			.collect();
-		if let Some(&DelegationStatus::DelegatedFrom(delegation_master, _)) = data.delegation_status.as_ref() {
+		if let Some(&DelegationStatus::DelegatedFrom(delegation_master, _)) =
+			data.delegation_status.as_ref()
+		{
 			consensus_nodes.remove(&delegation_master);
 		}
 
 		// start consensus establish sesssion
-		data.consensus_session.consensus_job_mut().transport_mut().version = Some(version.clone());
+		data.consensus_session
+			.consensus_job_mut()
+			.transport_mut()
+			.version = Some(version.clone());
 		data.version = Some(version.clone());
 		data.message_hash = Some(message_hash);
 		data.consensus_session.initialize(consensus_nodes)?;
@@ -292,57 +332,91 @@ impl SessionImpl {
 	}
 
 	/// Process signing message.
-	pub fn process_message(&self, sender: &NodeId, message: &EcdsaSigningMessage) -> Result<(), Error> {
+	pub fn process_message(
+		&self,
+		sender: &NodeId,
+		message: &EcdsaSigningMessage,
+	) -> Result<(), Error> {
 		if self.core.nonce != message.session_nonce() {
 			return Err(Error::ReplayProtection);
 		}
 
 		match message {
-			&EcdsaSigningMessage::EcdsaSigningConsensusMessage(ref message) =>
-				self.on_consensus_message(sender, message),
-			&EcdsaSigningMessage::EcdsaSignatureNonceGenerationMessage(ref message) =>
-				self.on_signature_nonce_generation_message(sender, message),
-			&EcdsaSigningMessage::EcdsaInversionNonceGenerationMessage(ref message) =>
-				self.on_inversion_nonce_generation_message(sender, message),
-			&EcdsaSigningMessage::EcdsaInversionZeroGenerationMessage(ref message) =>
-				self.on_inversion_zero_generation_message(sender, message),
-			&EcdsaSigningMessage::EcdsaSigningInversedNonceCoeffShare(ref message) =>
-				self.on_inversed_nonce_coeff_share(sender, message),
-			&EcdsaSigningMessage::EcdsaRequestPartialSignature(ref message) =>
-				self.on_partial_signature_requested(sender, message),
-			&EcdsaSigningMessage::EcdsaPartialSignature(ref message) =>
-				self.on_partial_signature(sender, message),
-			&EcdsaSigningMessage::EcdsaSigningSessionError(ref message) =>
-				self.process_node_error(Some(&sender), message.error.clone()),
-			&EcdsaSigningMessage::EcdsaSigningSessionCompleted(ref message) =>
-				self.on_session_completed(sender, message),
-			&EcdsaSigningMessage::EcdsaSigningSessionDelegation(ref message) =>
-				self.on_session_delegated(sender, message),
-			&EcdsaSigningMessage::EcdsaSigningSessionDelegationCompleted(ref message) =>
-				self.on_session_delegation_completed(sender, message),
+			&EcdsaSigningMessage::EcdsaSigningConsensusMessage(ref message) => {
+				self.on_consensus_message(sender, message)
+			}
+			&EcdsaSigningMessage::EcdsaSignatureNonceGenerationMessage(ref message) => {
+				self.on_signature_nonce_generation_message(sender, message)
+			}
+			&EcdsaSigningMessage::EcdsaInversionNonceGenerationMessage(ref message) => {
+				self.on_inversion_nonce_generation_message(sender, message)
+			}
+			&EcdsaSigningMessage::EcdsaInversionZeroGenerationMessage(ref message) => {
+				self.on_inversion_zero_generation_message(sender, message)
+			}
+			&EcdsaSigningMessage::EcdsaSigningInversedNonceCoeffShare(ref message) => {
+				self.on_inversed_nonce_coeff_share(sender, message)
+			}
+			&EcdsaSigningMessage::EcdsaRequestPartialSignature(ref message) => {
+				self.on_partial_signature_requested(sender, message)
+			}
+			&EcdsaSigningMessage::EcdsaPartialSignature(ref message) => {
+				self.on_partial_signature(sender, message)
+			}
+			&EcdsaSigningMessage::EcdsaSigningSessionError(ref message) => {
+				self.process_node_error(Some(&sender), message.error.clone())
+			}
+			&EcdsaSigningMessage::EcdsaSigningSessionCompleted(ref message) => {
+				self.on_session_completed(sender, message)
+			}
+			&EcdsaSigningMessage::EcdsaSigningSessionDelegation(ref message) => {
+				self.on_session_delegated(sender, message)
+			}
+			&EcdsaSigningMessage::EcdsaSigningSessionDelegationCompleted(ref message) => {
+				self.on_session_delegation_completed(sender, message)
+			}
 		}
 	}
 
 	/// When session is delegated to this node.
-	pub fn on_session_delegated(&self, sender: &NodeId, message: &EcdsaSigningSessionDelegation) -> Result<(), Error> {
+	pub fn on_session_delegated(
+		&self,
+		sender: &NodeId,
+		message: &EcdsaSigningSessionDelegation,
+	) -> Result<(), Error> {
 		debug_assert!(self.core.meta.id == *message.session);
 		debug_assert!(self.core.access_key == *message.sub_session);
 
 		{
 			let mut data = self.data.lock();
-			if data.consensus_session.state() != ConsensusSessionState::WaitingForInitialization || data.delegation_status.is_some() {
+			if data.consensus_session.state() != ConsensusSessionState::WaitingForInitialization
+				|| data.delegation_status.is_some()
+			{
 				return Err(Error::InvalidStateForRequest);
 			}
 
-			data.consensus_session.consensus_job_mut().executor_mut().set_requester(message.requester.clone().into());
-			data.delegation_status = Some(DelegationStatus::DelegatedFrom(sender.clone(), message.session_nonce));
+			data.consensus_session
+				.consensus_job_mut()
+				.executor_mut()
+				.set_requester(message.requester.clone().into());
+			data.delegation_status = Some(DelegationStatus::DelegatedFrom(
+				sender.clone(),
+				message.session_nonce,
+			));
 		}
 
-		self.initialize(message.version.clone().into(), message.message_hash.clone().into())
+		self.initialize(
+			message.version.clone().into(),
+			message.message_hash.clone().into(),
+		)
 	}
 
 	/// When delegated session is completed on other node.
-	pub fn on_session_delegation_completed(&self, sender: &NodeId, message: &EcdsaSigningSessionDelegationCompleted) -> Result<(), Error> {
+	pub fn on_session_delegation_completed(
+		&self,
+		sender: &NodeId,
+		message: &EcdsaSigningSessionDelegationCompleted,
+	) -> Result<(), Error> {
 		debug_assert!(self.core.meta.id == *message.session);
 		debug_assert!(self.core.access_key == *message.sub_session);
 
@@ -362,73 +436,131 @@ impl SessionImpl {
 	}
 
 	/// When consensus-related message is received.
-	pub fn on_consensus_message(&self, sender: &NodeId, message: &EcdsaSigningConsensusMessage) -> Result<(), Error> {
+	pub fn on_consensus_message(
+		&self,
+		sender: &NodeId,
+		message: &EcdsaSigningConsensusMessage,
+	) -> Result<(), Error> {
 		debug_assert!(self.core.meta.id == *message.session);
 		debug_assert!(self.core.access_key == *message.sub_session);
 		debug_assert!(sender != &self.core.meta.self_node_id);
 
 		let mut data = self.data.lock();
-		let is_establishing_consensus = data.consensus_session.state() == ConsensusSessionState::EstablishingConsensus;
+		let is_establishing_consensus =
+			data.consensus_session.state() == ConsensusSessionState::EstablishingConsensus;
 
 		if let &ConsensusMessage::InitializeConsensusSession(ref msg) = &message.message {
 			let version = msg.version.clone().into();
-			let has_key_share = self.core.key_share.as_ref()
+			let has_key_share = self
+				.core
+				.key_share
+				.as_ref()
 				.map(|ks| ks.version(&version).is_ok())
 				.unwrap_or(false);
-			data.consensus_session.consensus_job_mut().executor_mut().set_has_key_share(has_key_share);
+			data.consensus_session
+				.consensus_job_mut()
+				.executor_mut()
+				.set_has_key_share(has_key_share);
 			data.version = Some(version);
 		}
-		data.consensus_session.on_consensus_message(&sender, &message.message)?;
+		data.consensus_session
+			.on_consensus_message(&sender, &message.message)?;
 
-		let is_consensus_established = data.consensus_session.state() == ConsensusSessionState::ConsensusEstablished;
-		if self.core.meta.self_node_id != self.core.meta.master_node_id || !is_establishing_consensus || !is_consensus_established {
+		let is_consensus_established =
+			data.consensus_session.state() == ConsensusSessionState::ConsensusEstablished;
+		if self.core.meta.self_node_id != self.core.meta.master_node_id
+			|| !is_establishing_consensus
+			|| !is_consensus_established
+		{
 			return Ok(());
 		}
 
-		let key_share = self.core.key_share.as_ref()
-			.expect("this is master node; master node is selected so that it has key version; qed");
-		let key_version = key_share.version(data.version.as_ref()
-			.expect("this is master node; master node is selected so that it has key version; qed"))?;
+		let key_share =
+			self.core.key_share.as_ref().expect(
+				"this is master node; master node is selected so that it has key version; qed",
+			);
+		let key_version = key_share.version(data.version.as_ref().expect(
+			"this is master node; master node is selected so that it has key version; qed",
+		))?;
 
 		let consensus_group = data.consensus_session.select_consensus_group()?.clone();
 		let mut other_consensus_group_nodes = consensus_group.clone();
 		other_consensus_group_nodes.remove(&self.core.meta.self_node_id);
-		let consensus_group_map: BTreeMap<_, _> = consensus_group.iter().map(|n| (n.clone(), key_version.id_numbers[n].clone())).collect();
+		let consensus_group_map: BTreeMap<_, _> = consensus_group
+			.iter()
+			.map(|n| (n.clone(), key_version.id_numbers[n].clone()))
+			.collect();
 
 		// start generation of signature nonce
-		let sig_nonce_generation_session = Self::start_generation_session(&self.core, &other_consensus_group_nodes,
-			|s, k, n, m| EcdsaSigningMessage::EcdsaSignatureNonceGenerationMessage(
-				EcdsaSignatureNonceGenerationMessage {
-					session: s.into(),
-					sub_session: k.into(),
-					session_nonce: n,
-					message: m,
-				}));
-		sig_nonce_generation_session.initialize(Default::default(), Default::default(), false, key_share.threshold, consensus_group_map.clone().into())?;
+		let sig_nonce_generation_session = Self::start_generation_session(
+			&self.core,
+			&other_consensus_group_nodes,
+			|s, k, n, m| {
+				EcdsaSigningMessage::EcdsaSignatureNonceGenerationMessage(
+					EcdsaSignatureNonceGenerationMessage {
+						session: s.into(),
+						sub_session: k.into(),
+						session_nonce: n,
+						message: m,
+					},
+				)
+			},
+		);
+		sig_nonce_generation_session.initialize(
+			Default::default(),
+			Default::default(),
+			false,
+			key_share.threshold,
+			consensus_group_map.clone().into(),
+		)?;
 		data.sig_nonce_generation_session = Some(sig_nonce_generation_session);
 
 		// start generation of inversed nonce computation session
-		let inv_nonce_generation_session = Self::start_generation_session(&self.core, &other_consensus_group_nodes,
-			move |s, k, n, m| EcdsaSigningMessage::EcdsaInversionNonceGenerationMessage(
-				EcdsaInversionNonceGenerationMessage {
-					session: s.into(),
-					sub_session: k.into(),
-					session_nonce: n,
-					message: m,
-				}));
-		inv_nonce_generation_session.initialize(Default::default(), Default::default(), false, key_share.threshold, consensus_group_map.clone().into())?;
+		let inv_nonce_generation_session = Self::start_generation_session(
+			&self.core,
+			&other_consensus_group_nodes,
+			move |s, k, n, m| {
+				EcdsaSigningMessage::EcdsaInversionNonceGenerationMessage(
+					EcdsaInversionNonceGenerationMessage {
+						session: s.into(),
+						sub_session: k.into(),
+						session_nonce: n,
+						message: m,
+					},
+				)
+			},
+		);
+		inv_nonce_generation_session.initialize(
+			Default::default(),
+			Default::default(),
+			false,
+			key_share.threshold,
+			consensus_group_map.clone().into(),
+		)?;
 		data.inv_nonce_generation_session = Some(inv_nonce_generation_session);
 
 		// start generation of zero-secret shares for inversed nonce computation session
-		let inv_zero_generation_session = Self::start_generation_session(&self.core, &other_consensus_group_nodes,
-			move |s, k, n, m| EcdsaSigningMessage::EcdsaInversionZeroGenerationMessage(
-				EcdsaInversionZeroGenerationMessage {
-					session: s.into(),
-					sub_session: k.into(),
-					session_nonce: n,
-					message: m,
-				}));
-		inv_zero_generation_session.initialize(Default::default(), Default::default(), true, key_share.threshold * 2, consensus_group_map.clone().into())?;
+		let inv_zero_generation_session = Self::start_generation_session(
+			&self.core,
+			&other_consensus_group_nodes,
+			move |s, k, n, m| {
+				EcdsaSigningMessage::EcdsaInversionZeroGenerationMessage(
+					EcdsaInversionZeroGenerationMessage {
+						session: s.into(),
+						sub_session: k.into(),
+						session_nonce: n,
+						message: m,
+					},
+				)
+			},
+		);
+		inv_zero_generation_session.initialize(
+			Default::default(),
+			Default::default(),
+			true,
+			key_share.threshold * 2,
+			consensus_group_map.clone().into(),
+		)?;
 		data.inv_zero_generation_session = Some(inv_zero_generation_session);
 
 		data.state = SessionState::NoncesGenerating;
@@ -437,7 +569,11 @@ impl SessionImpl {
 	}
 
 	/// When signature nonce generation message is received.
-	pub fn on_signature_nonce_generation_message(&self, sender: &NodeId, message: &EcdsaSignatureNonceGenerationMessage) -> Result<(), Error> {
+	pub fn on_signature_nonce_generation_message(
+		&self,
+		sender: &NodeId,
+		message: &EcdsaSignatureNonceGenerationMessage,
+	) -> Result<(), Error> {
 		debug_assert!(self.core.meta.id == *message.session);
 		debug_assert!(self.core.access_key == *message.sub_session);
 		debug_assert!(sender != &self.core.meta.self_node_id);
@@ -452,24 +588,34 @@ impl SessionImpl {
 				}
 			}
 
-			let consensus_group: BTreeSet<NodeId> = message.nodes.keys().cloned().map(Into::into).collect();
+			let consensus_group: BTreeSet<NodeId> =
+				message.nodes.keys().cloned().map(Into::into).collect();
 			let mut other_consensus_group_nodes = consensus_group.clone();
 			other_consensus_group_nodes.remove(&self.core.meta.self_node_id);
 
-			data.sig_nonce_generation_session = Some(Self::start_generation_session(&self.core, &other_consensus_group_nodes,
-				|s, k, n, m| EcdsaSigningMessage::EcdsaSignatureNonceGenerationMessage(
-					EcdsaSignatureNonceGenerationMessage {
-						session: s.into(),
-						sub_session: k.into(),
-						session_nonce: n,
-						message: m,
-					})));
+			data.sig_nonce_generation_session = Some(Self::start_generation_session(
+				&self.core,
+				&other_consensus_group_nodes,
+				|s, k, n, m| {
+					EcdsaSigningMessage::EcdsaSignatureNonceGenerationMessage(
+						EcdsaSignatureNonceGenerationMessage {
+							session: s.into(),
+							sub_session: k.into(),
+							session_nonce: n,
+							message: m,
+						},
+					)
+				},
+			));
 
 			data.state = SessionState::NoncesGenerating;
 		}
 
 		{
-			let generation_session = data.sig_nonce_generation_session.as_ref().ok_or(Error::InvalidStateForRequest)?;
+			let generation_session = data
+				.sig_nonce_generation_session
+				.as_ref()
+				.ok_or(Error::InvalidStateForRequest)?;
 			let is_key_generating = generation_session.state() != GenerationSessionState::Finished;
 			generation_session.process_message(sender, &message.message)?;
 
@@ -483,7 +629,7 @@ impl SessionImpl {
 			return Ok(());
 		}
 
-		Self::send_inversed_nonce_coeff_share(&self.core, &mut*data)?;
+		Self::send_inversed_nonce_coeff_share(&self.core, &mut *data)?;
 		data.state = if self.core.meta.master_node_id != self.core.meta.self_node_id {
 			SessionState::SignatureComputing
 		} else {
@@ -494,7 +640,11 @@ impl SessionImpl {
 	}
 
 	/// When inversion nonce generation message is received.
-	pub fn on_inversion_nonce_generation_message(&self, sender: &NodeId, message: &EcdsaInversionNonceGenerationMessage) -> Result<(), Error> {
+	pub fn on_inversion_nonce_generation_message(
+		&self,
+		sender: &NodeId,
+		message: &EcdsaInversionNonceGenerationMessage,
+	) -> Result<(), Error> {
 		debug_assert!(self.core.meta.id == *message.session);
 		debug_assert!(self.core.access_key == *message.sub_session);
 		debug_assert!(sender != &self.core.meta.self_node_id);
@@ -509,24 +659,34 @@ impl SessionImpl {
 				}
 			}
 
-			let consensus_group: BTreeSet<NodeId> = message.nodes.keys().cloned().map(Into::into).collect();
+			let consensus_group: BTreeSet<NodeId> =
+				message.nodes.keys().cloned().map(Into::into).collect();
 			let mut other_consensus_group_nodes = consensus_group.clone();
 			other_consensus_group_nodes.remove(&self.core.meta.self_node_id);
 
-			data.inv_nonce_generation_session = Some(Self::start_generation_session(&self.core, &other_consensus_group_nodes,
-				|s, k, n, m| EcdsaSigningMessage::EcdsaInversionNonceGenerationMessage(
-					EcdsaInversionNonceGenerationMessage {
-						session: s.into(),
-						sub_session: k.into(),
-						session_nonce: n,
-						message: m,
-					})));
+			data.inv_nonce_generation_session = Some(Self::start_generation_session(
+				&self.core,
+				&other_consensus_group_nodes,
+				|s, k, n, m| {
+					EcdsaSigningMessage::EcdsaInversionNonceGenerationMessage(
+						EcdsaInversionNonceGenerationMessage {
+							session: s.into(),
+							sub_session: k.into(),
+							session_nonce: n,
+							message: m,
+						},
+					)
+				},
+			));
 
 			data.state = SessionState::NoncesGenerating;
 		}
 
 		{
-			let generation_session = data.inv_nonce_generation_session.as_ref().ok_or(Error::InvalidStateForRequest)?;
+			let generation_session = data
+				.inv_nonce_generation_session
+				.as_ref()
+				.ok_or(Error::InvalidStateForRequest)?;
 			let is_key_generating = generation_session.state() != GenerationSessionState::Finished;
 			generation_session.process_message(sender, &message.message)?;
 
@@ -540,7 +700,7 @@ impl SessionImpl {
 			return Ok(());
 		}
 
-		Self::send_inversed_nonce_coeff_share(&self.core, &mut*data)?;
+		Self::send_inversed_nonce_coeff_share(&self.core, &mut *data)?;
 		data.state = if self.core.meta.master_node_id != self.core.meta.self_node_id {
 			SessionState::SignatureComputing
 		} else {
@@ -551,7 +711,11 @@ impl SessionImpl {
 	}
 
 	/// When inversion zero generation message is received.
-	pub fn on_inversion_zero_generation_message(&self, sender: &NodeId, message: &EcdsaInversionZeroGenerationMessage) -> Result<(), Error> {
+	pub fn on_inversion_zero_generation_message(
+		&self,
+		sender: &NodeId,
+		message: &EcdsaInversionZeroGenerationMessage,
+	) -> Result<(), Error> {
 		debug_assert!(self.core.meta.id == *message.session);
 		debug_assert!(self.core.access_key == *message.sub_session);
 		debug_assert!(sender != &self.core.meta.self_node_id);
@@ -566,24 +730,34 @@ impl SessionImpl {
 				}
 			}
 
-			let consensus_group: BTreeSet<NodeId> = message.nodes.keys().cloned().map(Into::into).collect();
+			let consensus_group: BTreeSet<NodeId> =
+				message.nodes.keys().cloned().map(Into::into).collect();
 			let mut other_consensus_group_nodes = consensus_group.clone();
 			other_consensus_group_nodes.remove(&self.core.meta.self_node_id);
 
-			data.inv_zero_generation_session = Some(Self::start_generation_session(&self.core, &other_consensus_group_nodes,
-				|s, k, n, m| EcdsaSigningMessage::EcdsaInversionZeroGenerationMessage(
-					EcdsaInversionZeroGenerationMessage {
-						session: s.into(),
-						sub_session: k.into(),
-						session_nonce: n,
-						message: m,
-					})));
+			data.inv_zero_generation_session = Some(Self::start_generation_session(
+				&self.core,
+				&other_consensus_group_nodes,
+				|s, k, n, m| {
+					EcdsaSigningMessage::EcdsaInversionZeroGenerationMessage(
+						EcdsaInversionZeroGenerationMessage {
+							session: s.into(),
+							sub_session: k.into(),
+							session_nonce: n,
+							message: m,
+						},
+					)
+				},
+			));
 
 			data.state = SessionState::NoncesGenerating;
 		}
 
 		{
-			let generation_session = data.inv_zero_generation_session.as_ref().ok_or(Error::InvalidStateForRequest)?;
+			let generation_session = data
+				.inv_zero_generation_session
+				.as_ref()
+				.ok_or(Error::InvalidStateForRequest)?;
 			let is_key_generating = generation_session.state() != GenerationSessionState::Finished;
 			generation_session.process_message(sender, &message.message)?;
 
@@ -597,7 +771,7 @@ impl SessionImpl {
 			return Ok(());
 		}
 
-		Self::send_inversed_nonce_coeff_share(&self.core, &mut*data)?;
+		Self::send_inversed_nonce_coeff_share(&self.core, &mut *data)?;
 		data.state = if self.core.meta.master_node_id != self.core.meta.self_node_id {
 			SessionState::SignatureComputing
 		} else {
@@ -608,7 +782,11 @@ impl SessionImpl {
 	}
 
 	/// When inversed nonce share is received.
-	pub fn on_inversed_nonce_coeff_share(&self, sender: &NodeId, message: &EcdsaSigningInversedNonceCoeffShare) -> Result<(), Error> {
+	pub fn on_inversed_nonce_coeff_share(
+		&self,
+		sender: &NodeId,
+		message: &EcdsaSigningInversedNonceCoeffShare,
+	) -> Result<(), Error> {
 		debug_assert!(self.core.meta.id == *message.session);
 		debug_assert!(self.core.access_key == *message.sub_session);
 		debug_assert!(sender != &self.core.meta.self_node_id);
@@ -633,10 +811,13 @@ impl SessionImpl {
 					Entry::Occupied(_) => return Err(Error::InvalidStateForRequest),
 					Entry::Vacant(entry) => {
 						entry.insert(message.inversed_nonce_coeff_share.clone().into());
-					},
+					}
 				}
 
-				if consensus_group.iter().any(|n| !inversed_nonce_coeff_shares.contains_key(n)) {
+				if consensus_group
+					.iter()
+					.any(|n| !inversed_nonce_coeff_shares.contains_key(n))
+				{
 					return Ok(());
 				}
 			}
@@ -649,14 +830,37 @@ impl SessionImpl {
 			.expect("we are on master node; on master node message_hash is filled in initialize(); on_generation_message follows initialize; qed");
 
 		let nonce_exists_proof = "nonce is generated before signature is computed; we are in SignatureComputing state; qed";
-		let sig_nonce_public = data.sig_nonce_generation_session.as_ref().expect(nonce_exists_proof).joint_public_and_secret().expect(nonce_exists_proof)?.0;
-		let inv_nonce_share = data.inv_nonce_generation_session.as_ref().expect(nonce_exists_proof).joint_public_and_secret().expect(nonce_exists_proof)?.2;
+		let sig_nonce_public = data
+			.sig_nonce_generation_session
+			.as_ref()
+			.expect(nonce_exists_proof)
+			.joint_public_and_secret()
+			.expect(nonce_exists_proof)?
+			.0;
+		let inv_nonce_share = data
+			.inv_nonce_generation_session
+			.as_ref()
+			.expect(nonce_exists_proof)
+			.joint_public_and_secret()
+			.expect(nonce_exists_proof)?
+			.2;
 
-		self.core.disseminate_jobs(&mut data.consensus_session, &version, sig_nonce_public, inv_nonce_share, inversed_nonce_coeff, message_hash)
+		self.core.disseminate_jobs(
+			&mut data.consensus_session,
+			&version,
+			sig_nonce_public,
+			inv_nonce_share,
+			inversed_nonce_coeff,
+			message_hash,
+		)
 	}
 
 	/// When partial signature is requested.
-	pub fn on_partial_signature_requested(&self, sender: &NodeId, message: &EcdsaRequestPartialSignature) -> Result<(), Error> {
+	pub fn on_partial_signature_requested(
+		&self,
+		sender: &NodeId,
+		message: &EcdsaRequestPartialSignature,
+	) -> Result<(), Error> {
 		debug_assert!(self.core.meta.id == *message.session);
 		debug_assert!(self.core.access_key == *message.sub_session);
 		debug_assert!(sender != &self.core.meta.self_node_id);
@@ -676,33 +880,64 @@ impl SessionImpl {
 		}
 
 		let nonce_exists_proof = "nonce is generated before signature is computed; we are in SignatureComputing state; qed";
-		let sig_nonce_public = data.sig_nonce_generation_session.as_ref().expect(nonce_exists_proof).joint_public_and_secret().expect(nonce_exists_proof)?.0;
-		let inv_nonce_share = data.inv_nonce_generation_session.as_ref().expect(nonce_exists_proof).joint_public_and_secret().expect(nonce_exists_proof)?.2;
+		let sig_nonce_public = data
+			.sig_nonce_generation_session
+			.as_ref()
+			.expect(nonce_exists_proof)
+			.joint_public_and_secret()
+			.expect(nonce_exists_proof)?
+			.0;
+		let inv_nonce_share = data
+			.inv_nonce_generation_session
+			.as_ref()
+			.expect(nonce_exists_proof)
+			.joint_public_and_secret()
+			.expect(nonce_exists_proof)?
+			.2;
 
 		let version = data.version.as_ref().ok_or(Error::InvalidMessage)?.clone();
 		let key_version = key_share.version(&version)?.hash.clone();
 
-		let signing_job = EcdsaSigningJob::new_on_slave(key_share.clone(), key_version, sig_nonce_public, inv_nonce_share)?;
+		let signing_job = EcdsaSigningJob::new_on_slave(
+			key_share.clone(),
+			key_version,
+			sig_nonce_public,
+			inv_nonce_share,
+		)?;
 		let signing_transport = self.core.signing_transport();
 
-		data.consensus_session.on_job_request(sender, EcdsaPartialSigningRequest {
-			id: message.request_id.clone().into(),
-			inversed_nonce_coeff: message.inversed_nonce_coeff.clone().into(),
-			message_hash: message.message_hash.clone().into(),
-		}, signing_job, signing_transport).map(|_| ())
+		data.consensus_session
+			.on_job_request(
+				sender,
+				EcdsaPartialSigningRequest {
+					id: message.request_id.clone().into(),
+					inversed_nonce_coeff: message.inversed_nonce_coeff.clone().into(),
+					message_hash: message.message_hash.clone().into(),
+				},
+				signing_job,
+				signing_transport,
+			)
+			.map(|_| ())
 	}
 
 	/// When partial signature is received.
-	pub fn on_partial_signature(&self, sender: &NodeId, message: &EcdsaPartialSignature) -> Result<(), Error> {
+	pub fn on_partial_signature(
+		&self,
+		sender: &NodeId,
+		message: &EcdsaPartialSignature,
+	) -> Result<(), Error> {
 		debug_assert!(self.core.meta.id == *message.session);
 		debug_assert!(self.core.access_key == *message.sub_session);
 		debug_assert!(sender != &self.core.meta.self_node_id);
 
 		let mut data = self.data.lock();
-		data.consensus_session.on_job_response(sender, EcdsaPartialSigningResponse {
-			request_id: message.request_id.clone().into(),
-			partial_signature_s: message.partial_signature_s.clone().into(),
-		})?;
+		data.consensus_session.on_job_response(
+			sender,
+			EcdsaPartialSigningResponse {
+				request_id: message.request_id.clone().into(),
+				partial_signature_s: message.partial_signature_s.clone().into(),
+			},
+		)?;
 
 		if data.consensus_session.state() != ConsensusSessionState::Finished {
 			return Ok(());
@@ -710,11 +945,16 @@ impl SessionImpl {
 
 		// send compeltion signal to all nodes, except for rejected nodes
 		for node in data.consensus_session.consensus_non_rejected_nodes() {
-			self.core.cluster.send(&node, Message::EcdsaSigning(EcdsaSigningMessage::EcdsaSigningSessionCompleted(EcdsaSigningSessionCompleted {
-				session: self.core.meta.id.clone().into(),
-				sub_session: self.core.access_key.clone().into(),
-				session_nonce: self.core.nonce,
-			})))?;
+			self.core.cluster.send(
+				&node,
+				Message::EcdsaSigning(EcdsaSigningMessage::EcdsaSigningSessionCompleted(
+					EcdsaSigningSessionCompleted {
+						session: self.core.meta.id.clone().into(),
+						sub_session: self.core.access_key.clone().into(),
+						session_nonce: self.core.nonce,
+					},
+				)),
+			)?;
 		}
 
 		let result = data.consensus_session.result()?;
@@ -724,18 +964,27 @@ impl SessionImpl {
 	}
 
 	/// When session is completed.
-	pub fn on_session_completed(&self, sender: &NodeId, message: &EcdsaSigningSessionCompleted) -> Result<(), Error> {
+	pub fn on_session_completed(
+		&self,
+		sender: &NodeId,
+		message: &EcdsaSigningSessionCompleted,
+	) -> Result<(), Error> {
 		debug_assert!(self.core.meta.id == *message.session);
 		debug_assert!(self.core.access_key == *message.sub_session);
 		debug_assert!(sender != &self.core.meta.self_node_id);
 
-		self.data.lock().consensus_session.on_session_completed(sender)
+		self.data
+			.lock()
+			.consensus_session
+			.on_session_completed(sender)
 	}
 
 	/// Process error from the other node.
 	fn process_node_error(&self, node: Option<&NodeId>, error: Error) -> Result<(), Error> {
 		let mut data = self.data.lock();
-		let is_self_node_error = node.map(|n| n == &self.core.meta.self_node_id).unwrap_or(false);
+		let is_self_node_error = node
+			.map(|n| n == &self.core.meta.self_node_id)
+			.unwrap_or(false);
 		// error is always fatal if coming from this node
 		if is_self_node_error {
 			Self::set_signing_result(&self.core, &mut *data, Err(error.clone()));
@@ -748,9 +997,7 @@ impl SessionImpl {
 				None => data.consensus_session.on_session_timeout(),
 			}
 		} {
-			Ok(false) => {
-				Ok(())
-			},
+			Ok(false) => Ok(()),
 			Ok(true) => {
 				let version = data.version.as_ref().ok_or(Error::InvalidMessage)?.clone();
 
@@ -758,32 +1005,66 @@ impl SessionImpl {
 					.expect("on_node_error returned true; this means that jobs must be REsent; this means that jobs already have been sent; jobs are sent when message_hash.is_some(); qed");
 
 				let nonce_exists_proof = "on_node_error returned true; this means that jobs must be REsent; this means that jobs already have been sent; jobs are sent when nonces generation has completed; qed";
-				let sig_nonce_public = data.sig_nonce_generation_session.as_ref().expect(nonce_exists_proof).joint_public_and_secret().expect(nonce_exists_proof)?.0;
-				let inv_nonce_share = data.inv_nonce_generation_session.as_ref().expect(nonce_exists_proof).joint_public_and_secret().expect(nonce_exists_proof)?.2;
+				let sig_nonce_public = data
+					.sig_nonce_generation_session
+					.as_ref()
+					.expect(nonce_exists_proof)
+					.joint_public_and_secret()
+					.expect(nonce_exists_proof)?
+					.0;
+				let inv_nonce_share = data
+					.inv_nonce_generation_session
+					.as_ref()
+					.expect(nonce_exists_proof)
+					.joint_public_and_secret()
+					.expect(nonce_exists_proof)?
+					.2;
 
 				let inversed_nonce_coeff = Self::compute_inversed_nonce_coeff(&self.core, &*data)?;
 
-				let disseminate_result = self.core.disseminate_jobs(&mut data.consensus_session, &version, sig_nonce_public, inv_nonce_share, inversed_nonce_coeff, message_hash);
+				let disseminate_result = self.core.disseminate_jobs(
+					&mut data.consensus_session,
+					&version,
+					sig_nonce_public,
+					inv_nonce_share,
+					inversed_nonce_coeff,
+					message_hash,
+				);
 				match disseminate_result {
 					Ok(()) => Ok(()),
 					Err(err) => {
-						warn!("{}: ECDSA signing session failed with error: {:?} from {:?}", &self.core.meta.self_node_id, error, node);
+						warn!(
+							"{}: ECDSA signing session failed with error: {:?} from {:?}",
+							&self.core.meta.self_node_id, error, node
+						);
 						Self::set_signing_result(&self.core, &mut *data, Err(err.clone()));
 						Err(err)
 					}
 				}
-			},
+			}
 			Err(err) => {
-				warn!("{}: ECDSA signing session failed with error: {:?} from {:?}", &self.core.meta.self_node_id, error, node);
+				warn!(
+					"{}: ECDSA signing session failed with error: {:?} from {:?}",
+					&self.core.meta.self_node_id, error, node
+				);
 				Self::set_signing_result(&self.core, &mut *data, Err(err.clone()));
 				Err(err)
-			},
+			}
 		}
 	}
 
 	/// Start generation session.
-	fn start_generation_session<F>(core: &SessionCore, other_consensus_group_nodes: &BTreeSet<NodeId>, map_message: F) -> GenerationSession
-		where F: Fn(SessionId, Secret, u64, GenerationMessage) -> EcdsaSigningMessage + Send + Sync + 'static {
+	fn start_generation_session<F>(
+		core: &SessionCore,
+		other_consensus_group_nodes: &BTreeSet<NodeId>,
+		map_message: F,
+	) -> GenerationSession
+	where
+		F: Fn(SessionId, Secret, u64, GenerationMessage) -> EcdsaSigningMessage
+			+ Send
+			+ Sync
+			+ 'static,
+	{
 		GenerationSession::new(GenerationSessionParams {
 			id: core.meta.id.clone(),
 			self_node_id: core.meta.self_node_id.clone(),
@@ -801,22 +1082,39 @@ impl SessionImpl {
 	}
 
 	/// Set signing session result.
-	fn set_signing_result(core: &SessionCore, data: &mut SessionData, result: Result<Signature, Error>) {
-		if let Some(DelegationStatus::DelegatedFrom(master, nonce)) = data.delegation_status.take() {
+	fn set_signing_result(
+		core: &SessionCore,
+		data: &mut SessionData,
+		result: Result<Signature, Error>,
+	) {
+		if let Some(DelegationStatus::DelegatedFrom(master, nonce)) = data.delegation_status.take()
+		{
 			// error means can't communicate => ignore it
 			let _ = match result.as_ref() {
-				Ok(signature) => core.cluster.send(&master, Message::EcdsaSigning(EcdsaSigningMessage::EcdsaSigningSessionDelegationCompleted(EcdsaSigningSessionDelegationCompleted {
-					session: core.meta.id.clone().into(),
-					sub_session: core.access_key.clone().into(),
-					session_nonce: nonce,
-					signature: signature.clone().into(),
-				}))),
-				Err(error) => core.cluster.send(&master, Message::EcdsaSigning(EcdsaSigningMessage::EcdsaSigningSessionError(EcdsaSigningSessionError {
-					session: core.meta.id.clone().into(),
-					sub_session: core.access_key.clone().into(),
-					session_nonce: nonce,
-					error: error.clone().into(),
-				}))),
+				Ok(signature) => core.cluster.send(
+					&master,
+					Message::EcdsaSigning(
+						EcdsaSigningMessage::EcdsaSigningSessionDelegationCompleted(
+							EcdsaSigningSessionDelegationCompleted {
+								session: core.meta.id.clone().into(),
+								sub_session: core.access_key.clone().into(),
+								session_nonce: nonce,
+								signature: signature.clone().into(),
+							},
+						),
+					),
+				),
+				Err(error) => core.cluster.send(
+					&master,
+					Message::EcdsaSigning(EcdsaSigningMessage::EcdsaSigningSessionError(
+						EcdsaSigningSessionError {
+							session: core.meta.id.clone().into(),
+							sub_session: core.access_key.clone().into(),
+							session_nonce: nonce,
+							error: error.clone().into(),
+						},
+					)),
+				),
 			};
 		}
 
@@ -826,11 +1124,21 @@ impl SessionImpl {
 
 	/// Check if all nonces are generated.
 	fn check_nonces_generated(data: &SessionData) -> bool {
-		let expect_proof = "check_nonces_generated is called when som nonce-gen session is completed;
+		let expect_proof =
+			"check_nonces_generated is called when som nonce-gen session is completed;
 			all nonce-gen sessions are created at once; qed";
-		let sig_nonce_generation_session = data.sig_nonce_generation_session.as_ref().expect(expect_proof);
-		let inv_nonce_generation_session = data.inv_nonce_generation_session.as_ref().expect(expect_proof);
-		let inv_zero_generation_session = data.inv_zero_generation_session.as_ref().expect(expect_proof);
+		let sig_nonce_generation_session = data
+			.sig_nonce_generation_session
+			.as_ref()
+			.expect(expect_proof);
+		let inv_nonce_generation_session = data
+			.inv_nonce_generation_session
+			.as_ref()
+			.expect(expect_proof);
+		let inv_zero_generation_session = data
+			.inv_zero_generation_session
+			.as_ref()
+			.expect(expect_proof);
 
 		sig_nonce_generation_session.state() == GenerationSessionState::Finished
 			&& inv_nonce_generation_session.state() == GenerationSessionState::Finished
@@ -838,46 +1146,82 @@ impl SessionImpl {
 	}
 
 	/// Broadcast inversed nonce share.
-	fn send_inversed_nonce_coeff_share(core: &SessionCore, data: &mut SessionData) -> Result<(), Error> {
+	fn send_inversed_nonce_coeff_share(
+		core: &SessionCore,
+		data: &mut SessionData,
+	) -> Result<(), Error> {
 		let proof = "inversed nonce coeff share is sent after nonces generation is completed; qed";
 
 		let sig_nonce_generation_session = data.sig_nonce_generation_session.as_ref().expect(proof);
-		let sig_nonce = sig_nonce_generation_session.joint_public_and_secret().expect(proof).expect(proof).2;
+		let sig_nonce = sig_nonce_generation_session
+			.joint_public_and_secret()
+			.expect(proof)
+			.expect(proof)
+			.2;
 
 		let inv_nonce_generation_session = data.inv_nonce_generation_session.as_ref().expect(proof);
-		let inv_nonce = inv_nonce_generation_session.joint_public_and_secret().expect(proof).expect(proof).2;
+		let inv_nonce = inv_nonce_generation_session
+			.joint_public_and_secret()
+			.expect(proof)
+			.expect(proof)
+			.2;
 
 		let inv_zero_generation_session = data.inv_zero_generation_session.as_ref().expect(proof);
-		let inv_zero = inv_zero_generation_session.joint_public_and_secret().expect(proof).expect(proof).2;
+		let inv_zero = inv_zero_generation_session
+			.joint_public_and_secret()
+			.expect(proof)
+			.expect(proof)
+			.2;
 
-		let inversed_nonce_coeff_share = math::compute_ecdsa_inversed_secret_coeff_share(&sig_nonce, &inv_nonce, &inv_zero)?;
+		let inversed_nonce_coeff_share =
+			math::compute_ecdsa_inversed_secret_coeff_share(&sig_nonce, &inv_nonce, &inv_zero)?;
 		if core.meta.self_node_id == core.meta.master_node_id {
 			let mut inversed_nonce_coeff_shares = BTreeMap::new();
-			inversed_nonce_coeff_shares.insert(core.meta.self_node_id.clone(), inversed_nonce_coeff_share);
+			inversed_nonce_coeff_shares
+				.insert(core.meta.self_node_id.clone(), inversed_nonce_coeff_share);
 			data.inversed_nonce_coeff_shares = Some(inversed_nonce_coeff_shares);
 			Ok(())
 		} else {
-			core.cluster.send(&core.meta.master_node_id, Message::EcdsaSigning(EcdsaSigningMessage::EcdsaSigningInversedNonceCoeffShare(EcdsaSigningInversedNonceCoeffShare {
-				session: core.meta.id.clone().into(),
-				sub_session: core.access_key.clone().into(),
-				session_nonce: core.nonce,
-				inversed_nonce_coeff_share: inversed_nonce_coeff_share.into(),
-			})))
+			core.cluster.send(
+				&core.meta.master_node_id,
+				Message::EcdsaSigning(EcdsaSigningMessage::EcdsaSigningInversedNonceCoeffShare(
+					EcdsaSigningInversedNonceCoeffShare {
+						session: core.meta.id.clone().into(),
+						sub_session: core.access_key.clone().into(),
+						session_nonce: core.nonce,
+						inversed_nonce_coeff_share: inversed_nonce_coeff_share.into(),
+					},
+				)),
+			)
 		}
 	}
 
 	/// Compute inversed nonce coefficient on master node.
-	fn compute_inversed_nonce_coeff(core: &SessionCore, data: &SessionData) -> Result<Secret, Error> {
-		let proof = "inversed nonce coeff is computed on master node; key version exists on master node";
+	fn compute_inversed_nonce_coeff(
+		core: &SessionCore,
+		data: &SessionData,
+	) -> Result<Secret, Error> {
+		let proof =
+			"inversed nonce coeff is computed on master node; key version exists on master node";
 		let key_share = core.key_share.as_ref().expect(proof);
-		let key_version = key_share.version(data.version.as_ref().expect(proof)).expect(proof);
+		let key_version = key_share
+			.version(data.version.as_ref().expect(proof))
+			.expect(proof);
 
 		let proof = "inversed nonce coeff is computed after all shares are received; qed";
 		let inversed_nonce_coeff_shares = data.inversed_nonce_coeff_shares.as_ref().expect(proof);
 
-		math::compute_ecdsa_inversed_secret_coeff_from_shares(key_share.threshold,
-			&inversed_nonce_coeff_shares.keys().map(|n| key_version.id_numbers[n].clone()).collect::<Vec<_>>(),
-			&inversed_nonce_coeff_shares.values().cloned().collect::<Vec<_>>())
+		math::compute_ecdsa_inversed_secret_coeff_from_shares(
+			key_share.threshold,
+			&inversed_nonce_coeff_shares
+				.keys()
+				.map(|n| key_version.id_numbers[n].clone())
+				.collect::<Vec<_>>(),
+			&inversed_nonce_coeff_shares
+				.values()
+				.cloned()
+				.collect::<Vec<_>>(),
+		)
 	}
 }
 
@@ -916,18 +1260,22 @@ impl ClusterSession for SessionImpl {
 			// error in signing session is non-fatal, if occurs on slave node
 			// => either respond with error
 			// => or broadcast error
-			let message = Message::EcdsaSigning(EcdsaSigningMessage::EcdsaSigningSessionError(EcdsaSigningSessionError {
-				session: self.core.meta.id.clone().into(),
-				sub_session: self.core.access_key.clone().into(),
-				session_nonce: self.core.nonce,
-				error: error.clone().into(),
-			}));
+			let message = Message::EcdsaSigning(EcdsaSigningMessage::EcdsaSigningSessionError(
+				EcdsaSigningSessionError {
+					session: self.core.meta.id.clone().into(),
+					sub_session: self.core.access_key.clone().into(),
+					session_nonce: self.core.nonce,
+					error: error.clone().into(),
+				},
+			));
 
 			// do not bother processing send error, as we already processing error
 			let _ = if self.core.meta.master_node_id == self.core.meta.self_node_id {
 				self.core.cluster.broadcast(message)
 			} else {
-				self.core.cluster.send(&self.core.meta.master_node_id, message)
+				self.core
+					.cluster
+					.send(&self.core.meta.master_node_id, message)
 			};
 		}
 	}
@@ -940,16 +1288,27 @@ impl ClusterSession for SessionImpl {
 	}
 }
 
-impl<F> NonceGenerationTransport<F> where F: Fn(SessionId, Secret, u64, GenerationMessage) -> EcdsaSigningMessage + Send + Sync {
+impl<F> NonceGenerationTransport<F>
+where
+	F: Fn(SessionId, Secret, u64, GenerationMessage) -> EcdsaSigningMessage + Send + Sync,
+{
 	fn map_message(&self, message: Message) -> Result<Message, Error> {
 		match message {
-			Message::Generation(message) => Ok(Message::EcdsaSigning((self.map)(self.id.clone(), self.access_key.clone(), self.nonce, message))),
+			Message::Generation(message) => Ok(Message::EcdsaSigning((self.map)(
+				self.id.clone(),
+				self.access_key.clone(),
+				self.nonce,
+				message,
+			))),
 			_ => Err(Error::InvalidMessage),
 		}
 	}
 }
 
-impl<F> Cluster for NonceGenerationTransport<F> where F: Fn(SessionId, Secret, u64, GenerationMessage) -> EcdsaSigningMessage + Send + Sync {
+impl<F> Cluster for NonceGenerationTransport<F>
+where
+	F: Fn(SessionId, Secret, u64, GenerationMessage) -> EcdsaSigningMessage + Send + Sync,
+{
 	fn broadcast(&self, message: Message) -> Result<(), Error> {
 		let message = self.map_message(message)?;
 		for to in &self.other_nodes_ids {
@@ -986,91 +1345,140 @@ impl SessionCore {
 			id: self.meta.id.clone(),
 			access_key: self.access_key.clone(),
 			nonce: self.nonce,
-			cluster: self.cluster.clone()
+			cluster: self.cluster.clone(),
 		}
 	}
 
-	pub fn disseminate_jobs(&self, consensus_session: &mut SigningConsensusSession, version: &H256, nonce_public: Public, inv_nonce_share: Secret, inversed_nonce_coeff: Secret, message_hash: H256) -> Result<(), Error> {
+	pub fn disseminate_jobs(
+		&self,
+		consensus_session: &mut SigningConsensusSession,
+		version: &H256,
+		nonce_public: Public,
+		inv_nonce_share: Secret,
+		inversed_nonce_coeff: Secret,
+		message_hash: H256,
+	) -> Result<(), Error> {
 		let key_share = match self.key_share.as_ref() {
 			None => return Err(Error::InvalidMessage),
 			Some(key_share) => key_share,
 		};
 
 		let key_version = key_share.version(version)?.hash.clone();
-		let signing_job = EcdsaSigningJob::new_on_master(key_share.clone(), key_version, nonce_public, inv_nonce_share, inversed_nonce_coeff, message_hash)?;
-		consensus_session.disseminate_jobs(signing_job, self.signing_transport(), false).map(|_| ())
+		let signing_job = EcdsaSigningJob::new_on_master(
+			key_share.clone(),
+			key_version,
+			nonce_public,
+			inv_nonce_share,
+			inversed_nonce_coeff,
+			message_hash,
+		)?;
+		consensus_session
+			.disseminate_jobs(signing_job, self.signing_transport(), false)
+			.map(|_| ())
 	}
 }
 
 impl JobTransport for SigningConsensusTransport {
-	type PartialJobRequest=Requester;
-	type PartialJobResponse=bool;
+	type PartialJobRequest = Requester;
+	type PartialJobResponse = bool;
 
 	fn send_partial_request(&self, node: &NodeId, request: Requester) -> Result<(), Error> {
 		let version = self.version.as_ref()
 			.expect("send_partial_request is called on initialized master node only; version is filled in before initialization starts on master node; qed");
-		self.cluster.send(node, Message::EcdsaSigning(EcdsaSigningMessage::EcdsaSigningConsensusMessage(EcdsaSigningConsensusMessage {
-			session: self.id.clone().into(),
-			sub_session: self.access_key.clone().into(),
-			session_nonce: self.nonce,
-			message: ConsensusMessage::InitializeConsensusSession(InitializeConsensusSession {
-				requester: request.into(),
-				version: version.clone().into(),
-			})
-		})))
+		self.cluster.send(
+			node,
+			Message::EcdsaSigning(EcdsaSigningMessage::EcdsaSigningConsensusMessage(
+				EcdsaSigningConsensusMessage {
+					session: self.id.clone().into(),
+					sub_session: self.access_key.clone().into(),
+					session_nonce: self.nonce,
+					message: ConsensusMessage::InitializeConsensusSession(
+						InitializeConsensusSession {
+							requester: request.into(),
+							version: version.clone().into(),
+						},
+					),
+				},
+			)),
+		)
 	}
 
 	fn send_partial_response(&self, node: &NodeId, response: bool) -> Result<(), Error> {
-		self.cluster.send(node, Message::EcdsaSigning(EcdsaSigningMessage::EcdsaSigningConsensusMessage(EcdsaSigningConsensusMessage {
-			session: self.id.clone().into(),
-			sub_session: self.access_key.clone().into(),
-			session_nonce: self.nonce,
-			message: ConsensusMessage::ConfirmConsensusInitialization(ConfirmConsensusInitialization {
-				is_confirmed: response,
-			})
-		})))
+		self.cluster.send(
+			node,
+			Message::EcdsaSigning(EcdsaSigningMessage::EcdsaSigningConsensusMessage(
+				EcdsaSigningConsensusMessage {
+					session: self.id.clone().into(),
+					sub_session: self.access_key.clone().into(),
+					session_nonce: self.nonce,
+					message: ConsensusMessage::ConfirmConsensusInitialization(
+						ConfirmConsensusInitialization {
+							is_confirmed: response,
+						},
+					),
+				},
+			)),
+		)
 	}
 }
 
 impl JobTransport for SigningJobTransport {
-	type PartialJobRequest=EcdsaPartialSigningRequest;
-	type PartialJobResponse=EcdsaPartialSigningResponse;
+	type PartialJobRequest = EcdsaPartialSigningRequest;
+	type PartialJobResponse = EcdsaPartialSigningResponse;
 
-	fn send_partial_request(&self, node: &NodeId, request: EcdsaPartialSigningRequest) -> Result<(), Error> {
-		self.cluster.send(node, Message::EcdsaSigning(EcdsaSigningMessage::EcdsaRequestPartialSignature(EcdsaRequestPartialSignature {
-			session: self.id.clone().into(),
-			sub_session: self.access_key.clone().into(),
-			session_nonce: self.nonce,
-			request_id: request.id.into(),
-			inversed_nonce_coeff: request.inversed_nonce_coeff.into(),
-			message_hash: request.message_hash.into(),
-		})))
+	fn send_partial_request(
+		&self,
+		node: &NodeId,
+		request: EcdsaPartialSigningRequest,
+	) -> Result<(), Error> {
+		self.cluster.send(
+			node,
+			Message::EcdsaSigning(EcdsaSigningMessage::EcdsaRequestPartialSignature(
+				EcdsaRequestPartialSignature {
+					session: self.id.clone().into(),
+					sub_session: self.access_key.clone().into(),
+					session_nonce: self.nonce,
+					request_id: request.id.into(),
+					inversed_nonce_coeff: request.inversed_nonce_coeff.into(),
+					message_hash: request.message_hash.into(),
+				},
+			)),
+		)
 	}
 
-	fn send_partial_response(&self, node: &NodeId, response: EcdsaPartialSigningResponse) -> Result<(), Error> {
-		self.cluster.send(node, Message::EcdsaSigning(EcdsaSigningMessage::EcdsaPartialSignature(EcdsaPartialSignature {
-			session: self.id.clone().into(),
-			sub_session: self.access_key.clone().into(),
-			session_nonce: self.nonce,
-			request_id: response.request_id.into(),
-			partial_signature_s: response.partial_signature_s.into(),
-		})))
+	fn send_partial_response(
+		&self,
+		node: &NodeId,
+		response: EcdsaPartialSigningResponse,
+	) -> Result<(), Error> {
+		self.cluster.send(
+			node,
+			Message::EcdsaSigning(EcdsaSigningMessage::EcdsaPartialSignature(
+				EcdsaPartialSignature {
+					session: self.id.clone().into(),
+					sub_session: self.access_key.clone().into(),
+					session_nonce: self.nonce,
+					request_id: response.request_id.into(),
+					partial_signature_s: response.partial_signature_s.into(),
+				},
+			)),
+		)
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use std::sync::Arc;
-	use std::collections::{BTreeSet, BTreeMap, VecDeque};
-	use ethereum_types::H256;
-	use ethkey::{self, Random, Generator, KeyPair, verify_public, public_to_address};
 	use acl_storage::DummyAclStorage;
-	use key_server_cluster::{NodeId, DummyKeyStorage, SessionId, SessionMeta, Error, KeyStorage};
-	use key_server_cluster::cluster_sessions::ClusterSession;
+	use ethereum_types::H256;
+	use ethkey::{self, public_to_address, verify_public, Generator, KeyPair, Random};
 	use key_server_cluster::cluster::tests::DummyCluster;
+	use key_server_cluster::cluster_sessions::ClusterSession;
 	use key_server_cluster::generation_session::tests::MessageLoop as KeyGenerationMessageLoop;
 	use key_server_cluster::message::Message;
 	use key_server_cluster::signing_session_ecdsa::{SessionImpl, SessionParams};
+	use key_server_cluster::{DummyKeyStorage, Error, KeyStorage, NodeId, SessionId, SessionMeta};
+	use std::collections::{BTreeMap, BTreeSet, VecDeque};
+	use std::sync::Arc;
 
 	struct Node {
 		pub node_id: NodeId,
@@ -1090,7 +1498,20 @@ mod tests {
 
 	impl MessageLoop {
 		pub fn new(gl: &KeyGenerationMessageLoop) -> Self {
-			let version = gl.nodes.values().nth(0).unwrap().key_storage.get(&Default::default()).unwrap().unwrap().versions.iter().last().unwrap().hash;
+			let version = gl
+				.nodes
+				.values()
+				.nth(0)
+				.unwrap()
+				.key_storage
+				.get(&Default::default())
+				.unwrap()
+				.unwrap()
+				.versions
+				.iter()
+				.last()
+				.unwrap()
+				.hash;
 			let mut nodes = BTreeMap::new();
 			let session_id = gl.session_id.clone();
 			let requester = Random.generate().unwrap();
@@ -1101,22 +1522,46 @@ mod tests {
 				let acl_storage = Arc::new(DummyAclStorage::default());
 				acl_storages.push(acl_storage.clone());
 				let cluster = Arc::new(DummyCluster::new(gl_node_id.clone()));
-				let session = SessionImpl::new(SessionParams {
-					meta: SessionMeta {
-						id: session_id.clone(),
-						self_node_id: gl_node_id.clone(),
-						master_node_id: master_node_id.clone(),
-						threshold: gl_node.key_storage.get(&session_id).unwrap().unwrap().threshold,
-						configured_nodes_count: gl.nodes.len(),
-						connected_nodes_count: gl.nodes.len(),
+				let session = SessionImpl::new(
+					SessionParams {
+						meta: SessionMeta {
+							id: session_id.clone(),
+							self_node_id: gl_node_id.clone(),
+							master_node_id: master_node_id.clone(),
+							threshold: gl_node
+								.key_storage
+								.get(&session_id)
+								.unwrap()
+								.unwrap()
+								.threshold,
+							configured_nodes_count: gl.nodes.len(),
+							connected_nodes_count: gl.nodes.len(),
+						},
+						access_key:
+							"834cb736f02d9c968dfaf0c37658a1d86ff140554fc8b59c9fdad5a8cf810eec"
+								.parse()
+								.unwrap(),
+						key_share: Some(gl_node.key_storage.get(&session_id).unwrap().unwrap()),
+						acl_storage: acl_storage,
+						cluster: cluster.clone(),
+						nonce: 0,
 					},
-					access_key: "834cb736f02d9c968dfaf0c37658a1d86ff140554fc8b59c9fdad5a8cf810eec".parse().unwrap(),
-					key_share: Some(gl_node.key_storage.get(&session_id).unwrap().unwrap()),
-					acl_storage: acl_storage,
-					cluster: cluster.clone(),
-					nonce: 0,
-				}, if i == 0 { signature.clone().map(Into::into) } else { None }).unwrap();
-				nodes.insert(gl_node_id.clone(), Node { node_id: gl_node_id.clone(), cluster: cluster, key_storage: gl_node.key_storage.clone(), session: session });
+					if i == 0 {
+						signature.clone().map(Into::into)
+					} else {
+						None
+					},
+				)
+				.unwrap();
+				nodes.insert(
+					gl_node_id.clone(),
+					Node {
+						node_id: gl_node_id.clone(),
+						cluster: cluster,
+						key_storage: gl_node.key_storage.clone(),
+						session: session,
+					},
+				);
 			}
 
 			let nodes_ids: Vec<_> = nodes.keys().cloned().collect();
@@ -1141,8 +1586,13 @@ mod tests {
 		}
 
 		pub fn take_message(&mut self) -> Option<(NodeId, NodeId, Message)> {
-			self.nodes.values()
-				.filter_map(|n| n.cluster.take_message().map(|m| (n.node_id.clone(), m.0, m.1)))
+			self.nodes
+				.values()
+				.filter_map(|n| {
+					n.cluster
+						.take_message()
+						.map(|m| (n.node_id.clone(), m.0, m.1))
+				})
 				.nth(0)
 				.or_else(|| self.queue.pop_front())
 		}
@@ -1158,7 +1608,7 @@ mod tests {
 							continue;
 						}
 						return Ok(());
-					},
+					}
 					Err(Error::TooEarlyForRequest) => {
 						if is_queued_message {
 							self.queue.push_front(msg);
@@ -1166,17 +1616,28 @@ mod tests {
 							self.queue.push_back(msg);
 						}
 						return Ok(());
-					},
+					}
 					Err(err) => return Err(err),
 				}
 			}
 		}
 	}
 
-	fn prepare_signing_sessions(threshold: usize, num_nodes: usize) -> (KeyGenerationMessageLoop, MessageLoop) {
+	fn prepare_signing_sessions(
+		threshold: usize,
+		num_nodes: usize,
+	) -> (KeyGenerationMessageLoop, MessageLoop) {
 		// run key generation sessions
 		let mut gl = KeyGenerationMessageLoop::new(num_nodes);
-		gl.master().initialize(Default::default(), Default::default(), false, threshold, gl.nodes.keys().cloned().collect::<BTreeSet<_>>().into()).unwrap();
+		gl.master()
+			.initialize(
+				Default::default(),
+				Default::default(),
+				false,
+				threshold,
+				gl.nodes.keys().cloned().collect::<BTreeSet<_>>().into(),
+			)
+			.unwrap();
 		while let Some((from, to, message)) = gl.take_message() {
 			gl.process_message((from, to, message)).unwrap();
 		}
@@ -1194,7 +1655,12 @@ mod tests {
 
 			// run signing session
 			let message_hash = H256::random();
-			assert_eq!(sl.master().initialize(sl.version.clone(), message_hash).unwrap_err(), Error::ConsensusUnreachable);
+			assert_eq!(
+				sl.master()
+					.initialize(sl.version.clone(), message_hash)
+					.unwrap_err(),
+				Error::ConsensusUnreachable
+			);
 		}
 	}
 
@@ -1207,7 +1673,9 @@ mod tests {
 
 			// run signing session
 			let message_hash = H256::random();
-			sl.master().initialize(sl.version.clone(), message_hash).unwrap();
+			sl.master()
+				.initialize(sl.version.clone(), message_hash)
+				.unwrap();
 			while let Some((from, to, message)) = sl.take_message() {
 				sl.process_message((from, to, message)).unwrap();
 			}
@@ -1221,11 +1689,16 @@ mod tests {
 	#[test]
 	fn ecdsa_complete_signing_session_with_single_node_failing() {
 		let (_, mut sl) = prepare_signing_sessions(1, 4);
-		sl.master().initialize(sl.version.clone(), 777.into()).unwrap();
+		sl.master()
+			.initialize(sl.version.clone(), 777.into())
+			.unwrap();
 
 		// we need at least 3-of-4 nodes to agree to reach consensus
 		// let's say 1 of 4 nodes disagee
-		sl.acl_storages[1].prohibit(public_to_address(sl.requester.public()), SessionId::default());
+		sl.acl_storages[1].prohibit(
+			public_to_address(sl.requester.public()),
+			SessionId::default(),
+		);
 
 		// then consensus reachable, but single node will disagree
 		while let Some((from, to, message)) = sl.take_message() {
@@ -1242,11 +1715,16 @@ mod tests {
 	#[test]
 	fn ecdsa_complete_signing_session_with_acl_check_failed_on_master() {
 		let (_, mut sl) = prepare_signing_sessions(1, 4);
-		sl.master().initialize(sl.version.clone(), 777.into()).unwrap();
+		sl.master()
+			.initialize(sl.version.clone(), 777.into())
+			.unwrap();
 
 		// we need at least 3-of-4 nodes to agree to reach consensus
 		// let's say 1 of 4 nodes disagee
-		sl.acl_storages[0].prohibit(public_to_address(sl.requester.public()), SessionId::default());
+		sl.acl_storages[0].prohibit(
+			public_to_address(sl.requester.public()),
+			SessionId::default(),
+		);
 
 		// then consensus reachable, but single node will disagree
 		while let Some((from, to, message)) = sl.take_message() {
@@ -1268,16 +1746,62 @@ mod tests {
 		// initially session is created on node1 => node1 is master for itself, but for other nodes node0 is still master
 		let actual_master = sl.nodes.keys().nth(0).cloned().unwrap();
 		let requested_node = sl.nodes.keys().skip(1).nth(0).cloned().unwrap();
-		let version = sl.nodes[&actual_master].key_storage.get(&Default::default()).unwrap().unwrap().last_version().unwrap().hash.clone();
-		sl.nodes[&requested_node].key_storage.remove(&Default::default()).unwrap();
-		sl.nodes.get_mut(&requested_node).unwrap().session.core.key_share = None;
-		sl.nodes.get_mut(&requested_node).unwrap().session.core.meta.master_node_id = sl.nodes[&requested_node].session.core.meta.self_node_id.clone();
-		sl.nodes[&requested_node].session.data.lock().consensus_session.consensus_job_mut().executor_mut().set_requester(
-			sl.nodes[&actual_master].session.data.lock().consensus_session.consensus_job().executor().requester().unwrap().clone()
-		);
+		let version = sl.nodes[&actual_master]
+			.key_storage
+			.get(&Default::default())
+			.unwrap()
+			.unwrap()
+			.last_version()
+			.unwrap()
+			.hash
+			.clone();
+		sl.nodes[&requested_node]
+			.key_storage
+			.remove(&Default::default())
+			.unwrap();
+		sl.nodes
+			.get_mut(&requested_node)
+			.unwrap()
+			.session
+			.core
+			.key_share = None;
+		sl.nodes
+			.get_mut(&requested_node)
+			.unwrap()
+			.session
+			.core
+			.meta
+			.master_node_id = sl.nodes[&requested_node]
+			.session
+			.core
+			.meta
+			.self_node_id
+			.clone();
+		sl.nodes[&requested_node]
+			.session
+			.data
+			.lock()
+			.consensus_session
+			.consensus_job_mut()
+			.executor_mut()
+			.set_requester(
+				sl.nodes[&actual_master]
+					.session
+					.data
+					.lock()
+					.consensus_session
+					.consensus_job()
+					.executor()
+					.requester()
+					.unwrap()
+					.clone(),
+			);
 
 		// now let's try to do a decryption
-		sl.nodes[&requested_node].session.delegate(actual_master, version, H256::random()).unwrap();
+		sl.nodes[&requested_node]
+			.session
+			.delegate(actual_master, version, H256::random())
+			.unwrap();
 
 		// then consensus reachable, but single node will disagree
 		while let Some((from, to, message)) = sl.take_message() {
@@ -1297,7 +1821,9 @@ mod tests {
 		}
 
 		// now let's try to do a signing
-		sl.master().initialize(sl.version.clone(), H256::random()).unwrap();
+		sl.master()
+			.initialize(sl.version.clone(), H256::random())
+			.unwrap();
 
 		// then consensus reachable, but single node will disagree
 		while let Some((from, to, message)) = sl.take_message() {

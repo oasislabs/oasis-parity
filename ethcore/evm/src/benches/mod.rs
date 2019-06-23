@@ -22,14 +22,14 @@
 
 extern crate test;
 
-use self::test::{Bencher, black_box};
+use self::test::{black_box, Bencher};
 
-use bigint::prelude::U256;
 use bigint::hash::H256;
+use bigint::prelude::U256;
+use evm::tests::FakeExt;
+use evm::{self, Factory, VMType};
 use util::*;
 use vm::ActionParams;
-use evm::{self, Factory, VMType};
-use evm::tests::FakeExt;
 
 #[bench]
 fn simple_loop_log0_usize(b: &mut Bencher) {
@@ -46,9 +46,7 @@ fn simple_loop_log0(gas: U256, b: &mut Bencher) {
 	let mut ext = FakeExt::new();
 
 	let address = Address::from_str("0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
-	let code = black_box(
-		"62ffffff5b600190036000600fa0600357".from_hex().unwrap()
-	);
+	let code = black_box("62ffffff5b600190036000600fa0600357".from_hex().unwrap());
 
 	b.iter(|| {
 		let mut params = ActionParams::default();
@@ -78,7 +76,9 @@ fn mem_gas_calculation_same(gas: U256, b: &mut Bencher) {
 
 	b.iter(|| {
 		let code = black_box(
-			"6110006001556001546000555b610fff805560016000540380600055600c57".from_hex().unwrap()
+			"6110006001556001546000555b610fff805560016000540380600055600c57"
+				.from_hex()
+				.unwrap(),
 		);
 
 		let mut params = ActionParams::default();
@@ -108,7 +108,9 @@ fn mem_gas_calculation_increasing(gas: U256, b: &mut Bencher) {
 
 	b.iter(|| {
 		let code = black_box(
-			"6110006001556001546000555b610fff60005401805560016000540380600055600c57".from_hex().unwrap()
+			"6110006001556001546000555b610fff60005401805560016000540380600055600c57"
+				.from_hex()
+				.unwrap(),
 		);
 
 		let mut params = ActionParams::default();

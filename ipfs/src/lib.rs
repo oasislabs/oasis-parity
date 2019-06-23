@@ -14,36 +14,36 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-extern crate multihash;
 extern crate cid;
+extern crate multihash;
 extern crate unicase;
 
-extern crate rlp;
 extern crate ethcore;
 extern crate ethcore_bytes as bytes;
 extern crate ethereum_types;
 extern crate jsonrpc_core as core;
 extern crate jsonrpc_http_server as http;
+extern crate rlp;
 
 pub mod error;
 mod route;
 
-use std::thread;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::{mpsc, Arc};
-use std::net::{SocketAddr, IpAddr};
+use std::thread;
 
 use core::futures::future::{self, FutureResult};
 use core::futures::{self, Future};
 use ethcore::client::BlockChainClient;
-use http::hyper::header::{self, Vary, ContentType};
-use http::hyper::{Method, StatusCode};
+use http::hyper::header::{self, ContentType, Vary};
 use http::hyper::{self, server};
+use http::hyper::{Method, StatusCode};
 use unicase::Ascii;
 
 use error::ServerError;
 use route::Out;
 
-pub use http::{AccessControlAllowOrigin, Host, DomainsValidation};
+pub use http::{AccessControlAllowOrigin, DomainsValidation, Host};
 
 /// Request/response handler
 pub struct IpfsHandler {
@@ -60,16 +60,23 @@ impl IpfsHandler {
 		&*self.client
 	}
 
-	pub fn new(cors: DomainsValidation<AccessControlAllowOrigin>, hosts: DomainsValidation<Host>, client: Arc<BlockChainClient>) -> Self {
+	pub fn new(
+		cors: DomainsValidation<AccessControlAllowOrigin>,
+		hosts: DomainsValidation<Host>,
+		client: Arc<BlockChainClient>,
+	) -> Self {
 		IpfsHandler {
 			cors_domains: cors.into(),
 			allowed_hosts: hosts.into(),
 			client: client,
 		}
 	}
-	pub fn on_request(&self, req: hyper::Request) -> (Option<header::AccessControlAllowOrigin>, Out) {
+	pub fn on_request(
+		&self,
+		req: hyper::Request,
+	) -> (Option<header::AccessControlAllowOrigin>, Out) {
 		match *req.method() {
-			Method::Get | Method::Post => {},
+			Method::Get | Method::Post => {}
 			_ => return (None, Out::Bad("Invalid Request")),
 		}
 
@@ -98,29 +105,24 @@ impl server::Service for IpfsHandler {
 		let (cors_header, out) = self.on_request(request);
 
 		let mut res = match out {
-			Out::OctetStream(bytes) => {
-				hyper::Response::new()
-					.with_status(StatusCode::Ok)
-					.with_header(ContentType::octet_stream())
-					.with_body(bytes)
-			},
-			Out::NotFound(reason) => {
-				hyper::Response::new()
-					.with_status(StatusCode::NotFound)
-					.with_header(ContentType::plaintext())
-					.with_body(reason)
-			},
-			Out::Bad(reason) => {
-				hyper::Response::new()
-					.with_status(StatusCode::BadRequest)
-					.with_header(ContentType::plaintext())
-					.with_body(reason)
-			}
+			Out::OctetStream(bytes) => hyper::Response::new()
+				.with_status(StatusCode::Ok)
+				.with_header(ContentType::octet_stream())
+				.with_body(bytes),
+			Out::NotFound(reason) => hyper::Response::new()
+				.with_status(StatusCode::NotFound)
+				.with_header(ContentType::plaintext())
+				.with_body(reason),
+			Out::Bad(reason) => hyper::Response::new()
+				.with_status(StatusCode::BadRequest)
+				.with_header(ContentType::plaintext())
+				.with_body(reason),
 		};
 
 		if let Some(cors_header) = cors_header {
 			res.headers_mut().set(cors_header);
-			res.headers_mut().set(Vary::Items(vec![Ascii::new("Origin".into())]));
+			res.headers_mut()
+				.set(Vary::Items(vec![Ascii::new("Origin".into())]));
 		}
 
 		future::ok(res)
@@ -129,10 +131,13 @@ impl server::Service for IpfsHandler {
 
 /// Add current interface (default: "127.0.0.1:5001") to list of allowed hosts
 fn include_current_interface(mut hosts: Vec<Host>, interface: String, port: u16) -> Vec<Host> {
-	hosts.push(match port {
-		80 => interface,
-		_ => format!("{}:{}", interface, port),
-	}.into());
+	hosts.push(
+		match port {
+			80 => interface,
+			_ => format!("{}:{}", interface, port),
+		}
+		.into(),
+	);
 
 	hosts
 }
@@ -155,25 +160,32 @@ pub fn start_server(
 	interface: String,
 	cors: DomainsValidation<AccessControlAllowOrigin>,
 	hosts: DomainsValidation<Host>,
-	client: Arc<BlockChainClient>
+	client: Arc<BlockChainClient>,
 ) -> Result<Listening, ServerError> {
-
-	let ip: IpAddr = interface.parse().map_err(|_| ServerError::InvalidInterface)?;
+	let ip: IpAddr = interface
+		.parse()
+		.map_err(|_| ServerError::InvalidInterface)?;
 	let addr = SocketAddr::new(ip, port);
 	let hosts: Option<Vec<_>> = hosts.into();
-	let hosts: DomainsValidation<_> = hosts.map(move |hosts| include_current_interface(hosts, interface, port)).into();
+	let hosts: DomainsValidation<_> = hosts
+		.map(move |hosts| include_current_interface(hosts, interface, port))
+		.into();
 
 	let (close, shutdown_signal) = futures::sync::oneshot::channel::<()>();
 	let (tx, rx) = mpsc::sync_channel(1);
 	let thread = thread::spawn(move || {
 		let send = |res| tx.send(res).expect("rx end is never dropped; qed");
 		let server = match server::Http::new().bind(&addr, move || {
-			Ok(IpfsHandler::new(cors.clone(), hosts.clone(), client.clone()))
+			Ok(IpfsHandler::new(
+				cors.clone(),
+				hosts.clone(),
+				client.clone(),
+			))
 		}) {
 			Ok(server) => {
 				send(Ok(()));
 				server
-			},
+			}
 			Err(err) => {
 				send(Err(err));
 				return;

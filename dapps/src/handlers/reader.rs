@@ -18,8 +18,8 @@
 
 use std::io::{self, Read};
 
-use futures::{self, sink, Sink, Future};
 use futures::sync::mpsc;
+use futures::{self, sink, Future, Sink};
 use hyper;
 
 type Sender = mpsc::Sender<Result<hyper::Chunk, hyper::Error>>;

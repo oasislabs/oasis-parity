@@ -16,9 +16,9 @@
 
 //! `TransactionRequest` type
 
-use v1::types::{Bytes, H160, U256, TransactionCondition};
-use v1::helpers;
 use ansi_term::Colour;
+use v1::helpers;
+use v1::types::{Bytes, TransactionCondition, H160, U256};
 
 use std::fmt;
 
@@ -31,7 +31,7 @@ pub struct TransactionRequest {
 	/// Recipient
 	pub to: Option<H160>,
 	/// Gas Price
-	#[serde(rename="gasPrice")]
+	#[serde(rename = "gasPrice")]
 	pub gas_price: Option<U256>,
 	/// Gas
 	pub gas: Option<U256>,
@@ -57,8 +57,7 @@ pub fn format_ether(i: U256) -> String {
 	} else {
 		string.insert(idx as usize, '.');
 	}
-	String::from(string.trim_right_matches('0')
-		.trim_right_matches('.'))
+	String::from(string.trim_right_matches('0').trim_right_matches('.'))
 }
 
 impl fmt::Display for TransactionRequest {
@@ -70,9 +69,11 @@ impl fmt::Display for TransactionRequest {
 				"{} ETH from {} to 0x{:?}",
 				Colour::White.bold().paint(format_ether(eth)),
 				Colour::White.bold().paint(
-					self.from.as_ref()
+					self.from
+						.as_ref()
 						.map(|f| format!("0x{:?}", f))
-						.unwrap_or_else(|| "?".to_string())),
+						.unwrap_or_else(|| "?".to_string())
+				),
 				to
 			),
 			None => write!(
@@ -80,9 +81,11 @@ impl fmt::Display for TransactionRequest {
 				"{} ETH from {} for contract creation",
 				Colour::White.bold().paint(format_ether(eth)),
 				Colour::White.bold().paint(
-					self.from.as_ref()
+					self.from
+						.as_ref()
 						.map(|f| format!("0x{:?}", f))
-						.unwrap_or_else(|| "?".to_string())),
+						.unwrap_or_else(|| "?".to_string())
+				),
 			),
 		}
 	}
@@ -135,11 +138,11 @@ impl Into<helpers::TransactionRequest> for TransactionRequest {
 
 #[cfg(test)]
 mod tests {
-	use std::str::FromStr;
+	use super::*;
 	use rustc_hex::FromHex;
 	use serde_json;
-	use v1::types::{U256, H160, TransactionCondition};
-	use super::*;
+	use std::str::FromStr;
+	use v1::types::{TransactionCondition, H160, U256};
 
 	#[test]
 	fn transaction_request_deserialize() {
@@ -155,16 +158,19 @@ mod tests {
 		}"#;
 		let deserialized: TransactionRequest = serde_json::from_str(s).unwrap();
 
-		assert_eq!(deserialized, TransactionRequest {
-			from: Some(H160::from(1)),
-			to: Some(H160::from(2)),
-			gas_price: Some(U256::from(1)),
-			gas: Some(U256::from(2)),
-			value: Some(U256::from(3)),
-			data: Some(vec![0x12, 0x34, 0x56].into()),
-			nonce: Some(U256::from(4)),
-			condition: Some(TransactionCondition::Number(0x13)),
-		});
+		assert_eq!(
+			deserialized,
+			TransactionRequest {
+				from: Some(H160::from(1)),
+				to: Some(H160::from(2)),
+				gas_price: Some(U256::from(1)),
+				gas: Some(U256::from(2)),
+				value: Some(U256::from(3)),
+				data: Some(vec![0x12, 0x34, 0x56].into()),
+				nonce: Some(U256::from(4)),
+				condition: Some(TransactionCondition::Number(0x13)),
+			}
+		);
 	}
 
 	#[test]
@@ -196,16 +202,19 @@ mod tests {
 		let s = r#"{"from":"0x0000000000000000000000000000000000000001"}"#;
 		let deserialized: TransactionRequest = serde_json::from_str(s).unwrap();
 
-		assert_eq!(deserialized, TransactionRequest {
-			from: Some(H160::from(1).into()),
-			to: None,
-			gas_price: None,
-			gas: None,
-			value: None,
-			data: None,
-			nonce: None,
-			condition: None,
-		});
+		assert_eq!(
+			deserialized,
+			TransactionRequest {
+				from: Some(H160::from(1).into()),
+				to: None,
+				gas_price: None,
+				gas: None,
+				value: None,
+				data: None,
+				nonce: None,
+				condition: None,
+			}
+		);
 	}
 
 	#[test]
@@ -220,16 +229,19 @@ mod tests {
 
 		let deserialized: TransactionRequest = serde_json::from_str(s).unwrap();
 
-		assert_eq!(deserialized, TransactionRequest {
-			from: Some(H160::from_str("b5f7502a2807cb23615c7456055e1d65b2508625").unwrap()),
-			to: Some(H160::from_str("895d32f2db7d01ebb50053f9e48aacf26584fe40").unwrap()),
-			gas_price: Some(U256::from_str("0ba43b7400").unwrap()),
-			gas: Some(U256::from_str("2fd618").unwrap()),
-			value: None,
-			data: Some(vec![0x85, 0x95, 0xba, 0xb1].into()),
-			nonce: None,
-			condition: None,
-		});
+		assert_eq!(
+			deserialized,
+			TransactionRequest {
+				from: Some(H160::from_str("b5f7502a2807cb23615c7456055e1d65b2508625").unwrap()),
+				to: Some(H160::from_str("895d32f2db7d01ebb50053f9e48aacf26584fe40").unwrap()),
+				gas_price: Some(U256::from_str("0ba43b7400").unwrap()),
+				gas: Some(U256::from_str("2fd618").unwrap()),
+				value: None,
+				data: Some(vec![0x85, 0x95, 0xba, 0xb1].into()),
+				nonce: None,
+				condition: None,
+			}
+		);
 	}
 
 	#[test]

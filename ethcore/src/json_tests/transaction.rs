@@ -15,10 +15,10 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::test_common::*;
-use evm;
 use ethjson;
+use evm;
 use rlp::Rlp;
-use transaction::{Action, UnverifiedTransaction, SignedTransaction};
+use transaction::{Action, SignedTransaction, UnverifiedTransaction};
 
 fn do_json_test(json_data: &[u8]) -> Vec<String> {
 	let tests = ethjson::transaction::Test::load(json_data).unwrap();
@@ -27,14 +27,19 @@ fn do_json_test(json_data: &[u8]) -> Vec<String> {
 	let homestead_schedule = evm::Schedule::new_homestead();
 	let byzantium_schedule = evm::Schedule::new_byzantium();
 	for (name, test) in tests.into_iter() {
-		let mut fail_unless = |cond: bool, title: &str| if !cond { failed.push(name.clone()); println!("Transaction failed: {:?}: {:?}", name, title); };
+		let mut fail_unless = |cond: bool, title: &str| {
+			if !cond {
+				failed.push(name.clone());
+				println!("Transaction failed: {:?}: {:?}", name, title);
+			}
+		};
 
 		let number: Option<u64> = test.block_number.map(Into::into);
 		let schedule = match number {
 			None => &frontier_schedule,
 			Some(x) if x < 1_150_000 => &frontier_schedule,
 			Some(x) if x < 3_000_000 => &homestead_schedule,
-			Some(_) => &byzantium_schedule
+			Some(_) => &byzantium_schedule,
 		};
 		let allow_chain_id_of_one = number.map_or(false, |n| n >= 2_675_000);
 		let allow_unsigned = number.map_or(false, |n| n >= 3_000_000);
@@ -44,13 +49,25 @@ fn do_json_test(json_data: &[u8]) -> Vec<String> {
 			.as_val()
 			.map_err(::error::Error::from)
 			.and_then(|t: UnverifiedTransaction| {
-				t.validate(schedule, schedule.have_delegate_call, allow_chain_id_of_one, allow_unsigned).map_err(Into::into)
+				t.validate(
+					schedule,
+					schedule.have_delegate_call,
+					allow_chain_id_of_one,
+					allow_unsigned,
+				)
+				.map_err(Into::into)
 			});
 
-		fail_unless(test.transaction.is_none() == res.is_err(), "Validity different");
+		fail_unless(
+			test.transaction.is_none() == res.is_err(),
+			"Validity different",
+		);
 		if let (Some(tx), Some(sender)) = (test.transaction, test.sender) {
 			let t = res.unwrap();
-			fail_unless(SignedTransaction::new(t.clone()).unwrap().sender() == sender.into(), "sender mismatch");
+			fail_unless(
+				SignedTransaction::new(t.clone()).unwrap().sender() == sender.into(),
+				"sender mismatch",
+			);
 			let is_acceptable_chain_id = match t.chain_id() {
 				None => true,
 				Some(1) if allow_chain_id_of_one => true,
@@ -77,13 +94,13 @@ fn do_json_test(json_data: &[u8]) -> Vec<String> {
 	failed
 }
 
-declare_test!{TransactionTests_ttEip155VitaliksHomesead, "TransactionTests/ttEip155VitaliksHomesead"}
-declare_test!{TransactionTests_ttEip155VitaliksEip158, "TransactionTests/ttEip155VitaliksEip158"}
-declare_test!{TransactionTests_ttEip158, "TransactionTests/ttEip158"}
-declare_test!{TransactionTests_ttFrontier, "TransactionTests/ttFrontier"}
-declare_test!{TransactionTests_ttHomestead, "TransactionTests/ttHomestead"}
-declare_test!{TransactionTests_ttVRuleEip158, "TransactionTests/ttVRuleEip158"}
-declare_test!{TransactionTests_ttWrongRLPFrontier, "TransactionTests/ttWrongRLPFrontier"}
-declare_test!{TransactionTests_ttWrongRLPHomestead, "TransactionTests/ttWrongRLPHomestead"}
-declare_test!{TransactionTests_ttConstantinople, "TransactionTests/ttConstantinople"}
-declare_test!{TransactionTests_ttSpecConstantinople, "TransactionTests/ttSpecConstantinople"}
+declare_test! {TransactionTests_ttEip155VitaliksHomesead, "TransactionTests/ttEip155VitaliksHomesead"}
+declare_test! {TransactionTests_ttEip155VitaliksEip158, "TransactionTests/ttEip155VitaliksEip158"}
+declare_test! {TransactionTests_ttEip158, "TransactionTests/ttEip158"}
+declare_test! {TransactionTests_ttFrontier, "TransactionTests/ttFrontier"}
+declare_test! {TransactionTests_ttHomestead, "TransactionTests/ttHomestead"}
+declare_test! {TransactionTests_ttVRuleEip158, "TransactionTests/ttVRuleEip158"}
+declare_test! {TransactionTests_ttWrongRLPFrontier, "TransactionTests/ttWrongRLPFrontier"}
+declare_test! {TransactionTests_ttWrongRLPHomestead, "TransactionTests/ttWrongRLPHomestead"}
+declare_test! {TransactionTests_ttConstantinople, "TransactionTests/ttConstantinople"}
+declare_test! {TransactionTests_ttSpecConstantinople, "TransactionTests/ttSpecConstantinople"}

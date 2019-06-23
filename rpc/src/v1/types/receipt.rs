@@ -14,43 +14,43 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use v1::types::{Log, H160, H256, H2048, U256, U64};
-use ethcore::receipt::{Receipt as EthReceipt, RichReceipt, LocalizedReceipt, TransactionOutcome};
+use ethcore::receipt::{LocalizedReceipt, Receipt as EthReceipt, RichReceipt, TransactionOutcome};
+use v1::types::{Log, H160, H2048, H256, U256, U64};
 
 /// Receipt
 #[derive(Debug, Serialize)]
 pub struct Receipt {
 	/// Transaction Hash
-	#[serde(rename="transactionHash")]
+	#[serde(rename = "transactionHash")]
 	pub transaction_hash: Option<H256>,
 	/// Transaction index
-	#[serde(rename="transactionIndex")]
+	#[serde(rename = "transactionIndex")]
 	pub transaction_index: Option<U256>,
 	/// Block hash
-	#[serde(rename="blockHash")]
+	#[serde(rename = "blockHash")]
 	pub block_hash: Option<H256>,
 	/// Block number
-	#[serde(rename="blockNumber")]
+	#[serde(rename = "blockNumber")]
 	pub block_number: Option<U256>,
 	/// Cumulative gas used
-	#[serde(rename="cumulativeGasUsed")]
+	#[serde(rename = "cumulativeGasUsed")]
 	pub cumulative_gas_used: U256,
 	/// Gas used
-	#[serde(rename="gasUsed")]
+	#[serde(rename = "gasUsed")]
 	pub gas_used: Option<U256>,
 	/// Contract address
-	#[serde(rename="contractAddress")]
+	#[serde(rename = "contractAddress")]
 	pub contract_address: Option<H160>,
 	/// Logs
 	pub logs: Vec<Log>,
 	/// State Root
-	#[serde(rename="root")]
+	#[serde(rename = "root")]
 	pub state_root: Option<H256>,
 	/// Logs bloom
-	#[serde(rename="logsBloom")]
+	#[serde(rename = "logsBloom")]
 	pub logs_bloom: H2048,
 	/// Status code
-	#[serde(rename="status")]
+	#[serde(rename = "status")]
 	pub status_code: Option<U64>,
 }
 
@@ -136,7 +136,11 @@ mod tests {
 		let receipt = Receipt {
 			transaction_hash: Some(0.into()),
 			transaction_index: Some(0.into()),
-			block_hash: Some("ed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5".parse().unwrap()),
+			block_hash: Some(
+				"ed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5"
+					.parse()
+					.unwrap(),
+			),
 			block_number: Some(0x4510c.into()),
 			cumulative_gas_used: 0x20.into(),
 			gas_used: Some(0x10.into()),
@@ -144,11 +148,19 @@ mod tests {
 			logs: vec![Log {
 				address: "33990122638b9132ca29c723bdf037f1a891a70c".parse().unwrap(),
 				topics: vec![
-					"a6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc".parse().unwrap(),
-					"4861736852656700000000000000000000000000000000000000000000000000".parse().unwrap(),
+					"a6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc"
+						.parse()
+						.unwrap(),
+					"4861736852656700000000000000000000000000000000000000000000000000"
+						.parse()
+						.unwrap(),
 				],
 				data: vec![].into(),
-				block_hash: Some("ed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5".parse().unwrap()),
+				block_hash: Some(
+					"ed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5"
+						.parse()
+						.unwrap(),
+				),
 				block_number: Some(0x4510c.into()),
 				transaction_hash: Some(0.into()),
 				transaction_index: Some(0.into()),

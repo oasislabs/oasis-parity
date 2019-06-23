@@ -29,7 +29,10 @@ pub struct Mismatch<T> {
 
 impl<T: fmt::Display> fmt::Display for Mismatch<T> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		f.write_fmt(format_args!("Expected {}, found {}", self.expected, self.found))
+		f.write_fmt(format_args!(
+			"Expected {}, found {}",
+			self.expected, self.found
+		))
 	}
 }
 
@@ -46,7 +49,8 @@ pub struct OutOfBounds<T> {
 
 impl<T> OutOfBounds<T> {
 	pub fn map<F, U>(self, map: F) -> OutOfBounds<U>
-		where F: Fn(T) -> U
+	where
+		F: Fn(T) -> U,
 	{
 		OutOfBounds {
 			min: self.min.map(&map),

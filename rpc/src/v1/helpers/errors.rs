@@ -19,7 +19,7 @@
 use std::fmt;
 
 //use ethcore::account_provider::{SignError as AccountError};
-use ethcore::error::{Error as EthcoreError, ErrorKind, CallError};
+use ethcore::error::{CallError, Error as EthcoreError, ErrorKind};
 use jsonrpc_core::{futures, Error, ErrorCode, Value};
 use rlp::DecoderError;
 use transaction::Error as TransactionError;
@@ -55,7 +55,8 @@ mod codes {
 pub fn unimplemented(details: Option<String>) -> Error {
 	Error {
 		code: ErrorCode::ServerError(codes::UNSUPPORTED_REQUEST),
-		message: "This request is not implemented yet. Please create an issue on Github repo.".into(),
+		message: "This request is not implemented yet. Please create an issue on Github repo."
+			.into(),
 		data: details.map(Value::String),
 	}
 }
@@ -362,8 +363,7 @@ pub fn decode<T: Into<EthcoreError>>(error: T) -> Error {
 			code: ErrorCode::InternalError,
 			message: "decoding error".into(),
 			data: None,
-		}
-
+		},
 	}
 }
 
@@ -381,7 +381,10 @@ pub fn call(error: CallError) -> Error {
 		CallError::StateCorrupt => state_corrupt(),
 		CallError::Exceptional => exceptional(),
 		CallError::Execution(e) => execution(e),
-		CallError::TransactionNotFound => internal("{}, this should not be the case with eth_call, most likely a bug.", CallError::TransactionNotFound),
+		CallError::TransactionNotFound => internal(
+			"{}, this should not be the case with eth_call, most likely a bug.",
+			CallError::TransactionNotFound,
+		),
 	}
 }
 

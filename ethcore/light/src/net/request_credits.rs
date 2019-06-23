@@ -26,11 +26,11 @@
 //! Current default costs are picked completely arbitrarily, not based
 //! on any empirical timings or mathematical models.
 
-use request::{self, Request};
 use super::error::Error;
+use request::{self, Request};
 
-use rlp::{Rlp, RlpStream, Decodable, Encodable, DecoderError};
 use ethereum_types::U256;
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::time::{Duration, Instant};
 
 /// Credits value.
@@ -46,7 +46,9 @@ pub struct Credits {
 
 impl Credits {
 	/// Get the current amount of credits..
-	pub fn current(&self) -> U256 { self.estimate.clone() }
+	pub fn current(&self) -> U256 {
+		self.estimate.clone()
+	}
 
 	/// Make a definitive update.
 	/// This will be the value obtained after receiving
@@ -82,7 +84,7 @@ impl Credits {
 /// Costs themselves may be missing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CostTable {
-	base: U256, // cost per packet.
+	base: U256,            // cost per packet.
 	headers: Option<U256>, // cost per header
 	transaction_index: Option<U256>,
 	body: Option<U256>,
@@ -100,7 +102,11 @@ impl CostTable {
 		let mut num_set = 0;
 
 		{
-			let mut incr_if_set = |cost: &Option<_>| if cost.is_some() { num_set += 1 };
+			let mut incr_if_set = |cost: &Option<_>| {
+				if cost.is_some() {
+					num_set += 1
+				}
+			};
 			incr_if_set(&self.headers);
 			incr_if_set(&self.transaction_index);
 			incr_if_set(&self.body);
@@ -239,7 +245,7 @@ impl FlowParams {
 	pub fn from_request_times<F: Fn(::request::Kind) -> Duration>(
 		request_time: F,
 		load_share: f64,
-		max_stored: Duration
+		max_stored: Duration,
 	) -> Self {
 		use request::Kind;
 
@@ -256,7 +262,8 @@ impl FlowParams {
 			// how many requests we can handle per second
 			let rq_dur = request_time(kind);
 			let second_duration = {
-				let as_ns = rq_dur.as_secs() as f64 * 1_000_000_000f64 + rq_dur.subsec_nanos() as f64;
+				let as_ns =
+					rq_dur.as_secs() as f64 * 1_000_000_000f64 + rq_dur.subsec_nanos() as f64;
 				1_000_000_000f64 / as_ns
 			};
 
@@ -307,21 +314,29 @@ impl FlowParams {
 				header_proof: free_cost.clone(),
 				transaction_proof: free_cost.clone(),
 				epoch_signal: free_cost,
-			}
+			},
 		}
 	}
 
 	/// Get a reference to the credit limit.
-	pub fn limit(&self) -> &U256 { &self.limit }
+	pub fn limit(&self) -> &U256 {
+		&self.limit
+	}
 
 	/// Get a reference to the cost table.
-	pub fn cost_table(&self) -> &CostTable { &self.costs }
+	pub fn cost_table(&self) -> &CostTable {
+		&self.costs
+	}
 
 	/// Get the base cost of a request.
-	pub fn base_cost(&self) -> U256 { self.costs.base }
+	pub fn base_cost(&self) -> U256 {
+		self.costs.base
+	}
 
 	/// Get a reference to the recharge rate.
-	pub fn recharge_rate(&self) -> &U256 { &self.recharge }
+	pub fn recharge_rate(&self) -> &U256 {
+		&self.recharge
+	}
 
 	/// Compute the actual cost of a request, given the kind of request
 	/// and number of requests made.
@@ -374,7 +389,8 @@ impl FlowParams {
 
 		let elapsed: U256 = elapsed.into();
 
-		credits.estimate = ::std::cmp::min(self.limit, credits.estimate + (elapsed * self.recharge));
+		credits.estimate =
+			::std::cmp::min(self.limit, credits.estimate + (elapsed * self.recharge));
 	}
 
 	/// Refund some credits which were previously deducted.
@@ -418,7 +434,7 @@ mod tests {
 		use std::time::Duration;
 
 		let flow_params = FlowParams::new(100.into(), Default::default(), 20.into());
-		let mut credits =  flow_params.create_credits();
+		let mut credits = flow_params.create_credits();
 
 		assert!(credits.deduct_cost(101.into()).is_err());
 		assert!(credits.deduct_cost(10.into()).is_ok());
@@ -451,6 +467,9 @@ mod tests {
 		);
 
 		assert_eq!(flow_params2.costs, flow_params3.costs);
-		assert_eq!(flow_params.costs.headers.unwrap(), flow_params2.costs.headers.unwrap() * 2u32);
+		assert_eq!(
+			flow_params.costs.headers.unwrap(),
+			flow_params2.costs.headers.unwrap() * 2u32
+		);
 	}
 }

@@ -13,11 +13,11 @@ extern crate rlp;
 
 mod common;
 
-use std::cmp;
-use std::collections::HashMap;
+use common::{BLOCKS_SWAPPER, SNAPSHOT_SWAPPER};
 use elastic_array::ElasticArray1024;
 use rlp::{Rlp, RlpStream};
-use common::{SNAPSHOT_SWAPPER, BLOCKS_SWAPPER};
+use std::cmp;
+use std::collections::HashMap;
 
 pub fn snapshot_swapper() -> &'static Swapper<'static> {
 	&SNAPSHOT_SWAPPER as &Swapper
@@ -43,7 +43,11 @@ pub trait Decompressor {
 pub fn compress(c: &[u8], swapper: &Compressor) -> ElasticArray1024<u8> {
 	let rlp = Rlp::new(c);
 	if rlp.is_data() {
-		ElasticArray1024::from_slice(swapper.compressed(rlp.as_raw()).unwrap_or_else(|| rlp.as_raw()))
+		ElasticArray1024::from_slice(
+			swapper
+				.compressed(rlp.as_raw())
+				.unwrap_or_else(|| rlp.as_raw()),
+		)
 	} else {
 		map_rlp(&rlp, |r| compress(r.as_raw(), swapper))
 	}
@@ -53,7 +57,11 @@ pub fn compress(c: &[u8], swapper: &Compressor) -> ElasticArray1024<u8> {
 pub fn decompress(c: &[u8], swapper: &Decompressor) -> ElasticArray1024<u8> {
 	let rlp = Rlp::new(c);
 	if rlp.is_data() {
-		ElasticArray1024::from_slice(swapper.decompressed(rlp.as_raw()).unwrap_or_else(|| rlp.as_raw()))
+		ElasticArray1024::from_slice(
+			swapper
+				.decompressed(rlp.as_raw())
+				.unwrap_or_else(|| rlp.as_raw()),
+		)
 	} else {
 		map_rlp(&rlp, |r| decompress(r.as_raw(), swapper))
 	}

@@ -15,11 +15,13 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 use std::mem;
 
-use ethereum_types::{U256, H256, Address};
+use super::panic_payload;
+use ethereum_types::{Address, H256, U256};
 use hash;
 use vm::{self, CallType};
-use wasmi::{self, MemoryRef, RuntimeArgs, RuntimeValue, Error as InterpreterError, Trap, TrapKind};
-use super::panic_payload;
+use wasmi::{
+	self, Error as InterpreterError, MemoryRef, RuntimeArgs, RuntimeValue, Trap, TrapKind,
+};
 
 pub struct RuntimeContext {
 	pub address: Address,
@@ -86,14 +88,16 @@ pub enum Error {
 	Panic(String),
 }
 
-impl wasmi::HostError for Error { }
+impl wasmi::HostError for Error {}
 
 impl From<Trap> for Error {
 	fn from(trap: Trap) -> Self {
 		match *trap.kind() {
 			TrapKind::Unreachable => Error::Unreachable,
 			TrapKind::MemoryAccessOutOfBounds => Error::MemoryAccessViolation,
-			TrapKind::TableAccessOutOfBounds | TrapKind::ElemUninitialized => Error::InvalidVirtualCall,
+			TrapKind::TableAccessOutOfBounds | TrapKind::ElemUninitialized => {
+				Error::InvalidVirtualCall
+			}
 			TrapKind::DivisionByZero => Error::DivisionByZero,
 			TrapKind::InvalidConversionToInt => Error::InvalidConversionToInt,
 			TrapKind::UnexpectedSignature => Error::InvalidVirtualCall,
@@ -144,7 +148,6 @@ impl ::std::fmt::Display for Error {
 type Result<T> = ::std::result::Result<T, Error>;
 
 impl<'a> Runtime<'a> {
-
 	/// New runtime for wasm contract with specified params
 	pub fn with_params(
 		ext: &mut vm::Ext,
@@ -195,19 +198,20 @@ impl<'a> Runtime<'a> {
 	fn charge_gas(&mut self, amount: u64) -> bool {
 		let prev = self.gas_counter;
 		match prev.checked_add(amount) {
-		 	// gas charge overflow protection
-		 	None => false,
-		 	Some(val) if val > self.gas_limit => false,
-		 	Some(_) => {
-		 		self.gas_counter = prev + amount;
-		 		true
+			// gas charge overflow protection
+			None => false,
+			Some(val) if val > self.gas_limit => false,
+			Some(_) => {
+				self.gas_counter = prev + amount;
+				true
 			}
 		}
 	}
 
 	/// Charge gas according to closure
 	pub fn charge<F>(&mut self, f: F) -> Result<()>
-		where F: FnOnce(&vm::Schedule) -> u64
+	where
+		F: FnOnce(&vm::Schedule) -> u64,
 	{
 		let amount = f(self.ext.schedule());
 		if !self.charge_gas(amount as u64) {
@@ -219,20 +223,26 @@ impl<'a> Runtime<'a> {
 
 	/// Adjusted charge of gas which scales actual charge according to the wasm opcode counting coefficient
 	pub fn adjusted_charge<F>(&mut self, f: F) -> Result<()>
-		where F: FnOnce(&vm::Schedule) -> u64
+	where
+		F: FnOnce(&vm::Schedule) -> u64,
 	{
-		self.charge(|schedule| f(schedule) * schedule.wasm().opcodes_div as u64 / schedule.wasm().opcodes_mul as u64)
+		self.charge(|schedule| {
+			f(schedule) * schedule.wasm().opcodes_div as u64 / schedule.wasm().opcodes_mul as u64
+		})
 	}
 
 	/// Charge gas provided by the closure
 	///
 	/// Closure also can return overflowing flag as None in gas cost.
 	pub fn overflow_charge<F>(&mut self, f: F) -> Result<()>
-		where F: FnOnce(&vm::Schedule) -> Option<u64>
+	where
+		F: FnOnce(&vm::Schedule) -> Option<u64>,
 	{
 		let amount = match f(self.ext.schedule()) {
 			Some(amount) => amount,
-			None => { return Err(Error::GasLimit.into()); }
+			None => {
+				return Err(Error::GasLimit.into());
+			}
 		};
 
 		if !self.charge_gas(amount as u64) {
@@ -244,23 +254,26 @@ impl<'a> Runtime<'a> {
 
 	/// Same as overflow_charge, but with amount adjusted by wasm opcodes coeff
 	pub fn adjusted_overflow_charge<F>(&mut self, f: F) -> Result<()>
-		where F: FnOnce(&vm::Schedule) -> Option<u64>
+	where
+		F: FnOnce(&vm::Schedule) -> Option<u64>,
 	{
-		self.overflow_charge(|schedule|
+		self.overflow_charge(|schedule| {
 			f(schedule)
 				.and_then(|x| x.checked_mul(schedule.wasm().opcodes_div as u64))
 				.map(|x| x / schedule.wasm().opcodes_mul as u64)
-		)
+		})
 	}
 
 	/// Read from the storage to wasm memory
 	/// All storage read through here *must* be an H256.
-	pub fn storage_read(&mut self, args: RuntimeArgs) -> Result<()>
-	{
+	pub fn storage_read(&mut self, args: RuntimeArgs) -> Result<()> {
 		let key = self.h256_at(args.nth_checked(0)?)?;
 		let val_ptr: u32 = args.nth_checked(1)?;
 
-		let val = self.ext.storage_at(&key).map_err(|_| Error::StorageReadError)?;
+		let val = self
+			.ext
+			.storage_at(&key)
+			.map_err(|_| Error::StorageReadError)?;
 
 		self.adjusted_charge(|schedule| schedule.sload_gas as u64)?;
 
@@ -271,20 +284,26 @@ impl<'a> Runtime<'a> {
 
 	/// Write to storage from wasm memory
 	/// All storage written through here *must* be an H256.
-	pub fn storage_write(&mut self, args: RuntimeArgs) -> Result<()>
-	{
+	pub fn storage_write(&mut self, args: RuntimeArgs) -> Result<()> {
 		let key = self.h256_at(args.nth_checked(0)?)?;
 		let val_ptr: u32 = args.nth_checked(1)?;
 		let val = self.h256_at(val_ptr)?;
 
-		let former_val = self.ext.storage_at(&key).map_err(|_| Error::StorageUpdateError)?;
+		let former_val = self
+			.ext
+			.storage_at(&key)
+			.map_err(|_| Error::StorageUpdateError)?;
 		let reset = !(former_val == H256::zero() && val != H256::zero());
 		self.storage_bytes_charge(val.len() as u64, reset)?;
 
-		self.ext.set_storage(key, val).map_err(|_| Error::StorageUpdateError)?;
+		self.ext
+			.set_storage(key, val)
+			.map_err(|_| Error::StorageUpdateError)?;
 
 		if former_val != H256::zero() && val == H256::zero() {
-			self.ext.inc_sstore_clears(former_val.len() as u64).map_err(|_| Error::StorageUpdateError)?;
+			self.ext
+				.inc_sstore_clears(former_val.len() as u64)
+				.map_err(|_| Error::StorageUpdateError)?;
 		}
 
 		Ok(())
@@ -292,12 +311,19 @@ impl<'a> Runtime<'a> {
 
 	/// Gas charge prorated based on time until expiry and the number of bytes we're storing.
 	fn storage_bytes_charge(&mut self, bytes_len: u64, reset: bool) -> Result<()> {
-		let duration_secs = self.ext.seconds_until_expiry().map_err(|_| Error::StorageUpdateError)?;
+		let duration_secs = self
+			.ext
+			.seconds_until_expiry()
+			.map_err(|_| Error::StorageUpdateError)?;
 
 		let gas = if !reset {
-			self.ext.schedule().prorated_sstore_set_gas(duration_secs, bytes_len)
+			self.ext
+				.schedule()
+				.prorated_sstore_set_gas(duration_secs, bytes_len)
 		} else {
-			self.ext.schedule().prorated_sstore_reset_gas(duration_secs, bytes_len)
+			self.ext
+				.schedule()
+				.prorated_sstore_reset_gas(duration_secs, bytes_len)
 		};
 
 		// Charge gas after checking for u64 overflow.
@@ -338,7 +364,9 @@ impl<'a> Runtime<'a> {
 
 	/// Query current gas left for execution
 	pub fn gas_left(&self) -> Result<u64> {
-		if self.gas_counter > self.gas_limit { return Err(Error::InvalidGasState); }
+		if self.gas_counter > self.gas_limit {
+			return Err(Error::InvalidGasState);
+		}
 		Ok(self.gas_limit - self.gas_counter)
 	}
 
@@ -387,8 +415,7 @@ impl<'a> Runtime<'a> {
 	/// User panic
 	///
 	/// Contract can invoke this when he encounters unrecoverable error.
-	fn panic(&mut self, args: RuntimeArgs) -> Result<()>
-	{
+	fn panic(&mut self, args: RuntimeArgs) -> Result<()> {
 		let payload_ptr: u32 = args.nth_checked(0)?;
 		let payload_len: u32 = args.nth_checked(1)?;
 
@@ -415,8 +442,7 @@ impl<'a> Runtime<'a> {
 	}
 
 	/// Rust syscall
-	fn syscall(&mut self, args: RuntimeArgs) -> Result<RuntimeValue>
-	{
+	fn syscall(&mut self, args: RuntimeArgs) -> Result<RuntimeValue> {
 		let syscall_id: u32 = args.nth_checked(0)?;
 		let data_ptr: u32 = args.nth_checked(1)?;
 		Ok(match syscall_id {
@@ -476,7 +502,9 @@ impl<'a> Runtime<'a> {
 
 	fn expf(&mut self, args: RuntimeArgs) -> Result<RuntimeValue> {
 		let x: wasmi::nan_preserving_float::F32 = args.nth_checked(0)?;
-		Ok(RuntimeValue::F32(wasmi::nan_preserving_float::F32::from_float(x.to_float().exp())))
+		Ok(RuntimeValue::F32(
+			wasmi::nan_preserving_float::F32::from_float(x.to_float().exp()),
+		))
 	}
 
 	fn do_call(
@@ -484,9 +512,7 @@ impl<'a> Runtime<'a> {
 		use_val: bool,
 		call_type: CallType,
 		args: RuntimeArgs,
-	)
-		-> Result<RuntimeValue>
-	{
+	) -> Result<RuntimeValue> {
 		trace!(target: "wasm", "runtime: CALL({:?})", call_type);
 
 		let gas: u64 = args.nth_checked(0)?;
@@ -496,7 +522,11 @@ impl<'a> Runtime<'a> {
 		trace!(target: "wasm", "       address: {:?}", address);
 
 		let vofs = if use_val { 1 } else { 0 };
-		let val = if use_val { Some(self.u256_at(args.nth_checked(2)?)?) } else { None };
+		let val = if use_val {
+			Some(self.u256_at(args.nth_checked(2)?)?)
+		} else {
+			None
+		};
 		trace!(target: "wasm", "           val: {:?}", val);
 
 		let input_ptr: u32 = args.nth_checked(2 + vofs)?;
@@ -512,7 +542,9 @@ impl<'a> Runtime<'a> {
 		trace!(target: "wasm", "    result_len: {:?}", result_alloc_len);
 
 		if let Some(ref val) = val {
-			let address_balance = self.ext.balance(&self.context.address)
+			let address_balance = self
+				.ext
+				.balance(&self.context.address)
 				.map_err(|_| Error::BalanceQueryError)?;
 
 			if &address_balance < val {
@@ -529,22 +561,29 @@ impl<'a> Runtime<'a> {
 		// todo: optimize to use memory views once it's in
 		let payload = self.memory.get(input_ptr, input_len as usize)?;
 
-		let adjusted_gas = match gas.checked_mul(self.ext.schedule().wasm().opcodes_div as u64)
+		let adjusted_gas = match gas
+			.checked_mul(self.ext.schedule().wasm().opcodes_div as u64)
 			.map(|x| x / self.ext.schedule().wasm().opcodes_mul as u64)
 		{
 			Some(x) => x,
 			None => {
 				trace!("CALL overflowed gas, call aborted with error returned");
-				return Ok(RuntimeValue::I32(-1))
-			},
+				return Ok(RuntimeValue::I32(-1));
+			}
 		};
 
 		self.charge(|_| adjusted_gas)?;
 
 		let call_result = self.ext.call(
 			&gas.into(),
-			match call_type { CallType::DelegateCall => &self.context.sender, _ => &self.context.address },
-			match call_type { CallType::Call | CallType::StaticCall => &address, _ => &self.context.address },
+			match call_type {
+				CallType::DelegateCall => &self.context.sender,
+				_ => &self.context.address,
+			},
+			match call_type {
+				CallType::Call | CallType::StaticCall => &address,
+				_ => &self.context.address,
+			},
 			val,
 			&payload,
 			&address,
@@ -555,26 +594,24 @@ impl<'a> Runtime<'a> {
 		match call_result {
 			vm::MessageCallResult::Success(gas_left, _) => {
 				// cannot overflow, before making call gas_counter was incremented with gas, and gas_left < gas
-				self.gas_counter = self.gas_counter -
-					gas_left.low_u64() * self.ext.schedule().wasm().opcodes_div as u64
+				self.gas_counter = self.gas_counter
+					- gas_left.low_u64() * self.ext.schedule().wasm().opcodes_div as u64
 						/ self.ext.schedule().wasm().opcodes_mul as u64;
 
 				self.memory.set(result_ptr, &result)?;
 				self.result = result;
 				Ok(0i32.into())
-			},
+			}
 			vm::MessageCallResult::Reverted(gas_left, _) => {
 				// cannot overflow, before making call gas_counter was incremented with gas, and gas_left < gas
-				self.gas_counter = self.gas_counter -
-					gas_left.low_u64() * self.ext.schedule().wasm().opcodes_div as u64
+				self.gas_counter = self.gas_counter
+					- gas_left.low_u64() * self.ext.schedule().wasm().opcodes_div as u64
 						/ self.ext.schedule().wasm().opcodes_mul as u64;
 
 				self.memory.set(result_ptr, &result)?;
 				Ok((-1i32).into())
-			},
-			vm::MessageCallResult::Failed  => {
-				Ok((-1i32).into())
 			}
+			vm::MessageCallResult::Failed => Ok((-1i32).into()),
 		}
 	}
 
@@ -593,8 +630,7 @@ impl<'a> Runtime<'a> {
 		self.do_call(false, CallType::StaticCall, args)
 	}
 
-	fn return_address_ptr(&mut self, ptr: u32, val: Address) -> Result<()>
-	{
+	fn return_address_ptr(&mut self, ptr: u32, val: Address) -> Result<()> {
 		self.charge(|schedule| schedule.wasm().static_address as u64)?;
 		self.memory.set(ptr, &*val)?;
 		Ok(())
@@ -620,8 +656,7 @@ impl<'a> Runtime<'a> {
 	/// * code_ptr - pointer to the code data
 	/// * code_len - lenght of the code data
 	/// * result_ptr - pointer to write an address of the newly created contract
-	pub fn create(&mut self, args: RuntimeArgs) -> Result<RuntimeValue>
-	{
+	pub fn create(&mut self, args: RuntimeArgs) -> Result<RuntimeValue> {
 		//
 		// method signature:
 		//   fn create(endowment: *const u8, code_ptr: *const u8, code_len: u32, result_ptr: *mut u8) -> i32;
@@ -645,7 +680,12 @@ impl<'a> Runtime<'a> {
 			* U256::from(self.ext.schedule().wasm().opcodes_mul)
 			/ U256::from(self.ext.schedule().wasm().opcodes_div);
 
-		match self.ext.create(&gas_left, &endowment, &code, vm::CreateContractAddress::FromSenderAndCodeHash) {
+		match self.ext.create(
+			&gas_left,
+			&endowment,
+			&code,
+			vm::CreateContractAddress::FromSenderAndCodeHash,
+		) {
 			vm::ContractCreateResult::Created(address, gas_left) => {
 				self.memory.set(result_ptr, &*address)?;
 				self.gas_counter = self.gas_limit -
@@ -655,11 +695,11 @@ impl<'a> Runtime<'a> {
 						/ self.ext.schedule().wasm().opcodes_mul as u64;
 				trace!(target: "wasm", "runtime: create contract success (@{:?})", address);
 				Ok(0i32.into())
-			},
+			}
 			vm::ContractCreateResult::Failed => {
 				trace!(target: "wasm", "runtime: create contract fail");
 				Ok((-1i32).into())
-			},
+			}
 			vm::ContractCreateResult::Reverted(gas_left, _) => {
 				trace!(target: "wasm", "runtime: create contract reverted");
 				self.gas_counter = self.gas_limit -
@@ -669,28 +709,29 @@ impl<'a> Runtime<'a> {
 						/ self.ext.schedule().wasm().opcodes_mul as u64;
 
 				Ok((-1i32).into())
-			},
+			}
 		}
 	}
 
-	fn debug(&mut self, args: RuntimeArgs) -> Result<()>
-	{
+	fn debug(&mut self, args: RuntimeArgs) -> Result<()> {
 		let msg_ptr: u32 = args.nth_checked(0)?;
 		let msg_len: u32 = args.nth_checked(1)?;
-		let debug_str = String::from_utf8(
-			self.memory.get(msg_ptr, msg_len as usize)?
-		).map_err(|_| Error::BadUtf8)?;
+		let debug_str = String::from_utf8(self.memory.get(msg_ptr, msg_len as usize)?)
+			.map_err(|_| Error::BadUtf8)?;
 		println!("Contract debug message: {}", debug_str);
 
 		Ok(())
 	}
 
 	/// Pass suicide to state runtime
-	pub fn suicide(&mut self, args: RuntimeArgs) -> Result<()>
-	{
+	pub fn suicide(&mut self, args: RuntimeArgs) -> Result<()> {
 		let refund_address = self.address_at(args.nth_checked(0)?)?;
 
-		if self.ext.exists(&refund_address).map_err(|_| Error::SuicideAbort)? {
+		if self
+			.ext
+			.exists(&refund_address)
+			.map_err(|_| Error::SuicideAbort)?
+		{
 			trace!(target: "wasm", "Suicide: refund to existing address {}", refund_address);
 			self.adjusted_charge(|schedule| schedule.suicide_gas as u64)?;
 		} else {
@@ -698,7 +739,9 @@ impl<'a> Runtime<'a> {
 			self.adjusted_charge(|schedule| schedule.suicide_to_new_account_cost as u64)?;
 		}
 
-		self.ext.suicide(&refund_address).map_err(|_| Error::SuicideAbort)?;
+		self.ext
+			.suicide(&refund_address)
+			.map_err(|_| Error::SuicideAbort)?;
 
 		// We send trap to interpreter so it should abort further execution
 		Err(Error::Suicide.into())
@@ -761,8 +804,7 @@ impl<'a> Runtime<'a> {
 	}
 
 	///	Signature: `fn elog(topic_ptr: *const u8, topic_count: u32, data_ptr: *const u8, data_len: u32)`
-	pub fn elog(&mut self, args: RuntimeArgs) -> Result<()>
-	{
+	pub fn elog(&mut self, args: RuntimeArgs) -> Result<()> {
 		let topic_ptr: u32 = args.nth_checked(0)?;
 		let topic_count: u32 = args.nth_checked(1)?;
 		let data_ptr: u32 = args.nth_checked(2)?;
@@ -772,26 +814,30 @@ impl<'a> Runtime<'a> {
 			return Err(Error::Log.into());
 		}
 
-		self.adjusted_overflow_charge(|schedule|
-			{
-				let topics_gas = schedule.log_gas as u64 + schedule.log_topic_gas as u64 * topic_count as u64;
-				(schedule.log_data_gas as u64)
-					.checked_mul(schedule.log_data_gas as u64)
-					.and_then(|data_gas| data_gas.checked_add(topics_gas))
-			}
-		)?;
+		self.adjusted_overflow_charge(|schedule| {
+			let topics_gas =
+				schedule.log_gas as u64 + schedule.log_topic_gas as u64 * topic_count as u64;
+			(schedule.log_data_gas as u64)
+				.checked_mul(schedule.log_data_gas as u64)
+				.and_then(|data_gas| data_gas.checked_add(topics_gas))
+		})?;
 
 		let mut topics: Vec<H256> = Vec::with_capacity(topic_count as usize);
 		topics.resize(topic_count as usize, H256::zero());
 		for i in 0..topic_count {
-			let offset = i.checked_mul(32).ok_or(Error::MemoryAccessViolation)?
-				.checked_add(topic_ptr).ok_or(Error::MemoryAccessViolation)?;
+			let offset = i
+				.checked_mul(32)
+				.ok_or(Error::MemoryAccessViolation)?
+				.checked_add(topic_ptr)
+				.ok_or(Error::MemoryAccessViolation)?;
 
 			*topics.get_mut(i as usize)
 				.expect("topics is resized to `topic_count`, i is in 0..topic count iterator, get_mut uses i as an indexer, get_mut cannot fail; qed")
 				= H256::from(&self.memory.get(offset, 32)?[..]);
 		}
-		self.ext.log(topics, &self.memory.get(data_ptr, data_len as usize)?).map_err(|_| Error::Log)?;
+		self.ext
+			.log(topics, &self.memory.get(data_ptr, data_len as usize)?)
+			.map_err(|_| Error::Log)?;
 
 		Ok(())
 	}
@@ -799,7 +845,10 @@ impl<'a> Runtime<'a> {
 	/// Signature: `fn get_bytes(key: *const u8, result: *mut u8)`
 	pub fn get_bytes(&mut self, args: RuntimeArgs) -> Result<()> {
 		let key = self.storage_bytes_key(self.h256_at(args.nth_checked(0)?)?);
-		let bytes = self.ext.storage_bytes_at(&key).map_err(|_| Error::StorageReadError)?;
+		let bytes = self
+			.ext
+			.storage_bytes_at(&key)
+			.map_err(|_| Error::StorageReadError)?;
 
 		// Charge sload gas, scaled by number of bytes.
 		let sload_gas = U256::from(self.schedule().sload_gas);
@@ -826,7 +875,10 @@ impl<'a> Runtime<'a> {
 	/// Signature: `fn get_bytes_len(key: *const u8) -> u64`
 	pub fn get_bytes_len(&mut self, args: RuntimeArgs) -> Result<RuntimeValue> {
 		let key = self.storage_bytes_key(self.h256_at(args.nth_checked(0)?)?);
-		let len = self.ext.storage_bytes_len(&key).map_err(|_| Error::StorageReadError)?;
+		let len = self
+			.ext
+			.storage_bytes_len(&key)
+			.map_err(|_| Error::StorageReadError)?;
 		Ok(RuntimeValue::I64(len as i64))
 	}
 
@@ -834,7 +886,10 @@ impl<'a> Runtime<'a> {
 	pub fn set_bytes(&mut self, args: RuntimeArgs) -> Result<()> {
 		let key = self.storage_bytes_key(self.h256_at(args.nth_checked(0)?)?);
 
-		let former_bytes = self.ext.storage_bytes_at(&key).map_err(|_| Error::StorageUpdateError)?;
+		let former_bytes = self
+			.ext
+			.storage_bytes_at(&key)
+			.map_err(|_| Error::StorageUpdateError)?;
 
 		let bytes_ptr: u32 = args.nth_checked(1)?;
 		let len: u64 = args.nth_checked(2)?;
@@ -844,10 +899,14 @@ impl<'a> Runtime<'a> {
 		let reset = !(former_bytes.is_empty() && !is_bytes_empty);
 		self.storage_bytes_charge(len, reset)?;
 
-		self.ext.set_storage_bytes(key, bytes).map_err(|_| Error::StorageUpdateError)?;
+		self.ext
+			.set_storage_bytes(key, bytes)
+			.map_err(|_| Error::StorageUpdateError)?;
 
 		if !former_bytes.is_empty() && is_bytes_empty {
-			self.ext.inc_sstore_clears(former_bytes.len() as u64).map_err(|_| Error::StorageUpdateError)?;
+			self.ext
+				.inc_sstore_clears(former_bytes.len() as u64)
+				.map_err(|_| Error::StorageUpdateError)?;
 		}
 
 		Ok(())
@@ -862,8 +921,8 @@ impl<'a> Runtime<'a> {
 
 mod ext_impl {
 
-	use wasmi::{Externals, RuntimeArgs, RuntimeValue, Trap};
 	use env::ids::*;
+	use wasmi::{Externals, RuntimeArgs, RuntimeValue, Trap};
 
 	macro_rules! void {
 		{ $e: expr } => { { $e?; Ok(None) } }

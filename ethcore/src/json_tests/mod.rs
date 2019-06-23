@@ -17,9 +17,9 @@
 #[macro_use]
 mod test_common;
 
-mod transaction;
+mod chain;
+mod difficulty;
 mod executive;
 mod state;
-mod chain;
+mod transaction;
 mod trie;
-mod difficulty;

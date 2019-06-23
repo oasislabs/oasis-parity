@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::net;
 use ethkey::KeyPair;
-use key_server_cluster::NodeId;
 use key_server_cluster::io::SharedTcpStream;
+use key_server_cluster::NodeId;
+use std::net;
 
 /// Established connection data
 pub struct Connection {

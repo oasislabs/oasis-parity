@@ -17,16 +17,22 @@
 //! Abstraction over filters which works with polling and subscription.
 
 use std::collections::HashMap;
-use std::{sync::{Arc, atomic, atomic::AtomicBool, mpsc}, thread};
+use std::{
+	sync::{atomic, atomic::AtomicBool, mpsc, Arc},
+	thread,
+};
 
 use ethereum_types::{H256, H512};
 use ethkey::Public;
-use jsonrpc_macros::pubsub::{Subscriber, Sink};
+use jsonrpc_macros::pubsub::{Sink, Subscriber};
 use parking_lot::{Mutex, RwLock};
-use rand::{Rng, OsRng};
+use rand::{OsRng, Rng};
 
+use super::{
+	key_store::KeyStore,
+	types::{self, FilterItem, HexEncode},
+};
 use message::{Message, Topic};
-use super::{key_store::KeyStore, types::{self, FilterItem, HexEncode}};
 
 /// Kinds of filters,
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -117,28 +123,37 @@ impl Manager {
 
 	/// Insert new subscription filter. Generates a secure ID and sends it to
 	/// the subscriber
-	pub fn insert_subscription(&self, filter: Filter, sub: Subscriber<FilterItem>)
-		-> Result<(), &'static str>
-	{
+	pub fn insert_subscription(
+		&self,
+		filter: Filter,
+		sub: Subscriber<FilterItem>,
+	) -> Result<(), &'static str> {
 		let id: H256 = OsRng::new()
 			.map_err(|_| "unable to acquire secure randomness")?
 			.gen();
 
-		sub.assign_id(::jsonrpc_pubsub::SubscriptionId::String(format!("{:x}", id)))
-			.map(move |sink| {
-				let entry = FilterEntry::Subscription(Arc::new(filter), sink);
-				self.filters.write().insert(id, entry);
-			})
-			.map_err(|_| "subscriber disconnected")
+		sub.assign_id(::jsonrpc_pubsub::SubscriptionId::String(format!(
+			"{:x}",
+			id
+		)))
+		.map(move |sink| {
+			let entry = FilterEntry::Subscription(Arc::new(filter), sink);
+			self.filters.write().insert(id, entry);
+		})
+		.map_err(|_| "subscriber disconnected")
 	}
 
 	/// Poll changes on filter identified by ID.
 	pub fn poll_changes(&self, id: &H256) -> Option<Vec<FilterItem>> {
-		self.filters.read().get(id).and_then(|filter| match *filter {
-			FilterEntry::Subscription(_, _) => None,
-			FilterEntry::Poll(_, ref changes)
-				=> Some(::std::mem::replace(&mut *changes.lock(), Vec::new())),
-		})
+		self.filters
+			.read()
+			.get(id)
+			.and_then(|filter| match *filter {
+				FilterEntry::Subscription(_, _) => None,
+				FilterEntry::Poll(_, ref changes) => {
+					Some(::std::mem::replace(&mut *changes.lock(), Vec::new()))
+				}
+			})
 	}
 }
 
@@ -148,38 +163,45 @@ impl ::net::MessageHandler for Arc<Manager> {
 		let filters = self.filters.read();
 		let filters_iter = filters
 			.values()
-			.flat_map(|filter| messages.iter().map(move |msg| (filter, msg))) ;
+			.flat_map(|filter| messages.iter().map(move |msg| (filter, msg)));
 
-		for	(filter, message) in filters_iter {
+		for (filter, message) in filters_iter {
 			// if the message matches any of the possible bloom filters,
 			// send to thread pool to attempt decryption and avoid
 			// blocking the network thread for long.
 			let failed_send = match *filter {
 				FilterEntry::Poll(ref filter, _) | FilterEntry::Subscription(ref filter, _)
-					if !filter.basic_matches(message) => None,
+					if !filter.basic_matches(message) =>
+				{
+					None
+				}
 				FilterEntry::Poll(ref filter, ref buffer) => {
 					let (message, key_store) = (message.clone(), self.key_store.clone());
 					let (filter, buffer) = (filter.clone(), buffer.clone());
 
-					self.tx.lock().send(Box::new(move || {
-						filter.handle_message(
-							&message,
-							&*key_store,
-							|matched| buffer.lock().push(matched),
-						)
-					})).err().map(|x| x.0)
+					self.tx
+						.lock()
+						.send(Box::new(move || {
+							filter.handle_message(&message, &*key_store, |matched| {
+								buffer.lock().push(matched)
+							})
+						}))
+						.err()
+						.map(|x| x.0)
 				}
 				FilterEntry::Subscription(ref filter, ref sink) => {
 					let (message, key_store) = (message.clone(), self.key_store.clone());
 					let (filter, sink) = (filter.clone(), sink.clone());
 
-					self.tx.lock().send(Box::new(move || {
-						filter.handle_message(
-							&message,
-							&*key_store,
-							|matched| { let _ = sink.notify(Ok(matched)); },
-						)
-					})).err().map(|x| x.0)
+					self.tx
+						.lock()
+						.send(Box::new(move || {
+							filter.handle_message(&message, &*key_store, |matched| {
+								let _ = sink.notify(Ok(matched));
+							})
+						}))
+						.err()
+						.map(|x| x.0)
 				}
 			};
 
@@ -218,7 +240,9 @@ impl Filter {
 			return Err("no topics for filter");
 		}
 
-		let topics: Vec<_> = params.topics.into_iter()
+		let topics: Vec<_> = params
+			.topics
+			.into_iter()
 			.map(|x| x.into_inner())
 			.map(|topic| {
 				let abridged = super::abridge_topic(&topic);
@@ -238,9 +262,9 @@ impl Filter {
 	// filter.
 	// TODO: minimum PoW heuristic.
 	fn basic_matches(&self, message: &Message) -> bool {
-		self.topics.iter().any(|&(_, ref bloom, _)| {
-			&(bloom & message.bloom()) == bloom
-		})
+		self.topics
+			.iter()
+			.any(|&(_, ref bloom, _)| &(bloom & message.bloom()) == bloom)
 	}
 
 	// handle a message that matches the bloom.
@@ -253,17 +277,25 @@ impl Filter {
 		use rpc::crypto::DecryptionInstance;
 		use tiny_keccak::keccak256;
 
-		let matched_indices: Vec<_> = self.topics.iter()
+		let matched_indices: Vec<_> = self
+			.topics
+			.iter()
 			.enumerate()
 			.filter_map(|(i, &(_, ref bloom, ref abridged))| {
-				let contains_topic = &(bloom & message.bloom()) == bloom
-					&& message.topics().contains(abridged);
+				let contains_topic =
+					&(bloom & message.bloom()) == bloom && message.topics().contains(abridged);
 
-				if contains_topic { Some(i) } else { None }
+				if contains_topic {
+					Some(i)
+				} else {
+					None
+				}
 			})
 			.collect();
 
-		if matched_indices.is_empty() { return }
+		if matched_indices.is_empty() {
+			return;
+		}
 
 		let decrypt = match self.decrypt_with {
 			Some(ref id) => match store.read().decryption_instance(id) {
@@ -272,7 +304,7 @@ impl Filter {
 					warn!(target: "whisper", "Filter attempted to decrypt with destroyed identity {}",
 						id);
 
-					return
+					return;
 				}
 			},
 			None => {
@@ -290,13 +322,15 @@ impl Filter {
 				trace!(target: "whisper", "Failed to decrypt message with {} matching topics",
 					matched_indices.len());
 
-				return
+				return;
 			}
 		};
 
 		match ::rpc::payload::decode(&decrypted) {
 			Ok(decoded) => {
-				if decoded.from != self.from { return }
+				if decoded.from != self.from {
+					return;
+				}
 
 				let matched_topics = matched_indices
 					.into_iter()
@@ -314,19 +348,20 @@ impl Filter {
 					padding: decoded.padding.map(|pad| HexEncode(pad.to_vec())),
 				})
 			}
-			Err(reason) =>
+			Err(reason) => {
 				trace!(target: "whisper", "Bad payload in decrypted message with {} topics: {}",
-					matched_indices.len(), reason),
+					matched_indices.len(), reason)
+			}
 		}
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use message::{CreateParams, Message, Topic};
-	use rpc::types::{FilterRequest, HexEncode};
-	use rpc::abridge_topic;
 	use super::*;
+	use message::{CreateParams, Message, Topic};
+	use rpc::abridge_topic;
+	use rpc::types::{FilterRequest, HexEncode};
 
 	#[test]
 	fn rejects_empty_topics() {
@@ -356,7 +391,8 @@ mod tests {
 			payload: vec![1, 3, 5, 7, 9],
 			topics: abridged_topics.clone(),
 			work: 0,
-		}).unwrap();
+		})
+		.unwrap();
 
 		assert!(filter.basic_matches(&message));
 
@@ -365,7 +401,8 @@ mod tests {
 			payload: vec![1, 3, 5, 7, 9],
 			topics: abridged_topics.clone(),
 			work: 0,
-		}).unwrap();
+		})
+		.unwrap();
 
 		assert!(filter.basic_matches(&message));
 
@@ -374,15 +411,16 @@ mod tests {
 			payload: vec![1, 3, 5, 7, 9],
 			topics: vec![Topic([1, 8, 3, 99])],
 			work: 0,
-		}).unwrap();
+		})
+		.unwrap();
 
 		assert!(!filter.basic_matches(&message));
 	}
 
 	#[test]
 	fn decrypt_and_decode() {
-		use rpc::payload::{self, EncodeParams};
 		use rpc::key_store::{Key, KeyStore};
+		use rpc::payload::{self, EncodeParams};
 
 		let topics = vec![vec![1, 2, 3, 4], vec![5, 6, 7, 8]];
 		let abridged_topics: Vec<_> = topics.iter().map(|x| abridge_topic(&x)).collect();
@@ -399,8 +437,9 @@ mod tests {
 		let payload = payload::encode(EncodeParams {
 			message: &[1, 2, 3],
 			padding: Some(&[4, 5, 4, 5]),
-			sign_with: Some(signing_pair.secret().unwrap())
-		}).unwrap();
+			sign_with: Some(signing_pair.secret().unwrap()),
+		})
+		.unwrap();
 
 		let encrypted = encryption_instance.encrypt(&payload).unwrap();
 
@@ -409,26 +448,31 @@ mod tests {
 			payload: encrypted,
 			topics: abridged_topics.clone(),
 			work: 0,
-		}).unwrap();
+		})
+		.unwrap();
 
 		let message2 = Message::create(CreateParams {
 			ttl: 100,
 			payload: vec![3, 5, 7, 9],
 			topics: abridged_topics,
 			work: 0,
-		}).unwrap();
+		})
+		.unwrap();
 
 		let filter = Filter::new(FilterRequest {
 			decrypt_with: Some(HexEncode(decrypt_id)),
 			from: Some(HexEncode(signing_pair.public().unwrap().clone())),
 			topics: topics.into_iter().map(HexEncode).collect(),
-		}).unwrap();
+		})
+		.unwrap();
 
 		assert!(filter.basic_matches(&message));
 		assert!(filter.basic_matches(&message2));
 
 		let items = ::std::cell::Cell::new(0);
-		let on_match = |_| { items.set(items.get() + 1); };
+		let on_match = |_| {
+			items.set(items.get() + 1);
+		};
 
 		filter.handle_message(&message, &store, &on_match);
 		filter.handle_message(&message2, &store, &on_match);

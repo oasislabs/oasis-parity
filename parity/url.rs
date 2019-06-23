@@ -50,12 +50,16 @@ pub fn open(url: &str) -> Result<(), Error> {
 	const WINDOWS_SHELL_EXECUTE_SUCCESS: c_int = 32;
 
 	let h_instance = unsafe {
-		ShellExecuteA(ptr::null_mut(),
+		ShellExecuteA(
+			ptr::null_mut(),
 			CString::new("open").unwrap().as_ptr(),
-			CString::new(url.to_owned().replace("\n", "%0A")).unwrap().as_ptr(),
+			CString::new(url.to_owned().replace("\n", "%0A"))
+				.unwrap()
+				.as_ptr(),
 			ptr::null(),
 			ptr::null(),
-			Normal) as c_int
+			Normal,
+		) as c_int
 	};
 
 	// https://msdn.microsoft.com/en-us/library/windows/desktop/bb762153(v=vs.85).aspx
@@ -67,19 +71,19 @@ pub fn open(url: &str) -> Result<(), Error> {
 	}
 }
 
-#[cfg(any(target_os="macos", target_os="freebsd"))]
+#[cfg(any(target_os = "macos", target_os = "freebsd"))]
 pub fn open(url: &str) -> Result<(), Error> {
 	let _ = std::process::Command::new("open").arg(url).spawn()?;
 	Ok(())
 }
 
-#[cfg(target_os="linux")]
+#[cfg(target_os = "linux")]
 pub fn open(url: &str) -> Result<(), Error> {
 	let _ = std::process::Command::new("xdg-open").arg(url).spawn()?;
 	Ok(())
 }
 
-#[cfg(target_os="android")]
+#[cfg(target_os = "android")]
 pub fn open(_url: &str) -> Result<(), Error> {
 	// TODO: While it is generally always bad to leave a function implemented, there is not much
 	//		 more we can do here. This function will eventually be removed when we compile Parity

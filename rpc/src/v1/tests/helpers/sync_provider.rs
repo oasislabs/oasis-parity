@@ -16,10 +16,10 @@
 
 //! Test implementation of SyncProvider.
 
-use std::collections::BTreeMap;
 use ethereum_types::H256;
 use parking_lot::RwLock;
-use sync::{SyncProvider, EthProtocolInfo, SyncStatus, SyncState, PeerInfo, TransactionStats};
+use std::collections::BTreeMap;
+use sync::{EthProtocolInfo, PeerInfo, SyncProvider, SyncState, SyncStatus, TransactionStats};
 
 /// TestSyncProvider config.
 pub struct Config {
@@ -60,7 +60,7 @@ impl TestSyncProvider {
 
 	/// Simulate importing blocks.
 	pub fn increase_imported_block_number(&self, count: u64) {
-		let mut status =  self.status.write();
+		let mut status = self.status.write();
 		let current_number = status.last_imported_block_number.unwrap_or(0);
 		status.last_imported_block_number = Some(current_number + count);
 	}
@@ -95,10 +95,10 @@ impl SyncProvider for TestSyncProvider {
 				eth_info: Some(EthProtocolInfo {
 					version: 64,
 					difficulty: None,
-					head: 60.into()
+					head: 60.into(),
 				}),
 				pip_info: None,
-			}
+			},
 		]
 	}
 

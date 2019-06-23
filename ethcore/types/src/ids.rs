@@ -17,7 +17,7 @@
 //! Unique identifiers.
 
 use ethereum_types::H256;
-use {BlockNumber};
+use BlockNumber;
 
 /// Uniquely identifies block.
 #[derive(Debug, PartialEq, Copy, Clone, Hash, Eq)]
@@ -40,7 +40,7 @@ pub enum TransactionId {
 	Hash(H256),
 	/// Block id and transaction index within this block.
 	/// Querying by block position is always faster.
-	Location(BlockId, usize)
+	Location(BlockId, usize),
 }
 
 /// Uniquely identifies Trace.
@@ -57,5 +57,5 @@ pub struct UncleId {
 	/// Block id.
 	pub block: BlockId,
 	/// Position in block.
-	pub position: usize
+	pub position: usize,
 }

@@ -25,7 +25,7 @@ use std::time::Instant;
 macro_rules! trace_time {
 	($name: expr) => {
 		let _timer = $crate::PerfTimer::new($name);
-	}
+	};
 }
 
 /// Performance timer with logging. Starts measuring time in the constructor, prints
@@ -48,8 +48,7 @@ impl PerfTimer {
 impl Drop for PerfTimer {
 	fn drop(&mut self) {
 		let elapsed = self.start.elapsed();
-		let ms = elapsed.subsec_nanos() as f32 / 1_000_000.0 +
-				 elapsed.as_secs() as f32 * 1_000.0;
+		let ms = elapsed.subsec_nanos() as f32 / 1_000_000.0 + elapsed.as_secs() as f32 * 1_000.0;
 		trace!(target: "perf", "{}: {:.2}ms", self.name, ms);
 	}
 }

@@ -102,7 +102,9 @@ impl Batch {
 
 	/// Commit all the items in the batch to the given database.
 	pub fn commit(&mut self, dest: &mut Database) -> Result<()> {
-		if self.inner.is_empty() { return Ok(()) }
+		if self.inner.is_empty() {
+			return Ok(());
+		}
 
 		let mut transaction = DBTransaction::new();
 
@@ -118,16 +120,26 @@ impl Batch {
 /// A generalized migration from the given db to a destination db.
 pub trait Migration: 'static {
 	/// Number of columns in the database before the migration.
-	fn pre_columns(&self) -> Option<u32> { self.columns() }
+	fn pre_columns(&self) -> Option<u32> {
+		self.columns()
+	}
 	/// Number of columns in database after the migration.
 	fn columns(&self) -> Option<u32>;
 	/// Whether this migration alters any existing columns.
 	/// if not, then column families will simply be added and `migrate` will never be called.
-	fn alters_existing(&self) -> bool { true }
+	fn alters_existing(&self) -> bool {
+		true
+	}
 	/// Version of the database after the migration.
 	fn version(&self) -> u32;
 	/// Migrate a source to a destination.
-	fn migrate(&mut self, source: Arc<Database>, config: &Config, destination: &mut Database, col: Option<u32>) -> Result<()>;
+	fn migrate(
+		&mut self,
+		source: Arc<Database>,
+		config: &Config,
+		destination: &mut Database,
+		col: Option<u32>,
+	) -> Result<()>;
 }
 
 /// A simple migration over key-value pairs of a single column.
@@ -144,13 +156,25 @@ pub trait SimpleMigration: 'static {
 }
 
 impl<T: SimpleMigration> Migration for T {
-	fn columns(&self) -> Option<u32> { SimpleMigration::columns(self) }
+	fn columns(&self) -> Option<u32> {
+		SimpleMigration::columns(self)
+	}
 
-	fn version(&self) -> u32 { SimpleMigration::version(self) }
+	fn version(&self) -> u32 {
+		SimpleMigration::version(self)
+	}
 
-	fn alters_existing(&self) -> bool { true }
+	fn alters_existing(&self) -> bool {
+		true
+	}
 
-	fn migrate(&mut self, source: Arc<Database>, config: &Config, dest: &mut Database, col: Option<u32>) -> Result<()> {
+	fn migrate(
+		&mut self,
+		source: Arc<Database>,
+		config: &Config,
+		dest: &mut Database,
+		col: Option<u32>,
+	) -> Result<()> {
 		let migration_needed = col == SimpleMigration::migrated_column_index(self);
 		let mut batch = Batch::new(config, col);
 
@@ -184,11 +208,25 @@ pub struct ChangeColumns {
 }
 
 impl Migration for ChangeColumns {
-	fn pre_columns(&self) -> Option<u32> { self.pre_columns }
-	fn columns(&self) -> Option<u32> { self.post_columns }
-	fn version(&self) -> u32 { self.version }
-	fn alters_existing(&self) -> bool { false }
-	fn migrate(&mut self, _: Arc<Database>, _: &Config, _: &mut Database, _: Option<u32>) -> Result<()> {
+	fn pre_columns(&self) -> Option<u32> {
+		self.pre_columns
+	}
+	fn columns(&self) -> Option<u32> {
+		self.post_columns
+	}
+	fn version(&self) -> u32 {
+		self.version
+	}
+	fn alters_existing(&self) -> bool {
+		false
+	}
+	fn migrate(
+		&mut self,
+		_: Arc<Database>,
+		_: &Config,
+		_: &mut Database,
+		_: Option<u32>,
+	) -> Result<()> {
 		Ok(())
 	}
 }
@@ -242,7 +280,10 @@ impl Manager {
 	}
 
 	/// Adds new migration rules.
-	pub fn add_migration<T>(&mut self, migration: T) -> Result<()> where T: Migration {
+	pub fn add_migration<T>(&mut self, migration: T) -> Result<()>
+	where
+		T: Migration,
+	{
 		let is_new = match self.migrations.last() {
 			Some(last) => migration.version() > last.version(),
 			None => true,
@@ -261,7 +302,7 @@ impl Manager {
 		let migrations = self.migrations_from(version);
 		trace!(target: "migration", "Total migrations to execute for version {}: {}", version, migrations.len());
 		if migrations.is_empty() {
-			return Err(ErrorKind::MigrationImpossible.into())
+			return Err(ErrorKind::MigrationImpossible.into());
 		};
 
 		let columns = migrations.get(0).and_then(|m| m.pre_columns());
@@ -339,7 +380,10 @@ impl Manager {
 
 	/// Find all needed migrations.
 	fn migrations_from(&mut self, version: u32) -> Vec<&mut Box<Migration>> {
-		self.migrations.iter_mut().filter(|m| m.version() > version).collect()
+		self.migrations
+			.iter_mut()
+			.filter(|m| m.version() > version)
+			.collect()
 	}
 }
 

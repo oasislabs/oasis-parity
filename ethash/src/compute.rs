@@ -19,14 +19,14 @@
 
 // TODO: fix endianess for big endian
 
-use keccak::{keccak_512, keccak_256, H256};
 use cache::{NodeCache, NodeCacheBuilder};
+use keccak::{keccak_256, keccak_512, H256};
 use seed_compute::SeedHashCompute;
 use shared::*;
 use std::io;
 
-use std::{mem, ptr};
 use std::path::Path;
+use std::{mem, ptr};
 
 const MIX_WORDS: usize = ETHASH_MIX_BYTES / 4;
 const MIX_NODES: usize = MIX_WORDS / NODE_WORDS;
@@ -138,14 +138,14 @@ fn hash_compute(light: &Light, full_size: usize, header_hash: &H256, nonce: u64)
 			// We use explicit lifetimes to ensure that val's borrow is invalidated until the
 			// transmuted val dies.
 			unsafe fn make_const_array<'a, T, U>(val: &'a mut [T]) -> &'a mut [U; $n] {
-				use ::std::mem;
+				use std::mem;
 
 				debug_assert_eq!(val.len() * mem::size_of::<T>(), $n * mem::size_of::<U>());
 				mem::transmute(val.as_mut_ptr())
-			}
+				}
 
 			make_const_array($value)
-		}}
+			}};
 	}
 
 	#[repr(C)]
@@ -281,7 +281,10 @@ fn hash_compute(light: &Light, full_size: usize, header_hash: &H256, nonce: u64)
 		buf.compress_bytes
 	};
 
-	ProofOfWork { mix_hash: mix_hash, value: value }
+	ProofOfWork {
+		mix_hash: mix_hash,
+		value: value,
+	}
 }
 
 // TODO: Use the `simd` crate
@@ -294,8 +297,8 @@ fn calculate_dag_item(node_index: u32, cache: &[Node]) -> Node {
 
 	debug_assert_eq!(NODE_WORDS, 16);
 	for i in 0..ETHASH_DATASET_PARENTS as u32 {
-		let parent_index = fnv_hash(node_index ^ i, ret.as_words()[i as usize % NODE_WORDS]) %
-			num_parent_nodes as u32;
+		let parent_index = fnv_hash(node_index ^ i, ret.as_words()[i as usize % NODE_WORDS])
+			% num_parent_nodes as u32;
 		let parent = &cache[parent_index as usize];
 
 		unroll! {
@@ -326,7 +329,10 @@ mod test {
 		assert_eq!(16907456usize, get_cache_size(ETHASH_EPOCH_LENGTH + 1));
 		assert_eq!(284950208usize, get_cache_size(2046 * ETHASH_EPOCH_LENGTH));
 		assert_eq!(285081536usize, get_cache_size(2047 * ETHASH_EPOCH_LENGTH));
-		assert_eq!(285081536usize, get_cache_size(2048 * ETHASH_EPOCH_LENGTH - 1));
+		assert_eq!(
+			285081536usize,
+			get_cache_size(2048 * ETHASH_EPOCH_LENGTH - 1)
+		);
 	}
 
 	#[test]
@@ -359,7 +365,10 @@ mod test {
 			0x4a, 0x8e, 0x95, 0x69, 0xef, 0xc7, 0xd7, 0x1b, 0x33, 0x35, 0xdf, 0x36, 0x8c, 0x9a,
 			0xe9, 0x7e, 0x53, 0x84,
 		];
-		assert_eq!(quick_get_difficulty(&hash, nonce, &mix_hash)[..], boundary_good[..]);
+		assert_eq!(
+			quick_get_difficulty(&hash, nonce, &mix_hash)[..],
+			boundary_good[..]
+		);
 		let boundary_bad = [
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x3a, 0x9b, 0x6c, 0x69, 0xbc, 0x2c, 0xe2, 0xa2,
 			0x4a, 0x8e, 0x95, 0x69, 0xef, 0xc7, 0xd7, 0x1b, 0x33, 0x35, 0xdf, 0x36, 0x8c, 0x9a,
@@ -399,16 +408,28 @@ mod test {
 	fn test_drop_old_data() {
 		let tempdir = TempDir::new("").unwrap();
 		let builder = NodeCacheBuilder::new(None);
-		let first = builder.light(tempdir.path(), 0).to_file().unwrap().to_owned();
+		let first = builder
+			.light(tempdir.path(), 0)
+			.to_file()
+			.unwrap()
+			.to_owned();
 
-		let second = builder.light(tempdir.path(), ETHASH_EPOCH_LENGTH).to_file().unwrap().to_owned();
+		let second = builder
+			.light(tempdir.path(), ETHASH_EPOCH_LENGTH)
+			.to_file()
+			.unwrap()
+			.to_owned();
 		assert!(fs::metadata(&first).is_ok());
 
-		let _ = builder.light(tempdir.path(), ETHASH_EPOCH_LENGTH * 2).to_file();
+		let _ = builder
+			.light(tempdir.path(), ETHASH_EPOCH_LENGTH * 2)
+			.to_file();
 		assert!(fs::metadata(&first).is_err());
 		assert!(fs::metadata(&second).is_ok());
 
-		let _ = builder.light(tempdir.path(), ETHASH_EPOCH_LENGTH * 3).to_file();
+		let _ = builder
+			.light(tempdir.path(), ETHASH_EPOCH_LENGTH * 3)
+			.to_file();
 		assert!(fs::metadata(&second).is_err());
 	}
 }

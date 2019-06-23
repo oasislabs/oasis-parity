@@ -16,15 +16,17 @@
 
 use std::sync::Arc;
 
+use jsonrpc_core::futures::{self, Future, Stream};
 use jsonrpc_core::MetaIoHandler;
-use jsonrpc_core::futures::{self, Stream, Future};
 use jsonrpc_pubsub::Session;
 
 use std::time::Duration;
 
 use v1::{EthPubSub, EthPubSubClient, Metadata};
 
-use ethcore::client::{TestBlockChainClient, EachBlockWith, ChainNotify, ChainRoute, ChainRouteType};
+use ethcore::client::{
+	ChainNotify, ChainRoute, ChainRouteType, EachBlockWith, TestBlockChainClient,
+};
 use parity_reactor::EventLoop;
 
 const DURATION_ZERO: Duration = Duration::from_millis(0);
@@ -52,18 +54,39 @@ fn should_subscribe_to_new_heads() {
 	metadata.session = Some(Arc::new(Session::new(sender)));
 
 	// Subscribe
-	let request = r#"{"jsonrpc": "2.0", "method": "eth_subscribe", "params": ["newHeads"], "id": 1}"#;
+	let request =
+		r#"{"jsonrpc": "2.0", "method": "eth_subscribe", "params": ["newHeads"], "id": 1}"#;
 	let response = r#"{"jsonrpc":"2.0","result":"0x416d77337e24399d","id":1}"#;
-	assert_eq!(io.handle_request_sync(request, metadata.clone()), Some(response.to_owned()));
+	assert_eq!(
+		io.handle_request_sync(request, metadata.clone()),
+		Some(response.to_owned())
+	);
 
 	// Check notifications
-	handler.new_blocks(vec![], vec![], ChainRoute::new(vec![(h1, ChainRouteType::Enacted)]), vec![], vec![], DURATION_ZERO);
+	handler.new_blocks(
+		vec![],
+		vec![],
+		ChainRoute::new(vec![(h1, ChainRouteType::Enacted)]),
+		vec![],
+		vec![],
+		DURATION_ZERO,
+	);
 	let (res, receiver) = receiver.into_future().wait().unwrap();
 	let response = r#"{"jsonrpc":"2.0","method":"eth_subscription","params":{"result":{"author":"0x0000000000000000000000000000000000000000","difficulty":"0x1","extraData":"0x","gasLimit":"0xf4240","gasUsed":"0x0","hash":"0x3457d2fa2e3dd33c78ac681cf542e429becf718859053448748383af67e23218","logsBloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","miner":"0x0000000000000000000000000000000000000000","number":"0x1","parentHash":"0x0cd786a2425d16f152c658316c423e6ce1181e15c3295826d7c9904cba9ce303","receiptsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","sealFields":[],"sha3Uncles":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","size":"0x1c9","stateRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","timestamp":"0x0","transactionsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"},"subscription":"0x416d77337e24399d"}}"#;
 	assert_eq!(res, Some(response.into()));
 
 	// Notify about two blocks
-	handler.new_blocks(vec![], vec![], ChainRoute::new(vec![(h2, ChainRouteType::Enacted), (h3, ChainRouteType::Enacted)]), vec![], vec![], DURATION_ZERO);
+	handler.new_blocks(
+		vec![],
+		vec![],
+		ChainRoute::new(vec![
+			(h2, ChainRouteType::Enacted),
+			(h3, ChainRouteType::Enacted),
+		]),
+		vec![],
+		vec![],
+		DURATION_ZERO,
+	);
 
 	// Receive both
 	let (res, receiver) = receiver.into_future().wait().unwrap();
@@ -76,7 +99,10 @@ fn should_subscribe_to_new_heads() {
 	// And unsubscribe
 	let request = r#"{"jsonrpc": "2.0", "method": "eth_unsubscribe", "params": ["0x416d77337e24399d"], "id": 1}"#;
 	let response = r#"{"jsonrpc":"2.0","result":true,"id":1}"#;
-	assert_eq!(io.handle_request_sync(request, metadata), Some(response.to_owned()));
+	assert_eq!(
+		io.handle_request_sync(request, metadata),
+		Some(response.to_owned())
+	);
 
 	let (res, _receiver) = receiver.into_future().wait().unwrap();
 	assert_eq!(res, None);
@@ -84,9 +110,9 @@ fn should_subscribe_to_new_heads() {
 
 #[test]
 fn should_subscribe_to_logs() {
-	use ethcore::log_entry::{LocalizedLogEntry, LogEntry};
-	use ethcore::ids::BlockId;
 	use ethcore::client::BlockInfo;
+	use ethcore::ids::BlockId;
+	use ethcore::log_entry::{LocalizedLogEntry, LogEntry};
 
 	// given
 	let el = EventLoop::spawn();
@@ -96,21 +122,19 @@ fn should_subscribe_to_logs() {
 	let h1 = client.block_hash_delta_minus(1);
 	let block = client.block(BlockId::Hash(h1)).unwrap();
 	let tx_hash = block.transactions()[0].hash();
-	client.set_logs(vec![
-		LocalizedLogEntry {
-			entry: LogEntry {
-				address: 5.into(),
-				topics: vec![1.into(), 2.into(), 0.into(), 0.into()],
-				data: vec![],
-			},
-			block_hash: h1,
-			block_number: block.header().number(),
-			transaction_hash: tx_hash,
-			transaction_index: 0,
-			log_index: 0,
-			transaction_log_index: 0,
-		}
-	]);
+	client.set_logs(vec![LocalizedLogEntry {
+		entry: LogEntry {
+			address: 5.into(),
+			topics: vec![1.into(), 2.into(), 0.into(), 0.into()],
+			data: vec![],
+		},
+		block_hash: h1,
+		block_number: block.header().number(),
+		transaction_hash: tx_hash,
+		transaction_index: 0,
+		log_index: 0,
+		transaction_log_index: 0,
+	}]);
 
 	let pubsub = EthPubSubClient::new_test(Arc::new(client), el.remote());
 	let handler = pubsub.handler().upgrade().unwrap();
@@ -124,12 +148,23 @@ fn should_subscribe_to_logs() {
 	metadata.session = Some(Arc::new(Session::new(sender)));
 
 	// Subscribe
-	let request = r#"{"jsonrpc": "2.0", "method": "eth_subscribe", "params": ["logs", {}], "id": 1}"#;
+	let request =
+		r#"{"jsonrpc": "2.0", "method": "eth_subscribe", "params": ["logs", {}], "id": 1}"#;
 	let response = r#"{"jsonrpc":"2.0","result":"0x416d77337e24399d","id":1}"#;
-	assert_eq!(io.handle_request_sync(request, metadata.clone()), Some(response.to_owned()));
+	assert_eq!(
+		io.handle_request_sync(request, metadata.clone()),
+		Some(response.to_owned())
+	);
 
 	// Check notifications (enacted)
-	handler.new_blocks(vec![], vec![], ChainRoute::new(vec![(h1, ChainRouteType::Enacted)]), vec![], vec![], DURATION_ZERO);
+	handler.new_blocks(
+		vec![],
+		vec![],
+		ChainRoute::new(vec![(h1, ChainRouteType::Enacted)]),
+		vec![],
+		vec![],
+		DURATION_ZERO,
+	);
 	let (res, receiver) = receiver.into_future().wait().unwrap();
 	let response = r#"{"jsonrpc":"2.0","method":"eth_subscription","params":{"result":{"address":"0x0000000000000000000000000000000000000005","blockHash":"0x3457d2fa2e3dd33c78ac681cf542e429becf718859053448748383af67e23218","blockNumber":"0x1","data":"0x","logIndex":"0x0","topics":["0x0000000000000000000000000000000000000000000000000000000000000001","0x0000000000000000000000000000000000000000000000000000000000000002","0x0000000000000000000000000000000000000000000000000000000000000000","0x0000000000000000000000000000000000000000000000000000000000000000"],"transactionHash":""#.to_owned()
 		+ &format!("0x{:x}", tx_hash)
@@ -137,7 +172,14 @@ fn should_subscribe_to_logs() {
 	assert_eq!(res, Some(response.into()));
 
 	// Check notifications (retracted)
-	handler.new_blocks(vec![], vec![], ChainRoute::new(vec![(h1, ChainRouteType::Retracted)]), vec![], vec![], DURATION_ZERO);
+	handler.new_blocks(
+		vec![],
+		vec![],
+		ChainRoute::new(vec![(h1, ChainRouteType::Retracted)]),
+		vec![],
+		vec![],
+		DURATION_ZERO,
+	);
 	let (res, receiver) = receiver.into_future().wait().unwrap();
 	let response = r#"{"jsonrpc":"2.0","method":"eth_subscription","params":{"result":{"address":"0x0000000000000000000000000000000000000005","blockHash":"0x3457d2fa2e3dd33c78ac681cf542e429becf718859053448748383af67e23218","blockNumber":"0x1","data":"0x","logIndex":"0x0","topics":["0x0000000000000000000000000000000000000000000000000000000000000001","0x0000000000000000000000000000000000000000000000000000000000000002","0x0000000000000000000000000000000000000000000000000000000000000000","0x0000000000000000000000000000000000000000000000000000000000000000"],"transactionHash":""#.to_owned()
 		+ &format!("0x{:x}", tx_hash)
@@ -147,7 +189,10 @@ fn should_subscribe_to_logs() {
 	// And unsubscribe
 	let request = r#"{"jsonrpc": "2.0", "method": "eth_unsubscribe", "params": ["0x416d77337e24399d"], "id": 1}"#;
 	let response = r#"{"jsonrpc":"2.0","result":true,"id":1}"#;
-	assert_eq!(io.handle_request_sync(request, metadata), Some(response.to_owned()));
+	assert_eq!(
+		io.handle_request_sync(request, metadata),
+		Some(response.to_owned())
+	);
 
 	let (res, _receiver) = receiver.into_future().wait().unwrap();
 	assert_eq!(res, None);
@@ -173,12 +218,18 @@ fn should_subscribe_to_pending_transactions() {
 	// Fail if params are provided
 	let request = r#"{"jsonrpc": "2.0", "method": "eth_subscribe", "params": ["newPendingTransactions", {}], "id": 1}"#;
 	let response = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Couldn't parse parameters: newPendingTransactions","data":"\"Expected no parameters.\""},"id":1}"#;
-	assert_eq!(io.handle_request_sync(request, metadata.clone()), Some(response.to_owned()));
+	assert_eq!(
+		io.handle_request_sync(request, metadata.clone()),
+		Some(response.to_owned())
+	);
 
 	// Subscribe
 	let request = r#"{"jsonrpc": "2.0", "method": "eth_subscribe", "params": ["newPendingTransactions"], "id": 1}"#;
 	let response = r#"{"jsonrpc":"2.0","result":"0x416d77337e24399d","id":1}"#;
-	assert_eq!(io.handle_request_sync(request, metadata.clone()), Some(response.to_owned()));
+	assert_eq!(
+		io.handle_request_sync(request, metadata.clone()),
+		Some(response.to_owned())
+	);
 
 	// Send new transactions
 	handler.new_transactions(&[5.into(), 7.into()]);
@@ -194,7 +245,10 @@ fn should_subscribe_to_pending_transactions() {
 	// And unsubscribe
 	let request = r#"{"jsonrpc": "2.0", "method": "eth_unsubscribe", "params": ["0x416d77337e24399d"], "id": 1}"#;
 	let response = r#"{"jsonrpc":"2.0","result":true,"id":1}"#;
-	assert_eq!(io.handle_request_sync(request, metadata), Some(response.to_owned()));
+	assert_eq!(
+		io.handle_request_sync(request, metadata),
+		Some(response.to_owned())
+	);
 
 	let (res, _receiver) = receiver.into_future().wait().unwrap();
 	assert_eq!(res, None);
@@ -217,6 +271,10 @@ fn should_return_unimplemented() {
 
 	// Subscribe
 	let response = r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"This request is not implemented yet. Please create an issue on Github repo."},"id":1}"#;
-	let request = r#"{"jsonrpc": "2.0", "method": "eth_subscribe", "params": ["syncing"], "id": 1}"#;
-	assert_eq!(io.handle_request_sync(request, metadata.clone()), Some(response.to_owned()));
+	let request =
+		r#"{"jsonrpc": "2.0", "method": "eth_subscribe", "params": ["syncing"], "id": 1}"#;
+	assert_eq!(
+		io.handle_request_sync(request, metadata.clone()),
+		Some(response.to_owned())
+	);
 }

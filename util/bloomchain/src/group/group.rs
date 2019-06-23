@@ -26,8 +26,6 @@ impl BloomGroup {
 	pub fn new(size: usize) -> Self {
 		let blooms = (0..size).into_iter().map(|_| Bloom::default()).collect();
 
-		BloomGroup {
-			blooms: blooms
-		}
+		BloomGroup { blooms: blooms }
 	}
 }

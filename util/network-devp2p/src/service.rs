@@ -14,19 +14,19 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use network::{Error, NetworkConfiguration, NetworkProtocolHandler, NonReservedPeerMode};
-use network::{NetworkContext, PeerId, ProtocolId, NetworkIoMessage};
+use ansi_term::Colour;
 use host::Host;
 use io::*;
+use network::ConnectionFilter;
+use network::{Error, NetworkConfiguration, NetworkProtocolHandler, NonReservedPeerMode};
+use network::{NetworkContext, NetworkIoMessage, PeerId, ProtocolId};
 use parking_lot::RwLock;
 use std::net::SocketAddr;
 use std::ops::Range;
 use std::sync::Arc;
-use ansi_term::Colour;
-use network::ConnectionFilter;
 
 struct HostHandler {
-	public_url: RwLock<Option<String>>
+	public_url: RwLock<Option<String>>,
 }
 
 impl IoHandler<NetworkIoMessage> for HostHandler {
@@ -54,8 +54,13 @@ pub struct NetworkService {
 
 impl NetworkService {
 	/// Starts IO event loop
-	pub fn new(config: NetworkConfiguration, filter: Option<Arc<ConnectionFilter>>) -> Result<NetworkService, Error> {
-		let host_handler = Arc::new(HostHandler { public_url: RwLock::new(None) });
+	pub fn new(
+		config: NetworkConfiguration,
+		filter: Option<Arc<ConnectionFilter>>,
+	) -> Result<NetworkService, Error> {
+		let host_handler = Arc::new(HostHandler {
+			public_url: RwLock::new(None),
+		});
 		let io_service = IoService::<NetworkIoMessage>::start()?;
 
 		Ok(NetworkService {
@@ -74,7 +79,7 @@ impl NetworkService {
 		handler: Arc<NetworkProtocolHandler + Send + Sync>,
 		protocol: ProtocolId,
 		// version id + packet count
-		versions: &[(u8, u8)]
+		versions: &[(u8, u8)],
 	) -> Result<(), Error> {
 		self.io_service.send_message(NetworkIoMessage::AddHandler {
 			handler,
@@ -100,7 +105,7 @@ impl NetworkService {
 	pub fn num_peers_range(&self) -> Range<u32> {
 		let start = self.config.min_peers;
 		let end = self.config.max_peers + 1;
-		start .. end
+		start..end
 	}
 
 	/// Returns external url if available.
@@ -122,15 +127,19 @@ impl NetworkService {
 		let mut host = self.host.write();
 		let listen_addr = self.config.listen_address.clone();
 		if host.is_none() {
-			let h = Arc::new(Host::new(self.config.clone(), self.filter.clone())
-				.map_err(|err| (err.into(), listen_addr))?);
-			self.io_service.register_handler(h.clone())
+			let h = Arc::new(
+				Host::new(self.config.clone(), self.filter.clone())
+					.map_err(|err| (err.into(), listen_addr))?,
+			);
+			self.io_service
+				.register_handler(h.clone())
 				.map_err(|err| (err.into(), listen_addr))?;
 			*host = Some(h);
 		}
 
 		if self.host_handler.public_url.read().is_none() {
-			self.io_service.register_handler(self.host_handler.clone())
+			self.io_service
+				.register_handler(self.host_handler.clone())
 				.map_err(|err| (err.into(), listen_addr))?;
 		}
 
@@ -149,7 +158,11 @@ impl NetworkService {
 
 	/// Get a list of all connected peers by id.
 	pub fn connected_peers(&self) -> Vec<PeerId> {
-		self.host.read().as_ref().map(|h| h.connected_peers()).unwrap_or_else(Vec::new)
+		self.host
+			.read()
+			.as_ref()
+			.map(|h| h.connected_peers())
+			.unwrap_or_else(Vec::new)
 	}
 
 	/// Try to add a reserved peer.
@@ -182,7 +195,10 @@ impl NetworkService {
 	}
 
 	/// Executes action in the network context
-	pub fn with_context<F>(&self, protocol: ProtocolId, action: F) where F: FnOnce(&NetworkContext) {
+	pub fn with_context<F>(&self, protocol: ProtocolId, action: F)
+	where
+		F: FnOnce(&NetworkContext),
+	{
 		let io = IoContext::new(self.io_service.channel(), 0);
 		let host = self.host.read();
 		if let Some(ref host) = host.as_ref() {
@@ -191,9 +207,13 @@ impl NetworkService {
 	}
 
 	/// Evaluates function in the network context
-	pub fn with_context_eval<F, T>(&self, protocol: ProtocolId, action: F) -> Option<T> where F: FnOnce(&NetworkContext) -> T {
+	pub fn with_context_eval<F, T>(&self, protocol: ProtocolId, action: F) -> Option<T>
+	where
+		F: FnOnce(&NetworkContext) -> T,
+	{
 		let io = IoContext::new(self.io_service.channel(), 0);
 		let host = self.host.read();
-		host.as_ref().map(|ref host| host.with_context_eval(protocol, &io, action))
+		host.as_ref()
+			.map(|ref host| host.with_context_eval(protocol, &io, action))
 	}
 }

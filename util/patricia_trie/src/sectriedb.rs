@@ -14,17 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use ethereum_types::H256;
-use keccak::keccak;
-use hashdb::HashDB;
 use super::triedb::TrieDB;
-use super::{Trie, TrieItem, TrieIterator, Query};
+use super::{Query, Trie, TrieItem, TrieIterator};
+use ethereum_types::H256;
+use hashdb::HashDB;
+use keccak::keccak;
 
 /// A `Trie` implementation which hashes keys and uses a generic `HashDB` backing database.
 ///
 /// Use it as a `Trie` trait object. You can use `raw()` to get the backing `TrieDB` object.
 pub struct SecTrieDB<'db> {
-	raw: TrieDB<'db>
+	raw: TrieDB<'db>,
 }
 
 impl<'db> SecTrieDB<'db> {
@@ -34,7 +34,9 @@ impl<'db> SecTrieDB<'db> {
 	/// This guarantees the trie is built correctly.
 	/// Returns an error if root does not exist.
 	pub fn new(db: &'db HashDB, root: &'db H256) -> super::Result<Self> {
-		Ok(SecTrieDB { raw: TrieDB::new(db, root)? })
+		Ok(SecTrieDB {
+			raw: TrieDB::new(db, root)?,
+		})
 	}
 
 	/// Get a reference to the underlying raw `TrieDB` struct.
@@ -53,14 +55,21 @@ impl<'db> Trie for SecTrieDB<'db> {
 		TrieDB::iter(&self.raw)
 	}
 
-	fn root(&self) -> &H256 { self.raw.root() }
+	fn root(&self) -> &H256 {
+		self.raw.root()
+	}
 
 	fn contains(&self, key: &[u8]) -> super::Result<bool> {
 		self.raw.contains(&keccak(key))
 	}
 
-	fn get_with<'a, 'key, Q: Query>(&'a self, key: &'key [u8], query: Q) -> super::Result<Option<Q::Item>>
-		where 'a: 'key
+	fn get_with<'a, 'key, Q: Query>(
+		&'a self,
+		key: &'key [u8],
+		query: Q,
+	) -> super::Result<Option<Q::Item>>
+	where
+		'a: 'key,
 	{
 		self.raw.get_with(&keccak(key), query)
 	}
@@ -68,10 +77,10 @@ impl<'db> Trie for SecTrieDB<'db> {
 
 #[test]
 fn trie_to_sectrie() {
-	use memorydb::MemoryDB;
-	use hashdb::DBValue;
 	use super::triedbmut::TrieDBMut;
 	use super::TrieMut;
+	use hashdb::DBValue;
+	use memorydb::MemoryDB;
 
 	let mut memdb = MemoryDB::new();
 	let mut root = H256::default();
@@ -80,5 +89,8 @@ fn trie_to_sectrie() {
 		t.insert(&keccak(&[0x01u8, 0x23]), &[0x01u8, 0x23]).unwrap();
 	}
 	let t = SecTrieDB::new(&memdb, &root).unwrap();
-	assert_eq!(t.get(&[0x01u8, 0x23]).unwrap().unwrap(), DBValue::from_slice(&[0x01u8, 0x23]));
+	assert_eq!(
+		t.get(&[0x01u8, 0x23]).unwrap().unwrap(),
+		DBValue::from_slice(&[0x01u8, 0x23])
+	);
 }

@@ -23,19 +23,21 @@ mod body;
 mod header;
 mod transaction;
 
-pub use self::view_rlp::ViewRlp;
 pub use self::block::BlockView;
 pub use self::body::BodyView;
 pub use self::header::HeaderView;
 pub use self::transaction::TransactionView;
+pub use self::view_rlp::ViewRlp;
 
 #[cfg(test)]
 mod tests {
-    use super::HeaderView;
+	use super::HeaderView;
 
-    #[test]
-    #[should_panic(expected="View rlp is trusted and should be valid. Constructed in ethcore/src/views/mod.rs on line 39: RlpExpectedToBeList")]
-    fn should_include_file_line_number_in_panic_for_invalid_rlp() {
-        let _ = view!(HeaderView, &[]).parent_hash();
-    }
+	#[test]
+	#[should_panic(
+		expected = "View rlp is trusted and should be valid. Constructed in ethcore/src/views/mod.rs on line 39: RlpExpectedToBeList"
+	)]
+	fn should_include_file_line_number_in_panic_for_invalid_rlp() {
+		let _ = view!(HeaderView, &[]).parent_hash();
+	}
 }

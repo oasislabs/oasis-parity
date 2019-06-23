@@ -18,7 +18,7 @@
 //! encountering.
 
 use std::fmt;
-use {rlp, network};
+use {network, rlp};
 
 /// Levels of punishment.
 ///
@@ -115,7 +115,9 @@ impl fmt::Display for Error {
 			Error::UnsolicitedResponse => write!(f, "Peer provided unsolicited data"),
 			Error::BadBackReference => write!(f, "Bad back-reference in request."),
 			Error::NotServer => write!(f, "Peer not a server."),
-			Error::UnsupportedProtocolVersion(pv) => write!(f, "Unsupported protocol version: {}", pv),
+			Error::UnsupportedProtocolVersion(pv) => {
+				write!(f, "Unsupported protocol version: {}", pv)
+			}
 			Error::BadProtocolVersion => write!(f, "Bad protocol version in handshake"),
 			Error::Overburdened => write!(f, "Peer overburdened"),
 			Error::RejectedByHandlers => write!(f, "No handler kept this peer"),

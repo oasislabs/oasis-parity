@@ -15,23 +15,23 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Reference-counted memory-based `HashDB` implementation.
-extern crate heapsize;
+extern crate elastic_array;
 extern crate ethereum_types;
 extern crate hashdb;
+extern crate heapsize;
 extern crate keccak_hash as keccak;
 extern crate plain_hasher;
 extern crate rlp;
-extern crate elastic_array;
 
-use std::mem;
-use std::collections::HashMap;
-use std::collections::hash_map::Entry;
-use heapsize::HeapSizeOf;
 use ethereum_types::H256;
-use hashdb::{HashDB, DBValue};
-use keccak::{KECCAK_NULL_RLP, keccak};
+use hashdb::{DBValue, HashDB};
+use heapsize::HeapSizeOf;
+use keccak::{keccak, KECCAK_NULL_RLP};
 use plain_hasher::H256FastMap;
 use rlp::NULL_RLP;
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
+use std::mem;
 /// Reference-counted memory-based `HashDB` implementation.
 ///
 /// Use `new()` to create a new database. Insert items with `insert()`, remove items
@@ -144,13 +144,14 @@ impl MemoryDB {
 			return None;
 		}
 		match self.data.entry(key.clone()) {
-			Entry::Occupied(mut entry) =>
+			Entry::Occupied(mut entry) => {
 				if entry.get().1 == 1 {
 					Some(entry.remove().0)
 				} else {
 					entry.get_mut().1 -= 1;
 					None
-				},
+				}
+			}
 			Entry::Vacant(entry) => {
 				entry.insert((DBValue::new(), -1));
 				None
@@ -185,17 +186,14 @@ impl HashDB for MemoryDB {
 
 		match self.data.get(key) {
 			Some(&(ref d, rc)) if rc > 0 => Some(d.clone()),
-			_ => None
+			_ => None,
 		}
 	}
 
 	fn keys(&self) -> HashMap<H256, i32> {
-		self.data.iter()
-			.filter_map(|(k, v)| if v.1 != 0 {
-				Some((*k, v.1))
-			} else {
-				None
-			})
+		self.data
+			.iter()
+			.filter_map(|(k, v)| if v.1 != 0 { Some((*k, v.1)) } else { None })
 			.collect()
 	}
 
@@ -206,7 +204,7 @@ impl HashDB for MemoryDB {
 
 		match self.data.get(key) {
 			Some(&(_, x)) if x > 0 => true,
-			_ => false
+			_ => false,
 		}
 	}
 
@@ -222,10 +220,10 @@ impl HashDB for MemoryDB {
 					*old_value = DBValue::from_slice(value);
 				}
 				*rc += 1;
-			},
+			}
 			Entry::Vacant(entry) => {
 				entry.insert((DBValue::from_slice(value), 1));
-			},
+			}
 		}
 		key
 	}
@@ -242,10 +240,10 @@ impl HashDB for MemoryDB {
 					*old_value = value;
 				}
 				*rc += 1;
-			},
+			}
 			Entry::Vacant(entry) => {
 				entry.insert((value, 1));
-			},
+			}
 		}
 	}
 
@@ -258,18 +256,18 @@ impl HashDB for MemoryDB {
 			Entry::Occupied(mut entry) => {
 				let &mut (_, ref mut rc) = entry.get_mut();
 				*rc -= 1;
-			},
+			}
 			Entry::Vacant(entry) => {
 				entry.insert((DBValue::new(), -1));
-			},
+			}
 		}
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use keccak::keccak;
 	use super::*;
+	use keccak::keccak;
 
 	#[test]
 	fn memorydb_remove_and_purge() {
@@ -308,16 +306,25 @@ mod tests {
 		main.emplace(insert_key, DBValue::from_slice(b"arf"));
 
 		let negative_remove_key = other.insert(b"negative");
-		other.remove(&negative_remove_key);	// ref cnt: 0
-		other.remove(&negative_remove_key);	// ref cnt: -1
-		main.remove(&negative_remove_key);	// ref cnt: -1
+		other.remove(&negative_remove_key); // ref cnt: 0
+		other.remove(&negative_remove_key); // ref cnt: -1
+		main.remove(&negative_remove_key); // ref cnt: -1
 
 		main.consolidate(other);
 
 		let overlay = main.drain();
 
-		assert_eq!(overlay.get(&remove_key).unwrap(), &(DBValue::from_slice(b"doggo"), 0));
-		assert_eq!(overlay.get(&insert_key).unwrap(), &(DBValue::from_slice(b"arf"), 2));
-		assert_eq!(overlay.get(&negative_remove_key).unwrap(), &(DBValue::from_slice(b"negative"), -2));
+		assert_eq!(
+			overlay.get(&remove_key).unwrap(),
+			&(DBValue::from_slice(b"doggo"), 0)
+		);
+		assert_eq!(
+			overlay.get(&insert_key).unwrap(),
+			&(DBValue::from_slice(b"arf"), 2)
+		);
+		assert_eq!(
+			overlay.get(&negative_remove_key).unwrap(),
+			&(DBValue::from_slice(b"negative"), -2)
+		);
 	}
 }

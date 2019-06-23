@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use ethereum_types::H256;
+use bytes::*;
 use elastic_array::ElasticArray36;
+use ethereum_types::H256;
+use hashdb::DBValue;
 use nibbleslice::NibbleSlice;
 use nibblevec::NibbleVec;
-use bytes::*;
-use rlp::{Rlp, RlpStream, Prototype, DecoderError};
-use hashdb::DBValue;
+use rlp::{DecoderError, Prototype, Rlp, RlpStream};
 
 /// Partial node key type.
 pub type NodeKey = ElasticArray36<u8>;
@@ -35,7 +35,7 @@ pub enum Node<'a> {
 	/// Extension node; has key slice and node data. Data may not be null.
 	Extension(NibbleSlice<'a>, &'a [u8]),
 	/// Branch node; has array of 16 child nodes (each possibly null) and an optional immediate node data.
-	Branch([&'a [u8]; 16], Option<&'a [u8]>)
+	Branch([&'a [u8]; 16], Option<&'a [u8]>),
 }
 
 impl<'a> Node<'a> {
@@ -58,12 +58,19 @@ impl<'a> Node<'a> {
 				for i in 0..16 {
 					nodes[i] = r.at(i)?.as_raw();
 				}
-				Ok(Node::Branch(nodes, if r.at(16)?.is_empty() { None } else { Some(r.at(16)?.data()?) }))
-			},
+				Ok(Node::Branch(
+					nodes,
+					if r.at(16)?.is_empty() {
+						None
+					} else {
+						Some(r.at(16)?.data()?)
+					},
+				))
+			}
 			// an empty branch index.
 			Prototype::Data(0) => Ok(Node::Empty),
 			// something went wrong.
-			_ => Err(DecoderError::Custom("Rlp is not valid."))
+			_ => Err(DecoderError::Custom("Rlp is not valid.")),
 		}
 	}
 
@@ -78,24 +85,28 @@ impl<'a> Node<'a> {
 				stream.append(&&*slice.encoded(true));
 				stream.append(value);
 				stream.out()
-			},
+			}
 			Node::Extension(ref slice, ref raw_rlp) => {
 				let mut stream = RlpStream::new_list(2);
 				stream.append(&&*slice.encoded(false));
 				stream.append_raw(raw_rlp, 1);
 				stream.out()
-			},
+			}
 			Node::Branch(ref nodes, ref value) => {
 				let mut stream = RlpStream::new_list(17);
 				for i in 0..16 {
 					stream.append_raw(nodes[i], 1);
 				}
 				match *value {
-					Some(ref n) => { stream.append(n); },
-					None => { stream.append_empty_data(); },
+					Some(ref n) => {
+						stream.append(n);
+					}
+					None => {
+						stream.append_empty_data();
+					}
 				}
 				stream.out()
-			},
+			}
 			Node::Empty => {
 				let mut stream = RlpStream::new();
 				stream.append_empty_data();
@@ -107,7 +118,10 @@ impl<'a> Node<'a> {
 	pub fn try_decode_hash(node_data: &[u8]) -> Option<H256> {
 		let r = Rlp::new(node_data);
 		if r.is_data() && r.size() == 32 {
-			Some(r.as_val().expect("Hash is the correct size of 32 bytes; qed"))
+			Some(
+				r.as_val()
+					.expect("Hash is the correct size of 32 bytes; qed"),
+			)
 		} else {
 			None
 		}
@@ -135,10 +149,22 @@ impl<'a> From<Node<'a>> for OwnedNode {
 			Node::Extension(k, child) => OwnedNode::Extension(k.into(), DBValue::from_slice(child)),
 			Node::Branch(c, val) => {
 				let children = [
-					NodeKey::from_slice(c[0]), NodeKey::from_slice(c[1]), NodeKey::from_slice(c[2]), NodeKey::from_slice(c[3]),
-					NodeKey::from_slice(c[4]), NodeKey::from_slice(c[5]), NodeKey::from_slice(c[6]), NodeKey::from_slice(c[7]),
-					NodeKey::from_slice(c[8]), NodeKey::from_slice(c[9]), NodeKey::from_slice(c[10]), NodeKey::from_slice(c[11]),
-					NodeKey::from_slice(c[12]), NodeKey::from_slice(c[13]), NodeKey::from_slice(c[14]), NodeKey::from_slice(c[15]),
+					NodeKey::from_slice(c[0]),
+					NodeKey::from_slice(c[1]),
+					NodeKey::from_slice(c[2]),
+					NodeKey::from_slice(c[3]),
+					NodeKey::from_slice(c[4]),
+					NodeKey::from_slice(c[5]),
+					NodeKey::from_slice(c[6]),
+					NodeKey::from_slice(c[7]),
+					NodeKey::from_slice(c[8]),
+					NodeKey::from_slice(c[9]),
+					NodeKey::from_slice(c[10]),
+					NodeKey::from_slice(c[11]),
+					NodeKey::from_slice(c[12]),
+					NodeKey::from_slice(c[13]),
+					NodeKey::from_slice(c[14]),
+					NodeKey::from_slice(c[15]),
 				];
 
 				OwnedNode::Branch(children, val.map(DBValue::from_slice))

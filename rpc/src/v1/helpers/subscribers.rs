@@ -16,10 +16,10 @@
 
 //! A map of subscribers.
 
-use std::{ops, str};
-use std::collections::HashMap;
-use jsonrpc_macros::pubsub::{Subscriber, Sink, SubscriptionId};
+use jsonrpc_macros::pubsub::{Sink, Subscriber, SubscriptionId};
 use rand::{Rng, StdRng};
+use std::collections::HashMap;
+use std::{ops, str};
 use v1::types::H64;
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]

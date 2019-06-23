@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::io::Read;
+use super::{Bytes, H160};
 use serde_json;
-use super::{H160, Bytes};
+use std::io::Read;
 
 pub type Encseed = Bytes;
 
@@ -28,16 +28,19 @@ pub struct PresaleWallet {
 }
 
 impl PresaleWallet {
-	pub fn load<R>(reader: R) -> Result<Self, serde_json::Error> where R: Read {
+	pub fn load<R>(reader: R) -> Result<Self, serde_json::Error>
+	where
+		R: Read,
+	{
 		serde_json::from_reader(reader)
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use std::str::FromStr;
-	use serde_json;
 	use json::{PresaleWallet, H160};
+	use serde_json;
+	use std::str::FromStr;
 
 	#[test]
 	fn presale_wallet() {

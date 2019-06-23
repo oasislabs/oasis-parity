@@ -21,9 +21,9 @@
 extern crate futures;
 extern crate futures_cpupool;
 extern crate ntp;
-extern crate time as time_crate;
 extern crate parity_reactor;
 extern crate parking_lot;
+extern crate time as time_crate;
 
 #[macro_use]
 extern crate log;
@@ -36,8 +36,8 @@ mod types;
 
 pub use futures_cpupool::CpuPool;
 pub use health::NodeHealth;
+pub use time::{Error, TimeChecker};
 pub use types::{Health, HealthInfo, HealthStatus};
-pub use time::{TimeChecker, Error};
 
 /// Indicates sync status
 pub trait SyncStatus: ::std::fmt::Debug + Send + Sync {

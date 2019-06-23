@@ -27,8 +27,7 @@ use endpoint::{Endpoint, EndpointPath, Request, Response};
 use futures::future;
 use futures_cpupool::CpuPool;
 use handlers::{
-	ContentFetcherHandler, ContentHandler, ContentValidator, ValidatorResponse,
-	StreamingHandler,
+	ContentFetcherHandler, ContentHandler, ContentValidator, StreamingHandler, ValidatorResponse,
 };
 use WebProxyTokens;
 
@@ -39,11 +38,7 @@ pub struct Web<F> {
 }
 
 impl<F: Fetch> Web<F> {
-	pub fn boxed(
-		web_proxy_tokens: Arc<WebProxyTokens>,
-		fetch: F,
-		pool: CpuPool,
-	) -> Box<Endpoint> {
+	pub fn boxed(web_proxy_tokens: Arc<WebProxyTokens>, fetch: F, pool: CpuPool) -> Box<Endpoint> {
 		Box::new(Web {
 			web_proxy_tokens,
 			fetch,
@@ -52,16 +47,22 @@ impl<F: Fetch> Web<F> {
 	}
 
 	fn extract_target_url(&self, path: &EndpointPath) -> Result<String, ContentHandler> {
-		let token_and_url = path.app_params.get(0)
+		let token_and_url = path
+			.app_params
+			.get(0)
 			.map(|encoded| encoded.replace('.', ""))
-			.and_then(|encoded| base32::decode(base32::Alphabet::Crockford, &encoded.to_uppercase()))
+			.and_then(|encoded| {
+				base32::decode(base32::Alphabet::Crockford, &encoded.to_uppercase())
+			})
 			.and_then(|data| String::from_utf8(data).ok())
-			.ok_or_else(|| ContentHandler::error(
-				StatusCode::BadRequest,
-				"Invalid parameter",
-				"Couldn't parse given parameter:",
-				path.app_params.get(0).map(String::as_str),
-			))?;
+			.ok_or_else(|| {
+				ContentHandler::error(
+					StatusCode::BadRequest,
+					"Invalid parameter",
+					"Couldn't parse given parameter:",
+					path.app_params.get(0).map(String::as_str),
+				)
+			})?;
 
 		let mut token_it = token_and_url.split('+');
 		let token = token_it.next();
@@ -72,24 +73,35 @@ impl<F: Fetch> Web<F> {
 			Some(domain) => domain,
 			_ => {
 				return Err(ContentHandler::error(
-					StatusCode::BadRequest, "Invalid Access Token", "Invalid or old web proxy access token supplied.", Some("Try refreshing the page."),
+					StatusCode::BadRequest,
+					"Invalid Access Token",
+					"Invalid or old web proxy access token supplied.",
+					Some("Try refreshing the page."),
 				));
 			}
 		};
 
 		// Validate protocol
 		let mut target_url = match target_url {
-			Some(url) if url.starts_with("http://") || url.starts_with("https://") => url.to_owned(),
+			Some(url) if url.starts_with("http://") || url.starts_with("https://") => {
+				url.to_owned()
+			}
 			_ => {
 				return Err(ContentHandler::error(
-					StatusCode::BadRequest, "Invalid Protocol", "Invalid protocol used.", None,
+					StatusCode::BadRequest,
+					"Invalid Protocol",
+					"Invalid protocol used.",
+					None,
 				));
 			}
 		};
 
 		if !target_url.starts_with(&*domain) {
 			return Err(ContentHandler::error(
-				StatusCode::BadRequest, "Invalid Domain", "Dapp attempted to access invalid domain.", Some(&target_url),
+				StatusCode::BadRequest,
+				"Invalid Domain",
+				"Dapp attempted to access invalid domain.",
+				Some(&target_url),
 			));
 		}
 
@@ -98,7 +110,10 @@ impl<F: Fetch> Web<F> {
 		}
 
 		// Skip the token
-		let query = path.query.as_ref().map_or_else(String::new, |query| format!("?{}", query));
+		let query = path
+			.query
+			.as_ref()
+			.map_or_else(String::new, |query| format!("?{}", query));
 		let path = path.app_params[1..].join("/");
 
 		Ok(format!("{}{}{}", target_url, path, query))
@@ -115,7 +130,9 @@ impl<F: Fetch> Endpoint for Web<F> {
 			}
 		};
 
-		let token = path.app_params.get(0)
+		let token = path
+			.app_params
+			.get(0)
 			.expect("`target_url` is valid; app_params is not empty;qed")
 			.to_owned();
 
@@ -123,9 +140,7 @@ impl<F: Fetch> Endpoint for Web<F> {
 			req.method(),
 			&target_url,
 			path,
-			WebInstaller {
-				token,
-			},
+			WebInstaller { token },
 			self.fetch.clone(),
 			self.pool.clone(),
 		))
@@ -143,11 +158,7 @@ impl ContentValidator for WebInstaller {
 		let status = response.status();
 		let is_html = response.is_html();
 		let mime = response.content_type().unwrap_or(mime::TEXT_HTML);
-		let mut handler = StreamingHandler::new(
-			fetch::BodyReader::new(response),
-			status,
-			mime,
-		);
+		let mut handler = StreamingHandler::new(fetch::BodyReader::new(response), status, mime);
 		if is_html {
 			handler.set_initial_content(&format!(
 				r#"<script>history.replaceState({{}}, "", "/?{}{}/{}")</script>"#,

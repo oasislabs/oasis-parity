@@ -14,12 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::HashMap;
-use ethereum_types::H256;
-use header::BlockNumber;
 use blockchain::block_info::BlockInfo;
 use blockchain::extras::{BlockDetails, BlockReceipts, TransactionAddress};
 use blooms::{BloomGroup, GroupPosition};
+use ethereum_types::H256;
+use header::BlockNumber;
+use std::collections::HashMap;
 
 /// Block extras update info.
 pub struct ExtrasUpdate<'a> {

@@ -14,12 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+use hyper::mime::Mime;
+use hyper::{self, header, StatusCode};
 use std::io;
 use std::time::{Duration, SystemTime};
-use hyper::{self, header, StatusCode};
-use hyper::mime::{Mime};
 
-use handlers::{Reader, ContentHandler, add_security_headers};
+use handlers::{add_security_headers, ContentHandler, Reader};
 
 /// Represents a file that can be sent to client.
 /// Implementation should keep track of bytes already sent internally.
@@ -31,7 +31,9 @@ pub trait DappFile {
 	fn content_type(&self) -> &Mime;
 
 	/// Convert this file into io::Read instance.
-	fn into_reader(self) -> Self::Reader where Self: Sized;
+	fn into_reader(self) -> Self::Reader
+	where
+		Self: Sized;
 }
 
 /// Defines what cache headers should be appended to returned resources.
@@ -62,17 +64,22 @@ pub struct PageHandler<T: DappFile> {
 impl<T: DappFile> PageHandler<T> {
 	pub fn into_response(self) -> (Option<Reader<T::Reader>>, hyper::Response) {
 		let file = match self.file {
-			None => return (None, ContentHandler::error(
-				StatusCode::NotFound,
-				"File not found",
-				"Requested file has not been found.",
-				None,
-			).into()),
+			None => {
+				return (
+					None,
+					ContentHandler::error(
+						StatusCode::NotFound,
+						"File not found",
+						"Requested file has not been found.",
+						None,
+					)
+					.into(),
+				)
+			}
 			Some(file) => file,
 		};
 
-		let mut res = hyper::Response::new()
-			.with_status(StatusCode::Ok);
+		let mut res = hyper::Response::new().with_status(StatusCode::Ok);
 
 		// headers
 		{
@@ -85,7 +92,9 @@ impl<T: DappFile> PageHandler<T> {
 					header::CacheDirective::Public,
 					header::CacheDirective::MaxAge(validity_secs),
 				]));
-				headers.set(header::Expires(header::HttpDate::from(SystemTime::now() + validity)));
+				headers.set(header::Expires(header::HttpDate::from(
+					SystemTime::now() + validity,
+				)));
 			}
 
 			headers.set(header::ContentType(file.content_type().to_owned()));

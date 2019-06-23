@@ -14,13 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::fs;
-use std::io::{Read, Write, Error as IoError, ErrorKind};
-use std::path::{Path, PathBuf};
-use std::fmt::{Display, Formatter, Error as FmtError};
-use super::migration_rocksdb::{self, Manager as MigrationManager, Config as MigrationConfig, ChangeColumns};
 use super::kvdb_rocksdb::CompactionProfile;
+use super::migration_rocksdb::{
+	self, ChangeColumns, Config as MigrationConfig, Manager as MigrationManager,
+};
 use ethcore::client::DatabaseCompactionProfile;
+use std::fmt::{Display, Error as FmtError, Formatter};
+use std::fs;
+use std::io::{Error as IoError, ErrorKind, Read, Write};
+use std::path::{Path, PathBuf};
 
 use super::helpers;
 
@@ -111,9 +113,10 @@ fn current_version(path: &Path) -> Result<u32, Error> {
 		Err(_) => Err(Error::UnknownDatabaseVersion),
 		Ok(mut file) => {
 			let mut s = String::new();
-			file.read_to_string(&mut s).map_err(|_| Error::UnknownDatabaseVersion)?;
+			file.read_to_string(&mut s)
+				.map_err(|_| Error::UnknownDatabaseVersion)?;
 			u32::from_str_radix(&s, 10).map_err(|_| Error::UnknownDatabaseVersion)
-		},
+		}
 	}
 }
 
@@ -150,18 +153,28 @@ pub fn default_migration_settings(compaction_profile: &CompactionProfile) -> Mig
 }
 
 /// Migrations on the consolidated database.
-fn consolidated_database_migrations(compaction_profile: &CompactionProfile) -> Result<MigrationManager, Error> {
+fn consolidated_database_migrations(
+	compaction_profile: &CompactionProfile,
+) -> Result<MigrationManager, Error> {
 	let mut manager = MigrationManager::new(default_migration_settings(compaction_profile));
-	manager.add_migration(TO_V11).map_err(|_| Error::MigrationImpossible)?;
-	manager.add_migration(TO_V12).map_err(|_| Error::MigrationImpossible)?;
+	manager
+		.add_migration(TO_V11)
+		.map_err(|_| Error::MigrationImpossible)?;
+	manager
+		.add_migration(TO_V12)
+		.map_err(|_| Error::MigrationImpossible)?;
 	Ok(manager)
 }
 
 /// Migrates database at given position with given migration rules.
-fn migrate_database(version: u32, db_path: PathBuf, mut migrations: MigrationManager) -> Result<(), Error> {
+fn migrate_database(
+	version: u32,
+	db_path: PathBuf,
+	mut migrations: MigrationManager,
+) -> Result<(), Error> {
 	// check if migration is needed
 	if !migrations.is_needed(version) {
-		return Ok(())
+		return Ok(());
 	}
 
 	let backup_path = backup_database_path(&db_path);
@@ -173,7 +186,9 @@ fn migrate_database(version: u32, db_path: PathBuf, mut migrations: MigrationMan
 
 	// completely in-place migration leads to the paths being equal.
 	// in that case, no need to shuffle directories.
-	if temp_path == db_path { return Ok(()) }
+	if temp_path == db_path {
+		return Ok(());
+	}
 
 	// create backup
 	fs::rename(&db_path, &backup_path)?;
@@ -208,13 +223,24 @@ pub fn migrate(path: &Path, compaction_profile: &DatabaseCompactionProfile) -> R
 
 	// We are in the latest version, yay!
 	if version == CURRENT_VERSION {
-		return Ok(())
+		return Ok(());
 	}
 
 	// Further migrations
-	if version >= CONSOLIDATION_VERSION && version < CURRENT_VERSION && exists(&consolidated_database_path(path)) {
-		println!("Migrating database from version {} to {}", ::std::cmp::max(CONSOLIDATION_VERSION, version), CURRENT_VERSION);
-		migrate_database(version, consolidated_database_path(path), consolidated_database_migrations(&compaction_profile)?)?;
+	if version >= CONSOLIDATION_VERSION
+		&& version < CURRENT_VERSION
+		&& exists(&consolidated_database_path(path))
+	{
+		println!(
+			"Migrating database from version {} to {}",
+			::std::cmp::max(CONSOLIDATION_VERSION, version),
+			CURRENT_VERSION
+		);
+		migrate_database(
+			version,
+			consolidated_database_path(path),
+			consolidated_database_migrations(&compaction_profile)?,
+		)?;
 		println!("Migration finished");
 	}
 

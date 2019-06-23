@@ -23,7 +23,7 @@ use v1::types::U256;
 #[serde(deny_unknown_fields)]
 pub struct Histogram {
 	/// Gas prices for bucket edges.
-	#[serde(rename="bucketBounds")]
+	#[serde(rename = "bucketBounds")]
 	pub bucket_bounds: Vec<U256>,
 	/// Transacion counts for each bucket.
 	pub counts: Vec<usize>,
@@ -33,7 +33,7 @@ impl From<::stats::Histogram<::ethereum_types::U256>> for Histogram {
 	fn from(h: ::stats::Histogram<::ethereum_types::U256>) -> Self {
 		Histogram {
 			bucket_bounds: h.bucket_bounds.into_iter().map(Into::into).collect(),
-			counts: h.counts
+			counts: h.counts,
 		}
 	}
 }

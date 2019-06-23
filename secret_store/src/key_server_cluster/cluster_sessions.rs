@@ -14,30 +14,36 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::time::{Duration, Instant};
-use std::sync::{Arc, Weak};
-use std::sync::atomic::AtomicBool;
-use std::collections::{VecDeque, BTreeMap, BTreeSet};
-use parking_lot::{Mutex, RwLock, Condvar};
 use ethereum_types::H256;
 use ethkey::Secret;
-use key_server_cluster::{Error, NodeId, SessionId, Requester};
-use key_server_cluster::cluster::{Cluster, ClusterData, ClusterConfiguration, ClusterView};
+use key_server_cluster::cluster::{Cluster, ClusterConfiguration, ClusterData, ClusterView};
 use key_server_cluster::connection_trigger::ServersSetChangeSessionCreatorConnector;
+use key_server_cluster::decryption_session::SessionImpl as DecryptionSessionImpl;
+use key_server_cluster::encryption_session::SessionImpl as EncryptionSessionImpl;
+use key_server_cluster::generation_session::SessionImpl as GenerationSessionImpl;
+use key_server_cluster::key_version_negotiation_session::{
+	IsolatedSessionTransport as VersionNegotiationTransport,
+	SessionImpl as KeyVersionNegotiationSessionImpl,
+};
 use key_server_cluster::message::{self, Message};
-use key_server_cluster::generation_session::{SessionImpl as GenerationSessionImpl};
-use key_server_cluster::decryption_session::{SessionImpl as DecryptionSessionImpl};
-use key_server_cluster::encryption_session::{SessionImpl as EncryptionSessionImpl};
-use key_server_cluster::signing_session_ecdsa::{SessionImpl as EcdsaSigningSessionImpl};
-use key_server_cluster::signing_session_schnorr::{SessionImpl as SchnorrSigningSessionImpl};
-use key_server_cluster::share_add_session::{SessionImpl as ShareAddSessionImpl, IsolatedSessionTransport as ShareAddTransport};
-use key_server_cluster::servers_set_change_session::{SessionImpl as ServersSetChangeSessionImpl};
-use key_server_cluster::key_version_negotiation_session::{SessionImpl as KeyVersionNegotiationSessionImpl,
-	IsolatedSessionTransport as VersionNegotiationTransport};
+use key_server_cluster::servers_set_change_session::SessionImpl as ServersSetChangeSessionImpl;
+use key_server_cluster::share_add_session::{
+	IsolatedSessionTransport as ShareAddTransport, SessionImpl as ShareAddSessionImpl,
+};
+use key_server_cluster::signing_session_ecdsa::SessionImpl as EcdsaSigningSessionImpl;
+use key_server_cluster::signing_session_schnorr::SessionImpl as SchnorrSigningSessionImpl;
+use key_server_cluster::{Error, NodeId, Requester, SessionId};
+use parking_lot::{Condvar, Mutex, RwLock};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Weak};
+use std::time::{Duration, Instant};
 
-use key_server_cluster::cluster_sessions_creator::{GenerationSessionCreator, EncryptionSessionCreator, DecryptionSessionCreator,
-	SchnorrSigningSessionCreator, KeyVersionNegotiationSessionCreator, AdminSessionCreator, SessionCreatorCore,
-	EcdsaSigningSessionCreator, ClusterSessionCreator};
+use key_server_cluster::cluster_sessions_creator::{
+	AdminSessionCreator, ClusterSessionCreator, DecryptionSessionCreator,
+	EcdsaSigningSessionCreator, EncryptionSessionCreator, GenerationSessionCreator,
+	KeyVersionNegotiationSessionCreator, SchnorrSigningSessionCreator, SessionCreatorCore,
+};
 
 /// When there are no session-related messages for SESSION_TIMEOUT_INTERVAL seconds,
 /// we must treat this session as stalled && finish it with an error.
@@ -84,7 +90,12 @@ pub trait ClusterSession {
 	fn on_message(&self, sender: &NodeId, message: &Message) -> Result<(), Error>;
 
 	/// 'Wait for session completion' helper.
-	fn wait_session<T, U, F: Fn(&U) -> Option<Result<T, Error>>>(completion_event: &Condvar, session_data: &Mutex<U>, timeout: Option<Duration>, result_reader: F) -> Option<Result<T, Error>> {
+	fn wait_session<T, U, F: Fn(&U) -> Option<Result<T, Error>>>(
+		completion_event: &Condvar,
+		session_data: &Mutex<U>,
+		timeout: Option<Duration>,
+		result_reader: F,
+	) -> Option<Result<T, Error>> {
 		let mut locked_data = session_data.lock();
 		match result_reader(&locked_data) {
 			Some(result) => Some(result),
@@ -93,11 +104,11 @@ pub trait ClusterSession {
 					None => completion_event.wait(&mut locked_data),
 					Some(timeout) => {
 						completion_event.wait_for(&mut locked_data, timeout);
-					},
+					}
 				}
 
 				result_reader(&locked_data)
-			},
+			}
 		}
 	}
 }
@@ -121,19 +132,32 @@ pub enum AdminSessionCreationData {
 /// Active sessions on this cluster.
 pub struct ClusterSessions {
 	/// Key generation sessions.
-	pub generation_sessions: ClusterSessionsContainer<GenerationSessionImpl, GenerationSessionCreator, ()>,
+	pub generation_sessions:
+		ClusterSessionsContainer<GenerationSessionImpl, GenerationSessionCreator, ()>,
 	/// Encryption sessions.
-	pub encryption_sessions: ClusterSessionsContainer<EncryptionSessionImpl, EncryptionSessionCreator, ()>,
+	pub encryption_sessions:
+		ClusterSessionsContainer<EncryptionSessionImpl, EncryptionSessionCreator, ()>,
 	/// Decryption sessions.
-	pub decryption_sessions: ClusterSessionsContainer<DecryptionSessionImpl, DecryptionSessionCreator, Requester>,
+	pub decryption_sessions:
+		ClusterSessionsContainer<DecryptionSessionImpl, DecryptionSessionCreator, Requester>,
 	/// Schnorr signing sessions.
-	pub schnorr_signing_sessions: ClusterSessionsContainer<SchnorrSigningSessionImpl, SchnorrSigningSessionCreator, Requester>,
+	pub schnorr_signing_sessions: ClusterSessionsContainer<
+		SchnorrSigningSessionImpl,
+		SchnorrSigningSessionCreator,
+		Requester,
+	>,
 	/// ECDSA signing sessions.
-	pub ecdsa_signing_sessions: ClusterSessionsContainer<EcdsaSigningSessionImpl, EcdsaSigningSessionCreator, Requester>,
+	pub ecdsa_signing_sessions:
+		ClusterSessionsContainer<EcdsaSigningSessionImpl, EcdsaSigningSessionCreator, Requester>,
 	/// Key version negotiation sessions.
-	pub negotiation_sessions: ClusterSessionsContainer<KeyVersionNegotiationSessionImpl<VersionNegotiationTransport>, KeyVersionNegotiationSessionCreator, ()>,
+	pub negotiation_sessions: ClusterSessionsContainer<
+		KeyVersionNegotiationSessionImpl<VersionNegotiationTransport>,
+		KeyVersionNegotiationSessionCreator,
+		(),
+	>,
 	/// Administrative sessions.
-	pub admin_sessions: ClusterSessionsContainer<AdminSession, AdminSessionCreator, AdminSessionCreationData>,
+	pub admin_sessions:
+		ClusterSessionsContainer<AdminSession, AdminSessionCreator, AdminSessionCreationData>,
 	/// Self node id.
 	self_node_id: NodeId,
 	/// Creator core.
@@ -191,47 +215,75 @@ pub enum ClusterSessionsContainerState {
 
 impl ClusterSessions {
 	/// Create new cluster sessions container.
-	pub fn new(config: &ClusterConfiguration, servers_set_change_session_creator_connector: Arc<ServersSetChangeSessionCreatorConnector>) -> Self {
+	pub fn new(
+		config: &ClusterConfiguration,
+		servers_set_change_session_creator_connector: Arc<ServersSetChangeSessionCreatorConnector>,
+	) -> Self {
 		let container_state = Arc::new(Mutex::new(ClusterSessionsContainerState::Idle));
 		let creator_core = Arc::new(SessionCreatorCore::new(config));
 		ClusterSessions {
 			self_node_id: config.self_key_pair.public().clone(),
-			generation_sessions: ClusterSessionsContainer::new(GenerationSessionCreator {
-				core: creator_core.clone(),
-				make_faulty_generation_sessions: AtomicBool::new(false),
-			}, container_state.clone()),
-			encryption_sessions: ClusterSessionsContainer::new(EncryptionSessionCreator {
-				core: creator_core.clone(),
-			}, container_state.clone()),
-			decryption_sessions: ClusterSessionsContainer::new(DecryptionSessionCreator {
-				core: creator_core.clone(),
-			}, container_state.clone()),
-			schnorr_signing_sessions: ClusterSessionsContainer::new(SchnorrSigningSessionCreator {
-				core: creator_core.clone(),
-			}, container_state.clone()),
-			ecdsa_signing_sessions: ClusterSessionsContainer::new(EcdsaSigningSessionCreator {
-				core: creator_core.clone(),
-			}, container_state.clone()),
-			negotiation_sessions: ClusterSessionsContainer::new(KeyVersionNegotiationSessionCreator {
-				core: creator_core.clone(),
-			}, container_state.clone()),
-			admin_sessions: ClusterSessionsContainer::new(AdminSessionCreator {
-				core: creator_core.clone(),
-				servers_set_change_session_creator_connector: servers_set_change_session_creator_connector,
-				admin_public: config.admin_public.clone(),
-			}, container_state),
+			generation_sessions: ClusterSessionsContainer::new(
+				GenerationSessionCreator {
+					core: creator_core.clone(),
+					make_faulty_generation_sessions: AtomicBool::new(false),
+				},
+				container_state.clone(),
+			),
+			encryption_sessions: ClusterSessionsContainer::new(
+				EncryptionSessionCreator {
+					core: creator_core.clone(),
+				},
+				container_state.clone(),
+			),
+			decryption_sessions: ClusterSessionsContainer::new(
+				DecryptionSessionCreator {
+					core: creator_core.clone(),
+				},
+				container_state.clone(),
+			),
+			schnorr_signing_sessions: ClusterSessionsContainer::new(
+				SchnorrSigningSessionCreator {
+					core: creator_core.clone(),
+				},
+				container_state.clone(),
+			),
+			ecdsa_signing_sessions: ClusterSessionsContainer::new(
+				EcdsaSigningSessionCreator {
+					core: creator_core.clone(),
+				},
+				container_state.clone(),
+			),
+			negotiation_sessions: ClusterSessionsContainer::new(
+				KeyVersionNegotiationSessionCreator {
+					core: creator_core.clone(),
+				},
+				container_state.clone(),
+			),
+			admin_sessions: ClusterSessionsContainer::new(
+				AdminSessionCreator {
+					core: creator_core.clone(),
+					servers_set_change_session_creator_connector:
+						servers_set_change_session_creator_connector,
+					admin_public: config.admin_public.clone(),
+				},
+				container_state,
+			),
 			creator_core: creator_core,
 		}
 	}
 
 	#[cfg(test)]
 	pub fn make_faulty_generation_sessions(&self) {
-		self.generation_sessions.creator.make_faulty_generation_sessions();
+		self.generation_sessions
+			.creator
+			.make_faulty_generation_sessions();
 	}
 
 	/// Send session-level keep-alive messages.
 	pub fn sessions_keep_alive(&self) {
-		self.admin_sessions.send_keep_alive(&*SERVERS_SET_CHANGE_SESSION_ID, &self.self_node_id);
+		self.admin_sessions
+			.send_keep_alive(&*SERVERS_SET_CHANGE_SESSION_ID, &self.self_node_id);
 	}
 
 	/// When session-level keep-alive response is received.
@@ -265,7 +317,11 @@ impl ClusterSessions {
 	}
 }
 
-impl<S, SC, D> ClusterSessionsContainer<S, SC, D> where S: ClusterSession, SC: ClusterSessionCreator<S, D> {
+impl<S, SC, D> ClusterSessionsContainer<S, SC, D>
+where
+	S: ClusterSession,
+	SC: ClusterSessionCreator<S, D>,
+{
 	pub fn new(creator: SC, container_state: Arc<Mutex<ClusterSessionsContainerState>>) -> Self {
 		ClusterSessionsContainer {
 			creator: creator,
@@ -287,21 +343,32 @@ impl<S, SC, D> ClusterSessionsContainer<S, SC, D> where S: ClusterSession, SC: C
 
 	pub fn get(&self, session_id: &S::Id, update_last_message_time: bool) -> Option<Arc<S>> {
 		let mut sessions = self.sessions.write();
-		sessions.get_mut(session_id)
-			.map(|s| {
-				if update_last_message_time {
-					s.last_message_time = Instant::now();
-				}
-				s.session.clone()
-			})
+		sessions.get_mut(session_id).map(|s| {
+			if update_last_message_time {
+				s.last_message_time = Instant::now();
+			}
+			s.session.clone()
+		})
 	}
 
 	#[cfg(test)]
 	pub fn first(&self) -> Option<Arc<S>> {
-		self.sessions.read().values().nth(0).map(|s| s.session.clone())
+		self.sessions
+			.read()
+			.values()
+			.nth(0)
+			.map(|s| s.session.clone())
 	}
 
-	pub fn insert(&self, cluster: Arc<Cluster>, master: NodeId, session_id: S::Id, session_nonce: Option<u64>, is_exclusive_session: bool, creation_data: Option<D>) -> Result<Arc<S>, Error> {
+	pub fn insert(
+		&self,
+		cluster: Arc<Cluster>,
+		master: NodeId,
+		session_id: S::Id,
+		session_nonce: Option<u64>,
+		is_exclusive_session: bool,
+		creation_data: Option<D>,
+	) -> Result<Arc<S>, Error> {
 		let mut sessions = self.sessions.write();
 		if sessions.contains_key(&session_id) {
 			return Err(Error::DuplicateSessionId);
@@ -310,9 +377,17 @@ impl<S, SC, D> ClusterSessionsContainer<S, SC, D> where S: ClusterSession, SC: C
 		// create cluster
 		// let cluster = create_cluster_view(data, requires_all_connections)?;
 		// create session
-		let session = self.creator.create(cluster.clone(), master.clone(), session_nonce, session_id.clone(), creation_data)?;
+		let session = self.creator.create(
+			cluster.clone(),
+			master.clone(),
+			session_nonce,
+			session_id.clone(),
+			creation_data,
+		)?;
 		// check if session can be started
-		self.container_state.lock().on_session_starting(is_exclusive_session)?;
+		self.container_state
+			.lock()
+			.on_session_starting(is_exclusive_session)?;
 
 		// insert session
 		let queued_session = QueuedSession {
@@ -336,14 +411,26 @@ impl<S, SC, D> ClusterSessionsContainer<S, SC, D> where S: ClusterSession, SC: C
 		}
 	}
 
-	pub fn enqueue_message(&self, session_id: &S::Id, sender: NodeId, message: Message, is_queued_message: bool) {
-		self.sessions.write().get_mut(session_id)
-			.map(|session| if is_queued_message { session.queue.push_front((sender, message)) }
-				else { session.queue.push_back((sender, message)) });
+	pub fn enqueue_message(
+		&self,
+		session_id: &S::Id,
+		sender: NodeId,
+		message: Message,
+		is_queued_message: bool,
+	) {
+		self.sessions.write().get_mut(session_id).map(|session| {
+			if is_queued_message {
+				session.queue.push_front((sender, message))
+			} else {
+				session.queue.push_back((sender, message))
+			}
+		});
 	}
 
 	pub fn dequeue_message(&self, session_id: &S::Id) -> Option<(NodeId, Message)> {
-		self.sessions.write().get_mut(session_id)
+		self.sessions
+			.write()
+			.get_mut(session_id)
 			.and_then(|session| session.queue.pop_front())
 	}
 
@@ -351,7 +438,9 @@ impl<S, SC, D> ClusterSessionsContainer<S, SC, D> where S: ClusterSession, SC: C
 		let mut sessions = self.sessions.write();
 		for sid in sessions.keys().cloned().collect::<Vec<_>>() {
 			let remove_session = {
-				let session = sessions.get(&sid).expect("enumerating only existing sessions; qed");
+				let session = sessions
+					.get(&sid)
+					.expect("enumerating only existing sessions; qed");
 				if Instant::now() - session.last_message_time > SESSION_TIMEOUT_INTERVAL {
 					session.session.on_session_timeout();
 					session.session.is_finished()
@@ -370,7 +459,9 @@ impl<S, SC, D> ClusterSessionsContainer<S, SC, D> where S: ClusterSession, SC: C
 		let mut sessions = self.sessions.write();
 		for sid in sessions.keys().cloned().collect::<Vec<_>>() {
 			let remove_session = {
-				let session = sessions.get(&sid).expect("enumerating only existing sessions; qed");
+				let session = sessions
+					.get(&sid)
+					.expect("enumerating only existing sessions; qed");
 				session.session.on_node_timeout(node_id);
 				session.session.is_finished()
 			};
@@ -388,27 +479,36 @@ impl<S, SC, D> ClusterSessionsContainer<S, SC, D> where S: ClusterSession, SC: C
 				Some(listener) => {
 					callback(&*listener);
 					listener_index += 1;
-				},
+				}
 				None => {
 					listeners.swap_remove(listener_index);
-				},
+				}
 			}
 		}
 	}
 }
 
-impl<S, SC, D> ClusterSessionsContainer<S, SC, D> where S: ClusterSession, SC: ClusterSessionCreator<S, D>, SessionId: From<S::Id> {
+impl<S, SC, D> ClusterSessionsContainer<S, SC, D>
+where
+	S: ClusterSession,
+	SC: ClusterSessionCreator<S, D>,
+	SessionId: From<S::Id>,
+{
 	pub fn send_keep_alive(&self, session_id: &S::Id, self_node_id: &NodeId) {
 		if let Some(session) = self.sessions.write().get_mut(session_id) {
 			let now = Instant::now();
-			if self_node_id == &session.master && now - session.last_keep_alive_time > SESSION_KEEP_ALIVE_INTERVAL {
+			if self_node_id == &session.master
+				&& now - session.last_keep_alive_time > SESSION_KEEP_ALIVE_INTERVAL
+			{
 				session.last_keep_alive_time = now;
 				// since we send KeepAlive message to prevent nodes from disconnecting
 				// && worst thing that can happen if node is disconnected is that session is failed
 				// => ignore error here, because probably this node is not need for the rest of the session at all
-				let _ = session.cluster_view.broadcast(Message::Cluster(message::ClusterMessage::KeepAliveResponse(message::KeepAliveResponse {
-					session_id: Some(session_id.clone().into()),
-				})));
+				let _ = session.cluster_view.broadcast(Message::Cluster(
+					message::ClusterMessage::KeepAliveResponse(message::KeepAliveResponse {
+						session_id: Some(session_id.clone().into()),
+					}),
+				));
 			}
 		}
 	}
@@ -430,17 +530,20 @@ impl ClusterSessionsContainerState {
 		match *self {
 			ClusterSessionsContainerState::Idle if is_exclusive_session => {
 				::std::mem::replace(self, ClusterSessionsContainerState::Exclusive);
-			},
+			}
 			ClusterSessionsContainerState::Idle => {
 				::std::mem::replace(self, ClusterSessionsContainerState::Active(1));
-			},
-			ClusterSessionsContainerState::Active(_) if is_exclusive_session =>
-				return Err(Error::HasActiveSessions),
+			}
+			ClusterSessionsContainerState::Active(_) if is_exclusive_session => {
+				return Err(Error::HasActiveSessions)
+			}
 			ClusterSessionsContainerState::Active(sessions_count) => {
-				::std::mem::replace(self, ClusterSessionsContainerState::Active(sessions_count + 1));
-			},
-			ClusterSessionsContainerState::Exclusive =>
-				return Err(Error::ExclusiveSessionActive),
+				::std::mem::replace(
+					self,
+					ClusterSessionsContainerState::Active(sessions_count + 1),
+				);
+			}
+			ClusterSessionsContainerState::Exclusive => return Err(Error::ExclusiveSessionActive),
 		}
 		Ok(())
 	}
@@ -492,7 +595,7 @@ impl AdminSession {
 	pub fn as_servers_set_change(&self) -> Option<&ServersSetChangeSessionImpl> {
 		match *self {
 			AdminSession::ServersSetChange(ref session) => Some(session),
-			_ => None
+			_ => None,
 		}
 	}
 }
@@ -546,7 +649,10 @@ impl ClusterSession for AdminSession {
 		}
 	}
 }
-pub fn create_cluster_view(data: &Arc<ClusterData>, requires_all_connections: bool) -> Result<Arc<Cluster>, Error> {
+pub fn create_cluster_view(
+	data: &Arc<ClusterData>,
+	requires_all_connections: bool,
+) -> Result<Arc<Cluster>, Error> {
 	let disconnected_nodes_count = data.connections.disconnected_nodes().len();
 	if requires_all_connections {
 		if disconnected_nodes_count != 0 {
@@ -558,20 +664,26 @@ pub fn create_cluster_view(data: &Arc<ClusterData>, requires_all_connections: bo
 	connected_nodes.insert(data.self_key_pair.public().clone());
 
 	let connected_nodes_count = connected_nodes.len();
-	Ok(Arc::new(ClusterView::new(data.clone(), connected_nodes, connected_nodes_count + disconnected_nodes_count)))
+	Ok(Arc::new(ClusterView::new(
+		data.clone(),
+		connected_nodes,
+		connected_nodes_count + disconnected_nodes_count,
+	)))
 }
 
 #[cfg(test)]
 mod tests {
-	use std::sync::Arc;
-	use std::sync::atomic::{AtomicUsize, Ordering};
-	use ethkey::{Random, Generator};
-	use key_server_cluster::{Error, DummyAclStorage, DummyKeyStorage, MapKeyServerSet, PlainNodeKeyPair};
+	use super::{AdminSessionCreationData, ClusterSessions, ClusterSessionsListener};
+	use ethkey::{Generator, Random};
+	use key_server_cluster::cluster::tests::DummyCluster;
 	use key_server_cluster::cluster::ClusterConfiguration;
 	use key_server_cluster::connection_trigger::SimpleServersSetChangeSessionCreatorConnector;
-	use key_server_cluster::cluster::tests::DummyCluster;
-	use key_server_cluster::generation_session::{SessionImpl as GenerationSession};
-	use super::{ClusterSessions, AdminSessionCreationData, ClusterSessionsListener};
+	use key_server_cluster::generation_session::SessionImpl as GenerationSession;
+	use key_server_cluster::{
+		DummyAclStorage, DummyKeyStorage, Error, MapKeyServerSet, PlainNodeKeyPair,
+	};
+	use std::sync::atomic::{AtomicUsize, Ordering};
+	use std::sync::Arc;
 
 	pub fn make_cluster_sessions() -> ClusterSessions {
 		let key_pair = Random.generate().unwrap();
@@ -579,23 +691,50 @@ mod tests {
 			threads: 1,
 			self_key_pair: Arc::new(PlainNodeKeyPair::new(key_pair.clone())),
 			listen_address: ("127.0.0.1".to_owned(), 100_u16),
-			key_server_set: Arc::new(MapKeyServerSet::new(vec![(key_pair.public().clone(), format!("127.0.0.1:{}", 100).parse().unwrap())].into_iter().collect())),
+			key_server_set: Arc::new(MapKeyServerSet::new(
+				vec![(
+					key_pair.public().clone(),
+					format!("127.0.0.1:{}", 100).parse().unwrap(),
+				)]
+				.into_iter()
+				.collect(),
+			)),
 			allow_connecting_to_higher_nodes: false,
 			key_storage: Arc::new(DummyKeyStorage::default()),
 			acl_storage: Arc::new(DummyAclStorage::default()),
 			admin_public: Some(Random.generate().unwrap().public().clone()),
 			auto_migrate_enabled: false,
 		};
-		ClusterSessions::new(&config, Arc::new(SimpleServersSetChangeSessionCreatorConnector {
-			admin_public: Some(Random.generate().unwrap().public().clone()),
-		}))
+		ClusterSessions::new(
+			&config,
+			Arc::new(SimpleServersSetChangeSessionCreatorConnector {
+				admin_public: Some(Random.generate().unwrap().public().clone()),
+			}),
+		)
 	}
 
 	#[test]
 	fn cluster_session_cannot_be_started_if_exclusive_session_is_active() {
 		let sessions = make_cluster_sessions();
-		sessions.generation_sessions.insert(Arc::new(DummyCluster::new(Default::default())), Default::default(), Default::default(), None, false, None).unwrap();
-		match sessions.admin_sessions.insert(Arc::new(DummyCluster::new(Default::default())), Default::default(), Default::default(), None, true, Some(AdminSessionCreationData::ShareAdd(Default::default()))) {
+		sessions
+			.generation_sessions
+			.insert(
+				Arc::new(DummyCluster::new(Default::default())),
+				Default::default(),
+				Default::default(),
+				None,
+				false,
+				None,
+			)
+			.unwrap();
+		match sessions.admin_sessions.insert(
+			Arc::new(DummyCluster::new(Default::default())),
+			Default::default(),
+			Default::default(),
+			None,
+			true,
+			Some(AdminSessionCreationData::ShareAdd(Default::default())),
+		) {
 			Err(Error::HasActiveSessions) => (),
 			Err(e) => unreachable!(format!("{}", e)),
 			Ok(_) => unreachable!("OK"),
@@ -606,8 +745,25 @@ mod tests {
 	fn exclusive_session_cannot_be_started_if_other_session_is_active() {
 		let sessions = make_cluster_sessions();
 
-		sessions.admin_sessions.insert(Arc::new(DummyCluster::new(Default::default())), Default::default(), Default::default(), None, true, Some(AdminSessionCreationData::ShareAdd(Default::default()))).unwrap();
-		match sessions.generation_sessions.insert(Arc::new(DummyCluster::new(Default::default())), Default::default(), Default::default(), None, false, None) {
+		sessions
+			.admin_sessions
+			.insert(
+				Arc::new(DummyCluster::new(Default::default())),
+				Default::default(),
+				Default::default(),
+				None,
+				true,
+				Some(AdminSessionCreationData::ShareAdd(Default::default())),
+			)
+			.unwrap();
+		match sessions.generation_sessions.insert(
+			Arc::new(DummyCluster::new(Default::default())),
+			Default::default(),
+			Default::default(),
+			None,
+			false,
+			None,
+		) {
 			Err(Error::ExclusiveSessionActive) => (),
 			Err(e) => unreachable!(format!("{}", e)),
 			Ok(_) => unreachable!("OK"),
@@ -636,7 +792,17 @@ mod tests {
 		let sessions = make_cluster_sessions();
 		sessions.generation_sessions.add_listener(listener.clone());
 
-		sessions.generation_sessions.insert(Arc::new(DummyCluster::new(Default::default())), Default::default(), Default::default(), None, false, None).unwrap();
+		sessions
+			.generation_sessions
+			.insert(
+				Arc::new(DummyCluster::new(Default::default())),
+				Default::default(),
+				Default::default(),
+				None,
+				false,
+				None,
+			)
+			.unwrap();
 		assert_eq!(listener.inserted.load(Ordering::Relaxed), 1);
 		assert_eq!(listener.removed.load(Ordering::Relaxed), 0);
 

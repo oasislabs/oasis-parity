@@ -14,12 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::{BTreeSet, BTreeMap};
-use ethkey::{Public, Signature, recover};
-use tiny_keccak::Keccak;
+use ethkey::{recover, Public, Signature};
+use key_server_cluster::jobs::job_session::{
+	JobExecutor, JobPartialRequestAction, JobPartialResponseAction,
+};
+use key_server_cluster::message::{
+	InitializeConsensusSessionOfShareAdd, InitializeConsensusSessionWithServersSet,
+};
 use key_server_cluster::{Error, NodeId, SessionId};
-use key_server_cluster::message::{InitializeConsensusSessionWithServersSet, InitializeConsensusSessionOfShareAdd};
-use key_server_cluster::jobs::job_session::{JobPartialResponseAction, JobPartialRequestAction, JobExecutor};
+use std::collections::{BTreeMap, BTreeSet};
+use tiny_keccak::Keccak;
 
 /// Purpose of this job is to check if requestor is administrator of SecretStore (i.e. it have access to change key servers set).
 pub struct ServersSetChangeAccessJob {
@@ -50,8 +54,18 @@ pub struct ServersSetChangeAccessRequest {
 impl<'a> From<&'a InitializeConsensusSessionWithServersSet> for ServersSetChangeAccessRequest {
 	fn from(message: &InitializeConsensusSessionWithServersSet) -> Self {
 		ServersSetChangeAccessRequest {
-			old_servers_set: message.old_nodes_set.iter().cloned().map(Into::into).collect(),
-			new_servers_set: message.new_nodes_set.iter().cloned().map(Into::into).collect(),
+			old_servers_set: message
+				.old_nodes_set
+				.iter()
+				.cloned()
+				.map(Into::into)
+				.collect(),
+			new_servers_set: message
+				.new_nodes_set
+				.iter()
+				.cloned()
+				.map(Into::into)
+				.collect(),
 			old_set_signature: message.old_set_signature.clone().into(),
 			new_set_signature: message.new_set_signature.clone().into(),
 		}
@@ -61,8 +75,18 @@ impl<'a> From<&'a InitializeConsensusSessionWithServersSet> for ServersSetChange
 impl<'a> From<&'a InitializeConsensusSessionOfShareAdd> for ServersSetChangeAccessRequest {
 	fn from(message: &InitializeConsensusSessionOfShareAdd) -> Self {
 		ServersSetChangeAccessRequest {
-			old_servers_set: message.old_nodes_set.iter().cloned().map(Into::into).collect(),
-			new_servers_set: message.new_nodes_map.keys().cloned().map(Into::into).collect(),
+			old_servers_set: message
+				.old_nodes_set
+				.iter()
+				.cloned()
+				.map(Into::into)
+				.collect(),
+			new_servers_set: message
+				.new_nodes_map
+				.keys()
+				.cloned()
+				.map(Into::into)
+				.collect(),
 			old_set_signature: message.old_set_signature.clone().into(),
 			new_set_signature: message.new_set_signature.clone().into(),
 		}
@@ -80,7 +104,13 @@ impl ServersSetChangeAccessJob {
 		}
 	}
 
-	pub fn new_on_master(administrator: Public, old_servers_set: BTreeSet<NodeId>, new_servers_set: BTreeSet<NodeId>, old_set_signature: Signature, new_set_signature: Signature) -> Self {
+	pub fn new_on_master(
+		administrator: Public,
+		old_servers_set: BTreeSet<NodeId>,
+		new_servers_set: BTreeSet<NodeId>,
+		old_set_signature: Signature,
+		new_set_signature: Signature,
+	) -> Self {
 		ServersSetChangeAccessJob {
 			administrator: administrator,
 			old_servers_set: Some(old_servers_set),
@@ -100,7 +130,11 @@ impl JobExecutor for ServersSetChangeAccessJob {
 	type PartialJobResponse = bool;
 	type JobResponse = BTreeSet<NodeId>;
 
-	fn prepare_partial_request(&self, _node: &NodeId, _nodes: &BTreeSet<NodeId>) -> Result<ServersSetChangeAccessRequest, Error> {
+	fn prepare_partial_request(
+		&self,
+		_node: &NodeId,
+		_nodes: &BTreeSet<NodeId>,
+	) -> Result<ServersSetChangeAccessRequest, Error> {
 		let explanation = "prepare_partial_request is only called on master nodes; this field is filled on master nodes in constructor; qed";
 		Ok(ServersSetChangeAccessRequest {
 			old_servers_set: self.old_servers_set.clone().expect(explanation),
@@ -110,7 +144,10 @@ impl JobExecutor for ServersSetChangeAccessJob {
 		})
 	}
 
-	fn process_partial_request(&mut self, partial_request: ServersSetChangeAccessRequest) -> Result<JobPartialRequestAction<bool>, Error> {
+	fn process_partial_request(
+		&mut self,
+		partial_request: ServersSetChangeAccessRequest,
+	) -> Result<JobPartialRequestAction<bool>, Error> {
 		let ServersSetChangeAccessRequest {
 			old_servers_set,
 			new_servers_set,
@@ -119,19 +156,41 @@ impl JobExecutor for ServersSetChangeAccessJob {
 		} = partial_request;
 
 		// check old servers set signature
-		let old_actual_public = recover(&old_set_signature, &ordered_nodes_hash(&old_servers_set).into())?;
-		let new_actual_public = recover(&new_set_signature, &ordered_nodes_hash(&new_servers_set).into())?;
-		let is_administrator = old_actual_public == self.administrator && new_actual_public == self.administrator;
+		let old_actual_public = recover(
+			&old_set_signature,
+			&ordered_nodes_hash(&old_servers_set).into(),
+		)?;
+		let new_actual_public = recover(
+			&new_set_signature,
+			&ordered_nodes_hash(&new_servers_set).into(),
+		)?;
+		let is_administrator =
+			old_actual_public == self.administrator && new_actual_public == self.administrator;
 		self.new_servers_set = Some(new_servers_set);
 
-		Ok(if is_administrator { JobPartialRequestAction::Respond(true) } else { JobPartialRequestAction::Reject(false) })
+		Ok(if is_administrator {
+			JobPartialRequestAction::Respond(true)
+		} else {
+			JobPartialRequestAction::Reject(false)
+		})
 	}
 
-	fn check_partial_response(&mut self, _sender: &NodeId, partial_response: &bool) -> Result<JobPartialResponseAction, Error> {
-		Ok(if *partial_response { JobPartialResponseAction::Accept } else { JobPartialResponseAction::Reject })
+	fn check_partial_response(
+		&mut self,
+		_sender: &NodeId,
+		partial_response: &bool,
+	) -> Result<JobPartialResponseAction, Error> {
+		Ok(if *partial_response {
+			JobPartialResponseAction::Accept
+		} else {
+			JobPartialResponseAction::Reject
+		})
 	}
 
-	fn compute_response(&self, partial_responses: &BTreeMap<NodeId, bool>) -> Result<BTreeSet<NodeId>, Error> {
+	fn compute_response(
+		&self,
+		partial_responses: &BTreeMap<NodeId, bool>,
+	) -> Result<BTreeSet<NodeId>, Error> {
 		Ok(partial_responses.keys().cloned().collect())
 	}
 }

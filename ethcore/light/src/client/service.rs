@@ -30,7 +30,7 @@ use kvdb::KeyValueDB;
 use cache::Cache;
 use parking_lot::Mutex;
 
-use super::{ChainDataFetcher, LightChainNotify, Client, Config as ClientConfig};
+use super::{ChainDataFetcher, Client, Config as ClientConfig, LightChainNotify};
 
 /// Errors on service initialization.
 #[derive(Debug)]
@@ -65,10 +65,16 @@ pub struct Service<T> {
 
 impl<T: ChainDataFetcher> Service<T> {
 	/// Start the service: initialize I/O workers and client itself.
-	pub fn start(config: ClientConfig, spec: &Spec, fetcher: T, db: Arc<KeyValueDB>, cache: Arc<Mutex<Cache>>) -> Result<Self, Error> {
-
+	pub fn start(
+		config: ClientConfig,
+		spec: &Spec,
+		fetcher: T,
+		db: Arc<KeyValueDB>,
+		cache: Arc<Mutex<Cache>>,
+	) -> Result<Self, Error> {
 		let io_service = IoService::<ClientIoMessage>::start().map_err(Error::Io)?;
-		let client = Arc::new(Client::new(config,
+		let client = Arc::new(Client::new(
+			config,
 			db,
 			db::COL_LIGHT_CHAIN,
 			spec,
@@ -77,7 +83,9 @@ impl<T: ChainDataFetcher> Service<T> {
 			cache,
 		)?);
 
-		io_service.register_handler(Arc::new(ImportBlocks(client.clone()))).map_err(Error::Io)?;
+		io_service
+			.register_handler(Arc::new(ImportBlocks(client.clone())))
+			.map_err(Error::Io)?;
 		spec.engine.register_client(Arc::downgrade(&client) as _);
 
 		Ok(Service {
@@ -92,7 +100,10 @@ impl<T: ChainDataFetcher> Service<T> {
 	}
 
 	/// Register an I/O handler on the service.
-	pub fn register_handler(&self, handler: Arc<IoHandler<ClientIoMessage> + Send>) -> Result<(), IoError> {
+	pub fn register_handler(
+		&self,
+		handler: Arc<IoHandler<ClientIoMessage> + Send>,
+	) -> Result<(), IoError> {
 		self.io_service.register_handler(handler)
 	}
 
@@ -117,19 +128,22 @@ mod tests {
 	use super::Service;
 	use ethcore::spec::Spec;
 
-	use std::sync::Arc;
 	use cache::Cache;
 	use client::fetch;
-	use std::time::Duration;
-	use parking_lot::Mutex;
-	use kvdb_memorydb;
 	use ethcore::db::NUM_COLUMNS;
+	use kvdb_memorydb;
+	use parking_lot::Mutex;
+	use std::sync::Arc;
+	use std::time::Duration;
 
 	#[test]
 	fn it_works() {
 		let db = Arc::new(kvdb_memorydb::create(NUM_COLUMNS.unwrap_or(0)));
 		let spec = Spec::new_test();
-		let cache = Arc::new(Mutex::new(Cache::new(Default::default(), Duration::from_secs(6 * 3600))));
+		let cache = Arc::new(Mutex::new(Cache::new(
+			Default::default(),
+			Duration::from_secs(6 * 3600),
+		)));
 
 		Service::start(Default::default(), &spec, fetch::unavailable(), db, cache).unwrap();
 	}

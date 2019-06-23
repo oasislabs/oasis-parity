@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::io::{Read, Write};
-use serde_json;
 use super::Crypto;
+use serde_json;
+use std::io::{Read, Write};
 
 /// Vault meta file
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -28,19 +28,25 @@ pub struct VaultFile {
 }
 
 impl VaultFile {
-	pub fn load<R>(reader: R) -> Result<Self, serde_json::Error> where R: Read {
+	pub fn load<R>(reader: R) -> Result<Self, serde_json::Error>
+	where
+		R: Read,
+	{
 		serde_json::from_reader(reader)
 	}
 
-	pub fn write<W>(&self, writer: &mut W) -> Result<(), serde_json::Error> where W: Write {
+	pub fn write<W>(&self, writer: &mut W) -> Result<(), serde_json::Error>
+	where
+		W: Write,
+	{
 		serde_json::to_writer(writer, self)
 	}
 }
 
 #[cfg(test)]
 mod test {
+	use json::{Aes128Ctr, Cipher, Crypto, Kdf, Pbkdf2, Prf, VaultFile};
 	use serde_json;
-	use json::{VaultFile, Crypto, Cipher, Aes128Ctr, Kdf, Pbkdf2, Prf};
 
 	#[test]
 	fn to_and_from_json() {

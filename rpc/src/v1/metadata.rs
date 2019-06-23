@@ -18,7 +18,7 @@
 use std::sync::Arc;
 
 use jsonrpc_core;
-use jsonrpc_pubsub::{Session, PubSubMetadata};
+use jsonrpc_pubsub::{PubSubMetadata, Session};
 
 use v1::types::{DappId, Origin};
 

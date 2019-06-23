@@ -20,11 +20,11 @@ use std::sync::Arc;
 
 use ethcore::encoded;
 use ethcore::engines::{EthEngine, StateDependentProof};
-use ethcore::machine::EthereumMachine;
 use ethcore::header::Header;
+use ethcore::machine::EthereumMachine;
 use ethcore::receipt::Receipt;
-use futures::future::IntoFuture;
 use ethereum_types::H256;
+use futures::future::IntoFuture;
 
 /// Provides full chain data.
 pub trait ChainDataFetcher: Send + Sync + 'static {
@@ -32,11 +32,11 @@ pub trait ChainDataFetcher: Send + Sync + 'static {
 	type Error: ::std::fmt::Debug;
 
 	/// Future for fetching block body.
-	type Body: IntoFuture<Item=encoded::Block, Error=Self::Error>;
+	type Body: IntoFuture<Item = encoded::Block, Error = Self::Error>;
 	/// Future for fetching block receipts.
-	type Receipts: IntoFuture<Item=Vec<Receipt>, Error=Self::Error>;
+	type Receipts: IntoFuture<Item = Vec<Receipt>, Error = Self::Error>;
 	/// Future for fetching epoch transition
-	type Transition: IntoFuture<Item=Vec<u8>, Error=Self::Error>;
+	type Transition: IntoFuture<Item = Vec<u8>, Error = Self::Error>;
 
 	/// Fetch a block body.
 	fn block_body(&self, header: &Header) -> Self::Body;
@@ -49,7 +49,7 @@ pub trait ChainDataFetcher: Send + Sync + 'static {
 		&self,
 		_hash: H256,
 		_engine: Arc<EthEngine>,
-		_checker: Arc<StateDependentProof<EthereumMachine>>
+		_checker: Arc<StateDependentProof<EthereumMachine>>,
 	) -> Self::Transition;
 }
 
@@ -57,7 +57,9 @@ pub trait ChainDataFetcher: Send + Sync + 'static {
 pub struct Unavailable;
 
 /// Create a fetcher which has all data unavailable.
-pub fn unavailable() -> Unavailable { Unavailable }
+pub fn unavailable() -> Unavailable {
+	Unavailable
+}
 
 impl ChainDataFetcher for Unavailable {
 	type Error = &'static str;
@@ -78,7 +80,7 @@ impl ChainDataFetcher for Unavailable {
 		&self,
 		_hash: H256,
 		_engine: Arc<EthEngine>,
-		_checker: Arc<StateDependentProof<EthereumMachine>>
+		_checker: Arc<StateDependentProof<EthereumMachine>>,
 	) -> Self::Transition {
 		Err("fetching epoch transition proofs unavailable")
 	}

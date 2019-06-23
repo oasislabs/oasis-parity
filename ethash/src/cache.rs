@@ -16,12 +16,12 @@
 
 use compute::Light;
 use either::Either;
-use keccak::{H256, keccak_512};
+use keccak::{keccak_512, H256};
 use memmap::MmapMut;
 use parking_lot::Mutex;
 use seed_compute::SeedHashCompute;
 
-use shared::{ETHASH_CACHE_ROUNDS, NODE_BYTES, NODE_DWORDS, Node, epoch, get_cache_size, to_hex};
+use shared::{epoch, get_cache_size, to_hex, Node, ETHASH_CACHE_ROUNDS, NODE_BYTES, NODE_DWORDS};
 
 use std::borrow::Cow;
 use std::fs;
@@ -59,9 +59,9 @@ fn new_buffer(path: &Path, num_nodes: usize, ident: &H256, optimize_for: Optimiz
 		OptimizeFor::Memory => make_memmapped_cache(path, num_nodes, ident).ok(),
 	};
 
-	memmap.map(Either::Right).unwrap_or_else(|| {
-		Either::Left(make_memory_cache(num_nodes, ident))
-	})
+	memmap
+		.map(Either::Right)
+		.unwrap_or_else(|| Either::Left(make_memory_cache(num_nodes, ident)))
 }
 
 #[derive(Clone)]
@@ -167,9 +167,10 @@ impl NodeCache {
 	}
 
 	pub fn flush(&mut self) -> io::Result<()> {
-		if let Some(last) = self.epoch.checked_sub(2).map(|ep| {
-			cache_path(self.cache_dir.as_ref(), &self.builder.epoch_to_ident(ep))
-		})
+		if let Some(last) = self
+			.epoch
+			.checked_sub(2)
+			.map(|ep| cache_path(self.cache_dir.as_ref(), &self.builder.epoch_to_ident(ep)))
 		{
 			fs::remove_file(last).unwrap_or_else(|error| match error.kind() {
 				io::ErrorKind::NotFound => (),
@@ -232,9 +233,7 @@ fn consume_cache(cache: &mut Cache, path: &Path) -> io::Result<()> {
 
 			file.write_all(buf).map(|_| ())
 		}
-		Either::Right(ref mmap) => {
-			mmap.flush()
-		}
+		Either::Right(ref mmap) => mmap.flush(),
 	}
 }
 
@@ -242,14 +241,19 @@ fn cache_from_path(path: &Path, optimize_for: OptimizeFor) -> io::Result<Cache> 
 	let memmap = match optimize_for {
 		OptimizeFor::Cpu => None,
 		OptimizeFor::Memory => {
-			let file = fs::OpenOptions::new().read(true).write(true).create(true).open(path)?;
+			let file = fs::OpenOptions::new()
+				.read(true)
+				.write(true)
+				.create(true)
+				.open(path)?;
 			unsafe { MmapMut::map_mut(&file).ok() }
-		},
+		}
 	};
 
-	memmap.map(Either::Right).ok_or(()).or_else(|_| {
-		read_from_path(path).map(Either::Left)
-	})
+	memmap
+		.map(Either::Right)
+		.ok_or(())
+		.or_else(|_| read_from_path(path).map(Either::Left))
 }
 
 fn read_from_path(path: &Path) -> io::Result<Vec<Node>> {
@@ -258,9 +262,11 @@ fn read_from_path(path: &Path) -> io::Result<Vec<Node>> {
 
 	let mut file = File::open(path)?;
 
-	let mut nodes: Vec<u8> = Vec::with_capacity(file.metadata().map(|m| m.len() as _).unwrap_or(
-		NODE_BYTES * 1_000_000,
-	));
+	let mut nodes: Vec<u8> = Vec::with_capacity(
+		file.metadata()
+			.map(|m| m.len() as _)
+			.unwrap_or(NODE_BYTES * 1_000_000),
+	);
 	file.read_to_end(&mut nodes)?;
 
 	nodes.shrink_to_fit();

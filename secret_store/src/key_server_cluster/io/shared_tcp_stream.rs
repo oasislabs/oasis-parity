@@ -14,12 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
-use std::net::Shutdown;
-use std::io::{Read, Write, Error};
 use futures::Poll;
-use tokio_io::{AsyncRead, AsyncWrite};
+use std::io::{Error, Read, Write};
+use std::net::Shutdown;
+use std::sync::Arc;
 use tokio_core::net::TcpStream;
+use tokio_io::{AsyncRead, AsyncWrite};
 
 /// Read+Write implementation for Arc<TcpStream>.
 pub struct SharedTcpStream {
@@ -28,9 +28,7 @@ pub struct SharedTcpStream {
 
 impl SharedTcpStream {
 	pub fn new(a: Arc<TcpStream>) -> Self {
-		SharedTcpStream {
-			io: a,
-		}
+		SharedTcpStream { io: a }
 	}
 }
 

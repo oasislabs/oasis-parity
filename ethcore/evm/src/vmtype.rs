@@ -20,14 +20,18 @@ use std::fmt;
 #[derive(Debug, PartialEq, Clone)]
 pub enum VMType {
 	/// RUST EVM
-	Interpreter
+	Interpreter,
 }
 
 impl fmt::Display for VMType {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{}", match *self {
-			VMType::Interpreter => "INT"
-		})
+		write!(
+			f,
+			"{}",
+			match *self {
+				VMType::Interpreter => "INT",
+			}
+		)
 	}
 }
 

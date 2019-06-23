@@ -24,8 +24,8 @@
 use std::sync::Arc;
 
 use jsonrpc_core::{Error, ErrorCode, Metadata};
-use jsonrpc_pubsub::{Session, PubSubMetadata, SubscriptionId};
 use jsonrpc_macros::pubsub;
+use jsonrpc_pubsub::{PubSubMetadata, Session, SubscriptionId};
 
 use ethereum_types::H256;
 use mem::Memzero;
@@ -246,21 +246,27 @@ impl<P: PoolHandle + 'static, M: Send + Sync + 'static> Whisper for WhisperClien
 	}
 
 	fn get_public(&self, id: types::Identity) -> Result<types::Public, Error> {
-		self.store.read().public(&id.into_inner())
+		self.store
+			.read()
+			.public(&id.into_inner())
 			.cloned()
 			.map(HexEncode)
 			.ok_or_else(|| whisper_error("Unknown identity"))
 	}
 
 	fn get_private(&self, id: types::Identity) -> Result<types::Private, Error> {
-		self.store.read().secret(&id.into_inner())
+		self.store
+			.read()
+			.secret(&id.into_inner())
 			.map(|x| (&**x).clone())
 			.map(HexEncode)
 			.ok_or_else(|| whisper_error("Unknown identity"))
 	}
 
 	fn get_symmetric(&self, id: types::Identity) -> Result<types::Symmetric, Error> {
-		self.store.read().symmetric(&id.into_inner())
+		self.store
+			.read()
+			.symmetric(&id.into_inner())
 			.cloned()
 			.map(H256)
 			.map(HexEncode)
@@ -275,12 +281,16 @@ impl<P: PoolHandle + 'static, M: Send + Sync + 'static> Whisper for WhisperClien
 		use self::crypto::EncryptionInstance;
 
 		let encryption = match req.to {
-			Some(types::Receiver::Public(public)) => EncryptionInstance::ecies(public.into_inner())
-				.map_err(whisper_error)?,
-			Some(types::Receiver::Identity(id)) => self.store.read().encryption_instance(&id.into_inner())
+			Some(types::Receiver::Public(public)) => {
+				EncryptionInstance::ecies(public.into_inner()).map_err(whisper_error)?
+			}
+			Some(types::Receiver::Identity(id)) => self
+				.store
+				.read()
+				.encryption_instance(&id.into_inner())
 				.map_err(whisper_error)?,
 			None => {
-				use rand::{Rng, OsRng};
+				use rand::{OsRng, Rng};
 
 				// broadcast mode: use fixed nonce and fresh key each time.
 
@@ -289,24 +299,26 @@ impl<P: PoolHandle + 'static, M: Send + Sync + 'static> Whisper for WhisperClien
 
 				let key = Memzero::from(rng.gen::<[u8; 32]>());
 				if req.topics.is_empty() {
-					return Err(whisper_error("must supply at least one topic for broadcast message"));
+					return Err(whisper_error(
+						"must supply at least one topic for broadcast message",
+					));
 				}
 
 				EncryptionInstance::broadcast(
 					key,
-					req.topics.iter().map(|x| topic_hash(&x)).collect()
+					req.topics.iter().map(|x| topic_hash(&x)).collect(),
 				)
 			}
 		};
 
 		let sign_with = match req.from {
-			Some(from) => {
-				Some(
-					self.store.read().secret(&from.into_inner())
-						.cloned()
-						.ok_or_else(|| whisper_error("Unknown identity `from`"))?
-				)
-			}
+			Some(from) => Some(
+				self.store
+					.read()
+					.secret(&from.into_inner())
+					.cloned()
+					.ok_or_else(|| whisper_error("Unknown identity `from`"))?,
+			),
 			None => None,
 		};
 
@@ -315,9 +327,12 @@ impl<P: PoolHandle + 'static, M: Send + Sync + 'static> Whisper for WhisperClien
 				message: &req.payload.into_inner(),
 				padding: req.padding.map(|p| p.into_inner()).as_ref().map(|x| &x[..]),
 				sign_with: sign_with.as_ref(),
-			}).map_err(whisper_error)?;
+			})
+			.map_err(whisper_error)?;
 
-			encryption.encrypt(&payload).ok_or(whisper_error("encryption error"))?
+			encryption
+				.encrypt(&payload)
+				.ok_or(whisper_error("encryption error"))?
 		};
 
 		// mining the packet is the heaviest item of work by far.
@@ -327,9 +342,14 @@ impl<P: PoolHandle + 'static, M: Send + Sync + 'static> Whisper for WhisperClien
 		let message = Message::create(CreateParams {
 			ttl: req.ttl,
 			payload: encrypted,
-			topics: req.topics.into_iter().map(|x| abridge_topic(&x.into_inner())).collect(),
+			topics: req
+				.topics
+				.into_iter()
+				.map(|x| abridge_topic(&x.into_inner()))
+				.collect(),
 			work: req.priority,
-		}).map_err(|_| whisper_error("Empty topics"))?;
+		})
+		.map_err(|_| whisper_error("Empty topics"))?;
 
 		if !self.pool.relay(message) {
 			Err(whisper_error("PoW too low to compete with other messages"))
@@ -341,7 +361,8 @@ impl<P: PoolHandle + 'static, M: Send + Sync + 'static> Whisper for WhisperClien
 	fn new_filter(&self, req: types::FilterRequest) -> Result<types::Identity, Error> {
 		let filter = Filter::new(req).map_err(whisper_error)?;
 
-		self.filter_manager.insert_polled(filter)
+		self.filter_manager
+			.insert_polled(filter)
 			.map(HexEncode)
 			.map_err(whisper_error)
 	}
@@ -358,7 +379,9 @@ impl<P: PoolHandle + 'static, M: Send + Sync + 'static> Whisper for WhisperClien
 	}
 }
 
-impl<P: PoolHandle + 'static, M: Send + Sync + PubSubMetadata> WhisperPubSub for WhisperClient<P, M> {
+impl<P: PoolHandle + 'static, M: Send + Sync + PubSubMetadata> WhisperPubSub
+	for WhisperClient<P, M>
+{
 	type Metadata = M;
 
 	fn subscribe(
@@ -373,7 +396,9 @@ impl<P: PoolHandle + 'static, M: Send + Sync + PubSubMetadata> WhisperPubSub for
 					debug!(target: "whisper", "Failed to add subscription: {}", e);
 				}
 			}
-			Err(reason) => { let _ = subscriber.reject(whisper_error(reason)); }
+			Err(reason) => {
+				let _ = subscriber.reject(whisper_error(reason));
+			}
 		}
 	}
 

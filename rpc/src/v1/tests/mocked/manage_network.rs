@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+use self::ethcore_network::{NetworkContext, ProtocolId};
 use std::ops::Range;
 use sync::ManageNetwork;
-use self::ethcore_network::{ProtocolId, NetworkContext};
 
 extern crate ethcore_network;
 
@@ -24,12 +24,18 @@ pub struct TestManageNetwork;
 
 // TODO: rob, gavin (originally introduced this functions) - proper tests and test state
 impl ManageNetwork for TestManageNetwork {
-	fn accept_unreserved_peers(&self) { }
-	fn deny_unreserved_peers(&self) { }
-	fn remove_reserved_peer(&self, _peer: String) -> Result<(), String> { Ok(()) }
-	fn add_reserved_peer(&self, _peer: String) -> Result<(), String> { Ok(()) }
+	fn accept_unreserved_peers(&self) {}
+	fn deny_unreserved_peers(&self) {}
+	fn remove_reserved_peer(&self, _peer: String) -> Result<(), String> {
+		Ok(())
+	}
+	fn add_reserved_peer(&self, _peer: String) -> Result<(), String> {
+		Ok(())
+	}
 	fn start_network(&self) {}
 	fn stop_network(&self) {}
-	fn num_peers_range(&self) -> Range<u32> { 25 .. 51 }
-	fn with_proto_context(&self, _: ProtocolId, _: &mut FnMut(&NetworkContext)) { }
+	fn num_peers_range(&self) -> Range<u32> {
+		25..51
+	}
+	fn with_proto_context(&self, _: ProtocolId, _: &mut FnMut(&NetworkContext)) {}
 }

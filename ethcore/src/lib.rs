@@ -56,7 +56,7 @@
 
 // Recursion limit required because of
 // error_chain foreign_links.
-#![recursion_limit="128"]
+#![recursion_limit = "128"]
 
 extern crate bloomchain;
 extern crate bn;
@@ -80,12 +80,12 @@ extern crate hashdb;
 extern crate itertools;
 extern crate lru_cache;
 // extern crate num_cpus;
-extern crate num_integer;
 extern crate num_bigint;
+extern crate num_integer;
 extern crate num_traits;
 mod num {
-	pub use num_integer::*;
 	pub use num_bigint::*;
+	pub use num_integer::*;
 	pub use num_traits::*;
 }
 extern crate parity_machine;
@@ -93,17 +93,17 @@ extern crate parity_machine;
 #[cfg(test)]
 extern crate rand;
 // extern crate rayon;
-pub extern crate rlp;
-extern crate rlp_compress;
-extern crate keccak_hash as hash;
 extern crate heapsize;
+extern crate keccak_hash as hash;
 extern crate memorydb;
 extern crate patricia_trie as trie;
+pub extern crate rlp;
+extern crate rlp_compress;
 extern crate triehash;
 // extern crate ansi_term;
-extern crate unexpected;
 pub extern crate kvdb;
 extern crate kvdb_memorydb;
+extern crate unexpected;
 extern crate util_error;
 // extern crate snappy;
 //
@@ -119,11 +119,11 @@ extern crate wasm;
 #[cfg(feature = "use-wasmer-runtime")]
 extern crate wasmer;
 
-extern crate memory_cache;
+extern crate failure;
 pub extern crate journaldb;
+extern crate memory_cache;
 #[cfg(test)]
 extern crate tempdir;
-extern crate failure;
 
 #[macro_use]
 extern crate ethabi_derive;
@@ -164,6 +164,7 @@ pub mod executed;
 pub mod executive;
 pub mod header;
 pub mod machine;
+pub mod mkvs;
 pub mod pod_state;
 pub mod spec;
 pub mod state;
@@ -171,16 +172,15 @@ pub mod state_db;
 pub mod trace;
 /// Ext (Externalities) tracing
 pub mod trace_ext;
-pub mod mkvs;
 
-mod cache_manager;
-mod blooms;
-mod pod_account;
 pub mod account_db;
-mod builtin;
-mod externalities;
 pub mod blockchain;
+mod blooms;
+mod builtin;
+mod cache_manager;
+mod externalities;
 pub mod factory;
+mod pod_account;
 
 #[cfg(test)]
 #[cfg(feature = "json-tests")]
@@ -188,7 +188,6 @@ mod json_tests;
 #[cfg(any(test, feature = "test-helpers"))]
 pub mod test_helpers;
 
-pub use types::*;
-pub use executive::contract_address;
 pub use evm::CreateContractAddress;
-
+pub use executive::contract_address;
+pub use types::*;

@@ -18,10 +18,10 @@
 
 extern crate backtrace;
 
+use backtrace::Backtrace;
 use std::io::{self, Write};
 use std::panic::{self, PanicInfo};
 use std::thread;
-use backtrace::Backtrace;
 
 /// Set the panic hook
 pub fn set() {
@@ -44,7 +44,7 @@ fn panic_hook(info: &PanicInfo) {
 		None => match info.payload().downcast_ref::<String>() {
 			Some(s) => &s[..],
 			None => "Box<Any>",
-		}
+		},
 	};
 
 	let thread = thread::current();

@@ -15,8 +15,8 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 use jsonrpc_core::IoHandler;
-use version::version;
 use v1::{Web3, Web3Client};
+use version::version;
 
 #[test]
 fn rpc_web3_version() {
@@ -27,7 +27,9 @@ fn rpc_web3_version() {
 	let v = version().to_owned().replacen("/", "//", 1);
 
 	let request = r#"{"jsonrpc": "2.0", "method": "web3_clientVersion", "params": [], "id": 1}"#;
-	let response = r#"{"jsonrpc":"2.0","result":"VER","id":1}"#.to_owned().replace("VER", v.as_ref());
+	let response = r#"{"jsonrpc":"2.0","result":"VER","id":1}"#
+		.to_owned()
+		.replace("VER", v.as_ref());
 
 	assert_eq!(io.handle_request_sync(request), Some(response));
 }

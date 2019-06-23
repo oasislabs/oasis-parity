@@ -16,16 +16,16 @@
 
 //! Parity upgrade logic
 
-use semver::{Version, SemVerError};
+use dir::helpers::replace_home;
+use dir::{default_data_path, DatabaseDirectories};
+use journaldb::Algorithm;
+use semver::{SemVerError, Version};
 use std::collections::*;
-use std::fs::{self, File, create_dir_all};
 use std::env;
+use std::fs::{self, create_dir_all, File};
 use std::io;
 use std::io::{Read, Write};
-use std::path::{PathBuf, Path};
-use dir::{DatabaseDirectories, default_data_path};
-use dir::helpers::replace_home;
-use journaldb::Algorithm;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub enum Error {
@@ -77,12 +77,15 @@ fn dummy_upgrade() -> Result<(), Error> {
 	Ok(())
 }
 
-fn push_upgrades(upgrades: &mut UpgradeList)
-{
+fn push_upgrades(upgrades: &mut UpgradeList) {
 	// dummy upgrade (remove when the first one is in)
 	upgrades.insert(
-		UpgradeKey { old_version: Version::new(0, 9, 0), new_version: Version::new(1, 0, 0)},
-		dummy_upgrade);
+		UpgradeKey {
+			old_version: Version::new(0, 9, 0),
+			new_version: Version::new(1, 0, 0),
+		},
+		dummy_upgrade,
+	);
 }
 
 fn upgrade_from_version(previous_version: &Version) -> Result<usize, Error> {
@@ -103,38 +106,41 @@ fn upgrade_from_version(previous_version: &Version) -> Result<usize, Error> {
 }
 
 fn with_locked_version<F>(db_path: Option<&str>, script: F) -> Result<usize, Error>
-	where F: Fn(&Version) -> Result<usize, Error>
+where
+	F: Fn(&Version) -> Result<usize, Error>,
 {
-	let mut path = db_path.map_or({
-		let mut path = env::home_dir().expect("Applications should have a home dir");
-		path.push(".parity");
-		path
-	}, PathBuf::from);
+	let mut path = db_path.map_or(
+		{
+			let mut path = env::home_dir().expect("Applications should have a home dir");
+			path.push(".parity");
+			path
+		},
+		PathBuf::from,
+	);
 	create_dir_all(&path).map_err(|_| Error::CannotCreateConfigPath)?;
 	path.push("ver.lock");
 
-	let version =
-		File::open(&path).ok().and_then(|ref mut file|
-			{
-				let mut version_string = String::new();
-				file.read_to_string(&mut version_string)
-					.ok()
-					.and_then(|_| Version::parse(&version_string).ok())
-			})
-			.unwrap_or(Version::new(0, 9, 0));
+	let version = File::open(&path)
+		.ok()
+		.and_then(|ref mut file| {
+			let mut version_string = String::new();
+			file.read_to_string(&mut version_string)
+				.ok()
+				.and_then(|_| Version::parse(&version_string).ok())
+		})
+		.unwrap_or(Version::new(0, 9, 0));
 
 	let mut lock = File::create(&path).map_err(|_| Error::CannotWriteVersionFile)?;
 	let result = script(&version);
 
 	let written_version = Version::parse(CURRENT_VERSION)?;
-	lock.write_all(written_version.to_string().as_bytes()).map_err(|_| Error::CannotUpdateVersionFile)?;
+	lock.write_all(written_version.to_string().as_bytes())
+		.map_err(|_| Error::CannotUpdateVersionFile)?;
 	result
 }
 
 pub fn upgrade(db_path: Option<&str>) -> Result<usize, Error> {
-	with_locked_version(db_path, |ver| {
-		upgrade_from_version(ver)
-	})
+	with_locked_version(db_path, |ver| upgrade_from_version(ver))
 }
 
 fn file_exists(path: &Path) -> bool {
@@ -147,7 +153,17 @@ fn file_exists(path: &Path) -> bool {
 pub fn upgrade_key_location(from: &PathBuf, to: &PathBuf) {
 	match fs::create_dir_all(&to).and_then(|()| fs::read_dir(from)) {
 		Ok(entries) => {
-			let files: Vec<_> = entries.filter_map(|f| f.ok().and_then(|f| if f.file_type().ok().map_or(false, |f| f.is_file()) { f.file_name().to_str().map(|s| s.to_owned()) } else { None })).collect();
+			let files: Vec<_> = entries
+				.filter_map(|f| {
+					f.ok().and_then(|f| {
+						if f.file_type().ok().map_or(false, |f| f.is_file()) {
+							f.file_name().to_str().map(|s| s.to_owned())
+						} else {
+							None
+						}
+					})
+				})
+				.collect();
 			let mut num: usize = 0;
 			for name in files {
 				let mut from = from.clone();
@@ -165,9 +181,14 @@ pub fn upgrade_key_location(from: &PathBuf, to: &PathBuf) {
 				}
 			}
 			if num > 0 {
-				info!("Moved {} keys from {} to {}", num, from.to_string_lossy(), to.to_string_lossy());
+				info!(
+					"Moved {} keys from {} to {}",
+					num,
+					from.to_string_lossy(),
+					to.to_string_lossy()
+				);
 			}
-		},
+		}
 		Err(e) => {
 			debug!("Error moving keys from {:?} to {:?}: {:?}", from, to, e);
 		}
@@ -182,10 +203,17 @@ fn upgrade_dir_location(source: &PathBuf, dest: &PathBuf) {
 			if let Err(e) = fs::create_dir_all(&parent).and_then(|()| fs::rename(&source, &dest)) {
 				debug!("Skipped path {:?} -> {:?} :{:?}", source, dest, e);
 			} else {
-				info!("Moved {} to {}", source.to_string_lossy(), dest.to_string_lossy());
+				info!(
+					"Moved {} to {}",
+					source.to_string_lossy(),
+					dest.to_string_lossy()
+				);
 			}
 		} else {
-			debug!("Skipped upgrading directory {:?}, Destination already exists at {:?}", source, dest);
+			debug!(
+				"Skipped upgrading directory {:?}, Destination already exists at {:?}",
+				source, dest
+			);
 		}
 	}
 }
@@ -199,7 +227,10 @@ fn upgrade_user_defaults(dirs: &DatabaseDirectories) {
 				debug!("Skipped upgrading user defaults {:?}:{:?}", dest, e);
 			}
 		} else {
-			debug!("Skipped upgrading user defaults {:?}, File exists at {:?}", source, dest);
+			debug!(
+				"Skipped upgrading user defaults {:?}, File exists at {:?}",
+				source, dest
+			);
 		}
 	}
 }

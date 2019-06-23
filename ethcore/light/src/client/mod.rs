@@ -16,28 +16,28 @@
 
 //! Light client implementation. Stores data from light sync
 
-use std::sync::{Weak, Arc};
+use std::sync::{Arc, Weak};
 
 use ethcore::block_status::BlockStatus;
-use ethcore::client::{ClientReport, EnvInfo, ClientIoMessage};
-use ethcore::engines::{epoch, EthEngine, EpochChange, EpochTransition, Proof};
-use ethcore::machine::EthereumMachine;
-use ethcore::error::{Error, BlockImportError};
-use ethcore::ids::BlockId;
-use ethcore::header::{BlockNumber, Header};
-use ethcore::verification::queue::{self, HeaderQueue};
 use ethcore::blockchain_info::BlockChainInfo;
-use ethcore::spec::{Spec, SpecHardcodedSync};
+use ethcore::client::{ClientIoMessage, ClientReport, EnvInfo};
 use ethcore::encoded;
+use ethcore::engines::{epoch, EpochChange, EpochTransition, EthEngine, Proof};
+use ethcore::error::{BlockImportError, Error};
+use ethcore::header::{BlockNumber, Header};
+use ethcore::ids::BlockId;
+use ethcore::machine::EthereumMachine;
+use ethcore::spec::{Spec, SpecHardcodedSync};
+use ethcore::verification::queue::{self, HeaderQueue};
+use ethereum_types::{H256, U256};
+use futures::{Future, IntoFuture};
 use io::IoChannel;
 use parking_lot::{Mutex, RwLock};
-use ethereum_types::{H256, U256};
-use futures::{IntoFuture, Future};
 
 use kvdb::KeyValueDB;
 
 use self::fetch::ChainDataFetcher;
-use self::header_chain::{AncestryIter, HeaderChain, HardcodedSync};
+use self::header_chain::{AncestryIter, HardcodedSync, HeaderChain};
 
 use cache::Cache;
 
@@ -100,7 +100,7 @@ pub trait LightChainClient: Send + Sync {
 	fn score(&self, id: BlockId) -> Option<U256>;
 
 	/// Get an iterator over a block and its ancestry.
-	fn ancestry_iter<'a>(&'a self, start: BlockId) -> Box<Iterator<Item=encoded::Header> + 'a>;
+	fn ancestry_iter<'a>(&'a self, start: BlockId) -> Box<Iterator<Item = encoded::Header> + 'a>;
 
 	/// Get the signing chain ID.
 	fn signing_chain_id(&self) -> Option<u64>;
@@ -152,7 +152,9 @@ pub trait AsLightClient {
 impl<T: LightChainClient> AsLightClient for T {
 	type Client = Self;
 
-	fn as_light_client(&self) -> &Self { self }
+	fn as_light_client(&self) -> &Self {
+		self
+	}
 }
 
 /// Light client implementation.
@@ -177,13 +179,22 @@ impl<T: ChainDataFetcher> Client<T> {
 		spec: &Spec,
 		fetcher: T,
 		io_channel: IoChannel<ClientIoMessage>,
-		cache: Arc<Mutex<Cache>>
+		cache: Arc<Mutex<Cache>>,
 	) -> Result<Self, Error> {
 		Ok(Client {
-			queue: HeaderQueue::new(config.queue, spec.engine.clone(), io_channel, config.check_seal),
+			queue: HeaderQueue::new(
+				config.queue,
+				spec.engine.clone(),
+				io_channel,
+				config.check_seal,
+			),
 			engine: spec.engine.clone(),
 			chain: {
-				let hs_cfg = if config.no_hardcoded_sync { HardcodedSync::Deny } else { HardcodedSync::Allow };
+				let hs_cfg = if config.no_hardcoded_sync {
+					HardcodedSync::Deny
+				} else {
+					HardcodedSync::Allow
+				};
 				HeaderChain::new(db.clone(), chain_col, &spec, cache, hs_cfg)?
 			},
 			report: RwLock::new(ClientReport::default()),
@@ -236,7 +247,11 @@ impl<T: ChainDataFetcher> Client<T> {
 			best_block_hash: best_hdr.hash(),
 			best_block_number: best_hdr.number(),
 			best_block_timestamp: best_hdr.timestamp(),
-			ancient_block_hash: if first_block.is_some() { Some(genesis_hash) } else { None },
+			ancient_block_hash: if first_block.is_some() {
+				Some(genesis_hash)
+			} else {
+				None
+			},
 			ancient_block_number: if first_block.is_some() { Some(0) } else { None },
 			first_block_hash: first_block.as_ref().map(|first| first.hash),
 			first_block_number: first_block.as_ref().map(|first| first.number),
@@ -301,14 +316,13 @@ impl<T: ChainDataFetcher> Client<T> {
 			trace!(target: "client", "importing block {}", num);
 
 			if self.verify_full && !self.check_header(&mut bad, &verified_header) {
-				continue
+				continue;
 			}
 
 			let write_proof_result = match self.check_epoch_signal(&verified_header) {
 				Ok(Some(proof)) => self.write_pending_proof(&verified_header, proof),
 				Ok(None) => Ok(()),
-				Err(e) =>
-					panic!("Unable to fetch epoch transition proof: {:?}", e),
+				Err(e) => panic!("Unable to fetch epoch transition proof: {:?}", e),
 			};
 
 			if let Err(e) = write_proof_result {
@@ -316,9 +330,13 @@ impl<T: ChainDataFetcher> Client<T> {
 					The node may not be able to synchronize further.", e);
 			}
 
-			let epoch_proof =  self.engine.is_epoch_end(
+			let epoch_proof = self.engine.is_epoch_end(
 				&verified_header,
-				&|h| self.chain.block_header(BlockId::Hash(h)).and_then(|hdr| hdr.decode().ok()),
+				&|h| {
+					self.chain
+						.block_header(BlockId::Hash(h))
+						.and_then(|hdr| hdr.decode().ok())
+				},
 				&|h| self.chain.pending_transition(h),
 			);
 
@@ -416,24 +434,25 @@ impl<T: ChainDataFetcher> Client<T> {
 	// should skip.
 	fn check_header(&self, bad: &mut Vec<H256>, verified_header: &Header) -> bool {
 		let hash = verified_header.hash();
-		let parent_header = match self.chain.block_header(BlockId::Hash(*verified_header.parent_hash())) {
+		let parent_header = match self
+			.chain
+			.block_header(BlockId::Hash(*verified_header.parent_hash()))
+		{
 			Some(header) => header,
 			None => {
 				trace!(target: "client", "No parent for block ({}, {})",
 					verified_header.number(), hash);
-				return false // skip import of block with missing parent.
+				return false; // skip import of block with missing parent.
 			}
 		};
 
 		// Verify Block Family
 
 		let verify_family_result = {
-			parent_header.decode()
+			parent_header
+				.decode()
 				.map_err(|dec_err| dec_err.into())
-				.and_then(|decoded| {
-					self.engine.verify_block_family(&verified_header, &decoded)
-				})
-
+				.and_then(|decoded| self.engine.verify_block_family(&verified_header, &decoded))
 		};
 		if let Err(e) = verify_family_result {
 			warn!(target: "client", "Stage 3 block verification failed for #{} ({})\nError: {:?}",
@@ -455,14 +474,16 @@ impl<T: ChainDataFetcher> Client<T> {
 		true
 	}
 
-	fn check_epoch_signal(&self, verified_header: &Header) -> Result<Option<Proof<EthereumMachine>>, T::Error> {
-		use ethcore::machine::{AuxiliaryRequest, AuxiliaryData};
+	fn check_epoch_signal(
+		&self,
+		verified_header: &Header,
+	) -> Result<Option<Proof<EthereumMachine>>, T::Error> {
+		use ethcore::machine::{AuxiliaryData, AuxiliaryRequest};
 
 		let mut block: Option<Vec<u8>> = None;
 		let mut receipts: Option<Vec<_>> = None;
 
 		loop {
-
 			let is_signal = {
 				let auxiliary = AuxiliaryData {
 					bytes: block.as_ref().map(|x| &x[..]),
@@ -478,10 +499,12 @@ impl<T: ChainDataFetcher> Client<T> {
 				EpochChange::Yes(proof) => return Ok(Some(proof)),
 				EpochChange::Unsure(unsure) => {
 					let (b, r) = match unsure {
-						AuxiliaryRequest::Body =>
-							(Some(self.fetcher.block_body(verified_header)), None),
-						AuxiliaryRequest::Receipts =>
-							(None, Some(self.fetcher.block_receipts(verified_header))),
+						AuxiliaryRequest::Body => {
+							(Some(self.fetcher.block_body(verified_header)), None)
+						}
+						AuxiliaryRequest::Receipts => {
+							(None, Some(self.fetcher.block_receipts(verified_header)))
+						}
 						AuxiliaryRequest::Both => (
 							Some(self.fetcher.block_body(verified_header)),
 							Some(self.fetcher.block_receipts(verified_header)),
@@ -501,22 +524,26 @@ impl<T: ChainDataFetcher> Client<T> {
 	}
 
 	// attempts to fetch the epoch proof from the network until successful.
-	fn write_pending_proof(&self, header: &Header, proof: Proof<EthereumMachine>) -> Result<(), T::Error> {
+	fn write_pending_proof(
+		&self,
+		header: &Header,
+		proof: Proof<EthereumMachine>,
+	) -> Result<(), T::Error> {
 		let proof = match proof {
 			Proof::Known(known) => known,
-			Proof::WithState(state_dependent) => {
-				self.fetcher.epoch_transition(
-					header.hash(),
-					self.engine.clone(),
-					state_dependent
-				).into_future().wait()?
-			}
+			Proof::WithState(state_dependent) => self
+				.fetcher
+				.epoch_transition(header.hash(), self.engine.clone(), state_dependent)
+				.into_future()
+				.wait()?,
 		};
 
 		let mut batch = self.db.transaction();
-		self.chain.insert_pending_transition(&mut batch, header.hash(), epoch::PendingTransition {
-			proof: proof,
-		});
+		self.chain.insert_pending_transition(
+			&mut batch,
+			header.hash(),
+			epoch::PendingTransition { proof: proof },
+		);
 		self.db.write_buffered(batch);
 		Ok(())
 	}
@@ -527,7 +554,9 @@ impl<T: ChainDataFetcher> LightChainClient for Client<T> {
 		Client::add_listener(self, listener)
 	}
 
-	fn chain_info(&self) -> BlockChainInfo { Client::chain_info(self) }
+	fn chain_info(&self) -> BlockChainInfo {
+		Client::chain_info(self)
+	}
 
 	fn queue_header(&self, header: Header) -> Result<H256, BlockImportError> {
 		self.import_header(header)
@@ -549,7 +578,7 @@ impl<T: ChainDataFetcher> LightChainClient for Client<T> {
 		Client::score(self, id)
 	}
 
-	fn ancestry_iter<'a>(&'a self, start: BlockId) -> Box<Iterator<Item=encoded::Header> + 'a> {
+	fn ancestry_iter<'a>(&'a self, start: BlockId) -> Box<Iterator<Item = encoded::Header> + 'a> {
 		Box::new(Client::ancestry_iter(self, start))
 	}
 
@@ -601,16 +630,18 @@ impl<T: ChainDataFetcher> ::ethcore::client::ChainInfo for Client<T> {
 }
 
 impl<T: ChainDataFetcher> ::ethcore::client::EngineClient for Client<T> {
-	fn update_sealing(&self) { }
-	fn submit_seal(&self, _block_hash: H256, _seal: Vec<Vec<u8>>) { }
-	fn broadcast_consensus_message(&self, _message: Vec<u8>) { }
+	fn update_sealing(&self) {}
+	fn submit_seal(&self, _block_hash: H256, _seal: Vec<Vec<u8>>) {}
+	fn broadcast_consensus_message(&self, _message: Vec<u8>) {}
 
 	fn epoch_transition_for(&self, parent_hash: H256) -> Option<EpochTransition> {
-		self.chain.epoch_transition_for(parent_hash).map(|(hdr, proof)| EpochTransition {
-			block_hash: hdr.hash(),
-			block_number: hdr.number(),
-			proof: proof,
-		})
+		self.chain
+			.epoch_transition_for(parent_hash)
+			.map(|(hdr, proof)| EpochTransition {
+				block_hash: hdr.hash(),
+				block_number: hdr.number(),
+				proof: proof,
+			})
 	}
 
 	fn as_full_client(&self) -> Option<&::ethcore::client::BlockChainClient> {

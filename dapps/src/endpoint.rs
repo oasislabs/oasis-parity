@@ -39,11 +39,13 @@ impl EndpointPath {
 
 pub type EndpointInfo = ::apps::App;
 pub type Endpoints = BTreeMap<String, Box<Endpoint>>;
-pub type Response = Box<Future<Item=hyper::Response, Error=hyper::Error> + Send>;
+pub type Response = Box<Future<Item = hyper::Response, Error = hyper::Error> + Send>;
 pub type Request = hyper::Request;
 
-pub trait Endpoint : Send + Sync {
-	fn info(&self) -> Option<&EndpointInfo> { None }
+pub trait Endpoint: Send + Sync {
+	fn info(&self) -> Option<&EndpointInfo> {
+		None
+	}
 
 	fn respond(&self, path: EndpointPath, req: Request) -> Response;
 }

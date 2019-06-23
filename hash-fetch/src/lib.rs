@@ -31,8 +31,8 @@ extern crate mime;
 extern crate mime_guess;
 extern crate parity_reactor;
 extern crate rand;
-extern crate rustc_hex;
 extern crate registrar;
+extern crate rustc_hex;
 
 pub extern crate fetch;
 
@@ -41,15 +41,15 @@ extern crate ethabi_derive;
 #[macro_use]
 extern crate ethabi_contract;
 #[cfg(test)]
-extern crate parking_lot;
+extern crate fake_fetch;
 #[cfg(test)]
 extern crate hyper;
 #[cfg(test)]
-extern crate fake_fetch;
+extern crate parking_lot;
 
 mod client;
 
 pub mod urlhint;
 
-pub use client::{HashFetch, Client, Error};
+pub use client::{Client, Error, HashFetch};
 pub use fetch::Abort;

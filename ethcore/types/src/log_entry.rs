@@ -19,13 +19,15 @@
 use std::ops::Deref;
 // use heapsize::HeapSizeOf;
 use bytes::Bytes;
-use ethereum_types::{H256, Address, Bloom, BloomInput};
+use ethereum_types::{Address, Bloom, BloomInput, H256};
 
-use {BlockNumber};
 use ethjson;
+use BlockNumber;
 
 /// A record of execution for a `LOG` operation.
-#[derive(Default, Debug, Clone, PartialEq, Eq, RlpEncodable, RlpDecodable, Serialize, Deserialize)]
+#[derive(
+	Default, Debug, Clone, PartialEq, Eq, RlpEncodable, RlpDecodable, Serialize, Deserialize,
+)]
 pub struct LogEntry {
 	/// The address of the contract executing at the point of the `LOG` operation.
 	pub address: Address,
@@ -44,10 +46,12 @@ pub struct LogEntry {
 impl LogEntry {
 	/// Calculates the bloom of this log entry.
 	pub fn bloom(&self) -> Bloom {
-		self.topics.iter().fold(Bloom::from(BloomInput::Raw(&self.address)), |mut b, t| {
-			b.accrue(BloomInput::Raw(t));
-			b
-		})
+		self.topics
+			.iter()
+			.fold(Bloom::from(BloomInput::Raw(&self.address)), |mut b, t| {
+				b.accrue(BloomInput::Raw(t));
+				b
+			})
 	}
 }
 
@@ -90,17 +94,19 @@ impl Deref for LocalizedLogEntry {
 
 #[cfg(test)]
 mod tests {
-	use ethereum_types::{Bloom, Address};
 	use super::LogEntry;
+	use ethereum_types::{Address, Bloom};
 
 	#[test]
 	fn test_empty_log_bloom() {
 		let bloom = "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000".parse::<Bloom>().unwrap();
-		let address = "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6".parse::<Address>().unwrap();
+		let address = "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6"
+			.parse::<Address>()
+			.unwrap();
 		let log = LogEntry {
 			address: address,
 			topics: vec![],
-			data: vec![]
+			data: vec![],
 		};
 		assert_eq!(log.bloom(), bloom);
 	}

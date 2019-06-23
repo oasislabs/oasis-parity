@@ -26,7 +26,7 @@ pub struct GroupPosition {
 /// Uniquely identifies bloom position including the position in the group.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Position {
- 	/// Group position.
+	/// Group position.
 	pub group: GroupPosition,
 	/// Number in group.
 	pub number: usize,

@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{thread, time};
-use std::sync::{atomic, mpsc, Arc};
-use parking_lot::Mutex;
 use hyper;
+use parking_lot::Mutex;
+use std::sync::{atomic, mpsc, Arc};
+use std::{thread, time};
 
+use fetch::{self, Abort, Fetch, Request, Url};
 use futures::{self, future, Future};
-use fetch::{self, Fetch, Url, Request, Abort};
 
 pub struct FetchControl {
 	sender: mpsc::Sender<()>,
@@ -29,7 +29,8 @@ pub struct FetchControl {
 
 impl FetchControl {
 	pub fn respond(self) {
-		self.sender.send(())
+		self.sender
+			.send(())
 			.expect("Fetch cannot be finished without sending a response at least once.");
 	}
 
@@ -70,7 +71,10 @@ impl FakeFetch {
 	}
 
 	pub fn manual(&self) -> FetchControl {
-		assert!(self.manual.lock().is_none(), "Only one manual control may be active.");
+		assert!(
+			self.manual.lock().is_none(),
+			"Only one manual control may be active."
+		);
 		let (tx, rx) = mpsc::channel();
 		*self.manual.lock() = Some(rx);
 
@@ -84,13 +88,22 @@ impl FakeFetch {
 		let requests = self.requested.lock();
 		let idx = self.asserted.fetch_add(1, atomic::Ordering::SeqCst);
 
-		assert_eq!(requests.get(idx), Some(&url.to_owned()), "Expected fetch from specific URL.");
+		assert_eq!(
+			requests.get(idx),
+			Some(&url.to_owned()),
+			"Expected fetch from specific URL."
+		);
 	}
 
 	pub fn assert_no_more_requests(&self) {
 		let requests = self.requested.lock();
 		let len = self.asserted.load(atomic::Ordering::SeqCst);
-		assert_eq!(requests.len(), len, "Didn't expect any more requests, got: {:?}", &requests[len..]);
+		assert_eq!(
+			requests.len(),
+			len,
+			"Didn't expect any more requests, got: {:?}",
+			&requests[len..]
+		);
 	}
 }
 
@@ -110,7 +123,12 @@ impl Fetch for FakeFetch {
 				let _ = rx.recv();
 			}
 			let data = response.lock().take().unwrap_or(b"Some content");
-			tx.send(fetch::Response::new(u, hyper::Response::new().with_body(data), abort)).unwrap();
+			tx.send(fetch::Response::new(
+				u,
+				hyper::Response::new().with_body(data),
+				abort,
+			))
+			.unwrap();
 		});
 
 		Box::new(rx.map_err(|_| fetch::Error::Aborted))
@@ -119,7 +137,7 @@ impl Fetch for FakeFetch {
 	fn get(&self, url: &str, abort: Abort) -> Self::Result {
 		let url: Url = match url.parse() {
 			Ok(u) => u,
-			Err(e) => return Box::new(future::err(e.into()))
+			Err(e) => return Box::new(future::err(e.into())),
 		};
 		self.fetch(Request::get(url), abort)
 	}
@@ -127,7 +145,7 @@ impl Fetch for FakeFetch {
 	fn post(&self, url: &str, abort: Abort) -> Self::Result {
 		let url: Url = match url.parse() {
 			Ok(u) => u,
-			Err(e) => return Box::new(future::err(e.into()))
+			Err(e) => return Box::new(future::err(e.into())),
 		};
 		self.fetch(Request::post(url), abort)
 	}

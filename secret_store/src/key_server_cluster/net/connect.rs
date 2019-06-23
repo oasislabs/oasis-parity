@@ -14,20 +14,25 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
+use futures::{Async, Future, Poll};
+use key_server_cluster::io::{deadline, handshake, Deadline, Handshake};
+use key_server_cluster::net::Connection;
+use key_server_cluster::{Error, NodeId, NodeKeyPair};
 use std::collections::BTreeSet;
 use std::io;
-use std::time::Duration;
 use std::net::SocketAddr;
-use futures::{Future, Poll, Async};
-use tokio_core::reactor::Handle;
+use std::sync::Arc;
+use std::time::Duration;
 use tokio_core::net::{TcpStream, TcpStreamNew};
-use key_server_cluster::{Error, NodeId, NodeKeyPair};
-use key_server_cluster::io::{handshake, Handshake, Deadline, deadline};
-use key_server_cluster::net::Connection;
+use tokio_core::reactor::Handle;
 
 /// Create future for connecting to other node.
-pub fn connect(address: &SocketAddr, handle: &Handle, self_key_pair: Arc<NodeKeyPair>, trusted_nodes: BTreeSet<NodeId>) -> Deadline<Connect> {
+pub fn connect(
+	address: &SocketAddr,
+	handle: &Handle,
+	self_key_pair: Arc<NodeKeyPair>,
+	trusted_nodes: BTreeSet<NodeId>,
+) -> Deadline<Connect> {
 	let connect = Connect {
 		state: ConnectState::TcpConnect(TcpStream::connect(address, handle)),
 		address: address.clone(),
@@ -60,9 +65,13 @@ impl Future for Connect {
 		let (next, result) = match self.state {
 			ConnectState::TcpConnect(ref mut future) => {
 				let stream = try_ready!(future.poll());
-				let handshake = handshake(stream, self.self_key_pair.clone(), self.trusted_nodes.clone());
+				let handshake = handshake(
+					stream,
+					self.self_key_pair.clone(),
+					self.trusted_nodes.clone(),
+				);
 				(ConnectState::Handshake(handshake), Async::NotReady)
-			},
+			}
 			ConnectState::Handshake(ref mut future) => {
 				let (stream, result) = try_ready!(future.poll());
 				let result = match result {
@@ -76,7 +85,7 @@ impl Future for Connect {
 					key: result.shared_key,
 				};
 				(ConnectState::Connected, Async::Ready(Ok(connection)))
-			},
+			}
 			ConnectState::Connected => panic!("poll Connect after it's done"),
 		};
 
@@ -84,7 +93,7 @@ impl Future for Connect {
 		match result {
 			// by polling again, we register new future
 			Async::NotReady => self.poll(),
-			result => Ok(result)
+			result => Ok(result),
 		}
 	}
 }

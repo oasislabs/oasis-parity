@@ -25,21 +25,21 @@ use std::sync::Arc;
 
 use ethcore::executed::{Executed, ExecutionError};
 
-use futures::{Poll, Future};
-use futures::sync::oneshot::{self, Receiver, Canceled};
+use futures::sync::oneshot::{self, Canceled, Receiver};
+use futures::{Future, Poll};
 use network::PeerId;
-use parking_lot::{RwLock, Mutex};
+use parking_lot::{Mutex, RwLock};
 use rand;
 
-use net::{
-	self, Handler, PeerStatus, Status, Capabilities,
-	Announcement, EventContext, BasicContext, ReqId,
-};
-use cache::Cache;
-use request::{self as basic_request, Request as NetworkRequest};
 use self::request::CheckedRequest;
+use cache::Cache;
+use net::{
+	self, Announcement, BasicContext, Capabilities, EventContext, Handler, PeerStatus, ReqId,
+	Status,
+};
+use request::{self as basic_request, Request as NetworkRequest};
 
-pub use self::request::{Request, Response, HeaderRef};
+pub use self::request::{HeaderRef, Request, Response};
 
 #[cfg(test)]
 mod tests;
@@ -60,17 +60,15 @@ impl Peer {
 	// request.
 	fn can_fulfill(&self, request: &Capabilities) -> bool {
 		let local_caps = &self.capabilities;
-		let can_serve_since = |req, local| {
-			match (req, local) {
-				(Some(request_block), Some(serve_since)) => request_block >= serve_since,
-				(Some(_), None) => false,
-				(None, _) => true,
-			}
+		let can_serve_since = |req, local| match (req, local) {
+			(Some(request_block), Some(serve_since)) => request_block >= serve_since,
+			(Some(_), None) => false,
+			(None, _) => true,
 		};
 
-		local_caps.serve_headers >= request.serve_headers &&
-		    can_serve_since(request.serve_chain_since, local_caps.serve_chain_since) &&
-		    can_serve_since(request.serve_state_since, local_caps.serve_state_since)
+		local_caps.serve_headers >= request.serve_headers
+			&& can_serve_since(request.serve_chain_since, local_caps.serve_chain_since)
+			&& can_serve_since(request.serve_state_since, local_caps.serve_state_since)
 	}
 }
 
@@ -123,14 +121,16 @@ impl Pending {
 					}
 				}
 			}
-			_ => {}, // no other responses produce headers.
+			_ => {} // no other responses produce headers.
 		}
 	}
 
 	// supply a response.
-	fn supply_response(&mut self, cache: &Mutex<Cache>, response: &basic_request::Response)
-		-> Result<(), basic_request::ResponseError<self::request::Error>>
-	{
+	fn supply_response(
+		&mut self,
+		cache: &Mutex<Cache>,
+		response: &basic_request::Response,
+	) -> Result<(), basic_request::ResponseError<self::request::Error>> {
 		match self.requests.supply_response(&cache, response) {
 			Ok(response) => {
 				let idx = self.responses.len();
@@ -171,7 +171,8 @@ impl Pending {
 			// been filled by now. all remaining requests point to nothing earlier
 			// than the next unanswered request.
 			net_req.adjust_refs(&mut mapping);
-			builder.push(net_req)
+			builder
+				.push(net_req)
 				.expect("all back-references to answered requests have been filled; qed");
 		}
 
@@ -191,37 +192,45 @@ fn guess_capabilities(requests: &[CheckedRequest]) -> Capabilities {
 		tx_relay: false,
 	};
 
-	let update_since = |current: &mut Option<u64>, new|
+	let update_since = |current: &mut Option<u64>, new| {
 		*current = match *current {
 			Some(x) => Some(::std::cmp::min(x, new)),
 			None => Some(new),
-		};
+		}
+	};
 
 	for request in requests {
 		match *request {
 			// TODO: might be worth returning a required block number for this also.
-			CheckedRequest::HeaderProof(_, _) =>
-				caps.serve_headers = true,
-			CheckedRequest::HeaderByHash(_, _) =>
-				caps.serve_headers = true,
+			CheckedRequest::HeaderProof(_, _) => caps.serve_headers = true,
+			CheckedRequest::HeaderByHash(_, _) => caps.serve_headers = true,
 			CheckedRequest::TransactionIndex(_, _) => {} // hashes yield no info.
-			CheckedRequest::Signal(_, _) =>
-				caps.serve_headers = true,
-			CheckedRequest::Body(ref req, _) => if let Ok(ref hdr) = req.0.as_ref() {
-				update_since(&mut caps.serve_chain_since, hdr.number());
-			},
-			CheckedRequest::Receipts(ref req, _) => if let Ok(ref hdr) = req.0.as_ref() {
-				update_since(&mut caps.serve_chain_since, hdr.number());
-			},
-			CheckedRequest::Account(ref req, _) => if let Ok(ref hdr) = req.header.as_ref() {
-				update_since(&mut caps.serve_state_since, hdr.number());
-			},
-			CheckedRequest::Code(ref req, _) => if let Ok(ref hdr) = req.header.as_ref() {
-				update_since(&mut caps.serve_state_since, hdr.number());
-			},
-			CheckedRequest::Execution(ref req, _) => if let Ok(ref hdr) = req.header.as_ref() {
-				update_since(&mut caps.serve_state_since, hdr.number());
-			},
+			CheckedRequest::Signal(_, _) => caps.serve_headers = true,
+			CheckedRequest::Body(ref req, _) => {
+				if let Ok(ref hdr) = req.0.as_ref() {
+					update_since(&mut caps.serve_chain_since, hdr.number());
+				}
+			}
+			CheckedRequest::Receipts(ref req, _) => {
+				if let Ok(ref hdr) = req.0.as_ref() {
+					update_since(&mut caps.serve_chain_since, hdr.number());
+				}
+			}
+			CheckedRequest::Account(ref req, _) => {
+				if let Ok(ref hdr) = req.header.as_ref() {
+					update_since(&mut caps.serve_state_since, hdr.number());
+				}
+			}
+			CheckedRequest::Code(ref req, _) => {
+				if let Ok(ref hdr) = req.header.as_ref() {
+					update_since(&mut caps.serve_state_since, hdr.number());
+				}
+			}
+			CheckedRequest::Execution(ref req, _) => {
+				if let Ok(ref hdr) = req.header.as_ref() {
+					update_since(&mut caps.serve_state_since, hdr.number());
+				}
+			}
 		}
 	}
 
@@ -282,12 +291,17 @@ impl OnDemand {
 	///
 	/// Fails if back-references are not coherent.
 	/// The returned vector of responses will correspond to the requests exactly.
-	pub fn request_raw(&self, ctx: &BasicContext, requests: Vec<Request>)
-		-> Result<Receiver<Vec<Response>>, basic_request::NoSuchOutput>
-	{
+	pub fn request_raw(
+		&self,
+		ctx: &BasicContext,
+		requests: Vec<Request>,
+	) -> Result<Receiver<Vec<Response>>, basic_request::NoSuchOutput> {
 		let (sender, receiver) = oneshot::channel();
 		if requests.is_empty() {
-			assert!(sender.send(Vec::new()).is_ok(), "receiver still in scope; qed");
+			assert!(
+				sender.send(Vec::new()).is_ok(),
+				"receiver still in scope; qed"
+			);
 			return Ok(receiver);
 		}
 
@@ -320,13 +334,16 @@ impl OnDemand {
 		let net_requests = requests.clone().map_requests(|req| req.into_net_request());
 		let capabilities = guess_capabilities(requests.requests());
 
-		self.submit_pending(ctx, Pending {
-			requests: requests,
-			net_requests: net_requests,
-			required_capabilities: capabilities,
-			responses: responses,
-			sender: sender,
-		});
+		self.submit_pending(
+			ctx,
+			Pending {
+				requests: requests,
+				net_requests: net_requests,
+				required_capabilities: capabilities,
+				responses: responses,
+				sender: sender,
+			},
+		);
 
 		Ok(receiver)
 	}
@@ -334,13 +351,19 @@ impl OnDemand {
 	/// Submit a strongly-typed batch of requests.
 	///
 	/// Fails if back-reference are not coherent.
-	pub fn request<T>(&self, ctx: &BasicContext, requests: T) -> Result<OnResponses<T>, basic_request::NoSuchOutput>
-		where T: request::RequestAdapter
+	pub fn request<T>(
+		&self,
+		ctx: &BasicContext,
+		requests: T,
+	) -> Result<OnResponses<T>, basic_request::NoSuchOutput>
+	where
+		T: request::RequestAdapter,
 	{
-		self.request_raw(ctx, requests.make_requests()).map(|recv| OnResponses {
-			receiver: recv,
-			_marker: PhantomData,
-		})
+		self.request_raw(ctx, requests.make_requests())
+			.map(|recv| OnResponses {
+				receiver: recv,
+				_marker: PhantomData,
+			})
 	}
 
 	// maybe dispatch pending requests.
@@ -354,7 +377,9 @@ impl OnDemand {
 	// dispatch pending requests, and discard those for which the corresponding
 	// receiver has been dropped.
 	fn dispatch_pending(&self, ctx: &BasicContext) {
-		if self.pending.read().is_empty() { return }
+		if self.pending.read().is_empty() {
+			return;
+		}
 		let mut pending = self.pending.write();
 
 		debug!(target: "on_demand", "Attempting to dispatch {} pending requests", pending.len());
@@ -362,7 +387,8 @@ impl OnDemand {
 		// iterate over all pending requests, and check them for hang-up.
 		// then, try and find a peer who can serve it.
 		let peers = self.peers.read();
-		*pending = ::std::mem::replace(&mut *pending, Vec::new()).into_iter()
+		*pending = ::std::mem::replace(&mut *pending, Vec::new())
+			.into_iter()
 			.filter(|pending| !pending.sender.is_canceled())
 			.filter_map(|pending| {
 				// the peer we dispatch to is chosen randomly
@@ -372,17 +398,19 @@ impl OnDemand {
 					// TODO: see which requests can be answered by the cache?
 
 					if !peer.can_fulfill(&pending.required_capabilities) {
-						continue
+						continue;
 					}
 
 					match ctx.request_from(*peer_id, pending.net_requests.clone()) {
 						Ok(req_id) => {
 							trace!(target: "on_demand", "Dispatched request {} to peer {}", req_id, peer_id);
 							self.in_transit.write().insert(req_id, pending);
-							return None
+							return None;
 						}
 						Err(net::Error::NoCredits) | Err(net::Error::NotServer) => {}
-						Err(e) => debug!(target: "on_demand", "Error dispatching request to peer: {}", e),
+						Err(e) => {
+							debug!(target: "on_demand", "Error dispatching request to peer: {}", e)
+						}
 					}
 				}
 
@@ -414,11 +442,14 @@ impl Handler for OnDemand {
 		&self,
 		ctx: &EventContext,
 		status: &Status,
-		capabilities: &Capabilities
+		capabilities: &Capabilities,
 	) -> PeerStatus {
 		self.peers.write().insert(
 			ctx.peer(),
-			Peer { status: status.clone(), capabilities: capabilities.clone() }
+			Peer {
+				status: status.clone(),
+				capabilities: capabilities.clone(),
+			},
 		);
 		self.attempt_dispatch(ctx.as_basic());
 		PeerStatus::Kept
@@ -453,7 +484,12 @@ impl Handler for OnDemand {
 		self.attempt_dispatch(ctx.as_basic());
 	}
 
-	fn on_responses(&self, ctx: &EventContext, req_id: ReqId, responses: &[basic_request::Response]) {
+	fn on_responses(
+		&self,
+		ctx: &EventContext,
+		req_id: ReqId,
+		responses: &[basic_request::Response],
+	) {
 		let mut pending = match self.in_transit.write().remove(&req_id) {
 			Some(req) => req,
 			None => return,

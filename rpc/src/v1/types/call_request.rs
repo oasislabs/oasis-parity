@@ -26,7 +26,7 @@ pub struct CallRequest {
 	/// To
 	pub to: Option<H160>,
 	/// Gas Price
-	#[serde(rename="gasPrice")]
+	#[serde(rename = "gasPrice")]
 	pub gas_price: Option<U256>,
 	/// Gas
 	pub gas: Option<U256>,
@@ -54,11 +54,11 @@ impl Into<Request> for CallRequest {
 
 #[cfg(test)]
 mod tests {
-	use std::str::FromStr;
+	use super::CallRequest;
 	use rustc_hex::FromHex;
 	use serde_json;
-	use v1::types::{U256, H160};
-	use super::CallRequest;
+	use std::str::FromStr;
+	use v1::types::{H160, U256};
 
 	#[test]
 	fn call_request_deserialize() {
@@ -73,15 +73,18 @@ mod tests {
 		}"#;
 		let deserialized: CallRequest = serde_json::from_str(s).unwrap();
 
-		assert_eq!(deserialized, CallRequest {
-			from: Some(H160::from(1)),
-			to: Some(H160::from(2)),
-			gas_price: Some(U256::from(1)),
-			gas: Some(U256::from(2)),
-			value: Some(U256::from(3)),
-			data: Some(vec![0x12, 0x34, 0x56].into()),
-			nonce: Some(U256::from(4)),
-		});
+		assert_eq!(
+			deserialized,
+			CallRequest {
+				from: Some(H160::from(1)),
+				to: Some(H160::from(2)),
+				gas_price: Some(U256::from(1)),
+				gas: Some(U256::from(2)),
+				value: Some(U256::from(3)),
+				data: Some(vec![0x12, 0x34, 0x56].into()),
+				nonce: Some(U256::from(4)),
+			}
+		);
 	}
 
 	#[test]
@@ -112,14 +115,17 @@ mod tests {
 		let s = r#"{"from":"0x0000000000000000000000000000000000000001"}"#;
 		let deserialized: CallRequest = serde_json::from_str(s).unwrap();
 
-		assert_eq!(deserialized, CallRequest {
-			from: Some(H160::from(1)),
-			to: None,
-			gas_price: None,
-			gas: None,
-			value: None,
-			data: None,
-			nonce: None,
-		});
+		assert_eq!(
+			deserialized,
+			CallRequest {
+				from: Some(H160::from(1)),
+				to: None,
+				gas_price: None,
+				gas: None,
+				value: None,
+				data: None,
+				nonce: None,
+			}
+		);
 	}
 }

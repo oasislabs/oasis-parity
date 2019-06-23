@@ -16,17 +16,17 @@
 
 //! View onto block body rlp.
 
+use super::ViewRlp;
 use bytes::Bytes;
 use ethereum_types::H256;
 use hash::keccak;
-use header::{Header, BlockNumber};
+use header::{BlockNumber, Header};
 use transaction::{LocalizedTransaction, UnverifiedTransaction};
-use views::{TransactionView, HeaderView};
-use super::ViewRlp;
+use views::{HeaderView, TransactionView};
 
 /// View onto block rlp.
 pub struct BodyView<'a> {
-	rlp: ViewRlp<'a>
+	rlp: ViewRlp<'a>,
 }
 
 impl<'a> BodyView<'a> {
@@ -38,18 +38,16 @@ impl<'a> BodyView<'a> {
 	/// ```
 	/// #[macro_use]
 	/// extern crate ethcore;
-	/// 
+	///
 	/// use ethcore::views::{BodyView};
-	/// 
+	///
 	/// fn main() {
 	/// let bytes : &[u8] = &[];
 	/// let body_view = view!(BodyView, bytes);
 	/// }
 	/// ```
 	pub fn new(rlp: ViewRlp<'a>) -> BodyView<'a> {
-		BodyView {
-			rlp: rlp
-		}
+		BodyView { rlp: rlp }
 	}
 
 	/// Return reference to underlaying rlp.
@@ -63,7 +61,11 @@ impl<'a> BodyView<'a> {
 	}
 
 	/// Return List of transactions with additional localization info.
-	pub fn localized_transactions(&self, block_hash: &H256, block_number: BlockNumber) -> Vec<LocalizedTransaction> {
+	pub fn localized_transactions(
+		&self,
+		block_hash: &H256,
+		block_number: BlockNumber,
+	) -> Vec<LocalizedTransaction> {
 		self.transactions()
 			.into_iter()
 			.enumerate()
@@ -73,7 +75,8 @@ impl<'a> BodyView<'a> {
 				block_number: block_number,
 				transaction_index: i,
 				cached_sender: None,
-			}).collect()
+			})
+			.collect()
 	}
 
 	/// Return the raw rlp for the transactions in the given block.
@@ -87,21 +90,35 @@ impl<'a> BodyView<'a> {
 	}
 	/// Return List of transactions in given block.
 	pub fn transaction_views(&self) -> Vec<TransactionView<'a>> {
-		self.transactions_rlp().iter().map(TransactionView::new).collect()
+		self.transactions_rlp()
+			.iter()
+			.map(TransactionView::new)
+			.collect()
 	}
 
 	/// Return transaction hashes.
 	pub fn transaction_hashes(&self) -> Vec<H256> {
-		self.transactions_rlp().iter().map(|rlp| keccak(rlp.as_raw())).collect()
+		self.transactions_rlp()
+			.iter()
+			.map(|rlp| keccak(rlp.as_raw()))
+			.collect()
 	}
 
 	/// Returns transaction at given index without deserializing unnecessary data.
 	pub fn transaction_at(&self, index: usize) -> Option<UnverifiedTransaction> {
-		self.transactions_rlp().iter().nth(index).map(|rlp| rlp.as_val())
+		self.transactions_rlp()
+			.iter()
+			.nth(index)
+			.map(|rlp| rlp.as_val())
 	}
 
 	/// Returns localized transaction at given index.
-	pub fn localized_transaction_at(&self, block_hash: &H256, block_number: BlockNumber, index: usize) -> Option<LocalizedTransaction> {
+	pub fn localized_transaction_at(
+		&self,
+		block_hash: &H256,
+		block_number: BlockNumber,
+		index: usize,
+	) -> Option<LocalizedTransaction> {
 		self.transaction_at(index).map(|t| LocalizedTransaction {
 			signed: t,
 			block_hash: block_hash.clone(),
@@ -133,7 +150,10 @@ impl<'a> BodyView<'a> {
 
 	/// Return list of uncle hashes of given block.
 	pub fn uncle_hashes(&self) -> Vec<H256> {
-		self.uncles_rlp().iter().map(|rlp| keccak(rlp.as_raw())).collect()
+		self.uncles_rlp()
+			.iter()
+			.map(|rlp| keccak(rlp.as_raw()))
+			.collect()
 	}
 
 	/// Return nth uncle.
@@ -143,15 +163,18 @@ impl<'a> BodyView<'a> {
 
 	/// Return nth uncle rlp.
 	pub fn uncle_rlp_at(&self, index: usize) -> Option<Bytes> {
-		self.uncles_rlp().iter().nth(index).map(|rlp| rlp.as_raw().to_vec())
+		self.uncles_rlp()
+			.iter()
+			.nth(index)
+			.map(|rlp| rlp.as_raw().to_vec())
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use rustc_hex::FromHex;
 	use super::BodyView;
 	use blockchain::BlockChain;
+	use rustc_hex::FromHex;
 
 	#[test]
 	fn test_block_view() {

@@ -14,12 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{cmp, thread};
-use std::sync::Arc;
-use std::collections::VecDeque;
 use parking_lot::Mutex;
+use std::collections::VecDeque;
+use std::sync::Arc;
+use std::{cmp, thread};
 
-use ethstore::{PresaleWallet, Error};
+use ethstore::{Error, PresaleWallet};
 use num_cpus;
 
 pub fn run(passwords: VecDeque<String>, wallet_path: &str) -> Result<(), Error> {
@@ -36,7 +36,9 @@ pub fn run(passwords: VecDeque<String>, wallet_path: &str) -> Result<(), Error> 
 	}
 
 	for handle in handles {
-		handle.join().map_err(|err| Error::Custom(format!("Error finishing thread: {:?}", err)))?;
+		handle
+			.join()
+			.map_err(|err| Error::Custom(format!("Error finishing thread: {:?}", err)))?;
 	}
 
 	Ok(())
@@ -57,9 +59,9 @@ fn look_for_password(passwords: Arc<Mutex<VecDeque<String>>>, wallet: PresaleWal
 					println!("Found password: {}", &pass);
 					passwords.lock().clear();
 					return;
-				},
+				}
 				_ if counter % 100 == 0 => print!("."),
-				_ => {},
+				_ => {}
 			}
 		}
 	}

@@ -14,31 +14,34 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::str::{FromStr, from_utf8};
-use std::{io, fs};
-use std::io::{BufReader, BufRead};
-use std::time::{Instant, Duration};
-use std::thread::sleep;
-use std::sync::Arc;
-use rustc_hex::FromHex;
-use hash::{keccak, KECCAK_NULL_RLP};
-use ethereum_types::{U256, H256, Address};
 use bytes::ToPretty;
-use rlp::PayloadInfo;
+use cache::CacheConfig;
+use db;
+use dir::Directories;
 use ethcore::account_provider::AccountProvider;
-use ethcore::client::{Mode, DatabaseCompactionProfile, VMType, BlockImportError, Nonce, Balance, BlockChainClient, BlockId, BlockInfo, ImportBlock};
-use ethcore::error::{ImportErrorKind, BlockImportErrorKind};
+use ethcore::client::{
+	Balance, BlockChainClient, BlockId, BlockImportError, BlockInfo, DatabaseCompactionProfile,
+	ImportBlock, Mode, Nonce, VMType,
+};
+use ethcore::error::{BlockImportErrorKind, ImportErrorKind};
 use ethcore::miner::Miner;
 use ethcore::verification::queue::VerifierSettings;
-use ethcore_service::ClientService;
-use cache::CacheConfig;
-use informant::{Informant, FullNodeInformantData, MillisecondDuration};
-use params::{SpecType, Pruning, Switch, tracing_switch_to_bool, fatdb_switch_to_bool};
-use helpers::{to_client_config, execute_upgrades};
-use dir::Directories;
-use user_defaults::UserDefaults;
 use ethcore_private_tx;
-use db;
+use ethcore_service::ClientService;
+use ethereum_types::{Address, H256, U256};
+use hash::{keccak, KECCAK_NULL_RLP};
+use helpers::{execute_upgrades, to_client_config};
+use informant::{FullNodeInformantData, Informant, MillisecondDuration};
+use params::{fatdb_switch_to_bool, tracing_switch_to_bool, Pruning, SpecType, Switch};
+use rlp::PayloadInfo;
+use rustc_hex::FromHex;
+use std::io::{BufRead, BufReader};
+use std::str::{from_utf8, FromStr};
+use std::sync::Arc;
+use std::thread::sleep;
+use std::time::{Duration, Instant};
+use std::{fs, io};
+use user_defaults::UserDefaults;
 
 #[derive(Debug, PartialEq)]
 pub enum DataFormat {
@@ -59,7 +62,7 @@ impl FromStr for DataFormat {
 		match s {
 			"binary" | "bin" => Ok(DataFormat::Binary),
 			"hex" => Ok(DataFormat::Hex),
-			x => Err(format!("Invalid format: {}", x))
+			x => Err(format!("Invalid format: {}", x)),
 		}
 	}
 }
@@ -156,8 +159,8 @@ pub fn execute(cmd: BlockchainCmd) -> Result<(), String> {
 }
 
 fn execute_import_light(cmd: ImportBlockchain) -> Result<(), String> {
-	use light::client::{Service as LightClientService, Config as LightClientConfig};
 	use light::cache::Cache as LightDataCache;
+	use light::client::{Config as LightClientConfig, Service as LightClientService};
 	use parking_lot::Mutex;
 
 	let timer = Instant::now();
@@ -189,9 +192,10 @@ fn execute_import_light(cmd: ImportBlockchain) -> Result<(), String> {
 	// create dirs used by parity
 	cmd.dirs.create_dirs(false, false, false)?;
 
-	let cache = Arc::new(Mutex::new(
-		LightDataCache::new(Default::default(), Duration::new(0, 0))
-	));
+	let cache = Arc::new(Mutex::new(LightDataCache::new(
+		Default::default(),
+		Duration::new(0, 0),
+	)));
 
 	let mut config = LightClientConfig {
 		queue: Default::default(),
@@ -205,10 +209,14 @@ fn execute_import_light(cmd: ImportBlockchain) -> Result<(), String> {
 	config.queue.verifier_settings = cmd.verifier_settings;
 
 	// initialize database.
-	let db = db::open_db(&client_path.to_str().expect("DB path could not be converted to string."),
-						 &cmd.cache_config,
-						 &cmd.compaction,
-						 cmd.wal)?;
+	let db = db::open_db(
+		&client_path
+			.to_str()
+			.expect("DB path could not be converted to string."),
+		&cmd.cache_config,
+		&cmd.compaction,
+		cmd.wal,
+	)?;
 
 	// TODO: could epoch signals be avilable at the end of the file?
 	let fetch = ::light::client::fetch::unavailable();
@@ -221,7 +229,9 @@ fn execute_import_light(cmd: ImportBlockchain) -> Result<(), String> {
 	let client = service.client();
 
 	let mut instream: Box<io::Read> = match cmd.file_path {
-		Some(f) => Box::new(fs::File::open(&f).map_err(|_| format!("Cannot open given file: {}", f))?),
+		Some(f) => {
+			Box::new(fs::File::open(&f).map_err(|_| format!("Cannot open given file: {}", f))?)
+		}
 		None => Box::new(io::stdin()),
 	};
 
@@ -233,7 +243,9 @@ fn execute_import_light(cmd: ImportBlockchain) -> Result<(), String> {
 	let format = match cmd.format {
 		Some(format) => format,
 		None => {
-			first_read = instream.read(&mut first_bytes).map_err(|_| "Error reading from the file/stream.")?;
+			first_read = instream
+				.read(&mut first_bytes)
+				.map_err(|_| "Error reading from the file/stream.")?;
 			match first_bytes[0] {
 				0xf9 => DataFormat::Binary,
 				_ => DataFormat::Hex,
@@ -242,50 +254,72 @@ fn execute_import_light(cmd: ImportBlockchain) -> Result<(), String> {
 	};
 
 	let do_import = |bytes: Vec<u8>| {
-		while client.queue_info().is_full() { sleep(Duration::from_secs(1)); }
+		while client.queue_info().is_full() {
+			sleep(Duration::from_secs(1));
+		}
 
-		let header: ::ethcore::header::Header = ::rlp::Rlp::new(&bytes).val_at(0)
+		let header: ::ethcore::header::Header = ::rlp::Rlp::new(&bytes)
+			.val_at(0)
 			.map_err(|e| format!("Bad block: {}", e))?;
 
-		if client.best_block_header().number() >= header.number() { return Ok(()) }
+		if client.best_block_header().number() >= header.number() {
+			return Ok(());
+		}
 
 		if header.number() % 10000 == 0 {
 			info!("#{}", header.number());
 		}
 
 		match client.import_header(header) {
-			Err(BlockImportError(BlockImportErrorKind::Import(ImportErrorKind::AlreadyInChain), _)) => {
+			Err(BlockImportError(
+				BlockImportErrorKind::Import(ImportErrorKind::AlreadyInChain),
+				_,
+			)) => {
 				trace!("Skipping block already in chain.");
 			}
 			Err(e) => {
 				return Err(format!("Cannot import block: {:?}", e));
-			},
-			Ok(_) => {},
+			}
+			Ok(_) => {}
 		}
 		Ok(())
 	};
 
 	match format {
-		DataFormat::Binary => {
-			loop {
-				let mut bytes = if first_read > 0 {first_bytes.clone()} else {vec![0; READAHEAD_BYTES]};
-				let n = if first_read > 0 {
-					first_read
-				} else {
-					instream.read(&mut bytes).map_err(|_| "Error reading from the file/stream.")?
-				};
-				if n == 0 { break; }
-				first_read = 0;
-				let s = PayloadInfo::from(&bytes).map_err(|e| format!("Invalid RLP in the file/stream: {:?}", e))?.total();
-				bytes.resize(s, 0);
-				instream.read_exact(&mut bytes[n..]).map_err(|_| "Error reading from the file/stream.")?;
-				do_import(bytes)?;
+		DataFormat::Binary => loop {
+			let mut bytes = if first_read > 0 {
+				first_bytes.clone()
+			} else {
+				vec![0; READAHEAD_BYTES]
+			};
+			let n = if first_read > 0 {
+				first_read
+			} else {
+				instream
+					.read(&mut bytes)
+					.map_err(|_| "Error reading from the file/stream.")?
+			};
+			if n == 0 {
+				break;
 			}
-		}
+			first_read = 0;
+			let s = PayloadInfo::from(&bytes)
+				.map_err(|e| format!("Invalid RLP in the file/stream: {:?}", e))?
+				.total();
+			bytes.resize(s, 0);
+			instream
+				.read_exact(&mut bytes[n..])
+				.map_err(|_| "Error reading from the file/stream.")?;
+			do_import(bytes)?;
+		},
 		DataFormat::Hex => {
 			for line in BufReader::new(instream).lines() {
 				let s = line.map_err(|_| "Error reading from the file/stream.")?;
-				let s = if first_read > 0 {from_utf8(&first_bytes).unwrap().to_owned() + &(s[..])} else {s};
+				let s = if first_read > 0 {
+					from_utf8(&first_bytes).unwrap().to_owned() + &(s[..])
+				} else {
+					s
+				};
 				first_read = 0;
 				let bytes = s.from_hex().map_err(|_| "Invalid hex in file/stream.")?;
 				do_import(bytes)?;
@@ -297,7 +331,8 @@ fn execute_import_light(cmd: ImportBlockchain) -> Result<(), String> {
 	let ms = timer.elapsed().as_milliseconds();
 	let report = client.report();
 
-	info!("Import completed in {} seconds, {} headers, {} hdr/s",
+	info!(
+		"Import completed in {} seconds, {} headers, {} hdr/s",
 		ms / 1000,
 		report.blocks_imported,
 		(report.blocks_imported * 1000) as u64 / ms,
@@ -357,7 +392,7 @@ fn execute_import(cmd: ImportBlockchain) -> Result<(), String> {
 		algorithm,
 		cmd.pruning_history,
 		cmd.pruning_memory,
-		cmd.check_seal
+		cmd.check_seal,
 	);
 
 	client_config.queue.verifier_settings = cmd.verifier_settings;
@@ -379,7 +414,8 @@ fn execute_import(cmd: ImportBlockchain) -> Result<(), String> {
 		Arc::new(AccountProvider::transient_provider()),
 		Box::new(ethcore_private_tx::NoopEncryptor),
 		Default::default(),
-	).map_err(|e| format!("Client service error: {:?}", e))?;
+	)
+	.map_err(|e| format!("Client service error: {:?}", e))?;
 
 	// free up the spec in memory.
 	drop(spec);
@@ -387,7 +423,9 @@ fn execute_import(cmd: ImportBlockchain) -> Result<(), String> {
 	let client = service.client();
 
 	let mut instream: Box<io::Read> = match cmd.file_path {
-		Some(f) => Box::new(fs::File::open(&f).map_err(|_| format!("Cannot open given file: {}", f))?),
+		Some(f) => {
+			Box::new(fs::File::open(&f).map_err(|_| format!("Cannot open given file: {}", f))?)
+		}
 		None => Box::new(io::stdin()),
 	};
 
@@ -399,7 +437,9 @@ fn execute_import(cmd: ImportBlockchain) -> Result<(), String> {
 	let format = match cmd.format {
 		Some(format) => format,
 		None => {
-			first_read = instream.read(&mut first_bytes).map_err(|_| "Error reading from the file/stream.")?;
+			first_read = instream
+				.read(&mut first_bytes)
+				.map_err(|_| "Error reading from the file/stream.")?;
 			match first_bytes[0] {
 				0xf9 => DataFormat::Binary,
 				_ => DataFormat::Hex,
@@ -418,43 +458,64 @@ fn execute_import(cmd: ImportBlockchain) -> Result<(), String> {
 		cmd.with_color,
 	));
 
-	service.register_io_handler(informant).map_err(|_| "Unable to register informant handler".to_owned())?;
+	service
+		.register_io_handler(informant)
+		.map_err(|_| "Unable to register informant handler".to_owned())?;
 
 	let do_import = |bytes| {
-		while client.queue_info().is_full() { sleep(Duration::from_secs(1)); }
+		while client.queue_info().is_full() {
+			sleep(Duration::from_secs(1));
+		}
 		match client.import_block(bytes) {
-			Err(BlockImportError(BlockImportErrorKind::Import(ImportErrorKind::AlreadyInChain), _)) => {
+			Err(BlockImportError(
+				BlockImportErrorKind::Import(ImportErrorKind::AlreadyInChain),
+				_,
+			)) => {
 				trace!("Skipping block already in chain.");
 			}
 			Err(e) => {
 				return Err(format!("Cannot import block: {:?}", e));
-			},
-			Ok(_) => {},
+			}
+			Ok(_) => {}
 		}
 		Ok(())
 	};
 
 	match format {
-		DataFormat::Binary => {
-			loop {
-				let mut bytes = if first_read > 0 {first_bytes.clone()} else {vec![0; READAHEAD_BYTES]};
-				let n = if first_read > 0 {
-					first_read
-				} else {
-					instream.read(&mut bytes).map_err(|_| "Error reading from the file/stream.")?
-				};
-				if n == 0 { break; }
-				first_read = 0;
-				let s = PayloadInfo::from(&bytes).map_err(|e| format!("Invalid RLP in the file/stream: {:?}", e))?.total();
-				bytes.resize(s, 0);
-				instream.read_exact(&mut bytes[n..]).map_err(|_| "Error reading from the file/stream.")?;
-				do_import(bytes)?;
+		DataFormat::Binary => loop {
+			let mut bytes = if first_read > 0 {
+				first_bytes.clone()
+			} else {
+				vec![0; READAHEAD_BYTES]
+			};
+			let n = if first_read > 0 {
+				first_read
+			} else {
+				instream
+					.read(&mut bytes)
+					.map_err(|_| "Error reading from the file/stream.")?
+			};
+			if n == 0 {
+				break;
 			}
-		}
+			first_read = 0;
+			let s = PayloadInfo::from(&bytes)
+				.map_err(|e| format!("Invalid RLP in the file/stream: {:?}", e))?
+				.total();
+			bytes.resize(s, 0);
+			instream
+				.read_exact(&mut bytes[n..])
+				.map_err(|_| "Error reading from the file/stream.")?;
+			do_import(bytes)?;
+		},
 		DataFormat::Hex => {
 			for line in BufReader::new(instream).lines() {
 				let s = line.map_err(|_| "Error reading from the file/stream.")?;
-				let s = if first_read > 0 {from_utf8(&first_bytes).unwrap().to_owned() + &(s[..])} else {s};
+				let s = if first_read > 0 {
+					from_utf8(&first_bytes).unwrap().to_owned() + &(s[..])
+				} else {
+					s
+				};
 				first_read = 0;
 				let bytes = s.from_hex().map_err(|_| "Invalid hex in file/stream.")?;
 				do_import(bytes)?;
@@ -497,7 +558,6 @@ fn start_client(
 	cache_config: CacheConfig,
 	require_fat_db: bool,
 ) -> Result<ClientService, String> {
-
 	// load spec file
 	let spec = spec.spec(&dirs.cache)?;
 
@@ -568,7 +628,8 @@ fn start_client(
 		Arc::new(AccountProvider::transient_provider()),
 		Box::new(ethcore_private_tx::NoopEncryptor),
 		Default::default(),
-	).map_err(|e| format!("Client service error: {:?}", e))?;
+	)
+	.map_err(|e| format!("Client service error: {:?}", e))?;
 
 	drop(spec);
 	Ok(service)
@@ -593,24 +654,35 @@ fn execute_export(cmd: ExportBlockchain) -> Result<(), String> {
 	let client = service.client();
 
 	let mut out: Box<io::Write> = match cmd.file_path {
-		Some(f) => Box::new(fs::File::create(&f).map_err(|_| format!("Cannot write to file given: {}", f))?),
+		Some(f) => Box::new(
+			fs::File::create(&f).map_err(|_| format!("Cannot write to file given: {}", f))?,
+		),
 		None => Box::new(io::stdout()),
 	};
 
-	let from = client.block_number(cmd.from_block).ok_or("From block could not be found")?;
-	let to = client.block_number(cmd.to_block).ok_or("To block could not be found")?;
+	let from = client
+		.block_number(cmd.from_block)
+		.ok_or("From block could not be found")?;
+	let to = client
+		.block_number(cmd.to_block)
+		.ok_or("To block could not be found")?;
 
 	for i in from..(to + 1) {
 		if i % 10000 == 0 {
 			info!("#{}", i);
 		}
-		let b = client.block(BlockId::Number(i)).ok_or("Error exporting incomplete chain")?.into_inner();
+		let b = client
+			.block(BlockId::Number(i))
+			.ok_or("Error exporting incomplete chain")?
+			.into_inner();
 		match format {
 			DataFormat::Binary => {
-				out.write(&b).map_err(|e| format!("Couldn't write to stream. Cause: {}", e))?;
+				out.write(&b)
+					.map_err(|e| format!("Couldn't write to stream. Cause: {}", e))?;
 			}
 			DataFormat::Hex => {
-				out.write_fmt(format_args!("{}", b.pretty())).map_err(|e| format!("Couldn't write to stream. Cause: {}", e))?;
+				out.write_fmt(format_args!("{}", b.pretty()))
+					.map_err(|e| format!("Couldn't write to stream. Cause: {}", e))?;
 			}
 		}
 	}
@@ -631,13 +703,15 @@ fn execute_export_state(cmd: ExportState) -> Result<(), String> {
 		cmd.compaction,
 		cmd.wal,
 		cmd.cache_config,
-		true
+		true,
 	)?;
 
 	let client = service.client();
 
 	let mut out: Box<io::Write> = match cmd.file_path {
-		Some(f) => Box::new(fs::File::create(&f).map_err(|_| format!("Cannot write to file given: {}", f))?),
+		Some(f) => Box::new(
+			fs::File::create(&f).map_err(|_| format!("Cannot write to file given: {}", f))?,
+		),
 		None => Box::new(io::stdout()),
 	};
 
@@ -645,16 +719,23 @@ fn execute_export_state(cmd: ExportState) -> Result<(), String> {
 	let at = cmd.at;
 	let mut i = 0usize;
 
-	out.write_fmt(format_args!("{{ \"state\": {{", )).expect("Couldn't write to stream.");
+	out.write_fmt(format_args!("{{ \"state\": {{",))
+		.expect("Couldn't write to stream.");
 	loop {
-		let accounts = client.list_accounts(at, last.as_ref(), 1000).ok_or("Specified block not found")?;
+		let accounts = client
+			.list_accounts(at, last.as_ref(), 1000)
+			.ok_or("Specified block not found")?;
 		if accounts.is_empty() {
 			break;
 		}
 
 		for account in accounts.into_iter() {
-			let balance = client.balance(&account, at.into()).unwrap_or_else(U256::zero);
-			if cmd.min_balance.map_or(false, |m| balance < m) || cmd.max_balance.map_or(false, |m| balance > m) {
+			let balance = client
+				.balance(&account, at.into())
+				.unwrap_or_else(U256::zero);
+			if cmd.min_balance.map_or(false, |m| balance < m)
+				|| cmd.max_balance.map_or(false, |m| balance > m)
+			{
 				last = Some(account);
 				continue; //filtered out
 			}
@@ -662,22 +743,37 @@ fn execute_export_state(cmd: ExportState) -> Result<(), String> {
 			if i != 0 {
 				out.write(b",").expect("Write error");
 			}
-			out.write_fmt(format_args!("\n\"0x{:x}\": {{\"balance\": \"{:x}\", \"nonce\": \"{:x}\"", account, balance, client.nonce(&account, at).unwrap_or_else(U256::zero))).expect("Write error");
-			let code = client.code(&account, at.into()).unwrap_or(None).unwrap_or_else(Vec::new);
+			out.write_fmt(format_args!(
+				"\n\"0x{:x}\": {{\"balance\": \"{:x}\", \"nonce\": \"{:x}\"",
+				account,
+				balance,
+				client.nonce(&account, at).unwrap_or_else(U256::zero)
+			))
+			.expect("Write error");
+			let code = client
+				.code(&account, at.into())
+				.unwrap_or(None)
+				.unwrap_or_else(Vec::new);
 			if !code.is_empty() {
-				out.write_fmt(format_args!(", \"code_hash\": \"0x{:x}\"", keccak(&code))).expect("Write error");
+				out.write_fmt(format_args!(", \"code_hash\": \"0x{:x}\"", keccak(&code)))
+					.expect("Write error");
 				if cmd.code {
-					out.write_fmt(format_args!(", \"code\": \"{}\"", code.to_hex())).expect("Write error");
+					out.write_fmt(format_args!(", \"code\": \"{}\"", code.to_hex()))
+						.expect("Write error");
 				}
 			}
 			let storage_root = client.storage_root(&account, at).unwrap_or(KECCAK_NULL_RLP);
 			if storage_root != KECCAK_NULL_RLP {
-				out.write_fmt(format_args!(", \"storage_root\": \"0x{:x}\"", storage_root)).expect("Write error");
+				out.write_fmt(format_args!(", \"storage_root\": \"0x{:x}\"", storage_root))
+					.expect("Write error");
 				if cmd.storage {
-					out.write_fmt(format_args!(", \"storage\": {{")).expect("Write error");
+					out.write_fmt(format_args!(", \"storage\": {{"))
+						.expect("Write error");
 					let mut last_storage: Option<H256> = None;
 					loop {
-						let keys = client.list_storage(at, &account, last_storage.as_ref(), 1000).ok_or("Specified block not found")?;
+						let keys = client
+							.list_storage(at, &account, last_storage.as_ref(), 1000)
+							.ok_or("Specified block not found")?;
 						if keys.is_empty() {
 							break;
 						}
@@ -686,7 +782,14 @@ fn execute_export_state(cmd: ExportState) -> Result<(), String> {
 							if last_storage.is_some() {
 								out.write(b",").expect("Write error");
 							}
-							out.write_fmt(format_args!("\n\t\"0x{:x}\": \"0x{:x}\"", key, client.storage_at(&account, &key, at.into()).unwrap_or_else(Default::default))).expect("Write error");
+							out.write_fmt(format_args!(
+								"\n\t\"0x{:x}\": \"0x{:x}\"",
+								key,
+								client
+									.storage_at(&account, &key, at.into())
+									.unwrap_or_else(Default::default)
+							))
+							.expect("Write error");
 							last_storage = Some(key);
 						}
 					}

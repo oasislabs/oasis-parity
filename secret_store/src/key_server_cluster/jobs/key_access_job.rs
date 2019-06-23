@@ -14,10 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+use key_server_cluster::jobs::job_session::{
+	JobExecutor, JobPartialRequestAction, JobPartialResponseAction,
+};
+use key_server_cluster::{AclStorage, Error, NodeId, Requester, SessionId};
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
-use std::collections::{BTreeSet, BTreeMap};
-use key_server_cluster::{Error, NodeId, SessionId, Requester, AclStorage};
-use key_server_cluster::jobs::job_session::{JobPartialResponseAction, JobPartialRequestAction, JobExecutor};
 
 /// Purpose of this job is to construct set of nodes, which have agreed to provide access to the given key for the given requestor.
 pub struct KeyAccessJob {
@@ -41,7 +43,11 @@ impl KeyAccessJob {
 		}
 	}
 
-	pub fn new_on_master(id: SessionId, acl_storage: Arc<AclStorage>, requester: Requester) -> Self {
+	pub fn new_on_master(
+		id: SessionId,
+		acl_storage: Arc<AclStorage>,
+		requester: Requester,
+	) -> Self {
 		KeyAccessJob {
 			id: id,
 			has_key_share: true,
@@ -68,26 +74,56 @@ impl JobExecutor for KeyAccessJob {
 	type PartialJobResponse = bool;
 	type JobResponse = BTreeSet<NodeId>;
 
-	fn prepare_partial_request(&self, _node: &NodeId, _nodes: &BTreeSet<NodeId>) -> Result<Requester, Error> {
+	fn prepare_partial_request(
+		&self,
+		_node: &NodeId,
+		_nodes: &BTreeSet<NodeId>,
+	) -> Result<Requester, Error> {
 		Ok(self.requester.as_ref().expect("prepare_partial_request is only called on master nodes; new_on_master fills the signature; qed").clone())
 	}
 
-	fn process_partial_request(&mut self, partial_request: Requester) -> Result<JobPartialRequestAction<bool>, Error> {
+	fn process_partial_request(
+		&mut self,
+		partial_request: Requester,
+	) -> Result<JobPartialRequestAction<bool>, Error> {
 		if !self.has_key_share {
 			return Ok(JobPartialRequestAction::Reject(false));
 		}
-		
+
 		self.requester = Some(partial_request.clone());
-		self.acl_storage.check(partial_request.address(&self.id).map_err(Error::InsufficientRequesterData)?, &self.id)
+		self.acl_storage
+			.check(
+				partial_request
+					.address(&self.id)
+					.map_err(Error::InsufficientRequesterData)?,
+				&self.id,
+			)
 			.map_err(|_| Error::AccessDenied)
-			.map(|is_confirmed| if is_confirmed { JobPartialRequestAction::Respond(true) } else { JobPartialRequestAction::Reject(false) })
+			.map(|is_confirmed| {
+				if is_confirmed {
+					JobPartialRequestAction::Respond(true)
+				} else {
+					JobPartialRequestAction::Reject(false)
+				}
+			})
 	}
 
-	fn check_partial_response(&mut self, _sender: &NodeId, partial_response: &bool) -> Result<JobPartialResponseAction, Error> {
-		Ok(if *partial_response { JobPartialResponseAction::Accept } else { JobPartialResponseAction::Reject })
+	fn check_partial_response(
+		&mut self,
+		_sender: &NodeId,
+		partial_response: &bool,
+	) -> Result<JobPartialResponseAction, Error> {
+		Ok(if *partial_response {
+			JobPartialResponseAction::Accept
+		} else {
+			JobPartialResponseAction::Reject
+		})
 	}
 
-	fn compute_response(&self, partial_responses: &BTreeMap<NodeId, bool>) -> Result<BTreeSet<NodeId>, Error> {
+	fn compute_response(
+		&self,
+		partial_responses: &BTreeMap<NodeId, bool>,
+	) -> Result<BTreeSet<NodeId>, Error> {
 		Ok(partial_responses.keys().cloned().collect())
 	}
 }

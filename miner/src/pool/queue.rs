@@ -16,21 +16,24 @@
 
 //! Ethereum Transaction Queue
 
-use std::{cmp, fmt};
-use std::sync::Arc;
-use std::sync::atomic::{self, AtomicUsize};
 use std::collections::BTreeMap;
+use std::sync::atomic::{self, AtomicUsize};
+use std::sync::Arc;
+use std::{cmp, fmt};
 
-use ethereum_types::{H256, U256, Address};
+use ethereum_types::{Address, H256, U256};
 use parking_lot::RwLock;
 use rayon::prelude::*;
 use transaction;
 use txpool::{self, Verifier};
 
-use pool::{self, scoring, verifier, client, ready, listener, PrioritizationStrategy};
 use pool::local_transactions::LocalTransactionsList;
+use pool::{self, client, listener, ready, scoring, verifier, PrioritizationStrategy};
 
-type Listener = (LocalTransactionsList, (listener::Notifier, listener::Logger));
+type Listener = (
+	LocalTransactionsList,
+	(listener::Notifier, listener::Logger),
+);
 type Pool = txpool::Pool<pool::VerifiedTransaction, scoring::NonceAndGasPrice, Listener>;
 
 /// Max cache time in milliseconds for pending transactions.
@@ -151,7 +154,11 @@ impl TransactionQueue {
 	) -> Self {
 		TransactionQueue {
 			insertion_id: Default::default(),
-			pool: RwLock::new(txpool::Pool::new(Default::default(), scoring::NonceAndGasPrice(strategy), limits)),
+			pool: RwLock::new(txpool::Pool::new(
+				Default::default(),
+				scoring::NonceAndGasPrice(strategy),
+				limits,
+			)),
 			options: RwLock::new(verification_options),
 			cached_pending: RwLock::new(CachedPending::none()),
 		}
@@ -181,11 +188,15 @@ impl TransactionQueue {
 		let results = transactions
 			.into_par_iter()
 			.map(|transaction| verifier.verify_transaction(transaction))
-			.map(|result| result.and_then(|verified| {
-				self.pool.write().import(verified)
-					.map(|_imported| ())
-					.map_err(convert_error)
-			}))
+			.map(|result| {
+				result.and_then(|verified| {
+					self.pool
+						.write()
+						.import(verified)
+						.map(|_imported| ())
+						.map_err(convert_error)
+				})
+			})
 			.collect::<Vec<_>>();
 
 		// Notify about imported transactions.
@@ -215,21 +226,30 @@ impl TransactionQueue {
 		block_number: u64,
 		current_timestamp: u64,
 		nonce_cap: Option<U256>,
-	) -> Vec<Arc<pool::VerifiedTransaction>> where
+	) -> Vec<Arc<pool::VerifiedTransaction>>
+	where
 		C: client::NonceClient,
 	{
-
-		if let Some(pending) = self.cached_pending.read().pending(block_number, current_timestamp, nonce_cap.as_ref()) {
+		if let Some(pending) =
+			self.cached_pending
+				.read()
+				.pending(block_number, current_timestamp, nonce_cap.as_ref())
+		{
 			return pending;
 		}
 
 		// Double check after acquiring write lock
 		let mut cached_pending = self.cached_pending.write();
-		if let Some(pending) = cached_pending.pending(block_number, current_timestamp, nonce_cap.as_ref()) {
+		if let Some(pending) =
+			cached_pending.pending(block_number, current_timestamp, nonce_cap.as_ref())
+		{
 			return pending;
 		}
 
-		let pending: Vec<_> = self.collect_pending(client, block_number, current_timestamp, nonce_cap, |i| i.collect());
+		let pending: Vec<_> =
+			self.collect_pending(client, block_number, current_timestamp, nonce_cap, |i| {
+				i.collect()
+			});
 
 		*cached_pending = CachedPending {
 			block_number,
@@ -253,14 +273,17 @@ impl TransactionQueue {
 		current_timestamp: u64,
 		nonce_cap: Option<U256>,
 		collect: F,
-	) -> T where
+	) -> T
+	where
 		C: client::NonceClient,
-		F: FnOnce(txpool::PendingIterator<
-			pool::VerifiedTransaction,
-			(ready::Condition, ready::State<C>),
-			scoring::NonceAndGasPrice,
-			Listener,
-		>) -> T,
+		F: FnOnce(
+			txpool::PendingIterator<
+				pool::VerifiedTransaction,
+				(ready::Condition, ready::State<C>),
+				scoring::NonceAndGasPrice,
+				Listener,
+			>,
+		) -> T,
 	{
 		let pending_readiness = ready::Condition::new(block_number, current_timestamp);
 		// don't mark any transactions as stale at this point.
@@ -273,10 +296,7 @@ impl TransactionQueue {
 	}
 
 	/// Culls all stalled transactions from the pool.
-	pub fn cull<C: client::NonceClient>(
-		&self,
-		client: C,
-	) {
+	pub fn cull<C: client::NonceClient>(&self, client: C) {
 		// We don't care about future transactions, so nonce_cap is not important.
 		let nonce_cap = None;
 		// We want to clear stale transactions from the queue as well.
@@ -299,11 +319,7 @@ impl TransactionQueue {
 
 	/// Returns next valid nonce for given sender
 	/// or `None` if there are no pending transactions from that sender.
-	pub fn next_nonce<C: client::NonceClient>(
-		&self,
-		client: C,
-		address: &Address,
-	) -> Option<U256> {
+	pub fn next_nonce<C: client::NonceClient>(&self, client: C, address: &Address) -> Option<U256> {
 		// Do not take nonce_cap into account when determining next nonce.
 		let nonce_cap = None;
 		// Also we ignore stale transactions in the queue.
@@ -311,7 +327,9 @@ impl TransactionQueue {
 
 		let state_readiness = ready::State::new(client, stale_id, nonce_cap);
 
-		self.pool.read().pending_from_sender(state_readiness, address)
+		self.pool
+			.read()
+			.pending_from_sender(state_readiness, address)
 			.last()
 			.map(|tx| tx.signed().nonce + U256::one())
 	}
@@ -320,10 +338,7 @@ impl TransactionQueue {
 	///
 	/// Given transaction hash looks up that transaction in the pool
 	/// and returns a shared pointer to it or `None` if it's not present.
-	pub fn find(
-		&self,
-		hash: &H256,
-	) -> Option<Arc<pool::VerifiedTransaction>> {
+	pub fn find(&self, hash: &H256) -> Option<Arc<pool::VerifiedTransaction>> {
 		self.pool.read().find(hash)
 	}
 
@@ -402,7 +417,14 @@ impl TransactionQueue {
 
 	/// Returns status of recently seen local transactions.
 	pub fn local_transactions(&self) -> BTreeMap<H256, pool::local_transactions::Status> {
-		self.pool.read().listener().0.all_transactions().iter().map(|(a, b)| (*a, b.clone())).collect()
+		self.pool
+			.read()
+			.listener()
+			.0
+			.all_transactions()
+			.iter()
+			.map(|(a, b)| (*a, b.clone()))
+			.collect()
 	}
 
 	/// Add a callback to be notified about all transactions entering the pool.
@@ -422,7 +444,7 @@ fn convert_error(err: txpool::Error) -> transaction::Error {
 		ref e => {
 			warn!(target: "txqueue", "Unknown import error: {:?}", e);
 			transaction::Error::NotAllowed
-		},
+		}
 	}
 }
 
@@ -433,7 +455,11 @@ mod tests {
 
 	#[test]
 	fn should_get_pending_transactions() {
-		let queue = TransactionQueue::new(txpool::Options::default(), verifier::Options::default(), PrioritizationStrategy::GasPriceOnly);
+		let queue = TransactionQueue::new(
+			txpool::Options::default(),
+			verifier::Options::default(),
+			PrioritizationStrategy::GasPriceOnly,
+		);
 
 		let pending: Vec<_> = queue.pending(TestClient::default(), 0, 0, None);
 

@@ -16,10 +16,10 @@
 
 //! Transaction test transaction deserialization.
 
-use uint::Uint;
 use bytes::Bytes;
 use hash::Address;
 use maybe::MaybeEmpty;
+use uint::Uint;
 
 /// Transaction test transaction deserialization.
 #[derive(Debug, PartialEq, Deserialize)]
@@ -27,10 +27,10 @@ pub struct Transaction {
 	/// Transaction data.
 	pub data: Bytes,
 	/// Gas limit.
-	#[serde(rename="gasLimit")]
+	#[serde(rename = "gasLimit")]
 	pub gas_limit: Uint,
 	/// Gas price.
-	#[serde(rename="gasPrice")]
+	#[serde(rename = "gasPrice")]
 	pub gas_price: Uint,
 	/// Nonce.
 	pub nonce: Uint,

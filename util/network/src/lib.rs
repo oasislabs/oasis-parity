@@ -14,18 +14,19 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-#![recursion_limit="128"]
+#![recursion_limit = "128"]
 
 extern crate ethcore_crypto as crypto;
 extern crate ethcore_io as io;
 extern crate ethereum_types;
 extern crate ethkey;
-extern crate rlp;
 extern crate ipnetwork;
-extern crate parity_snappy as snappy;
 extern crate libc;
+extern crate parity_snappy as snappy;
+extern crate rlp;
 
-#[cfg(test)] #[macro_use]
+#[cfg(test)]
+#[macro_use]
 extern crate assert_matches;
 
 #[macro_use]
@@ -34,20 +35,20 @@ extern crate error_chain;
 mod connection_filter;
 mod error;
 
-pub use connection_filter::{ConnectionFilter, ConnectionDirection};
+pub use connection_filter::{ConnectionDirection, ConnectionFilter};
+pub use error::{DisconnectReason, Error, ErrorKind};
 pub use io::TimerToken;
-pub use error::{Error, ErrorKind, DisconnectReason};
 
+use ethereum_types::H512;
+use ethkey::Secret;
+use ipnetwork::{IpNetwork, IpNetworkError};
+use rlp::{Decodable, DecoderError, Rlp};
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr};
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::str::{self, FromStr};
 use std::sync::Arc;
 use std::time::Duration;
-use ipnetwork::{IpNetwork, IpNetworkError};
-use ethkey::Secret;
-use ethereum_types::H512;
-use rlp::{Decodable, DecoderError, Rlp};
 
 /// Protocol handler level packet id
 pub type PacketId = u8;
@@ -124,20 +125,26 @@ impl Decodable for PeerCapabilityInfo {
 	fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
 		let p: Vec<u8> = rlp.val_at(0)?;
 		if p.len() != 3 {
-			return Err(DecoderError::Custom("Invalid subprotocol string length. Should be 3"));
+			return Err(DecoderError::Custom(
+				"Invalid subprotocol string length. Should be 3",
+			));
 		}
 		let mut p2: ProtocolId = [0u8; 3];
 		p2.clone_from_slice(&p);
 		Ok(PeerCapabilityInfo {
 			protocol: p2,
-			version: rlp.val_at(1)?
+			version: rlp.val_at(1)?,
 		})
 	}
 }
 
 impl ToString for PeerCapabilityInfo {
 	fn to_string(&self) -> String {
-		format!("{}/{}", str::from_utf8(&self.protocol[..]).unwrap_or("???"), self.version)
+		format!(
+			"{}/{}",
+			str::from_utf8(&self.protocol[..]).unwrap_or("???"),
+			self.version
+		)
 	}
 }
 
@@ -238,14 +245,20 @@ impl NetworkConfiguration {
 	/// Create new default configuration with specified listen port.
 	pub fn new_with_port(port: u16) -> NetworkConfiguration {
 		let mut config = NetworkConfiguration::new();
-		config.listen_address = Some(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), port)));
+		config.listen_address = Some(SocketAddr::V4(SocketAddrV4::new(
+			Ipv4Addr::new(0, 0, 0, 0),
+			port,
+		)));
 		config
 	}
 
 	/// Create new default configuration for localhost-only connection with random port (usefull for testing)
 	pub fn new_local() -> NetworkConfiguration {
 		let mut config = NetworkConfiguration::new();
-		config.listen_address = Some(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 0)));
+		config.listen_address = Some(SocketAddr::V4(SocketAddrV4::new(
+			Ipv4Addr::new(127, 0, 0, 1),
+			0,
+		)));
 		config.nat_enabled = false;
 		config
 	}
@@ -257,7 +270,13 @@ pub trait NetworkContext {
 	fn send(&self, peer: PeerId, packet_id: PacketId, data: Vec<u8>) -> Result<(), Error>;
 
 	/// Send a packet over the network to another peer using specified protocol.
-	fn send_protocol(&self, protocol: ProtocolId, peer: PeerId, packet_id: PacketId, data: Vec<u8>) -> Result<(), Error>;
+	fn send_protocol(
+		&self,
+		protocol: ProtocolId,
+		peer: PeerId,
+		packet_id: PacketId,
+		data: Vec<u8>,
+	) -> Result<(), Error>;
 
 	/// Respond to a current network message. Panics if no there is no packet in the context. If the session is expired returns nothing.
 	fn respond(&self, packet_id: PacketId, data: Vec<u8>) -> Result<(), Error>;
@@ -287,12 +306,21 @@ pub trait NetworkContext {
 	fn subprotocol_name(&self) -> ProtocolId;
 }
 
-impl<'a, T> NetworkContext for &'a T where T: ?Sized + NetworkContext {
+impl<'a, T> NetworkContext for &'a T
+where
+	T: ?Sized + NetworkContext,
+{
 	fn send(&self, peer: PeerId, packet_id: PacketId, data: Vec<u8>) -> Result<(), Error> {
 		(**self).send(peer, packet_id, data)
 	}
 
-	fn send_protocol(&self, protocol: ProtocolId, peer: PeerId, packet_id: PacketId, data: Vec<u8>) -> Result<(), Error> {
+	fn send_protocol(
+		&self,
+		protocol: ProtocolId,
+		peer: PeerId,
+		packet_id: PacketId,
+		data: Vec<u8>,
+	) -> Result<(), Error> {
 		(**self).send_protocol(protocol, peer, packet_id, data)
 	}
 
@@ -371,42 +399,44 @@ impl NonReservedPeerMode {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IpFilter {
-    pub predefined: AllowIP,
-    pub custom_allow: Vec<IpNetwork>,
-    pub custom_block: Vec<IpNetwork>,
+	pub predefined: AllowIP,
+	pub custom_allow: Vec<IpNetwork>,
+	pub custom_block: Vec<IpNetwork>,
 }
 
 impl Default for IpFilter {
-    fn default() -> Self {
-        IpFilter {
-            predefined: AllowIP::All,
-            custom_allow: vec![],
-            custom_block: vec![],
-        }
-    }
+	fn default() -> Self {
+		IpFilter {
+			predefined: AllowIP::All,
+			custom_allow: vec![],
+			custom_block: vec![],
+		}
+	}
 }
 
 impl IpFilter {
-    /// Attempt to parse the peer mode from a string.
-    pub fn parse(s: &str) -> Result<IpFilter, IpNetworkError> {
-        let mut filter = IpFilter::default();
-        for f in s.split_whitespace() {
-            match f {
-                "all" => filter.predefined = AllowIP::All,
-                "private" => filter.predefined = AllowIP::Private,
-                "public" => filter.predefined = AllowIP::Public,
-                "none" => filter.predefined = AllowIP::None,
-                custom => {
-                    if custom.starts_with("-") {
-                        filter.custom_block.push(IpNetwork::from_str(&custom.to_owned().split_off(1))?)
-                    } else {
-                        filter.custom_allow.push(IpNetwork::from_str(custom)?)
-                    }
-                }
-            }
-        }
-        Ok(filter)
-    }
+	/// Attempt to parse the peer mode from a string.
+	pub fn parse(s: &str) -> Result<IpFilter, IpNetworkError> {
+		let mut filter = IpFilter::default();
+		for f in s.split_whitespace() {
+			match f {
+				"all" => filter.predefined = AllowIP::All,
+				"private" => filter.predefined = AllowIP::Private,
+				"public" => filter.predefined = AllowIP::Public,
+				"none" => filter.predefined = AllowIP::None,
+				custom => {
+					if custom.starts_with("-") {
+						filter
+							.custom_block
+							.push(IpNetwork::from_str(&custom.to_owned().split_off(1))?)
+					} else {
+						filter.custom_allow.push(IpNetwork::from_str(custom)?)
+					}
+				}
+			}
+		}
+		Ok(filter)
+	}
 }
 
 /// IP fiter
@@ -418,6 +448,6 @@ pub enum AllowIP {
 	Private,
 	/// Connect to public network only
 	Public,
-    /// Block all addresses
-    None,
+	/// Block all addresses
+	None,
 }

@@ -22,11 +22,11 @@ pub struct App {
 	pub description: String,
 	pub version: String,
 	pub author: String,
-	#[serde(rename="iconUrl")]
+	#[serde(rename = "iconUrl")]
 	pub icon_url: String,
-	#[serde(rename="localUrl")]
+	#[serde(rename = "localUrl")]
 	pub local_url: Option<String>,
-	#[serde(rename="allowJsEval")]
+	#[serde(rename = "allowJsEval")]
 	pub allow_js_eval: Option<bool>,
 }
 

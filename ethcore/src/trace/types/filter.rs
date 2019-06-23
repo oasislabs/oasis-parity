@@ -16,18 +16,18 @@
 
 //! Trace filters type definitions
 
-use std::ops::Range;
+use super::trace::{Action, Res};
 use bloomchain::{Filter as BloomFilter, Number};
 use ethereum_types::{Address, Bloom, BloomInput};
+use std::ops::Range;
 use trace::flat::FlatTrace;
-use super::trace::{Action, Res};
 
 /// Addresses filter.
 ///
 /// Used to create bloom possibilities and match filters.
 #[derive(Debug)]
 pub struct AddressesFilter {
-	list: Vec<Address>
+	list: Vec<Address>,
 }
 
 impl From<Vec<Address>> for AddressesFilter {
@@ -51,7 +51,9 @@ impl AddressesFilter {
 	pub fn blooms(&self) -> Vec<Bloom> {
 		match self.list.is_empty() {
 			true => vec![Bloom::default()],
-			false => self.list.iter()
+			false => self
+				.list
+				.iter()
 				.map(|address| Bloom::from(BloomInput::Raw(address)))
 				.collect(),
 		}
@@ -63,13 +65,16 @@ impl AddressesFilter {
 			true => blooms,
 			false => blooms
 				.into_iter()
-				.flat_map(|bloom| self.list.iter()
-					.map(|address| {
-						let mut bloom = bloom.clone();
-						bloom.accrue(BloomInput::Raw(address));
-						bloom
-					})
-					.collect::<Vec<_>>())
+				.flat_map(|bloom| {
+					self.list
+						.iter()
+						.map(|address| {
+							let mut bloom = bloom.clone();
+							bloom.accrue(BloomInput::Raw(address));
+							bloom
+						})
+						.collect::<Vec<_>>()
+				})
 				.collect(),
 		}
 	}
@@ -111,25 +116,27 @@ impl Filter {
 				let from_matches = self.from_address.matches(&call.from);
 				let to_matches = self.to_address.matches(&call.to);
 				from_matches && to_matches
-			},
+			}
 			Action::Create(ref create) => {
 				let from_matches = self.from_address.matches(&create.from);
 
 				let to_matches = match trace.result {
-					Res::Create(ref create_result) => self.to_address.matches(&create_result.address),
-					_ => false
+					Res::Create(ref create_result) => {
+						self.to_address.matches(&create_result.address)
+					}
+					_ => false,
 				};
 
 				from_matches && to_matches
-			},
+			}
 			Action::Suicide(ref suicide) => {
 				let from_matches = self.from_address.matches(&suicide.address);
 				let to_matches = self.to_address.matches(&suicide.refund_address);
 				from_matches && to_matches
-			},
+			}
 			Action::Reward(ref reward) => {
 				self.from_address.matches_all() && self.to_address.matches(&reward.author)
-			},
+			}
 		}
 	}
 }
@@ -137,10 +144,10 @@ impl Filter {
 #[cfg(test)]
 mod tests {
 	use ethereum_types::{Address, Bloom, BloomInput};
-	use trace::trace::{Action, Call, Res, Create, CreateResult, Suicide, Reward};
-	use trace::flat::FlatTrace;
-	use trace::{Filter, AddressesFilter, TraceError, RewardType};
 	use evm::CallType;
+	use trace::flat::FlatTrace;
+	use trace::trace::{Action, Call, Create, CreateResult, Res, Reward, Suicide};
+	use trace::{AddressesFilter, Filter, RewardType, TraceError};
 
 	#[test]
 	fn empty_trace_filter_bloom_possibilities() {
@@ -330,7 +337,7 @@ mod tests {
 			}),
 			result: Res::None,
 			trace_address: vec![].into_iter().collect(),
-			subtraces: 0
+			subtraces: 0,
 		};
 
 		assert!(f0.matches(&trace));
@@ -349,7 +356,7 @@ mod tests {
 			}),
 			result: Res::None,
 			trace_address: vec![].into_iter().collect(),
-			subtraces: 0
+			subtraces: 0,
 		};
 
 		assert!(!f0.matches(&trace));

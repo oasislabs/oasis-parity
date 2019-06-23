@@ -16,8 +16,8 @@
 
 //! Localized traces type definitions
 
-use ethereum_types::H256;
 use super::trace::{Action, Res};
+use ethereum_types::H256;
 use header::BlockNumber;
 
 /// Localized trace.

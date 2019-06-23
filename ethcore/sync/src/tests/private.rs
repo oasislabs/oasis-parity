@@ -14,21 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
-use hash::keccak;
-use io::{IoHandler, IoChannel};
-use ethcore::client::{BlockChainClient, BlockId, ClientIoMessage};
-use ethcore::spec::Spec;
-use ethcore::miner::MinerService;
-use ethcore::CreateContractAddress;
-use transaction::{Transaction, Action};
-use ethcore::executive::{contract_address};
-use ethcore::test_helpers::{push_block_with_transactions};
-use ethcore_private_tx::{Provider, ProviderConfig, NoopEncryptor, Importer};
 use ethcore::account_provider::AccountProvider;
-use ethkey::{KeyPair};
-use tests::helpers::{TestNet, TestIoHandler};
+use ethcore::client::{BlockChainClient, BlockId, ClientIoMessage};
+use ethcore::executive::contract_address;
+use ethcore::miner::MinerService;
+use ethcore::spec::Spec;
+use ethcore::test_helpers::push_block_with_transactions;
+use ethcore::CreateContractAddress;
+use ethcore_private_tx::{Importer, NoopEncryptor, Provider, ProviderConfig};
+use ethkey::KeyPair;
+use hash::keccak;
+use io::{IoChannel, IoHandler};
 use rustc_hex::FromHex;
+use std::sync::Arc;
+use tests::helpers::{TestIoHandler, TestNet};
+use transaction::{Action, Transaction};
 use SyncConfig;
 
 fn seal_spec() -> Spec {
@@ -45,55 +45,79 @@ fn send_private_transaction() {
 	ap.insert_account(s0.secret().clone(), "").unwrap();
 	ap.insert_account(s1.secret().clone(), "").unwrap();
 
-	let mut net = TestNet::with_spec_and_accounts(2, SyncConfig::default(), seal_spec, Some(ap.clone()));
+	let mut net =
+		TestNet::with_spec_and_accounts(2, SyncConfig::default(), seal_spec, Some(ap.clone()));
 	let client0 = net.peer(0).chain.clone();
 	let client1 = net.peer(1).chain.clone();
-	let io_handler0: Arc<IoHandler<ClientIoMessage>> = Arc::new(TestIoHandler::new(net.peer(0).chain.clone()));
-	let io_handler1: Arc<IoHandler<ClientIoMessage>> = Arc::new(TestIoHandler::new(net.peer(1).chain.clone()));
+	let io_handler0: Arc<IoHandler<ClientIoMessage>> =
+		Arc::new(TestIoHandler::new(net.peer(0).chain.clone()));
+	let io_handler1: Arc<IoHandler<ClientIoMessage>> =
+		Arc::new(TestIoHandler::new(net.peer(1).chain.clone()));
 
-	net.peer(0).miner.set_author(s0.address(), Some("".into())).unwrap();
-	net.peer(1).miner.set_author(s1.address(), Some("".to_owned())).unwrap();
-	net.peer(0).chain.engine().register_client(Arc::downgrade(&net.peer(0).chain) as _);
-	net.peer(1).chain.engine().register_client(Arc::downgrade(&net.peer(1).chain) as _);
-	net.peer(0).chain.set_io_channel(IoChannel::to_handler(Arc::downgrade(&io_handler0)));
-	net.peer(1).chain.set_io_channel(IoChannel::to_handler(Arc::downgrade(&io_handler1)));
+	net.peer(0)
+		.miner
+		.set_author(s0.address(), Some("".into()))
+		.unwrap();
+	net.peer(1)
+		.miner
+		.set_author(s1.address(), Some("".to_owned()))
+		.unwrap();
+	net.peer(0)
+		.chain
+		.engine()
+		.register_client(Arc::downgrade(&net.peer(0).chain) as _);
+	net.peer(1)
+		.chain
+		.engine()
+		.register_client(Arc::downgrade(&net.peer(1).chain) as _);
+	net.peer(0)
+		.chain
+		.set_io_channel(IoChannel::to_handler(Arc::downgrade(&io_handler0)));
+	net.peer(1)
+		.chain
+		.set_io_channel(IoChannel::to_handler(Arc::downgrade(&io_handler1)));
 
-	let (address, _) = contract_address(CreateContractAddress::FromSenderAndNonce, &s0.address(), &0.into(), &[]);
+	let (address, _) = contract_address(
+		CreateContractAddress::FromSenderAndNonce,
+		&s0.address(),
+		&0.into(),
+		&[],
+	);
 	let chain_id = client0.signing_chain_id();
 
 	// Exhange statuses
 	net.sync();
 
 	// Setup private providers
-	let validator_config = ProviderConfig{
+	let validator_config = ProviderConfig {
 		validator_accounts: vec![s1.address()],
 		signer_account: None,
 		passwords: vec!["".into()],
 	};
 
-	let signer_config = ProviderConfig{
+	let signer_config = ProviderConfig {
 		validator_accounts: Vec::new(),
 		signer_account: Some(s0.address()),
 		passwords: vec!["".into()],
 	};
 
 	let pm0 = Arc::new(Provider::new(
-			client0.clone(),
-			net.peer(0).miner.clone(),
-			ap.clone(),
-			Box::new(NoopEncryptor::default()),
-			signer_config,
-			IoChannel::to_handler(Arc::downgrade(&io_handler0)),
+		client0.clone(),
+		net.peer(0).miner.clone(),
+		ap.clone(),
+		Box::new(NoopEncryptor::default()),
+		signer_config,
+		IoChannel::to_handler(Arc::downgrade(&io_handler0)),
 	));
 	pm0.add_notify(net.peers[0].clone());
 
 	let pm1 = Arc::new(Provider::new(
-			client1.clone(),
-			net.peer(1).miner.clone(),
-			ap.clone(),
-			Box::new(NoopEncryptor::default()),
-			validator_config,
-			IoChannel::to_handler(Arc::downgrade(&io_handler1)),
+		client1.clone(),
+		net.peer(1).miner.clone(),
+		ap.clone(),
+		Box::new(NoopEncryptor::default()),
+		validator_config,
+		IoChannel::to_handler(Arc::downgrade(&io_handler1)),
 	));
 	pm1.add_notify(net.peers[1].clone());
 
@@ -105,7 +129,14 @@ fn send_private_transaction() {
 	private_create_tx.gas = 200000.into();
 	let private_create_tx_signed = private_create_tx.sign(&s0.secret(), None);
 	let validators = vec![s1.address()];
-	let (public_tx, _) = pm0.public_creation_transaction(BlockId::Latest, &private_create_tx_signed, &validators, 0.into()).unwrap();
+	let (public_tx, _) = pm0
+		.public_creation_transaction(
+			BlockId::Latest,
+			&private_create_tx_signed,
+			&validators,
+			0.into(),
+		)
+		.unwrap();
 	let public_tx = public_tx.sign(&s0.secret(), chain_id);
 
 	let public_tx_copy = public_tx.clone();
@@ -117,7 +148,9 @@ fn send_private_transaction() {
 	//Create private transaction for modifying state
 	let mut private_tx = Transaction::default();
 	private_tx.action = Action::Call(address.clone());
-	private_tx.data = "bc64b76d2a00000000000000000000000000000000000000000000000000000000000000".from_hex().unwrap(); //setX(42)
+	private_tx.data = "bc64b76d2a00000000000000000000000000000000000000000000000000000000000000"
+		.from_hex()
+		.unwrap(); //setX(42)
 	private_tx.gas = 120000.into();
 	private_tx.nonce = 1.into();
 	let private_tx = private_tx.sign(&s0.secret(), None);
@@ -143,7 +176,9 @@ fn send_private_transaction() {
 
 	//process signed response
 	let signed_private_transaction = received_signed_private_transactions[0].clone();
-	assert!(pm0.import_signed_private_transaction(&signed_private_transaction).is_ok());
+	assert!(pm0
+		.import_signed_private_transaction(&signed_private_transaction)
+		.is_ok());
 	let local_transactions = net.peer(0).miner.local_transactions();
 	assert_eq!(local_transactions.len(), 1);
 }

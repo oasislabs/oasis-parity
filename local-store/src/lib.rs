@@ -16,26 +16,25 @@
 
 //! Manages local node data: pending local transactions, sync security level
 
-use std::sync::Arc;
 use std::fmt;
+use std::sync::Arc;
 use std::time::Duration;
 
-use transaction::{
-	SignedTransaction, PendingTransaction, UnverifiedTransaction,
-	Condition as TransactionCondition
-};
 use ethcore::client::ClientIoMessage;
 use io::IoHandler;
-use rlp::Rlp;
 use kvdb::KeyValueDB;
+use rlp::Rlp;
+use transaction::{
+	Condition as TransactionCondition, PendingTransaction, SignedTransaction, UnverifiedTransaction,
+};
 
 extern crate ethcore;
-extern crate ethcore_transaction as transaction;
 extern crate ethcore_io as io;
-extern crate rlp;
-extern crate serde_json;
-extern crate serde;
+extern crate ethcore_transaction as transaction;
 extern crate kvdb;
+extern crate rlp;
+extern crate serde;
+extern crate serde_json;
 
 #[macro_use]
 extern crate serde_derive;
@@ -106,7 +105,7 @@ impl TransactionEntry {
 		let tx: UnverifiedTransaction = match Rlp::new(&self.rlp_bytes).as_val() {
 			Err(e) => {
 				warn!(target: "local_store", "Invalid persistent transaction stored: {}", e);
-				return None
+				return None;
 			}
 			Ok(tx) => tx,
 		};
@@ -116,7 +115,7 @@ impl TransactionEntry {
 			Ok(tx) => Some(PendingTransaction::new(tx, self.condition.map(Into::into))),
 			Err(_) => {
 				warn!(target: "local_store", "Bad signature on persistent transaction: {}", hash);
-				return None
+				return None;
 			}
 		}
 	}
@@ -160,7 +159,11 @@ pub struct LocalDataStore<T: NodeInfo> {
 impl<T: NodeInfo> LocalDataStore<T> {
 	/// Attempt to read pending transactions out of the local store.
 	pub fn pending_transactions(&self) -> Result<Vec<PendingTransaction>, Error> {
-		if let Some(val) = self.db.get(self.col, LOCAL_TRANSACTIONS_KEY).map_err(Error::Database)? {
+		if let Some(val) = self
+			.db
+			.get(self.col, LOCAL_TRANSACTIONS_KEY)
+			.map_err(Error::Database)?
+		{
 			let local_txs: Vec<_> = ::serde_json::from_slice::<Vec<TransactionEntry>>(&val)
 				.map_err(Error::Json)?
 				.into_iter()
@@ -177,7 +180,9 @@ impl<T: NodeInfo> LocalDataStore<T> {
 	pub fn update(&self) -> Result<(), Error> {
 		trace!(target: "local_store", "Updating local store entries.");
 
-		let local_entries: Vec<TransactionEntry> = self.node.pending_transactions()
+		let local_entries: Vec<TransactionEntry> = self
+			.node
+			.pending_transactions()
 			.into_iter()
 			.map(Into::into)
 			.collect();
@@ -232,16 +237,18 @@ impl<T: NodeInfo> Drop for LocalDataStore<T> {
 mod tests {
 	use super::NodeInfo;
 
-	use std::sync::Arc;
-	use transaction::{Transaction, Condition, PendingTransaction};
 	use ethkey::{Brain, Generator};
+	use std::sync::Arc;
+	use transaction::{Condition, PendingTransaction, Transaction};
 
 	// we want to test: round-trip of good transactions.
 	// failure to roundtrip bad transactions (but that it doesn't panic)
 
 	struct Dummy(Vec<PendingTransaction>);
 	impl NodeInfo for Dummy {
-		fn pending_transactions(&self) -> Vec<PendingTransaction> { self.0.clone() }
+		fn pending_transactions(&self) -> Vec<PendingTransaction> {
+			self.0.clone()
+		}
 	}
 
 	#[test]
@@ -262,18 +269,20 @@ mod tests {
 	#[test]
 	fn with_condition() {
 		let keypair = Brain::new("abcd".into()).generate().unwrap();
-		let transactions: Vec<_> = (0..10u64).map(|nonce| {
-			let mut tx = Transaction::default();
-			tx.nonce = nonce.into();
+		let transactions: Vec<_> = (0..10u64)
+			.map(|nonce| {
+				let mut tx = Transaction::default();
+				tx.nonce = nonce.into();
 
-			let signed = tx.sign(keypair.secret(), None);
-			let condition = match nonce {
-				5 => Some(Condition::Number(100_000)),
-				_ => None,
-			};
+				let signed = tx.sign(keypair.secret(), None);
+				let condition = match nonce {
+					5 => Some(Condition::Number(100_000)),
+					_ => None,
+				};
 
-			PendingTransaction::new(signed, condition)
-		}).collect();
+				PendingTransaction::new(signed, condition)
+			})
+			.collect();
 
 		let db = Arc::new(::kvdb_memorydb::create(0));
 
@@ -297,14 +306,16 @@ mod tests {
 	#[test]
 	fn skips_bad_transactions() {
 		let keypair = Brain::new("abcd".into()).generate().unwrap();
-		let mut transactions: Vec<_> = (0..10u64).map(|nonce| {
-			let mut tx = Transaction::default();
-			tx.nonce = nonce.into();
+		let mut transactions: Vec<_> = (0..10u64)
+			.map(|nonce| {
+				let mut tx = Transaction::default();
+				tx.nonce = nonce.into();
 
-			let signed = tx.sign(keypair.secret(), None);
+				let signed = tx.sign(keypair.secret(), None);
 
-			PendingTransaction::new(signed, None)
-		}).collect();
+				PendingTransaction::new(signed, None)
+			})
+			.collect();
 
 		transactions.push({
 			let mut tx = Transaction::default();

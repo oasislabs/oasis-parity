@@ -16,15 +16,15 @@
 
 //! URLHint Contract
 
-use std::sync::Arc;
-use rustc_hex::ToHex;
 use mime::{self, Mime};
 use mime_guess;
+use rustc_hex::ToHex;
+use std::sync::Arc;
 
-use futures::{future, Future};
+use ethereum_types::{Address, H256};
 use futures::future::Either;
-use ethereum_types::{H256, Address};
-use registrar::{Registrar, RegistrarClient, Asynchronous};
+use futures::{future, Future};
+use registrar::{Asynchronous, Registrar, RegistrarClient};
 
 use_contract!(urlhint, "Urlhint", "res/urlhint.json");
 
@@ -33,7 +33,8 @@ const GITHUB_HINT: &'static str = "githubhint";
 /// GithubHint entries with commit set as `0x0..01` should be treated
 /// as Github Dapp, downloadable zip files, than can be extracted, containing
 /// the manifest.json file along with the dapp
-static GITHUB_DAPP_COMMIT: &[u8; COMMIT_LEN] = &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
+static GITHUB_DAPP_COMMIT: &[u8; COMMIT_LEN] =
+	&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
 
 /// Github-hosted dapp.
 #[derive(Debug, PartialEq)]
@@ -53,10 +54,15 @@ impl GithubApp {
 	pub fn url(&self) -> String {
 		// Since https fetcher doesn't support redirections we use direct link
 		// format!("https://github.com/{}/{}/archive/{}.zip", self.account, self.repo, self.commit.to_hex())
-		format!("https://codeload.github.com/{}/{}/zip/{}", self.account, self.repo, self.commit.to_hex())
+		format!(
+			"https://codeload.github.com/{}/{}/zip/{}",
+			self.account,
+			self.repo,
+			self.commit.to_hex()
+		)
 	}
 
-	fn commit(bytes: &[u8]) -> Option<[u8;COMMIT_LEN]> {
+	fn commit(bytes: &[u8]) -> Option<[u8; COMMIT_LEN]> {
 		if bytes.len() < COMMIT_LEN {
 			return None;
 		}
@@ -95,19 +101,20 @@ pub enum URLHintResult {
 /// URLHint Contract interface
 pub trait URLHint: Send + Sync {
 	/// Resolves given id to registrar entry.
-	fn resolve(&self, id: H256) -> Box<Future<Item = Option<URLHintResult>, Error = String> + Send>;
+	fn resolve(&self, id: H256)
+		-> Box<Future<Item = Option<URLHintResult>, Error = String> + Send>;
 }
 
 /// `URLHintContract` API
 pub struct URLHintContract {
 	urlhint: urlhint::Urlhint,
 	registrar: Registrar,
-	client: Arc<RegistrarClient<Call=Asynchronous>>,
+	client: Arc<RegistrarClient<Call = Asynchronous>>,
 }
 
 impl URLHintContract {
 	/// Creates new `URLHintContract`
-		pub fn new(client: Arc<RegistrarClient<Call=Asynchronous>>) -> Self {
+	pub fn new(client: Arc<RegistrarClient<Call = Asynchronous>>) -> Self {
 		URLHintContract {
 			urlhint: urlhint::Urlhint::default(),
 			registrar: Registrar::new(client.clone()),
@@ -152,29 +159,39 @@ fn decode_urlhint_output(output: (String, [u8; 20], Address)) -> Option<URLHintR
 		}
 	};
 
-	commit.map(|commit| URLHintResult::Dapp(GithubApp {
-		account: account,
-		repo: repo,
-		commit: commit,
-		owner: owner,
-	}))
+	commit.map(|commit| {
+		URLHintResult::Dapp(GithubApp {
+			account: account,
+			repo: repo,
+			commit: commit,
+			owner: owner,
+		})
+	})
 }
 
 impl URLHint for URLHintContract {
-	fn resolve(&self, id: H256) -> Box<Future<Item = Option<URLHintResult>, Error = String> + Send> {
+	fn resolve(
+		&self,
+		id: H256,
+	) -> Box<Future<Item = Option<URLHintResult>, Error = String> + Send> {
 		let entries = self.urlhint.functions().entries();
 		let client = self.client.clone();
 
-		let future = self.registrar.get_address(GITHUB_HINT)
-			.and_then(move |addr| if !addr.is_zero() {
-				let data = entries.input(id);
-				let result = client.call_contract(addr, data)
-					.and_then(move |output| entries.output(&output).map_err(|e| e.to_string()))
-					.map(decode_urlhint_output);
-				Either::B(result)
-			} else {
-				Either::A(future::ok(None))
-		});
+		let future = self
+			.registrar
+			.get_address(GITHUB_HINT)
+			.and_then(move |addr| {
+				if !addr.is_zero() {
+					let data = entries.input(id);
+					let result = client
+						.call_contract(addr, data)
+						.and_then(move |output| entries.output(&output).map_err(|e| e.to_string()))
+						.map(decode_urlhint_output);
+					Either::B(result)
+				} else {
+					Either::A(future::ok(None))
+				}
+			});
 		Box::new(future)
 	}
 }
@@ -195,26 +212,23 @@ fn guess_mime_type(url: &str) -> Option<Mime> {
 			}
 		}
 	}
-	url.and_then(|url| {
-		url.split('.').last()
-	}).and_then(|extension| {
-		mime_guess::get_mime_type_opt(extension)
-	})
+	url.and_then(|url| url.split('.').last())
+		.and_then(|extension| mime_guess::get_mime_type_opt(extension))
 }
 
 #[cfg(test)]
 pub mod tests {
-	use std::sync::Arc;
-	use std::str::FromStr;
 	use rustc_hex::FromHex;
+	use std::str::FromStr;
+	use std::sync::Arc;
 
 	use futures::{Future, IntoFuture};
 
-	use super::*;
 	use super::guess_mime_type;
-	use parking_lot::Mutex;
-	use ethereum_types::Address;
+	use super::*;
 	use bytes::{Bytes, ToPretty};
+	use ethereum_types::Address;
+	use parking_lot::Mutex;
 
 	pub struct FakeRegistrar {
 		pub calls: Arc<Mutex<Vec<(String, String)>>>,
@@ -228,12 +242,12 @@ pub mod tests {
 		pub fn new() -> Self {
 			FakeRegistrar {
 				calls: Arc::new(Mutex::new(Vec::new())),
-				responses: Mutex::new(
-					vec![
-						Ok(format!("000000000000000000000000{}", URLHINT).from_hex().unwrap()),
-						Ok(Vec::new())
-					]
-				),
+				responses: Mutex::new(vec![
+					Ok(format!("000000000000000000000000{}", URLHINT)
+						.from_hex()
+						.unwrap()),
+					Ok(Vec::new()),
+				]),
 			}
 		}
 	}
@@ -258,7 +272,11 @@ pub mod tests {
 		let registrar = FakeRegistrar::new();
 		let resolve_result = {
 			use ethabi::{encode, Token};
-			encode(&[Token::String(String::new()), Token::FixedBytes(vec![0; 20]), Token::Address([0; 20].into())])
+			encode(&[
+				Token::String(String::new()),
+				Token::FixedBytes(vec![0; 20]),
+				Token::Address([0; 20].into()),
+			])
 		};
 		registrar.responses.lock()[1] = Ok(resolve_result);
 
@@ -278,7 +296,8 @@ pub mod tests {
 			"6795dbcd058740ee9a5a3fb9f1cfa10752baec87e09cc45cd7027fd54708271aca300c75000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000014100000000000000000000000000000000000000000000000000000000000000".to_owned()
 		);
 		assert_eq!(call1.0, URLHINT);
-		assert_eq!(call1.1,
+		assert_eq!(
+			call1.1,
 			"267b69227465737400000000000000000000000000000000000000000000000000000000".to_owned()
 		);
 	}
@@ -297,12 +316,20 @@ pub mod tests {
 		let res = urlhint.resolve("test".as_bytes().into()).wait().unwrap();
 
 		// then
-		assert_eq!(res, Some(URLHintResult::Dapp(GithubApp {
-			account: "ethcore".into(),
-			repo: "dao.claim".into(),
-			commit: GithubApp::commit(&"ec4c1fe06c808fe3739858c347109b1f5f1ed4b5".from_hex().unwrap()).unwrap(),
-			owner: Address::from_str("deadcafebeefbeefcafedeaddeedfeedffffffff").unwrap(),
-		})))
+		assert_eq!(
+			res,
+			Some(URLHintResult::Dapp(GithubApp {
+				account: "ethcore".into(),
+				repo: "dao.claim".into(),
+				commit: GithubApp::commit(
+					&"ec4c1fe06c808fe3739858c347109b1f5f1ed4b5"
+						.from_hex()
+						.unwrap()
+				)
+				.unwrap(),
+				owner: Address::from_str("deadcafebeefbeefcafedeaddeedfeedffffffff").unwrap(),
+			}))
+		)
 	}
 
 	#[test]
@@ -319,11 +346,14 @@ pub mod tests {
 		let res = urlhint.resolve("test".as_bytes().into()).wait().unwrap();
 
 		// then
-		assert_eq!(res, Some(URLHintResult::Content(Content {
-			url: "https://parity.io/assets/images/ethcore-black-horizontal.png".into(),
-			mime: mime::IMAGE_PNG,
-			owner: Address::from_str("deadcafebeefbeefcafedeaddeedfeedffffffff").unwrap(),
-		})))
+		assert_eq!(
+			res,
+			Some(URLHintResult::Content(Content {
+				url: "https://parity.io/assets/images/ethcore-black-horizontal.png".into(),
+				mime: mime::IMAGE_PNG,
+				owner: Address::from_str("deadcafebeefbeefcafedeaddeedfeedffffffff").unwrap(),
+			}))
+		)
 	}
 
 	#[test]
@@ -332,7 +362,9 @@ pub mod tests {
 		let app = GithubApp {
 			account: "test".into(),
 			repo: "xyz".into(),
-			commit: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
+			commit: [
+				0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+			],
 			owner: Address::default(),
 		};
 
@@ -340,7 +372,11 @@ pub mod tests {
 		let url = app.url();
 
 		// then
-		assert_eq!(url, "https://codeload.github.com/test/xyz/zip/000102030405060708090a0b0c0d0e0f10111213".to_owned());
+		assert_eq!(
+			url,
+			"https://codeload.github.com/test/xyz/zip/000102030405060708090a0b0c0d0e0f10111213"
+				.to_owned()
+		);
 	}
 
 	#[test]

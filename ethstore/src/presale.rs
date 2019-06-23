@@ -14,11 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+use crypto::{pbkdf2, Keccak256};
+use ethkey::{Address, KeyPair, Secret};
+use json;
 use std::fs;
 use std::path::Path;
-use json;
-use ethkey::{Address, Secret, KeyPair};
-use crypto::{Keccak256, pbkdf2};
 use {crypto, Error};
 
 /// Pre-sale wallet.
@@ -46,10 +46,13 @@ impl From<json::PresaleWallet> for PresaleWallet {
 
 impl PresaleWallet {
 	/// Open a pre-sale wallet.
-	pub fn open<P>(path: P) -> Result<Self, Error> where P: AsRef<Path> {
+	pub fn open<P>(path: P) -> Result<Self, Error>
+	where
+		P: AsRef<Path>,
+	{
 		let file = fs::File::open(path)?;
-		let presale = json::PresaleWallet::load(file)
-			.map_err(|e| Error::InvalidKeyFile(format!("{}", e)))?;
+		let presale =
+			json::PresaleWallet::load(file).map_err(|e| Error::InvalidKeyFile(format!("{}", e)))?;
 		Ok(PresaleWallet::from(presale))
 	}
 
@@ -61,14 +64,15 @@ impl PresaleWallet {
 		pbkdf2::sha256(2000, salt, sec, &mut derived_key);
 
 		let mut key = vec![0; self.ciphertext.len()];
-		let len = crypto::aes::decrypt_128_cbc(&derived_key[0..16], &self.iv, &self.ciphertext, &mut key)
-			.map_err(|_| Error::InvalidPassword)?;
+		let len =
+			crypto::aes::decrypt_128_cbc(&derived_key[0..16], &self.iv, &self.ciphertext, &mut key)
+				.map_err(|_| Error::InvalidPassword)?;
 		let unpadded = &key[..len];
 
 		let secret = Secret::from_unsafe_slice(&unpadded.keccak256())?;
 		if let Ok(kp) = KeyPair::from_secret(secret) {
 			if kp.address() == self.address {
-				return Ok(kp)
+				return Ok(kp);
 			}
 		}
 

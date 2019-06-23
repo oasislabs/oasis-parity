@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{ops, str};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use rustc_hex::{FromHex, FromHexError, ToHex};
 use serde::de::Error;
-use rustc_hex::{ToHex, FromHex, FromHexError};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::{ops, str};
 
 #[derive(Debug, PartialEq)]
 pub struct Bytes(Vec<u8>);
@@ -32,17 +32,22 @@ impl ops::Deref for Bytes {
 
 impl<'a> Deserialize<'a> for Bytes {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-		where D: Deserializer<'a>
+	where
+		D: Deserializer<'a>,
 	{
 		let s = String::deserialize(deserializer)?;
-		let data = s.from_hex().map_err(|e| Error::custom(format!("Invalid hex value {}", e)))?;
+		let data = s
+			.from_hex()
+			.map_err(|e| Error::custom(format!("Invalid hex value {}", e)))?;
 		Ok(Bytes(data))
 	}
 }
 
 impl Serialize for Bytes {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where S: Serializer {
+	where
+		S: Serializer,
+	{
 		serializer.serialize_str(&self.0.to_hex())
 	}
 }
@@ -57,7 +62,11 @@ impl str::FromStr for Bytes {
 
 impl From<&'static str> for Bytes {
 	fn from(s: &'static str) -> Self {
-		s.parse().expect(&format!("invalid string literal for {}: '{}'", stringify!(Self), s))
+		s.parse().expect(&format!(
+			"invalid string literal for {}: '{}'",
+			stringify!(Self),
+			s
+		))
 	}
 }
 

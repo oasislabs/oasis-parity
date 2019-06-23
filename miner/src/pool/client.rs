@@ -22,7 +22,7 @@
 
 use std::fmt;
 
-use ethereum_types::{U256, H256, H160 as Address};
+use ethereum_types::{H160 as Address, H256, U256};
 use transaction;
 
 /// Account Details
@@ -51,8 +51,10 @@ pub trait Client: fmt::Debug + Sync {
 	fn transaction_already_included(&self, hash: &H256) -> bool;
 
 	/// Structurarily verify given transaction.
-	fn verify_transaction(&self, tx: transaction::UnverifiedTransaction)
-		-> Result<transaction::SignedTransaction, transaction::Error>;
+	fn verify_transaction(
+		&self,
+		tx: transaction::UnverifiedTransaction,
+	) -> Result<transaction::SignedTransaction, transaction::Error>;
 
 	/// Estimate minimal gas requirurement for given transaction.
 	fn required_gas(&self, tx: &transaction::Transaction) -> U256;
@@ -64,8 +66,10 @@ pub trait Client: fmt::Debug + Sync {
 	fn transaction_type(&self, tx: &transaction::SignedTransaction) -> TransactionType;
 
 	/// Performs pre-validation of RLP decoded transaction
-	fn decode_transaction(&self, transaction: &[u8])
-		-> Result<transaction::UnverifiedTransaction, transaction::Error>;
+	fn decode_transaction(
+		&self,
+		transaction: &[u8],
+	) -> Result<transaction::UnverifiedTransaction, transaction::Error>;
 }
 
 /// State nonce client

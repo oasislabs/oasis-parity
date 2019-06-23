@@ -14,34 +14,40 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
-use std::collections::{HashMap, BTreeMap};
-use std::io;
-use std::ops::Range;
-use std::time::Duration;
 use bytes::Bytes;
-use devp2p::NetworkService;
-use network::{NetworkProtocolHandler, NetworkContext, PeerId, ProtocolId,
-	NetworkConfiguration as BasicNetworkConfiguration, NonReservedPeerMode, Error, ErrorKind,
-	ConnectionFilter};
-use ethereum_types::{H256, H512, U256};
-use io::{TimerToken};
-use ethcore::ethstore::ethkey::Secret;
-use ethcore::client::{BlockChainClient, ChainNotify, ChainRoute, ChainMessageType};
-use ethcore::snapshot::SnapshotService;
-use ethcore::header::BlockNumber;
-use sync_io::NetSyncIo;
 use chain::{ChainSync, SyncStatus as EthSyncStatus};
-use std::net::{SocketAddr, AddrParseError};
-use std::str::FromStr;
-use parking_lot::RwLock;
-use chain::{ETH_PROTOCOL_VERSION_63, ETH_PROTOCOL_VERSION_62,
-	PAR_PROTOCOL_VERSION_1, PAR_PROTOCOL_VERSION_2, PAR_PROTOCOL_VERSION_3};
+use chain::{
+	ETH_PROTOCOL_VERSION_62, ETH_PROTOCOL_VERSION_63, PAR_PROTOCOL_VERSION_1,
+	PAR_PROTOCOL_VERSION_2, PAR_PROTOCOL_VERSION_3,
+};
+use devp2p::NetworkService;
+use ethcore::client::{BlockChainClient, ChainMessageType, ChainNotify, ChainRoute};
+use ethcore::ethstore::ethkey::Secret;
+use ethcore::header::BlockNumber;
+use ethcore::snapshot::SnapshotService;
+use ethereum_types::{H256, H512, U256};
+use io::TimerToken;
 use light::client::AsLightClient;
+use light::net::{
+	self as light_net, Capabilities, EventContext, Handler as LightHandler, LightProtocol,
+	Params as LightParams,
+};
 use light::Provider;
-use light::net::{self as light_net, LightProtocol, Params as LightParams, Capabilities, Handler as LightHandler, EventContext};
 use network::IpFilter;
+use network::{
+	ConnectionFilter, Error, ErrorKind, NetworkConfiguration as BasicNetworkConfiguration,
+	NetworkContext, NetworkProtocolHandler, NonReservedPeerMode, PeerId, ProtocolId,
+};
+use parking_lot::RwLock;
 use private_tx::PrivateTxHandler;
+use std::collections::{BTreeMap, HashMap};
+use std::io;
+use std::net::{AddrParseError, SocketAddr};
+use std::ops::Range;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
+use sync_io::NetSyncIo;
 use transaction::UnverifiedTransaction;
 
 /// Parity sync protocol
@@ -210,11 +216,7 @@ pub struct AttachedProtocol {
 
 impl AttachedProtocol {
 	fn register(&self, network: &NetworkService) {
-		let res = network.register_protocol(
-			self.handler.clone(),
-			self.protocol_id,
-			self.versions
-		);
+		let res = network.register_protocol(self.handler.clone(), self.protocol_id, self.versions);
 
 		if let Err(e) = res {
 			warn!(target: "sync", "Error attaching protocol {:?}: {:?}", self.protocol_id, e);
@@ -258,17 +260,25 @@ pub struct EthSync {
 
 impl EthSync {
 	/// Creates and register protocol with the network service
-	pub fn new(params: Params, connection_filter: Option<Arc<ConnectionFilter>>) -> Result<Arc<EthSync>, Error> {
+	pub fn new(
+		params: Params,
+		connection_filter: Option<Arc<ConnectionFilter>>,
+	) -> Result<Arc<EthSync>, Error> {
 		const MAX_LIGHTSERV_LOAD: f64 = 0.5;
 
 		let pruning_info = params.chain.pruning_info();
 		let light_proto = match params.config.serve_light {
 			false => None,
 			true => Some({
-				let sample_store = params.network_config.net_config_path
+				let sample_store = params
+					.network_config
+					.net_config_path
 					.clone()
 					.map(::std::path::PathBuf::from)
-					.map(|mut p| { p.push("request_timings"); light_net::FileStore(p) })
+					.map(|mut p| {
+						p.push("request_timings");
+						light_net::FileStore(p)
+					})
 					.map(|store| Box::new(store) as Box<_>);
 
 				let mut light_params = LightParams {
@@ -290,11 +300,18 @@ impl EthSync {
 				light_proto.add_handler(Arc::new(TxRelay(params.chain.clone())));
 
 				Arc::new(light_proto)
-			})
+			}),
 		};
 
-		let chain_sync = ChainSync::new(params.config, &*params.chain, params.private_tx_handler.clone());
-		let service = NetworkService::new(params.network_config.clone().into_basic()?, connection_filter)?;
+		let chain_sync = ChainSync::new(
+			params.config,
+			&*params.chain,
+			params.private_tx_handler.clone(),
+		);
+		let service = NetworkService::new(
+			params.network_config.clone().into_basic()?,
+			connection_filter,
+		)?;
 
 		let sync = Arc::new(EthSync {
 			network: service,
@@ -322,28 +339,40 @@ impl SyncProvider for EthSync {
 
 	/// Get sync peers
 	fn peers(&self) -> Vec<PeerInfo> {
-		self.network.with_context_eval(self.subprotocol_name, |ctx| {
-			let peer_ids = self.network.connected_peers();
-			let eth_sync = self.eth_handler.sync.read();
-			let light_proto = self.light_proto.as_ref();
+		self.network
+			.with_context_eval(self.subprotocol_name, |ctx| {
+				let peer_ids = self.network.connected_peers();
+				let eth_sync = self.eth_handler.sync.read();
+				let light_proto = self.light_proto.as_ref();
 
-			peer_ids.into_iter().filter_map(|peer_id| {
-				let session_info = match ctx.session_info(peer_id) {
-					None => return None,
-					Some(info) => info,
-				};
+				peer_ids
+					.into_iter()
+					.filter_map(|peer_id| {
+						let session_info = match ctx.session_info(peer_id) {
+							None => return None,
+							Some(info) => info,
+						};
 
-				Some(PeerInfo {
-					id: session_info.id.map(|id| format!("{:x}", id)),
-					client_version: session_info.client_version,
-					capabilities: session_info.peer_capabilities.into_iter().map(|c| c.to_string()).collect(),
-					remote_address: session_info.remote_address,
-					local_address: session_info.local_address,
-					eth_info: eth_sync.peer_info(&peer_id),
-					pip_info: light_proto.as_ref().and_then(|lp| lp.peer_status(&peer_id)).map(Into::into),
-				})
-			}).collect()
-		}).unwrap_or_else(Vec::new)
+						Some(PeerInfo {
+							id: session_info.id.map(|id| format!("{:x}", id)),
+							client_version: session_info.client_version,
+							capabilities: session_info
+								.peer_capabilities
+								.into_iter()
+								.map(|c| c.to_string())
+								.collect(),
+							remote_address: session_info.remote_address,
+							local_address: session_info.local_address,
+							eth_info: eth_sync.peer_info(&peer_id),
+							pip_info: light_proto
+								.as_ref()
+								.and_then(|lp| lp.peer_status(&peer_id))
+								.map(Into::into),
+						})
+					})
+					.collect()
+			})
+			.unwrap_or_else(Vec::new)
 	}
 
 	fn enode(&self) -> Option<String> {
@@ -373,29 +402,44 @@ struct SyncProtocolHandler {
 impl NetworkProtocolHandler for SyncProtocolHandler {
 	fn initialize(&self, io: &NetworkContext) {
 		if io.subprotocol_name() != WARP_SYNC_PROTOCOL_ID {
-			io.register_timer(0, Duration::from_secs(1)).expect("Error registering sync timer");
+			io.register_timer(0, Duration::from_secs(1))
+				.expect("Error registering sync timer");
 		}
 	}
 
 	fn read(&self, io: &NetworkContext, peer: &PeerId, packet_id: u8, data: &[u8]) {
 		trace_time!("sync::read");
-		ChainSync::dispatch_packet(&self.sync, &mut NetSyncIo::new(io, &*self.chain, &*self.snapshot_service, &self.overlay), *peer, packet_id, data);
+		ChainSync::dispatch_packet(
+			&self.sync,
+			&mut NetSyncIo::new(io, &*self.chain, &*self.snapshot_service, &self.overlay),
+			*peer,
+			packet_id,
+			data,
+		);
 	}
 
 	fn connected(&self, io: &NetworkContext, peer: &PeerId) {
 		trace_time!("sync::connected");
 		// If warp protocol is supported only allow warp handshake
-		let warp_protocol = io.protocol_version(WARP_SYNC_PROTOCOL_ID, *peer).unwrap_or(0) != 0;
+		let warp_protocol =
+			io.protocol_version(WARP_SYNC_PROTOCOL_ID, *peer)
+				.unwrap_or(0) != 0;
 		let warp_context = io.subprotocol_name() == WARP_SYNC_PROTOCOL_ID;
 		if warp_protocol == warp_context {
-			self.sync.write().on_peer_connected(&mut NetSyncIo::new(io, &*self.chain, &*self.snapshot_service, &self.overlay), *peer);
+			self.sync.write().on_peer_connected(
+				&mut NetSyncIo::new(io, &*self.chain, &*self.snapshot_service, &self.overlay),
+				*peer,
+			);
 		}
 	}
 
 	fn disconnected(&self, io: &NetworkContext, peer: &PeerId) {
 		trace_time!("sync::disconnected");
 		if io.subprotocol_name() != WARP_SYNC_PROTOCOL_ID {
-			self.sync.write().on_peer_aborting(&mut NetSyncIo::new(io, &*self.chain, &*self.snapshot_service, &self.overlay), *peer);
+			self.sync.write().on_peer_aborting(
+				&mut NetSyncIo::new(io, &*self.chain, &*self.snapshot_service, &self.overlay),
+				*peer,
+			);
 		}
 	}
 
@@ -409,19 +453,24 @@ impl NetworkProtocolHandler for SyncProtocolHandler {
 }
 
 impl ChainNotify for EthSync {
-	fn new_blocks(&self,
+	fn new_blocks(
+		&self,
 		imported: Vec<H256>,
 		invalid: Vec<H256>,
 		route: ChainRoute,
 		sealed: Vec<H256>,
 		proposed: Vec<Bytes>,
-		_duration: Duration)
-	{
+		_duration: Duration,
+	) {
 		use light::net::Announcement;
 
 		self.network.with_context(self.subprotocol_name, |context| {
-			let mut sync_io = NetSyncIo::new(context, &*self.eth_handler.chain, &*self.eth_handler.snapshot_service,
-				&self.eth_handler.overlay);
+			let mut sync_io = NetSyncIo::new(
+				context,
+				&*self.eth_handler.chain,
+				&*self.eth_handler.snapshot_service,
+				&self.eth_handler.overlay,
+			);
 			self.eth_handler.sync.write().chain_new_blocks(
 				&mut sync_io,
 				&imported,
@@ -429,27 +478,32 @@ impl ChainNotify for EthSync {
 				route.enacted(),
 				route.retracted(),
 				&sealed,
-				&proposed);
+				&proposed,
+			);
 		});
 
-		self.network.with_context(self.light_subprotocol_name, |context| {
-			let light_proto = match self.light_proto.as_ref() {
-				Some(lp) => lp,
-				None => return,
-			};
+		self.network
+			.with_context(self.light_subprotocol_name, |context| {
+				let light_proto = match self.light_proto.as_ref() {
+					Some(lp) => lp,
+					None => return,
+				};
 
-			let chain_info = self.eth_handler.chain.chain_info();
-			light_proto.make_announcement(&context, Announcement {
-				head_hash: chain_info.best_block_hash,
-				head_num: chain_info.best_block_number,
-				head_td: chain_info.total_difficulty,
-				reorg_depth: 0, // recalculated on a per-peer basis.
-				serve_headers: false, // these fields consist of _changes_ in capability.
-				serve_state_since: None,
-				serve_chain_since: None,
-				tx_relay: false,
+				let chain_info = self.eth_handler.chain.chain_info();
+				light_proto.make_announcement(
+					&context,
+					Announcement {
+						head_hash: chain_info.best_block_hash,
+						head_num: chain_info.best_block_number,
+						head_td: chain_info.total_difficulty,
+						reorg_depth: 0,       // recalculated on a per-peer basis.
+						serve_headers: false, // these fields consist of _changes_ in capability.
+						serve_state_since: None,
+						serve_chain_since: None,
+						tx_relay: false,
+					},
+				)
 			})
-		})
 	}
 
 	fn start(&self) {
@@ -465,20 +519,41 @@ impl ChainNotify for EthSync {
 			_ => {},
 		}
 
-		self.network.register_protocol(self.eth_handler.clone(), self.subprotocol_name, &[ETH_PROTOCOL_VERSION_62, ETH_PROTOCOL_VERSION_63])
+		self.network
+			.register_protocol(
+				self.eth_handler.clone(),
+				self.subprotocol_name,
+				&[ETH_PROTOCOL_VERSION_62, ETH_PROTOCOL_VERSION_63],
+			)
 			.unwrap_or_else(|e| warn!("Error registering ethereum protocol: {:?}", e));
 		// register the warp sync subprotocol
-		self.network.register_protocol(self.eth_handler.clone(), WARP_SYNC_PROTOCOL_ID, &[PAR_PROTOCOL_VERSION_1, PAR_PROTOCOL_VERSION_2, PAR_PROTOCOL_VERSION_3])
+		self.network
+			.register_protocol(
+				self.eth_handler.clone(),
+				WARP_SYNC_PROTOCOL_ID,
+				&[
+					PAR_PROTOCOL_VERSION_1,
+					PAR_PROTOCOL_VERSION_2,
+					PAR_PROTOCOL_VERSION_3,
+				],
+			)
 			.unwrap_or_else(|e| warn!("Error registering snapshot sync protocol: {:?}", e));
 
 		// register the light protocol.
 		if let Some(light_proto) = self.light_proto.as_ref().map(|x| x.clone()) {
-			self.network.register_protocol(light_proto, self.light_subprotocol_name, ::light::net::PROTOCOL_VERSIONS)
+			self.network
+				.register_protocol(
+					light_proto,
+					self.light_subprotocol_name,
+					::light::net::PROTOCOL_VERSIONS,
+				)
 				.unwrap_or_else(|e| warn!("Error registering light client protocol: {:?}", e));
 		}
 
 		// register any attached protocols.
-		for proto in &self.attached_protos { proto.register(&self.network) }
+		for proto in &self.attached_protos {
+			proto.register(&self.network)
+		}
 	}
 
 	fn stop(&self) {
@@ -488,11 +563,28 @@ impl ChainNotify for EthSync {
 
 	fn broadcast(&self, message_type: ChainMessageType) {
 		self.network.with_context(WARP_SYNC_PROTOCOL_ID, |context| {
-			let mut sync_io = NetSyncIo::new(context, &*self.eth_handler.chain, &*self.eth_handler.snapshot_service, &self.eth_handler.overlay);
+			let mut sync_io = NetSyncIo::new(
+				context,
+				&*self.eth_handler.chain,
+				&*self.eth_handler.snapshot_service,
+				&self.eth_handler.overlay,
+			);
 			match message_type {
-				ChainMessageType::Consensus(message) => self.eth_handler.sync.write().propagate_consensus_packet(&mut sync_io, message),
-				ChainMessageType::PrivateTransaction(message) => self.eth_handler.sync.write().propagate_private_transaction(&mut sync_io, message),
-				ChainMessageType::SignedPrivateTransaction(message) => self.eth_handler.sync.write().propagate_signed_private_transaction(&mut sync_io, message),
+				ChainMessageType::Consensus(message) => self
+					.eth_handler
+					.sync
+					.write()
+					.propagate_consensus_packet(&mut sync_io, message),
+				ChainMessageType::PrivateTransaction(message) => self
+					.eth_handler
+					.sync
+					.write()
+					.propagate_private_transaction(&mut sync_io, message),
+				ChainMessageType::SignedPrivateTransaction(message) => self
+					.eth_handler
+					.sync
+					.write()
+					.propagate_signed_private_transaction(&mut sync_io, message),
 			}
 		});
 	}
@@ -510,12 +602,18 @@ struct TxRelay(Arc<BlockChainClient>);
 impl LightHandler for TxRelay {
 	fn on_transactions(&self, ctx: &EventContext, relay: &[::transaction::UnverifiedTransaction]) {
 		trace!(target: "pip", "Relaying {} transactions from peer {}", relay.len(), ctx.peer());
-		self.0.queue_transactions(relay.iter().map(|tx| ::rlp::encode(tx).into_vec()).collect(), ctx.peer())
+		self.0.queue_transactions(
+			relay
+				.iter()
+				.map(|tx| ::rlp::encode(tx).into_vec())
+				.collect(),
+			ctx.peer(),
+		)
 	}
 }
 
 /// Trait for managing network
-pub trait ManageNetwork : Send + Sync {
+pub trait ManageNetwork: Send + Sync {
 	/// Set to allow unreserved peers to connect
 	fn accept_unreserved_peers(&self);
 	/// Set to deny unreserved peers to connect
@@ -538,19 +636,25 @@ pub trait ManageNetwork : Send + Sync {
 
 impl ManageNetwork for EthSync {
 	fn accept_unreserved_peers(&self) {
-		self.network.set_non_reserved_mode(NonReservedPeerMode::Accept);
+		self.network
+			.set_non_reserved_mode(NonReservedPeerMode::Accept);
 	}
 
 	fn deny_unreserved_peers(&self) {
-		self.network.set_non_reserved_mode(NonReservedPeerMode::Deny);
+		self.network
+			.set_non_reserved_mode(NonReservedPeerMode::Deny);
 	}
 
 	fn remove_reserved_peer(&self, peer: String) -> Result<(), String> {
-		self.network.remove_reserved_peer(&peer).map_err(|e| format!("{:?}", e))
+		self.network
+			.remove_reserved_peer(&peer)
+			.map_err(|e| format!("{:?}", e))
 	}
 
 	fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
-		self.network.add_reserved_peer(&peer).map_err(|e| format!("{:?}", e))
+		self.network
+			.add_reserved_peer(&peer)
+			.map_err(|e| format!("{:?}", e))
 	}
 
 	fn start_network(&self) {
@@ -559,7 +663,12 @@ impl ManageNetwork for EthSync {
 
 	fn stop_network(&self) {
 		self.network.with_context(self.subprotocol_name, |context| {
-			let mut sync_io = NetSyncIo::new(context, &*self.eth_handler.chain, &*self.eth_handler.snapshot_service, &self.eth_handler.overlay);
+			let mut sync_io = NetSyncIo::new(
+				context,
+				&*self.eth_handler.chain,
+				&*self.eth_handler.snapshot_service,
+				&self.eth_handler.overlay,
+			);
 			self.eth_handler.sync.write().abort(&mut sync_io);
 		});
 
@@ -634,8 +743,14 @@ impl NetworkConfiguration {
 		Ok(BasicNetworkConfiguration {
 			config_path: self.config_path,
 			net_config_path: self.net_config_path,
-			listen_address: match self.listen_address { None => None, Some(addr) => Some(SocketAddr::from_str(&addr)?) },
-			public_address: match self.public_address { None => None, Some(addr) => Some(SocketAddr::from_str(&addr)?) },
+			listen_address: match self.listen_address {
+				None => None,
+				Some(addr) => Some(SocketAddr::from_str(&addr)?),
+			},
+			public_address: match self.public_address {
+				None => None,
+				Some(addr) => Some(SocketAddr::from_str(&addr)?),
+			},
 			udp_port: self.udp_port,
 			nat_enabled: self.nat_enabled,
 			discovery_enabled: self.discovery_enabled,
@@ -647,7 +762,11 @@ impl NetworkConfiguration {
 			reserved_protocols: hash_map![WARP_SYNC_PROTOCOL_ID => self.snapshot_peers],
 			reserved_nodes: self.reserved_nodes,
 			ip_filter: self.ip_filter,
-			non_reserved_mode: if self.allow_non_reserved { NonReservedPeerMode::Accept } else { NonReservedPeerMode::Deny },
+			non_reserved_mode: if self.allow_non_reserved {
+				NonReservedPeerMode::Accept
+			} else {
+				NonReservedPeerMode::Deny
+			},
 			client_version: self.client_version,
 		})
 	}
@@ -658,8 +777,12 @@ impl From<BasicNetworkConfiguration> for NetworkConfiguration {
 		NetworkConfiguration {
 			config_path: other.config_path,
 			net_config_path: other.net_config_path,
-			listen_address: other.listen_address.and_then(|addr| Some(format!("{}", addr))),
-			public_address: other.public_address.and_then(|addr| Some(format!("{}", addr))),
+			listen_address: other
+				.listen_address
+				.and_then(|addr| Some(format!("{}", addr))),
+			public_address: other
+				.public_address
+				.and_then(|addr| Some(format!("{}", addr))),
 			udp_port: other.udp_port,
 			nat_enabled: other.nat_enabled,
 			discovery_enabled: other.discovery_enabled,
@@ -668,10 +791,16 @@ impl From<BasicNetworkConfiguration> for NetworkConfiguration {
 			max_peers: other.max_peers,
 			min_peers: other.min_peers,
 			max_pending_peers: other.max_handshakes,
-			snapshot_peers: *other.reserved_protocols.get(&WARP_SYNC_PROTOCOL_ID).unwrap_or(&0),
+			snapshot_peers: *other
+				.reserved_protocols
+				.get(&WARP_SYNC_PROTOCOL_ID)
+				.unwrap_or(&0),
 			reserved_nodes: other.reserved_nodes,
 			ip_filter: other.ip_filter,
-			allow_non_reserved: match other.non_reserved_mode { NonReservedPeerMode::Accept => true, _ => false } ,
+			allow_non_reserved: match other.non_reserved_mode {
+				NonReservedPeerMode::Accept => true,
+				_ => false,
+			},
 			client_version: other.client_version,
 		}
 	}
@@ -748,7 +877,8 @@ pub struct LightSync {
 impl LightSync {
 	/// Create a new light sync service.
 	pub fn new<L>(params: LightSyncParams<L>) -> Result<Self, Error>
-		where L: AsLightClient + Provider + Sync + Send + 'static
+	where
+		L: AsLightClient + Provider + Sync + Send + 'static,
 	{
 		use light_sync::LightSync as SyncHandler;
 
@@ -791,36 +921,45 @@ impl LightSync {
 
 	/// Execute a closure with a protocol context.
 	pub fn with_context<F, T>(&self, f: F) -> Option<T>
-		where F: FnOnce(&::light::net::BasicContext) -> T
+	where
+		F: FnOnce(&::light::net::BasicContext) -> T,
 	{
-		self.network.with_context_eval(
-			self.subprotocol_name,
-			move |ctx| self.proto.with_context(&ctx, f),
-		)
+		self.network
+			.with_context_eval(self.subprotocol_name, move |ctx| {
+				self.proto.with_context(&ctx, f)
+			})
 	}
 }
 
 impl ::std::ops::Deref for LightSync {
 	type Target = ::light_sync::SyncInfo;
 
-	fn deref(&self) -> &Self::Target { &*self.sync }
+	fn deref(&self) -> &Self::Target {
+		&*self.sync
+	}
 }
 
 impl ManageNetwork for LightSync {
 	fn accept_unreserved_peers(&self) {
-		self.network.set_non_reserved_mode(NonReservedPeerMode::Accept);
+		self.network
+			.set_non_reserved_mode(NonReservedPeerMode::Accept);
 	}
 
 	fn deny_unreserved_peers(&self) {
-		self.network.set_non_reserved_mode(NonReservedPeerMode::Deny);
+		self.network
+			.set_non_reserved_mode(NonReservedPeerMode::Deny);
 	}
 
 	fn remove_reserved_peer(&self, peer: String) -> Result<(), String> {
-		self.network.remove_reserved_peer(&peer).map_err(|e| format!("{:?}", e))
+		self.network
+			.remove_reserved_peer(&peer)
+			.map_err(|e| format!("{:?}", e))
 	}
 
 	fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
-		self.network.add_reserved_peer(&peer).map_err(|e| format!("{:?}", e))
+		self.network
+			.add_reserved_peer(&peer)
+			.map_err(|e| format!("{:?}", e))
 	}
 
 	fn start_network(&self) {
@@ -838,10 +977,17 @@ impl ManageNetwork for LightSync {
 
 		let light_proto = self.proto.clone();
 
-		self.network.register_protocol(light_proto, self.subprotocol_name, ::light::net::PROTOCOL_VERSIONS)
+		self.network
+			.register_protocol(
+				light_proto,
+				self.subprotocol_name,
+				::light::net::PROTOCOL_VERSIONS,
+			)
 			.unwrap_or_else(|e| warn!("Error registering light client protocol: {:?}", e));
 
-		for proto in &self.attached_protos { proto.register(&self.network) }
+		for proto in &self.attached_protos {
+			proto.register(&self.network)
+		}
 	}
 
 	fn stop_network(&self) {
@@ -872,26 +1018,35 @@ impl LightSyncProvider for LightSync {
 	}
 
 	fn peers(&self) -> Vec<PeerInfo> {
-		self.network.with_context_eval(self.subprotocol_name, |ctx| {
-			let peer_ids = self.network.connected_peers();
+		self.network
+			.with_context_eval(self.subprotocol_name, |ctx| {
+				let peer_ids = self.network.connected_peers();
 
-			peer_ids.into_iter().filter_map(|peer_id| {
-				let session_info = match ctx.session_info(peer_id) {
-					None => return None,
-					Some(info) => info,
-				};
+				peer_ids
+					.into_iter()
+					.filter_map(|peer_id| {
+						let session_info = match ctx.session_info(peer_id) {
+							None => return None,
+							Some(info) => info,
+						};
 
-				Some(PeerInfo {
-					id: session_info.id.map(|id| format!("{:x}", id)),
-					client_version: session_info.client_version,
-					capabilities: session_info.peer_capabilities.into_iter().map(|c| c.to_string()).collect(),
-					remote_address: session_info.remote_address,
-					local_address: session_info.local_address,
-					eth_info: None,
-					pip_info: self.proto.peer_status(&peer_id).map(Into::into),
-				})
-			}).collect()
-		}).unwrap_or_else(Vec::new)
+						Some(PeerInfo {
+							id: session_info.id.map(|id| format!("{:x}", id)),
+							client_version: session_info.client_version,
+							capabilities: session_info
+								.peer_capabilities
+								.into_iter()
+								.map(|c| c.to_string())
+								.collect(),
+							remote_address: session_info.remote_address,
+							local_address: session_info.local_address,
+							eth_info: None,
+							pip_info: self.proto.peer_status(&peer_id).map(Into::into),
+						})
+					})
+					.collect()
+			})
+			.unwrap_or_else(Vec::new)
 	}
 
 	fn enode(&self) -> Option<String> {

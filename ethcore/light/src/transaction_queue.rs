@@ -23,13 +23,13 @@
 //! accounts for which they create transactions, this queue is structured in an
 //! address-wise manner.
 
-use std::fmt;
-use std::collections::{BTreeMap, HashMap};
 use std::collections::hash_map::Entry;
+use std::collections::{BTreeMap, HashMap};
+use std::fmt;
 
-use transaction::{self, Condition, PendingTransaction, SignedTransaction};
-use ethereum_types::{H256, U256, Address};
+use ethereum_types::{Address, H256, U256};
 use plain_hasher::H256FastMap;
+use transaction::{self, Condition, PendingTransaction, SignedTransaction};
 
 // Knowledge of an account's current nonce.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -95,7 +95,9 @@ impl AccountTransactions {
 	}
 
 	fn next_nonce(&self) -> U256 {
-		self.current.last().map(|last| last.nonce + 1.into())
+		self.current
+			.last()
+			.map(|last| last.nonce + 1.into())
 			.unwrap_or_else(|| *self.cur_nonce.value())
 	}
 
@@ -109,7 +111,7 @@ impl AccountTransactions {
 				Some(tx) => {
 					promoted.push(tx.hash);
 					self.current.push(tx)
-				},
+				}
 				None => break,
 			}
 
@@ -154,13 +156,18 @@ impl fmt::Debug for TransactionQueue {
 
 impl TransactionQueue {
 	/// Import a pending transaction to be queued.
-	pub fn import(&mut self, tx: PendingTransaction) -> Result<ImportDestination, transaction::Error>  {
+	pub fn import(
+		&mut self,
+		tx: PendingTransaction,
+	) -> Result<ImportDestination, transaction::Error> {
 		let sender = tx.sender();
 		let hash = tx.hash();
 		let nonce = tx.nonce;
 		let tx_info = TransactionInfo::from(&tx);
 
-		if self.by_hash.contains_key(&hash) { return Err(transaction::Error::AlreadyImported) }
+		if self.by_hash.contains_key(&hash) {
+			return Err(transaction::Error::AlreadyImported);
+		}
 
 		let (res, promoted) = match self.by_account.entry(sender) {
 			Entry::Vacant(entry) => {
@@ -177,7 +184,7 @@ impl TransactionQueue {
 				if &nonce < acct_txs.cur_nonce.value() {
 					// don't accept txs from before known current nonce.
 					if acct_txs.cur_nonce.is_known() {
-						return Err(transaction::Error::Old)
+						return Err(transaction::Error::Old);
 					}
 
 					// lower our assumption until corrected later.
@@ -203,7 +210,12 @@ impl TransactionQueue {
 						// earlier in nonce than all other "current" transactions or later.
 						assert!(idx == 0 || idx == cur_len);
 
-						if idx == 0 && acct_txs.current.first().map_or(false, |f| f.nonce != incr_nonce) {
+						if idx == 0
+							&& acct_txs
+								.current
+								.first()
+								.map_or(false, |f| f.nonce != incr_nonce)
+						{
 							let old_cur = ::std::mem::replace(&mut acct_txs.current, vec![tx_info]);
 
 							trace!(target: "txqueue", "Moving {} transactions with nonce > {} to future",
@@ -215,7 +227,12 @@ impl TransactionQueue {
 							}
 
 							(ImportDestination::Current, vec![hash])
-						} else if idx == cur_len && acct_txs.current.last().map_or(false, |f| f.nonce + 1.into() != nonce) {
+						} else if idx == cur_len
+							&& acct_txs
+								.current
+								.last()
+								.map_or(false, |f| f.nonce + 1.into() != nonce)
+						{
 							trace!(target: "txqueue", "Queued future transaction for {}, nonce={}", sender, nonce);
 							let future_nonce = nonce;
 							acct_txs.future.insert(future_nonce, tx_info);
@@ -250,7 +267,9 @@ impl TransactionQueue {
 	/// If the address has no queued transactions, then `None` will be returned
 	/// and the next nonce will have to be deduced via other means.
 	pub fn next_nonce(&self, address: &Address) -> Option<U256> {
-		self.by_account.get(address).map(AccountTransactions::next_nonce)
+		self.by_account
+			.get(address)
+			.map(AccountTransactions::next_nonce)
 	}
 
 	/// Get all transactions ready to be propagated.
@@ -258,7 +277,11 @@ impl TransactionQueue {
 	/// propagated transactions.
 	///
 	/// Returned transactions are batched by sender, in order of ascending nonce.
-	pub fn ready_transactions(&self, best_block_number: u64, best_block_timestamp: u64) -> Vec<PendingTransaction> {
+	pub fn ready_transactions(
+		&self,
+		best_block_number: u64,
+		best_block_timestamp: u64,
+	) -> Vec<PendingTransaction> {
 		self.by_account.values()
 			.flat_map(|acct_txs| {
 				acct_txs.current.iter().take_while(|tx| match tx.condition {
@@ -283,7 +306,11 @@ impl TransactionQueue {
 	/// propagated transactions.
 	///
 	/// Returned transactions are batched by sender, in order of ascending nonce.
-	pub fn future_transactions(&self, best_block_number: u64, best_block_timestamp: u64) -> Vec<PendingTransaction> {
+	pub fn future_transactions(
+		&self,
+		best_block_number: u64,
+		best_block_timestamp: u64,
+	) -> Vec<PendingTransaction> {
 		self.by_account.values()
 			.flat_map(|acct_txs| {
 				acct_txs.current.iter().skip_while(|tx| match tx.condition {
@@ -317,10 +344,17 @@ impl TransactionQueue {
 				acct_txs.cur_nonce = CurrentNonce::Known(cur_nonce);
 
 				// cull old "future" keys.
-				let old_future: Vec<_> = acct_txs.future.keys().take_while(|&&k| k < cur_nonce).cloned().collect();
+				let old_future: Vec<_> = acct_txs
+					.future
+					.keys()
+					.take_while(|&&k| k < cur_nonce)
+					.cloned()
+					.collect();
 
 				for old in old_future {
-					let hash = acct_txs.future.remove(&old)
+					let hash = acct_txs
+						.future
+						.remove(&old)
 						.expect("key extracted from keys iterator; known to exist; qed")
 						.hash;
 					removed_hashes.push(hash);
@@ -329,10 +363,10 @@ impl TransactionQueue {
 				// then cull from "current".
 				let valid_pos = acct_txs.current.iter().position(|tx| tx.nonce >= cur_nonce);
 				match valid_pos {
-					None =>
-						removed_hashes.extend(acct_txs.current.drain(..).map(|tx| tx.hash)),
-					Some(valid) =>
-						removed_hashes.extend(acct_txs.current.drain(..valid).map(|tx| tx.hash)),
+					None => removed_hashes.extend(acct_txs.current.drain(..).map(|tx| tx.hash)),
+					Some(valid) => {
+						removed_hashes.extend(acct_txs.current.drain(..valid).map(|tx| tx.hash))
+					}
 				}
 
 				// now try and move stuff out of future into current.
@@ -376,7 +410,7 @@ impl TransactionQueue {
 mod tests {
 	use super::TransactionQueue;
 	use ethereum_types::Address;
-	use transaction::{Transaction, PendingTransaction, Condition};
+	use transaction::{Condition, PendingTransaction, Transaction};
 
 	#[test]
 	fn queued_senders() {
@@ -481,7 +515,8 @@ mod tests {
 				3 => PendingTransaction::new(tx, Some(Condition::Number(100))),
 				4 => PendingTransaction::new(tx, Some(Condition::Timestamp(1234))),
 				_ => tx.into(),
-			}).unwrap();
+			})
+			.unwrap();
 		}
 
 		assert_eq!(txq.ready_transactions(0, 0).len(), 3);

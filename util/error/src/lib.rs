@@ -23,14 +23,14 @@
 extern crate error_chain;
 
 extern crate ethereum_types;
+extern crate kvdb;
 extern crate rlp;
 extern crate rustc_hex;
-extern crate kvdb;
 
-use std::fmt;
-use rustc_hex::FromHexError;
-use rlp::DecoderError;
 use ethereum_types::H256;
+use rlp::DecoderError;
+use rustc_hex::FromHexError;
+use std::fmt;
 
 #[derive(Debug)]
 /// Error in database subsystem.
@@ -44,10 +44,14 @@ pub enum BaseDataError {
 impl fmt::Display for BaseDataError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match *self {
-			BaseDataError::NegativelyReferencedHash(hash) =>
-				write!(f, "Entry {} removed from database more times than it was added.", hash),
-			BaseDataError::AlreadyExists(hash) =>
-				write!(f, "Committed key already exists in database: {}", hash),
+			BaseDataError::NegativelyReferencedHash(hash) => write!(
+				f,
+				"Entry {} removed from database more times than it was added.",
+				hash
+			),
+			BaseDataError::AlreadyExists(hash) => {
+				write!(f, "Committed key already exists in database: {}", hash)
+			}
 		}
 	}
 }

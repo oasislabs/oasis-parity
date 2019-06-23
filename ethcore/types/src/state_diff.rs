@@ -16,18 +16,18 @@
 
 //! State diff module.
 
+use account_diff::*;
+use ethereum_types::Address;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::ops::*;
-use std::collections::BTreeMap;
-use ethereum_types::Address;
-use account_diff::*;
 
 /// Expression for the delta between two system states. Encoded the
 /// delta of every altered account.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct StateDiff {
 	/// Raw diff key-value
-	pub raw: BTreeMap<Address, AccountDiff>
+	pub raw: BTreeMap<Address, AccountDiff>,
 }
 
 impl StateDiff {

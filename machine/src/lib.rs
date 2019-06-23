@@ -19,7 +19,7 @@
 
 extern crate ethereum_types;
 
-use ethereum_types::{H256, U256, Address};
+use ethereum_types::{Address, H256, U256};
 
 /// A header. This contains important metadata about the block, as well as a
 /// "seal" that indicates validity to a consensus engine.
@@ -116,7 +116,7 @@ pub trait Machine: for<'a> LocalizedMachine<'a> {
 	/// The block header type.
 	type Header: Header;
 	// /// The live block type.
-	type LiveBlock: LiveBlock<Header=Self::Header>;
+	type LiveBlock: LiveBlock<Header = Self::Header>;
 	/// Block header with metadata information.
 	type ExtendedHeader: Header;
 	// /// A handle to a blockchain client for this machine.
@@ -147,5 +147,10 @@ pub trait WithBalances: Machine {
 	fn balance(&self, live: &Self::LiveBlock, address: &Address) -> Result<U256, Self::Error>;
 
 	/// Increment the balance of an account in the state of the live block.
-	fn add_balance(&self, live: &mut Self::LiveBlock, address: &Address, amount: &U256) -> Result<(), Self::Error>;
+	fn add_balance(
+		&self,
+		live: &mut Self::LiveBlock,
+		address: &Address,
+		amount: &U256,
+	) -> Result<(), Self::Error>;
 }

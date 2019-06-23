@@ -16,12 +16,12 @@
 
 //! Receipt
 
-use ethereum_types::{H256, U256, Address, Bloom};
+use ethereum_types::{Address, Bloom, H256, U256};
 // use heapsize::HeapSizeOf;
-use rlp::{Rlp, RlpStream, Encodable, Decodable, DecoderError};
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 
-use {BlockNumber};
-use log_entry::{LogEntry, LocalizedLogEntry};
+use log_entry::{LocalizedLogEntry, LogEntry};
+use BlockNumber;
 
 /// Transaction outcome store in the receipt.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,7 +52,10 @@ impl Receipt {
 	pub fn new(outcome: TransactionOutcome, gas_used: U256, logs: Vec<LogEntry>) -> Receipt {
 		Receipt {
 			gas_used: gas_used,
-			log_bloom: logs.iter().fold(Bloom::default(), |mut b, l| { b = &b | &l.bloom(); b }), //TODO: use |= operator
+			log_bloom: logs.iter().fold(Bloom::default(), |mut b, l| {
+				b = &b | &l.bloom();
+				b
+			}), //TODO: use |= operator
 			logs: logs,
 			outcome: outcome,
 		}
@@ -64,15 +67,15 @@ impl Encodable for Receipt {
 		match self.outcome {
 			TransactionOutcome::Unknown => {
 				s.begin_list(3);
-			},
+			}
 			TransactionOutcome::StateRoot(ref root) => {
 				s.begin_list(4);
 				s.append(root);
-			},
+			}
 			TransactionOutcome::StatusCode(ref status_code) => {
 				s.begin_list(4);
 				s.append(status_code);
-			},
+			}
 		}
 		s.append(&self.gas_used);
 		s.append(&self.log_bloom);
@@ -101,7 +104,7 @@ impl Decodable for Receipt {
 					} else {
 						TransactionOutcome::StateRoot(first.as_val()?)
 					}
-				}
+				},
 			})
 		}
 	}
@@ -173,8 +176,8 @@ mod tests {
 			vec![LogEntry {
 				address: "dcf421d093428b096ca501a7cd1a740855a7976f".into(),
 				topics: vec![],
-				data: vec![0u8; 32]
-			}]
+				data: vec![0u8; 32],
+			}],
 		);
 		assert_eq!(&::rlp::encode(&r)[..], &expected[..]);
 	}
@@ -183,13 +186,15 @@ mod tests {
 	fn test_basic() {
 		let expected = ::rustc_hex::FromHex::from_hex("f90162a02f697d671e9ae4ee24a43c4b0d7e15f1cb4ba6de1561120d43b9a4e8c4a8a6ee83040caeb9010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000f838f794dcf421d093428b096ca501a7cd1a740855a7976fc0a00000000000000000000000000000000000000000000000000000000000000000").unwrap();
 		let r = Receipt::new(
-			TransactionOutcome::StateRoot("2f697d671e9ae4ee24a43c4b0d7e15f1cb4ba6de1561120d43b9a4e8c4a8a6ee".into()),
+			TransactionOutcome::StateRoot(
+				"2f697d671e9ae4ee24a43c4b0d7e15f1cb4ba6de1561120d43b9a4e8c4a8a6ee".into(),
+			),
 			0x40cae.into(),
 			vec![LogEntry {
 				address: "dcf421d093428b096ca501a7cd1a740855a7976f".into(),
 				topics: vec![],
-				data: vec![0u8; 32]
-			}]
+				data: vec![0u8; 32],
+			}],
 		);
 		let encoded = ::rlp::encode(&r);
 		assert_eq!(&encoded[..], &expected[..]);
@@ -206,8 +211,8 @@ mod tests {
 			vec![LogEntry {
 				address: "dcf421d093428b096ca501a7cd1a740855a7976f".into(),
 				topics: vec![],
-				data: vec![0u8; 32]
-			}]
+				data: vec![0u8; 32],
+			}],
 		);
 		let encoded = ::rlp::encode(&r);
 		assert_eq!(&encoded[..], &expected[..]);

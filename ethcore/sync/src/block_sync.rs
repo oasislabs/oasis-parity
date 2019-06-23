@@ -14,22 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+use blocks::BlockCollection;
+use ethcore::block::Block;
+use ethcore::client::{BlockId, BlockImportError, BlockImportErrorKind, BlockStatus};
+use ethcore::error::{BlockError, ImportErrorKind};
+use ethcore::header::{BlockNumber, Header as BlockHeader};
+use ethcore::views::BlockView;
+use ethereum_types::H256;
+use heapsize::HeapSizeOf;
+use rlp::Rlp;
+use std::cmp;
 ///
 /// Blockchain downloader
 ///
-
 use std::collections::{HashSet, VecDeque};
-use std::cmp;
-use heapsize::HeapSizeOf;
-use ethereum_types::H256;
-use rlp::Rlp;
-use ethcore::views::BlockView;
-use ethcore::header::{BlockNumber, Header as BlockHeader};
-use ethcore::client::{BlockStatus, BlockId, BlockImportError, BlockImportErrorKind};
-use ethcore::block::Block;
-use ethcore::error::{ImportErrorKind, BlockError};
 use sync_io::SyncIo;
-use blocks::BlockCollection;
 
 const MAX_HEADERS_TO_REQUEST: usize = 128;
 const MAX_BODIES_TO_REQUEST: usize = 32;
@@ -53,17 +52,9 @@ pub enum State {
 
 /// Data that needs to be requested from a peer.
 pub enum BlockRequest {
-	Headers {
-		start: H256,
-		count: u64,
-		skip: u64,
-	},
-	Bodies {
-		hashes: Vec<H256>,
-	},
-	Receipts {
-		hashes: Vec<H256>,
-	},
+	Headers { start: H256, count: u64, skip: u64 },
+	Bodies { hashes: Vec<H256> },
+	Receipts { hashes: Vec<H256> },
 }
 
 /// Indicates sync action
@@ -71,7 +62,7 @@ pub enum DownloadAction {
 	/// Do nothing
 	None,
 	/// Reset downloads for all peers
-	Reset
+	Reset,
 }
 
 #[derive(Eq, PartialEq, Debug)]
@@ -134,7 +125,11 @@ impl BlockDownloader {
 	}
 
 	/// Create a new instance of sync with unlimited reorg allowed.
-	pub fn with_unlimited_reorg(sync_receipts: bool, start_hash: &H256, start_number: BlockNumber) -> Self {
+	pub fn with_unlimited_reorg(
+		sync_receipts: bool,
+		start_hash: &H256,
+		start_number: BlockNumber,
+	) -> Self {
 		BlockDownloader {
 			state: State::Idle,
 			highest_block: None,
@@ -216,11 +211,16 @@ impl BlockDownloader {
 	}
 
 	/// Add new block headers.
-	pub fn import_headers(&mut self, io: &mut SyncIo, r: &Rlp, expected_hash: Option<H256>) -> Result<DownloadAction, BlockDownloaderImportError> {
+	pub fn import_headers(
+		&mut self,
+		io: &mut SyncIo,
+		r: &Rlp,
+		expected_hash: Option<H256>,
+	) -> Result<DownloadAction, BlockDownloaderImportError> {
 		let item_count = r.item_count().unwrap_or(0);
 		if self.state == State::Idle {
 			trace!(target: "sync", "Ignored unexpected block headers");
-			return Ok(DownloadAction::None)
+			return Ok(DownloadAction::None);
 		}
 		if item_count == 0 && (self.state == State::Blocks) {
 			return Err(BlockDownloaderImportError::Invalid);
@@ -259,15 +259,19 @@ impl BlockDownloader {
 			match io.chain().block_status(BlockId::Hash(hash.clone())) {
 				BlockStatus::InChain | BlockStatus::Queued => {
 					match self.state {
-						State::Blocks => trace!(target: "sync", "Header already in chain {} ({})", number, hash),
-						_ => trace!(target: "sync", "Header already in chain {} ({}), state = {:?}", number, hash, self.state),
+						State::Blocks => {
+							trace!(target: "sync", "Header already in chain {} ({})", number, hash)
+						}
+						_ => {
+							trace!(target: "sync", "Header already in chain {} ({}), state = {:?}", number, hash, self.state)
+						}
 					}
 					headers.push(hdr.as_raw().to_vec());
 					hashes.push(hash);
-				},
+				}
 				BlockStatus::Bad => {
 					return Err(BlockDownloaderImportError::Invalid);
-				},
+				}
 				BlockStatus::Unknown | BlockStatus::Pending => {
 					headers.push(hdr.as_raw().to_vec());
 					hashes.push(hash);
@@ -298,7 +302,7 @@ impl BlockDownloader {
 						return Err(BlockDownloaderImportError::Invalid);
 					}
 				}
-			},
+			}
 			State::Blocks => {
 				let count = headers.len();
 				// At least one of the heades must advance the subchain. Otherwise they are all useless.
@@ -308,7 +312,7 @@ impl BlockDownloader {
 				}
 				self.blocks.insert_headers(headers);
 				trace!(target: "sync", "Inserted {} headers", count);
-			},
+			}
 			_ => trace!(target: "sync", "Unexpected headers({})", headers.len()),
 		}
 
@@ -316,15 +320,17 @@ impl BlockDownloader {
 	}
 
 	/// Called by peer once it has new block bodies
-	pub fn import_bodies(&mut self, _io: &mut SyncIo, r: &Rlp) -> Result<(), BlockDownloaderImportError> {
+	pub fn import_bodies(
+		&mut self,
+		_io: &mut SyncIo,
+		r: &Rlp,
+	) -> Result<(), BlockDownloaderImportError> {
 		let item_count = r.item_count().unwrap_or(0);
 		if item_count == 0 {
 			return Err(BlockDownloaderImportError::Useless);
-		}
-		else if self.state != State::Blocks {
+		} else if self.state != State::Blocks {
 			trace!(target: "sync", "Ignored unexpected block bodies");
-		}
-		else {
+		} else {
 			let mut bodies = Vec::with_capacity(item_count);
 			for i in 0..item_count {
 				let body = r.at(i).map_err(|e| {
@@ -342,15 +348,17 @@ impl BlockDownloader {
 	}
 
 	/// Called by peer once it has new block bodies
-	pub fn import_receipts(&mut self, _io: &mut SyncIo, r: &Rlp) -> Result<(), BlockDownloaderImportError> {
+	pub fn import_receipts(
+		&mut self,
+		_io: &mut SyncIo,
+		r: &Rlp,
+	) -> Result<(), BlockDownloaderImportError> {
 		let item_count = r.item_count().unwrap_or(0);
 		if item_count == 0 {
 			return Err(BlockDownloaderImportError::Useless);
-		}
-		else if self.state != State::Blocks {
+		} else if self.state != State::Blocks {
 			trace!(target: "sync", "Ignored unexpected block receipts");
-		}
-		else {
+		} else {
 			let mut receipts = Vec::with_capacity(item_count);
 			for i in 0..item_count {
 				let receipt = r.at(i).map_err(|e| {
@@ -404,10 +412,10 @@ impl BlockDownloader {
 						}
 					}
 				}
-			},
+			}
 			_ => {
 				self.retract_step = 1;
-			},
+			}
 		}
 		self.last_round_start = self.last_imported_block;
 		self.last_round_start_hash = self.last_imported_hash;
@@ -415,14 +423,18 @@ impl BlockDownloader {
 	}
 
 	/// Find some headers or blocks to download for a peer.
-	pub fn request_blocks(&mut self, io: &mut SyncIo, num_active_peers: usize) -> Option<BlockRequest> {
+	pub fn request_blocks(
+		&mut self,
+		io: &mut SyncIo,
+		num_active_peers: usize,
+	) -> Option<BlockRequest> {
 		match self.state {
 			State::Idle => {
 				self.start_sync_round(io);
 				if self.state == State::ChainHead {
 					return self.request_blocks(io, num_active_peers);
 				}
-			},
+			}
 			State::ChainHead => {
 				if num_active_peers < MAX_PARALLEL_SUBCHAIN_DOWNLOAD {
 					// Request subchain headers
@@ -435,7 +447,7 @@ impl BlockDownloader {
 						skip: (MAX_HEADERS_TO_REQUEST - 2) as u64,
 					});
 				}
-			},
+			}
 			State::Blocks => {
 				// check to see if we need to download any block bodies first
 				let needed_bodies = self.blocks.needed_bodies(MAX_BODIES_TO_REQUEST, false);
@@ -446,7 +458,8 @@ impl BlockDownloader {
 				}
 
 				if self.download_receipts {
-					let needed_receipts = self.blocks.needed_receipts(MAX_RECEPITS_TO_REQUEST, false);
+					let needed_receipts =
+						self.blocks.needed_receipts(MAX_RECEPITS_TO_REQUEST, false);
 					if !needed_receipts.is_empty() {
 						return Some(BlockRequest::Receipts {
 							hashes: needed_receipts,
@@ -455,21 +468,26 @@ impl BlockDownloader {
 				}
 
 				// find subchain to download
-				if let Some((h, count)) = self.blocks.needed_headers(MAX_HEADERS_TO_REQUEST, false) {
+				if let Some((h, count)) = self.blocks.needed_headers(MAX_HEADERS_TO_REQUEST, false)
+				{
 					return Some(BlockRequest::Headers {
 						start: h,
 						count: count as u64,
 						skip: 0,
 					});
 				}
-			},
+			}
 			State::Complete => (),
 		}
 		None
 	}
 
 	/// Checks if there are blocks fully downloaded that can be imported into the blockchain and does the import.
-	pub fn collect_blocks(&mut self, io: &mut SyncIo, allow_out_of_order: bool) -> Result<(), BlockDownloaderImportError> {
+	pub fn collect_blocks(
+		&mut self,
+		io: &mut SyncIo,
+		allow_out_of_order: bool,
+	) -> Result<(), BlockDownloaderImportError> {
 		let mut bad = false;
 		let mut imported = HashSet::new();
 		let blocks = self.blocks.drain();
@@ -502,30 +520,45 @@ impl BlockDownloader {
 			};
 
 			match result {
-				Err(BlockImportError(BlockImportErrorKind::Import(ImportErrorKind::AlreadyInChain), _)) => {
+				Err(BlockImportError(
+					BlockImportErrorKind::Import(ImportErrorKind::AlreadyInChain),
+					_,
+				)) => {
 					trace!(target: "sync", "Block already in chain {:?}", h);
 					self.block_imported(&h, number, &parent);
-				},
-				Err(BlockImportError(BlockImportErrorKind::Import(ImportErrorKind::AlreadyQueued), _)) => {
+				}
+				Err(BlockImportError(
+					BlockImportErrorKind::Import(ImportErrorKind::AlreadyQueued),
+					_,
+				)) => {
 					trace!(target: "sync", "Block already queued {:?}", h);
 					self.block_imported(&h, number, &parent);
-				},
+				}
 				Ok(_) => {
 					trace!(target: "sync", "Block queued {:?}", h);
 					imported.insert(h.clone());
 					self.block_imported(&h, number, &parent);
-				},
-				Err(BlockImportError(BlockImportErrorKind::Block(BlockError::UnknownParent(_)), _)) if allow_out_of_order => {
+				}
+				Err(BlockImportError(
+					BlockImportErrorKind::Block(BlockError::UnknownParent(_)),
+					_,
+				)) if allow_out_of_order => {
 					break;
-				},
-				Err(BlockImportError(BlockImportErrorKind::Block(BlockError::UnknownParent(_)), _)) => {
+				}
+				Err(BlockImportError(
+					BlockImportErrorKind::Block(BlockError::UnknownParent(_)),
+					_,
+				)) => {
 					trace!(target: "sync", "Unknown new block parent, restarting sync");
 					break;
-				},
-				Err(BlockImportError(BlockImportErrorKind::Block(BlockError::TemporarilyInvalid(_)), _)) => {
+				}
+				Err(BlockImportError(
+					BlockImportErrorKind::Block(BlockError::TemporarilyInvalid(_)),
+					_,
+				)) => {
 					debug!(target: "sync", "Block temporarily invalid, restarting sync");
 					break;
-				},
+				}
 				Err(e) => {
 					debug!(target: "sync", "Bad block {:?} : {:?}", h, e);
 					bad = true;

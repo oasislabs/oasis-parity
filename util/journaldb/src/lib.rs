@@ -20,8 +20,8 @@ extern crate heapsize;
 #[macro_use]
 extern crate log;
 
-extern crate ethereum_types;
 extern crate ethcore_bytes as bytes;
+extern crate ethereum_types;
 extern crate hashdb;
 extern crate kvdb;
 extern crate memorydb;
@@ -36,15 +36,15 @@ extern crate keccak_hash as keccak;
 #[cfg(test)]
 extern crate kvdb_memorydb;
 
-use std::{fmt, str};
 use std::sync::Arc;
+use std::{fmt, str};
 
-/// Export the journaldb module.
-mod traits;
 mod archivedb;
 mod earlymergedb;
 mod overlayrecentdb;
 mod refcounteddb;
+/// Export the journaldb module.
+mod traits;
 mod util;
 
 pub mod overlaydb;
@@ -80,7 +80,9 @@ pub enum Algorithm {
 }
 
 impl Default for Algorithm {
-	fn default() -> Algorithm { Algorithm::OverlayRecent }
+	fn default() -> Algorithm {
+		Algorithm::OverlayRecent
+	}
 }
 
 impl str::FromStr for Algorithm {
@@ -128,7 +130,12 @@ impl Algorithm {
 
 	/// Returns all algorithm types.
 	pub fn all_types() -> Vec<Algorithm> {
-		vec![Algorithm::Archive, Algorithm::EarlyMerge, Algorithm::OverlayRecent, Algorithm::RefCounted]
+		vec![
+			Algorithm::Archive,
+			Algorithm::EarlyMerge,
+			Algorithm::OverlayRecent,
+			Algorithm::RefCounted,
+		]
 	}
 }
 
@@ -139,7 +146,11 @@ impl fmt::Display for Algorithm {
 }
 
 /// Create a new `JournalDB` trait object over a generic key-value database.
-pub fn new(backing: Arc<::kvdb::KeyValueDB>, algorithm: Algorithm, col: Option<u32>) -> Box<JournalDB> {
+pub fn new(
+	backing: Arc<::kvdb::KeyValueDB>,
+	algorithm: Algorithm,
+	col: Option<u32>,
+) -> Box<JournalDB> {
 	match algorithm {
 		Algorithm::Archive => Box::new(archivedb::ArchiveDB::new(backing, col)),
 		Algorithm::EarlyMerge => Box::new(earlymergedb::EarlyMergeDB::new(backing, col)),
@@ -149,8 +160,8 @@ pub fn new(backing: Arc<::kvdb::KeyValueDB>, algorithm: Algorithm, col: Option<u
 }
 
 // all keys must be at least 12 bytes
-const DB_PREFIX_LEN : usize = ::kvdb::PREFIX_LEN;
-const LATEST_ERA_KEY : [u8; ::kvdb::PREFIX_LEN] = [ b'l', b'a', b's', b't', 0, 0, 0, 0, 0, 0, 0, 0 ];
+const DB_PREFIX_LEN: usize = ::kvdb::PREFIX_LEN;
+const LATEST_ERA_KEY: [u8; ::kvdb::PREFIX_LEN] = [b'l', b'a', b's', b't', 0, 0, 0, 0, 0, 0, 0, 0];
 
 #[cfg(test)]
 mod tests {
