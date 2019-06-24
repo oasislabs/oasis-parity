@@ -21,7 +21,7 @@ use hash::keccak;
 use hashdb::HashDB;
 use itertools::Itertools;
 use rlp::{self, RlpStream};
-use state::Account;
+use state::{Account, MKVS_KEY_CODE, MKVS_KEY_PREFIX_STORAGE};
 use std::collections::BTreeMap;
 use std::fmt;
 use trie::TrieFactory;
@@ -83,12 +83,14 @@ impl PodAccount {
 	pub fn insert_additional(&self, mkvs: &mut MKVS) {
 		match self.code {
 			Some(ref c) if !c.is_empty() => {
-				mkvs.insert(&keccak(c), c);
+				mkvs.insert(MKVS_KEY_CODE, c);
 			}
 			_ => {}
 		}
 		for (k, v) in &self.storage {
-			mkvs.insert(k.as_ref(), &rlp::encode(v));
+			let mut key = MKVS_KEY_PREFIX_STORAGE.to_vec();
+			key.extend_from_slice(k);
+			mkvs.insert(&key, &rlp::encode(v));
 		}
 	}
 }

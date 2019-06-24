@@ -605,8 +605,7 @@ impl Spec {
 
 		for (address, account) in self.genesis_state.get().iter() {
 			db.note_non_null_account(address);
-			let address_hash = &keccak(address);
-			let mut account_mkvs = PrefixedMKVS::new(&mut mkvs, address_hash);
+			let mut account_mkvs = PrefixedMKVS::new(&mut mkvs, address);
 			account.insert_additional(&mut account_mkvs);
 		}
 
