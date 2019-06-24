@@ -58,7 +58,7 @@ pub fn wasm_exports(
 			// generates these guys
 			// https://github.com/paritytech/parity-ethereum/blob/dae5d75d/ethcore/wasm/src/env.rs#L28
 			let id_ident = format_ident!("{}_FUNC", wasmi_sig_ident);
-			(wasmi_sig_ident, id_ident)
+			(id_ident, wasmi_sig_ident)
 		})
 		.unzip();
 
