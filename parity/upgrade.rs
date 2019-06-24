@@ -49,7 +49,7 @@ struct UpgradeKey {
 	pub new_version: Version,
 }
 
-type UpgradeList = HashMap<UpgradeKey, fn() -> Result<() -> Result<(), Error>>;
+type UpgradeList = HashMap<UpgradeKey, fn() -> Result<(), Error>>;
 
 impl UpgradeKey {
 	// given the following config exist
