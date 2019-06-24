@@ -10,6 +10,9 @@ const ADDR_CHARS: usize = ADDR_LEN_BYTES * 2; // two hex digits per byte
 
 macro_rules! bcfs {
 	( $self:ident . bcfs . $fn:ident ( $($args:expr),+ )  ) => {
+		// Unsafety is required because BCFS is mutably borrowed with `self`
+		// but also takes a `PendingTransaction` which also happens to be `self.
+		// This is okay because BCFS doesn't modify itself through `PendingTransaction`.
 		match unsafe { &mut *$self.bcfs.get() }.$fn($self, $( $args ),+ ) {
 			Ok(result) => result,
 			Err(errno) => return Ok(errno)
@@ -266,8 +269,8 @@ impl<'a> crate::Runtime<'a> {
 		Ok(ErrNo::Success)
 	}
 
-	pub fn fd_sync(&mut self, _fd: Fd) -> crate::Result<ErrNo> {
-		Ok(ErrNo::Success) // unimplemented(dontneed): there's no disk to synchronize
+	pub fn fd_sync(&mut self, fd: Fd) -> crate::Result<ErrNo> {
+		self.fd_datasync(fd) // there's no metadata
 	}
 
 	pub fn fd_tell(&mut self, fd: Fd, offset: P<FileSize>) -> crate::Result<ErrNo> {
@@ -468,7 +471,6 @@ impl<'a> crate::Runtime<'a> {
 				std::mem::forget(mem_slice);
 				// Launder the slice to get around borrow of `self` by `iovs` so that
 				// it can be used by `bcfs` via `PendingTransaction`.
-				// BCFS
 				Ok(std::io::IoSliceMut::new(unsafe {
 					std::slice::from_raw_parts_mut(p, iov.len as usize)
 				}))
@@ -527,7 +529,6 @@ impl<'a> crate::Runtime<'a> {
 				std::mem::forget(mem_slice);
 				// Launder the slice to get around borrow of `self` by `iovs` so that
 				// it can be used by `bcfs` via `PendingTransaction`.
-				// BCFS
 				Ok(std::io::IoSlice::new(unsafe {
 					std::slice::from_raw_parts(p, iov.len as usize)
 				}))
