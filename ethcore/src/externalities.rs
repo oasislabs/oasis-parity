@@ -621,11 +621,12 @@ where
 	B: StateBackend,
 {
 	fn set(&mut self, key: &[u8], value: &[u8]) {
-		self.set_storage_bytes(slice_to_key(key), value.to_vec());
+		self.set_storage_bytes(slice_to_key(key), value.to_vec())
+			.ok();
 	}
 
 	fn remove(&mut self, key: &[u8]) {
-		self.set_storage_bytes(slice_to_key(key), Vec::new());
+		self.set_storage_bytes(slice_to_key(key), Vec::new()).ok();
 	}
 }
 
