@@ -13,7 +13,7 @@ jobs:
 
       - run:
           name: Checkstyle
-          command: cargo fmt -p ethcore -- --check
+          command: cargo fmt -p ethcore -p ethcore-transaction -p ethkey -p vm -p wasm -- --check
 
       - run:
           name: Check out git submodules (wasm-tests, in particular)
