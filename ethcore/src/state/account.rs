@@ -228,7 +228,8 @@ impl Account {
 		if let Some(value) = self.cached_storage_at(key) {
 			return Some(value);
 		}
-		let panicky_decoder = |bytes:&[u8]| ::rlp::decode(&bytes).expect("decoding db value failed");
+		let panicky_decoder =
+			|bytes: &[u8]| ::rlp::decode(&bytes).expect("decoding db value failed");
 		let mut k = MKVS_KEY_PREFIX_STORAGE.to_vec();
 		k.extend_from_slice(key);
 		let item = mkvs.get(&k).map(|value| panicky_decoder(&value));
@@ -355,9 +356,14 @@ impl Account {
 	/// Provide a database to get `code_size`. Should not be called if it is a contract without code.
 	pub fn cache_code_size(&mut self, mkvs: &MKVS) -> bool {
 		// TODO: fill out self.code_cache;
-		trace!("Account::cache_code_size: ic={}; self.code_hash={:?}, self.code_cache={}", self.is_cached(), self.code_hash, self.code_cache.pretty());
-		self.code_size.is_some() ||
-			if self.code_hash != KECCAK_EMPTY {
+		trace!(
+			"Account::cache_code_size: ic={}; self.code_hash={:?}, self.code_cache={}",
+			self.is_cached(),
+			self.code_hash,
+			self.code_cache.pretty()
+		);
+		self.code_size.is_some()
+			|| if self.code_hash != KECCAK_EMPTY {
 				match mkvs.get(MKVS_KEY_CODE) {
 					Some(x) => {
 						self.code_size = Some(x.len());
@@ -440,10 +446,10 @@ impl Account {
 		for (k, v) in self.storage_changes.drain() {
 			// cast key and value to trait type,
 			// so we can call overloaded `to_bytes` method
-            //
-            // Note: for confidential contracts we never remove from storage, even if the storage is
-            //       zeroed out. This is guaranteed since the length will always be > 32 when
-            //       encrypted.
+			//
+			// Note: for confidential contracts we never remove from storage, even if the storage is
+			//       zeroed out. This is guaranteed since the length will always be > 32 when
+			//       encrypted.
 			let mut key = MKVS_KEY_PREFIX_STORAGE.to_vec();
 			key.extend_from_slice(&k);
 			match v.len() == 32 && H256::from_slice(&v).is_zero() {

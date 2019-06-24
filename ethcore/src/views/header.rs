@@ -21,7 +21,7 @@ use bytes::Bytes;
 use ethereum_types::{Address, Bloom, H256, U256};
 use hash::keccak;
 use header::BlockNumber;
-use rlp::{self};
+use rlp;
 
 /// View onto block header rlp.
 pub struct HeaderView<'a> {

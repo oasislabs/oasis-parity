@@ -680,7 +680,7 @@ impl<B: Backend> State<B> {
 			if let Some(ref mut acc) = local_account {
 				if let Some(ref account) = acc.account {
 					let account_mkvs = ReadOnlyPrefixedMKVS::new(&self.mkvs, address);
-					return Ok(account.storage_at(&account_mkvs, &key))
+					return Ok(account.storage_at(&account_mkvs, &key));
 				} else {
 					return Ok(None);
 				}
@@ -1309,7 +1309,12 @@ impl<B: Backend> State<B> {
 				Some(ref mut account) => {
 					if require_code {
 						let account_mkvs = ReadOnlyPrefixedMKVS::new(&self.mkvs, a);
-						Self::update_account_cache(RequireCache::Code, account, &self.db, &account_mkvs);
+						Self::update_account_cache(
+							RequireCache::Code,
+							account,
+							&self.db,
+							&account_mkvs,
+						);
 					}
 					account
 				}

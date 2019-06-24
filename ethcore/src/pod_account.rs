@@ -82,7 +82,9 @@ impl PodAccount {
 
 	pub fn insert_additional(&self, mkvs: &mut MKVS) {
 		match self.code {
-			Some(ref c) if !c.is_empty() => { mkvs.insert(MKVS_KEY_CODE, c); }
+			Some(ref c) if !c.is_empty() => {
+				mkvs.insert(MKVS_KEY_CODE, c);
+			}
 			_ => {}
 		}
 		for (k, v) in &self.storage {
