@@ -21,6 +21,17 @@ fn export_fn_args(args: &syn::FnDecl) -> impl Iterator<Item = &syn::Type> {
 		})
 }
 
+/// Generates boilerplate required by wasmi for adding exports.
+/// Place `#[wasm_exports]` atop an `impl` block to turn the contained method signatures
+/// into a set of runtime exports.
+///
+/// For reference, the user writes a version of [1] with strongly-typed arguments.
+/// The types must be `repr(C)` and `Copy` since they'll be scanned in from linear memory.
+/// The macro will generate an `impl Externals` a la [2] and also all of the stuff in [3].
+///
+/// [1] https://github.com/paritytech/parity-ethereum/blob/dae5d75d/ethcore/wasm/src/runtime.rs#L145
+/// [2] https://github.com/paritytech/parity-ethereum/blob/dae5d75d/ethcore/wasm/src/runtime.rs#L764-L799
+/// [3] https://github.com/paritytech/parity-ethereum/blob/dae5d75d/ethcore/wasm/src/env.rs
 #[proc_macro_attribute]
 pub fn wasm_exports(
 	_args: proc_macro::TokenStream,
@@ -44,6 +55,8 @@ pub fn wasm_exports(
 				&sig.ident.to_string().to_uppercase(),
 				proc_macro2::Span::call_site(),
 			);
+			// generates these guys
+			// https://github.com/paritytech/parity-ethereum/blob/dae5d75d/ethcore/wasm/src/env.rs#L28
 			let id_ident = format_ident!("{}_FUNC", wasmi_sig_ident);
 			(wasmi_sig_ident, id_ident)
 		})
@@ -62,11 +75,14 @@ pub fn wasm_exports(
 					WasmType::I32 => quote!(I32),
 					WasmType::I64 => quote!(I64),
 				});
+			// these are special cased since `gas` returns nothing and `proc_exit` traps
 			let ret_ty = if sig.ident == "gas" || sig.ident == "proc_exit" {
 				quote! { None }
 			} else {
-				quote! { Some(I32) }
+				quote! { Some(I32) } // otherwise, WASI returns errno_t (u32)
 			};
+			// generates these gals
+			// https://github.com/paritytech/parity-ethereum/blob/dae5d75d/ethcore/wasm/src/env.rs#L60
 			quote! {
 				pub const #wsig_ident: crate::env::StaticSignature =
 					crate::env::StaticSignature(&[#(#wasm_args),*], #ret_ty);
@@ -77,10 +93,13 @@ pub fn wasm_exports(
 		.iter()
 		.zip(id_idents.iter())
 		.map(|(f, id_ident)| {
+			// here we generate these
+			// https://github.com/paritytech/parity-ethereum/blob/master/ethcore/wasm/src/runtime.rs#L764
 			let f_ident = &f.ident;
 			let args = (0..(f.decl.inputs.len() - 1/* &self */)).map(|i| {
 				quote! { args.nth_checked(#i)? }
 			});
+			// special cased for the same reason as described above
 			if f_ident == "gas" || f_ident == "proc_exit" {
 				quote! {
 					ids::#id_ident => {
@@ -104,6 +123,7 @@ pub fn wasm_exports(
 		.zip(id_idents.iter().zip(wsig_idents.iter()))
 		.map(|(f, (id_ident, sig_ident))| {
 			let f_ident = &f.ident;
+			// generates https://github.com/paritytech/parity-ethereum/blob/dae5d75d/ethcore/wasm/src/env.rs#L257
 			quote! {
 				stringify!(#f_ident) => {
 					crate::env::host(signatures::#sig_ident, ids::#id_ident)
