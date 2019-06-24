@@ -21,7 +21,7 @@ use hash::keccak;
 use hashdb::HashDB;
 use itertools::Itertools;
 use rlp::{self, RlpStream};
-use state::Account;
+use state::{Account, MKVS_KEY_CODE, MKVS_KEY_PREFIX_STORAGE};
 use std::collections::BTreeMap;
 use std::fmt;
 use trie::TrieFactory;
