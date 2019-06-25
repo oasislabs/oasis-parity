@@ -222,24 +222,36 @@ where
 		}
 	}
 
-	fn create(&mut self, gas: &U256, value: &U256, code: &[u8], address_scheme: CreateContractAddress) -> ContractCreateResult {
+	fn create(
+		&mut self,
+		gas: &U256,
+		value: &U256,
+		code: &[u8],
+		address_scheme: CreateContractAddress,
+	) -> ContractCreateResult {
 		let code = {
 			if self.state.confidential_ctx.is_some()
-				&& self.state.confidential_ctx
-				.as_ref()
-				.unwrap()
-				.borrow()
-				.activated() {
-					let mut header_code = OasisContract::make_header(1, json!({
+				&& self
+					.state
+					.confidential_ctx
+					.as_ref()
+					.unwrap()
+					.borrow()
+					.activated()
+			{
+				let mut header_code = OasisContract::make_header(
+					1,
+					json!({
 						"confidential": true
-					}).to_string());
-					header_code.append(&mut code.to_vec());
-					header_code
-				}
-			else {
+					})
+					.to_string(),
+				);
+				header_code.append(&mut code.to_vec());
+				header_code
+			} else {
 				code.to_vec()
 			}
-        };
+		};
 
 		// create new contract address
 		let (address, code_hash) = match self.state.nonce(&self.origin_info.address) {

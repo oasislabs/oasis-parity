@@ -1,8 +1,8 @@
 use byteorder::{BigEndian, ByteOrder};
+use elastic_array::ElasticArray128;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
-use elastic_array::ElasticArray128;
 
 /// 4-byte prefix prepended to contract code indicating header
 pub const OASIS_HEADER_PREFIX: &'static [u8; 4] = b"\0sis";
