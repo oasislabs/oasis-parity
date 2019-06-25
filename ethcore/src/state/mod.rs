@@ -1396,7 +1396,7 @@ impl<B: Backend> State<B> {
 				.as_ref()
 				.expect("Cannot encrypt without a confidential context")
 				.borrow()
-				.encrypt_storage(key.to_vec())
+				.encrypt_storage_key(key.to_vec())
 				.expect("Should be able to encrypt storage keys");
 			keccak(&enc_key)
 		} else {
@@ -1412,8 +1412,8 @@ impl<B: Backend> State<B> {
 			self.confidential_ctx
 				.as_ref()
 				.expect("Cannot encrypt without a confidential context")
-				.borrow()
-				.encrypt_storage(value)
+				.borrow_mut()
+				.encrypt_storage_value(value)
 				.expect("Should be able to encrypt storage")
 		} else {
 			value
@@ -1433,7 +1433,7 @@ impl<B: Backend> State<B> {
 				.as_ref()
 				.expect("Cannot decrypt without a confidential context")
 				.borrow()
-				.decrypt_storage(value)
+				.decrypt_storage_value(value)
 				.expect("Corrupted state")
 		} else {
 			value
