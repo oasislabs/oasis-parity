@@ -329,6 +329,8 @@ where
 		value: Option<U256>,
 		data: &[u8],
 		code_address: &Address,
+		output: &mut [u8],
+		call_type: CallType,
 	) -> MessageCallResult {
 		trace!(target: "externalities", "call");
 
@@ -366,7 +368,7 @@ where
 				.map_or(code, |c| Some(c.code.clone())),
 			code_hash: Some(code_hash),
 			data: Some(data.to_vec()),
-			call_type: CallType::Call,
+			call_type: call_type,
 			params_type: vm::ParamsType::Separate,
 			oasis_contract: oasis_contract,
 		};
@@ -384,11 +386,10 @@ where
 		);
 
 		let mut subexttracer = self.ext_tracer.subtracer(&params.address);
-		let mut output = Vec::new();
 		match ex.call(
 			params,
 			self.substate,
-			BytesRef::Flexible(&mut output),
+			BytesRef::Fixed(output),
 			self.tracer,
 			self.vm_tracer,
 			&mut subexttracer,
@@ -587,6 +588,11 @@ where
 	}
 }
 
+/// The Parity trie uses H256 (32-byte) keys. Keys used by WASI services
+/// will look like file names. Trie performance is optimized when keys with
+/// similar access patterns share a prefix. This function aims to maximize
+/// performance by preserving the original (hopefully prefixed) paths but
+/// safely defaults to hashing long paths.
 fn slice_to_key(sl: &[u8]) -> H256 {
 	let mut hash = [0u8; 32];
 	if sl.len() > hash.len() {
@@ -805,6 +811,8 @@ mod tests {
 			false,
 		);
 
+		let mut output = vec![];
+
 		// this should panic because we have no balance on any account
 		ext.call(
 			&"0000000000000000000000000000000000000000000000000000000000120000"
@@ -819,6 +827,8 @@ mod tests {
 			),
 			&[],
 			&Address::new(),
+			&mut output,
+			CallType::Call,
 		);
 	}
 

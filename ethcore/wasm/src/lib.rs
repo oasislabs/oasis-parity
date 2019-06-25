@@ -189,10 +189,8 @@ impl vm::Vm for WasmInterpreter {
 			)
 		};
 
-		let gas_left = U256::from(
-			(gas_left as u128 * ext.schedule().wasm().opcodes_mul as u128
-				/ ext.schedule().wasm().opcodes_div as u128) as u64,
-		);
+		let gas_left = U256::from(gas_left) * U256::from(ext.schedule().wasm().opcodes_mul)
+			/ U256::from(ext.schedule().wasm().opcodes_div);
 
 		let apply_state = !result.is_err();
 		let output = result.unwrap_or_else(std::convert::identity);

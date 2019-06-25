@@ -146,6 +146,8 @@ impl<'a> PendingTransaction for Runtime<'a> {
 			if value > 0 { Some(value.into()) } else { None },
 			input,
 			callee, /* code addr */
+			&mut [],
+			CallType::Call,
 		);
 
 		match call_result {
@@ -192,7 +194,7 @@ impl<'a> PendingTransaction for Runtime<'a> {
 		self.err_output.extend_from_slice(data);
 	}
 
-	/// Publishes a broascast message in this block.
+	/// Publishes a broadcast message in this block.
 	fn emit(&mut self, topics: &[&[u8]], data: &[u8]) {
 		const H256_BYTES: usize = 256 / 8;
 		let mut htopics = Vec::with_capacity(std::cmp::min(topics.len(), 4));
@@ -233,8 +235,8 @@ impl<'a> PendingTransaction for Runtime<'a> {
 	fn account_meta_at(&self, addr: &Self::Address) -> Option<Self::AccountMeta> {
 		Some(Self::AccountMeta {
 			balance: match self.ext.balance(maddr2eaddr(addr)) {
-				Ok(bal) => bal.low_u64(),
-				Err(_) => return None,
+				Ok(bal) if bal.bits() <= 64 => bal.low_u64(),
+				_ => return None,
 			},
 			expiry: self
 				.ext
@@ -417,8 +419,7 @@ impl<'a> Runtime<'a> {
 		};
 
 		if !self.charge_gas(amount as u64) {
-			// Err(Error::GasLimit.into())
-			Ok(())
+			Err(Error::GasLimit.into())
 		} else {
 			Ok(())
 		}

@@ -128,6 +128,8 @@ pub trait Ext: blockchain_traits::KVStore + blockchain_traits::KVStoreMut {
 		value: Option<U256>,
 		data: &[u8],
 		code_address: &Address,
+		output: &mut [u8],
+		call_type: CallType,
 	) -> MessageCallResult;
 
 	/// Returns code at given address

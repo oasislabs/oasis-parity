@@ -1231,10 +1231,7 @@ mod tests {
 					}),
 					result: trace::Res::Call(trace::CallResult {
 						gas_used: 600.into(),
-						output: vec![
-							0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 156, 17, 133, 165, 197, 233, 252,
-							84, 97, 40, 8, 151, 126, 232, 245, 72, 178, 37, 141, 49
-						] // ^ "9c1185a5c5e9fc54612808977ee8f548b2258d31" is RIPEMD("")
+						output: vec![]
 					}),
 					subtraces: 0,
 					trace_address: vec![0].into_iter().collect(),
