@@ -349,12 +349,14 @@ pub trait ConfidentialCtx {
 	/// Returns the public key of the peer connecting through an encrypted session to the runtime.
 	/// Returns None if no such key exists, e.g., if a confidential contract is being created.
 	fn peer(&self) -> Option<Vec<u8>>;
-	/// Encrypts the given data to be placed into contract storage	under the context.
+	/// Encrypts the given data to be placed into contract storage under the context.
 	/// The runtime allows *only a given contract* to encrypt/decrypt this data, as
 	/// opposed to the `encrypt` method, which allows a user's client to decrypt.
-	fn encrypt_storage(&self, data: Vec<u8>) -> Result<Vec<u8>>;
-	/// Analog to `encrypt_storage` for decyrpting data.
-	fn decrypt_storage(&self, data: Vec<u8>) -> Result<Vec<u8>>;
+	fn encrypt_storage_value(&mut self, data: Vec<u8>) -> Result<Vec<u8>>;
+	/// Encrypts the given data as a contract storage key.
+	fn encrypt_storage_key(&self, data: Vec<u8>) -> Result<Vec<u8>>;
+	/// Analog to `encrypt_storage_value` for decrypting storage values.
+	fn decrypt_storage_value(&self, data: Vec<u8>) -> Result<Vec<u8>>;
 	/// Creates the long term public key for the given contract. If it already
 	/// exists, returns the existing key. The first item is the key, the second
 	/// is a signature over the key by the KeyManager.
