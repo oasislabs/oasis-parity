@@ -229,18 +229,29 @@ where
 		code: &[u8],
 		address_scheme: CreateContractAddress,
 	) -> ContractCreateResult {
-		if self.state.confidential_ctx.is_some()
-			&& self
-				.state
-				.confidential_ctx
-				.as_ref()
-				.unwrap()
-				.borrow()
-				.activated()
-		{
-			error!("Can't create a contract when executing a confidential contract");
-			return ContractCreateResult::Failed;
-		}
+		let code = {
+			if self.state.confidential_ctx.is_some()
+				&& self
+					.state
+					.confidential_ctx
+					.as_ref()
+					.unwrap()
+					.borrow()
+					.activated()
+			{
+				let mut header_code = OasisContract::make_header(
+					1,
+					json!({
+						"confidential": true
+					})
+					.to_string(),
+				);
+				header_code.append(&mut code.to_vec());
+				header_code
+			} else {
+				code.to_vec()
+			}
+		};
 
 		// create new contract address
 		let (address, code_hash) = match self.state.nonce(&self.origin_info.address) {
@@ -252,7 +263,7 @@ where
 		};
 
 		// Extract contract deployment header, if present.
-		let oasis_contract = match OasisContract::from_code(code) {
+		let oasis_contract = match OasisContract::from_code(&code) {
 			Ok(contract) => contract,
 			Err(_) => return ContractCreateResult::Failed,
 		};

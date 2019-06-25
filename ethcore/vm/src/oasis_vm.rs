@@ -120,7 +120,7 @@ impl ConfidentialVm {
 			if ext.depth() == 0 {
 				self.tx(params, ext)
 			} else {
-				self.cross_contract_call(params, ext)
+				self.cross_contract_tx(params, ext)
 			}
 		};
 
@@ -220,6 +220,46 @@ impl ConfidentialVm {
 			return Ok(result);
 		}
 		Ok(result)
+	}
+
+	/// Executes a cross contract transaction.
+	fn cross_contract_tx(&mut self, mut params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
+		assert!(self.ctx.borrow().activated() && ext.depth() > 0);
+
+		if params.call_type == CallType::None {
+			self.cross_contract_create(params, ext)
+		} else {
+			self.cross_contract_call(params, ext)
+		}
+	}
+
+	/// Creates a confidential contract from within a confidential contract.
+	fn cross_contract_create(
+		&mut self,
+		mut params: ActionParams,
+		ext: &mut Ext,
+	) -> Result<GasLeft> {
+		let (public_key, mut signature) = self
+			.ctx
+			.borrow_mut()
+			.create_long_term_public_key(params.code_address.clone())?;
+
+		let mut log_data = public_key;
+		log_data.append(&mut signature);
+
+		// Store public key in log for retrieval.
+		ext.log(vec![H256::from(CONFIDENTIAL_LOG_TOPIC)], &log_data)?;
+
+		// Swap the confidential context to the new contract we're creating.
+		let old_contract = self.ctx.borrow_mut().activate(Some(params.address))?;
+
+		// Execute the init code with the underlying vm.
+		let result = self.vm.exec(params, ext);
+
+		// Swap back the confidential ctx to use the keys prior to the cross contract call.
+		self.ctx.borrow_mut().activate(old_contract)?;
+
+		result
 	}
 
 	/// Executes a confidential cross contract call. Here, a confidential context is already active,
