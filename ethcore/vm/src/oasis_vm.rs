@@ -49,9 +49,9 @@ impl Vm for OasisVm {
 		result
 	}
 
-	fn prepare(&mut self, params: ActionParams) -> Result<()> {
+	fn prepare(&mut self, params: &ActionParams, ext: &mut Ext) -> Result<()> {
 		Ok(())
-	}
+	}	
 	
 }
 
@@ -85,9 +85,10 @@ impl Vm for ConfidentialVm {
 		}
 	}
 
-	fn prepare(&mut self, params: ActionParams) -> Result<()> {
+	fn prepare(&mut self, params: &ActionParams, ext: &mut Ext) -> Result<()> {
 		Ok(())
 	}
+	
 }
 
 impl ConfidentialVm {

@@ -62,6 +62,6 @@ pub trait Vm {
 	/// to compute the final gas left.
 	fn exec(&mut self, params: ActionParams, ext: &mut Ext) -> Result<GasLeft>;
 
-	fn prepare(&mut self, params: ActionParams) -> Result<()>;
+	fn prepare(&mut self, params: &ActionParams, ext: &mut Ext) -> Result<()>;
 
 }

@@ -46,8 +46,10 @@ macro_rules! reqrep_test {
 		fake_ext.info = $info;
 		fake_ext.blockhashes = $block_hashes;
 
-		let mut interpreter = wasm_runtime();
-		interpreter
+		let mut runtime = wasm_runtime();
+		runtime.prepare(&params, &mut fake_ext);
+
+		runtime
 			.exec(params, &mut fake_ext)
 			.map(|result| match result {
 				GasLeft::Known(_) => {
@@ -71,7 +73,9 @@ fn test_finalize(res: Result<GasLeft, vm::Error>) -> Result<U256, vm::Error> {
 }
 
 fn wasm_runtime() -> WasmRuntime {
-	WasmRuntime
+    WasmRuntime {
+        instance: None,
+    }
 }
 
 /*
@@ -93,8 +97,9 @@ fn empty() {
 	let mut ext = FakeExt::new().with_wasm();
 
 	let gas_left = {
-		let mut interpreter = wasm_runtime();
-		test_finalize(interpreter.exec(params, &mut ext)).unwrap()
+		let mut runtime = wasm_runtime();
+		runtime.prepare(&params, &mut ext);
+		test_finalize(runtime.exec(params, &mut ext)).unwrap()
 	};
 
 	//assert_eq!(gas_left, U256::from(91_804));
@@ -122,8 +127,9 @@ fn logger() {
 	let mut ext = FakeExt::new().with_wasm();
 
 	let _gas_left = {
-		let mut interpreter = wasm_runtime();
-		test_finalize(interpreter.exec(params, &mut ext)).unwrap()
+		let mut runtime = wasm_runtime();
+		runtime.prepare(&params, &mut ext);
+		test_finalize(runtime.exec(params, &mut ext)).unwrap()
 	};
 
 	let address_val: H256 = address.into();
@@ -198,8 +204,11 @@ fn identity() {
 	let mut ext = FakeExt::new().with_wasm();
 
 	let (_gas_left, result) = {
-		let mut interpreter = wasm_runtime();
-		let result = interpreter
+		
+		let mut runtime = wasm_runtime();
+		runtime.prepare(&params, &mut ext);
+
+		let result = runtime
 			.exec(params, &mut ext)
 			.expect("Interpreter to execute without any errors");
 		match result {
@@ -240,8 +249,11 @@ fn dispersion() {
 	let mut ext = FakeExt::new().with_wasm();
 
 	let (_gas_left, result) = {
-		let mut interpreter = wasm_runtime();
-		let result = interpreter
+		
+		let mut runtime = wasm_runtime();
+		runtime.prepare(&params, &mut ext);
+
+		let result = runtime
 			.exec(params, &mut ext)
 			.expect("Interpreter to execute without any errors");
 		match result {
@@ -273,8 +285,10 @@ fn suicide_not() {
 
 	let (_gas_left, result) =
 		{
-			let mut interpreter = wasm_runtime();
-			let result = interpreter
+			let mut runtime = wasm_runtime();
+			runtime.prepare(&params, &mut ext);
+
+			let result = runtime
 				.exec(params, &mut ext)
 				.expect("Interpreter to execute without any errors");
 			match result {
@@ -312,8 +326,10 @@ fn suicide() {
 	let mut ext = FakeExt::new().with_wasm();
 
 	let _gas_left = {
-		let mut interpreter = wasm_runtime();
-		let result = interpreter
+		let mut runtime = wasm_runtime();
+		runtime.prepare(&params, &mut ext);
+
+		let result = runtime
 			.exec(params, &mut ext)
 			.expect("Interpreter to execute without any errors");
 		match result {
@@ -342,8 +358,10 @@ fn create() {
 	let mut ext = FakeExt::new().with_wasm();
 
 	let _gas_left = {
-		let mut interpreter = wasm_runtime();
-		let result = interpreter
+		let mut runtime = wasm_runtime();
+		runtime.prepare(&params, &mut ext);
+
+		let result = runtime
 			.exec(params, &mut ext)
 			.expect("Interpreter to execute without any errors");
 		match result {
@@ -388,8 +406,10 @@ fn call_msg() {
 		.insert(receiver.clone(), U256::from(10000000000u64));
 
 	let _gas_left = {
-		let mut interpreter = wasm_runtime();
-		let result = interpreter
+		let mut runtime = wasm_runtime();
+		runtime.prepare(&params, &mut ext);
+
+		let result = runtime
 			.exec(params, &mut ext)
 			.expect("Interpreter to execute without any errors");
 		match result {
@@ -437,8 +457,10 @@ fn call_code() {
 	let mut ext = FakeExt::new().with_wasm();
 
 	let (_gas_left, result) = {
-		let mut interpreter = wasm_runtime();
-		let result = interpreter
+		let mut runtime = wasm_runtime();
+		runtime.prepare(&params, &mut ext);
+
+		let result = runtime
 			.exec(params, &mut ext)
 			.expect("Interpreter to execute without any errors");
 		match result {
@@ -491,8 +513,10 @@ fn call_static() {
 	let mut ext = FakeExt::new().with_wasm();
 
 	let (_gas_left, result) = {
-		let mut interpreter = wasm_runtime();
-		let result = interpreter
+		let mut runtime = wasm_runtime();
+		runtime.prepare(&params, &mut ext);
+
+		let result = runtime
 			.exec(params, &mut ext)
 			.expect("Interpreter to execute without any errors");
 		match result {
@@ -538,8 +562,10 @@ fn realloc() {
 	let mut ext = FakeExt::new().with_wasm();
 
 	let (_gas_left, result) = {
-		let mut interpreter = wasm_runtime();
-		let result = interpreter
+		let mut runtime = wasm_runtime();
+		runtime.prepare(&params, &mut ext);
+
+		let result = runtime
 			.exec(params, &mut ext)
 			.expect("Interpreter to execute without any errors");
 		match result {
@@ -569,8 +595,10 @@ fn alloc() {
 	let mut ext = FakeExt::new().with_wasm();
 
 	let (_gas_left, result) = {
-		let mut interpreter = wasm_runtime();
-		let result = interpreter
+		let mut runtime = wasm_runtime();
+		runtime.prepare(&params, &mut ext);
+
+		let result = runtime
 			.exec(params, &mut ext)
 			.expect("Interpreter to execute without any errors");
 		match result {
@@ -608,8 +636,10 @@ fn storage_read() {
 	);
 
 	let (_gas_left, result) = {
-		let mut interpreter = wasm_runtime();
-		let result = interpreter
+		let mut runtime = wasm_runtime();
+		runtime.prepare(&params, &mut ext);
+
+		let result = runtime
 			.exec(params, &mut ext)
 			.expect("Interpreter to execute without any errors");
 		match result {
@@ -643,8 +673,10 @@ fn keccak() {
 	let mut ext = FakeExt::new().with_wasm();
 
 	let (_gas_left, result) = {
-		let mut interpreter = wasm_runtime();
-		let result = interpreter
+		let mut runtime = wasm_runtime();
+		runtime.prepare(&params, &mut ext);
+
+		let result = runtime
 			.exec(params, &mut ext)
 			.expect("Interpreter to execute without any errors");
 		match result {
@@ -794,8 +826,10 @@ fn storage_metering() {
 	]);
 
 	let _gas_left = {
-		let mut interpreter = wasm_runtime();
-		test_finalize(interpreter.exec(params, &mut ext)).unwrap()
+		let mut runtime = wasm_runtime();
+		runtime.prepare(&params, &mut ext);
+
+		test_finalize(runtime.exec(params, &mut ext)).unwrap()
 	};
 
 	// 0 -> not 0
@@ -817,8 +851,10 @@ fn storage_metering() {
 	]);
 
 	let _gas_left = {
-		let mut interpreter = wasm_runtime();
-		test_finalize(interpreter.exec(params, &mut ext)).unwrap()
+		let mut runtime = wasm_runtime();
+		runtime.prepare(&params, &mut ext);
+
+		test_finalize(runtime.exec(params, &mut ext)).unwrap()
 	};
 
 	// not 0 -> not 0
@@ -931,8 +967,10 @@ fn embedded_keccak() {
 	let mut ext = FakeExt::new().with_wasm();
 
 	let (_gas_left, result) = {
-		let mut interpreter = wasm_runtime();
-		let result = interpreter
+		let mut runtime = wasm_runtime();
+		runtime.prepare(&params, &mut ext);
+
+		let result = runtime
 			.exec(params, &mut ext)
 			.expect("Interpreter to execute without any errors");
 		match result {
@@ -971,8 +1009,10 @@ fn events() {
 	let mut ext = FakeExt::new().with_wasm();
 
 	let (_gas_left, result) = {
-		let mut interpreter = wasm_runtime();
-		let result = interpreter
+		let mut runtime = wasm_runtime();
+		runtime.prepare(&params, &mut ext);
+
+		let result = runtime
 			.exec(params, &mut ext)
 			.expect("Interpreter to execute without any errors");
 		match result {

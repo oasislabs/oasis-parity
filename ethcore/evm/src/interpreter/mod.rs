@@ -111,6 +111,11 @@ pub struct Interpreter<Cost: CostType> {
 }
 
 impl<Cost: CostType> vm::Vm for Interpreter<Cost> {
+
+	fn prepare(&mut self, params: &ActionParams, ext: &mut vm::Ext) -> vm::Result<()> {
+		Ok(())
+	}
+
 	fn exec(&mut self, params: ActionParams, ext: &mut vm::Ext) -> vm::Result<GasLeft> {
 		self.mem.clear();
 
@@ -240,10 +245,6 @@ impl<Cost: CostType> vm::Vm for Interpreter<Cost> {
 		}
 		informant.done();
 		Ok(GasLeft::Known(gasometer.current_gas.as_u256()))
-	}
-
-	fn prepare(&mut self, params: ActionParams) -> vm::Result<()> {
-		Ok(())
 	}
 
 }

@@ -92,6 +92,11 @@ enum ExecutionOutcome {
 }
 
 impl vm::Vm for WasmInterpreter {
+
+	fn prepare(&mut self, params: &ActionParams, ext: &mut vm::Ext) -> vm::Result<()> {
+		Ok(())
+	}
+
 	fn exec(&mut self, params: ActionParams, ext: &mut vm::Ext) -> vm::Result<GasLeft> {
 		let (module, data) = parser::payload(&params, ext.schedule().wasm())?;
 
@@ -196,10 +201,6 @@ impl vm::Vm for WasmInterpreter {
 				apply_state: true,
 			})
 		}
-	}
-
-	fn prepare(&mut self, params: ActionParams) -> vm::Result<()> {
-		Ok(())
 	}
 
 }
