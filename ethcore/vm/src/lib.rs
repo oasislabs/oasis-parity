@@ -16,6 +16,7 @@
 
 //! Virtual machines support library
 
+extern crate blockchain_traits;
 #[macro_use]
 extern crate log;
 extern crate byteorder;

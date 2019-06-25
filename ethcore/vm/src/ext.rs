@@ -62,7 +62,7 @@ pub enum CreateContractAddress {
 }
 
 /// Externalities interface for EVMs
-pub trait Ext {
+pub trait Ext: blockchain_traits::KVStore + blockchain_traits::KVStoreMut {
 	/// Returns a value for a given key. Maintains the same H256 -> H256 interface
 	/// as Ethereum.
 	fn storage_at(&self, key: &H256) -> Result<H256>;
@@ -82,12 +82,11 @@ pub trait Ext {
 	/// for storage values of arbitrary length.
 	fn set_storage_bytes(&mut self, key: H256, value: Vec<u8>) -> Result<()>;
 
-	/// Returns the storage expiry for the origin account.
-	fn storage_expiry(&self) -> Result<u64>;
+	/// Returns the storage expiry for the requested account.
+	fn storage_expiry(&self, address: &Address) -> Result<u64>;
 
-	/// Returns the duration until the origin account's storage expires (in seconds).
-	///
-	/// Returns Err if the contract is expired.
+	/// Returns the duration until the account at `address` expires (in seconds).
+	/// Returns None if the account does not exist.
 	fn seconds_until_expiry(&self) -> Result<u64>;
 
 	/// Determine whether an account exists.
@@ -188,4 +187,7 @@ pub trait Ext {
 
 	/// Returns true if the given contract is confidential.
 	fn is_confidential_contract(&self, contract: &Address) -> Result<bool>;
+
+	fn as_kvstore(&self) -> &dyn blockchain_traits::KVStore;
+	fn as_kvstore_mut(&mut self) -> &mut dyn blockchain_traits::KVStoreMut;
 }

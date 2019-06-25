@@ -1,0 +1,15 @@
+[package]
+name = "wasi-tests"
+version = "0.1.0"
+authors = ["Oasis Labs <feedback@oasislabs.com>"]
+edition = "2018"
+
+[dependencies]
+
+[workspace]
+
+[profile.release]
+incremental = false
+lto = true
+opt-level = "z"
+panic = "abort"

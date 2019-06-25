@@ -120,6 +120,7 @@ panic = "abort"
 members = [
 	"chainspec",
 	"dapps/js-glue",
+	"ethcore/wasm/macros",
 	"ethcore/wasm/run",
 	"ethcore/types",
 	"ethkey/cli",
