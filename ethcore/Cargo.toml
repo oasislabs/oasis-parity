@@ -8,6 +8,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 # ansi_term = "0.10"
+blockchain-traits = "0.2"
 bloomchain = { path = "../util/bloomchain" }
 bn = { git = "https://github.com/paritytech/bn", default-features = false }
 byteorder = "1.0"
