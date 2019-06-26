@@ -191,7 +191,7 @@ impl vm::Vm for WasmInterpreter {
 					_ => (),
 				},
 				Err(InterpreterError::Function(_)) if is_create => {
-					// deploy function eed not exist
+					// deploy function need not exist
 					execution_outcome = ExecutionOutcome::Return;
 				}
 				_ => (),
@@ -215,10 +215,8 @@ impl vm::Vm for WasmInterpreter {
 
 		let apply_state = !result.is_err();
 		let output = if is_create {
-			let code = std::sync::Arc::try_unwrap(params.code.unwrap_or_default())
-				.unwrap_or_else(|arc| arc.to_vec());
-			hash::keccak(&code);
-			code
+			std::sync::Arc::try_unwrap(params.code.unwrap_or_default())
+				.unwrap_or_else(|arc| arc.to_vec())
 		} else {
 			result.clone().unwrap_or_else(std::convert::identity) // Result<Vec<u8>, Vec<u8>> -> Vec<u8>
 		};
