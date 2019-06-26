@@ -53,6 +53,7 @@ fn gas_rules(wasm_costs: &vm::WasmCosts) -> rules::Set {
 pub fn payload<'a>(
 	params: &'a vm::ActionParams,
 	wasm_costs: &vm::WasmCosts,
+	module_doctor: Option<impl Fn(&mut elements::Module)>,
 ) -> Result<(elements::Module, &'a [u8]), vm::Error> {
 	let code = match params.code {
 		Some(ref code) => &code[..],
@@ -69,7 +70,7 @@ pub fn payload<'a>(
 		vm::ParamsType::Separate => (::std::io::Cursor::new(&code[..]), 0),
 	};
 
-	let deserialized_module = elements::Module::deserialize(&mut cursor)
+	let mut deserialized_module = elements::Module::deserialize(&mut cursor)
 		.map_err(|err| vm::Error::Wasm(format!("Error deserializing contract code ({:?})", err)))?;
 
 	if deserialized_module
@@ -81,6 +82,10 @@ pub fn payload<'a>(
 		return Err(vm::Error::Wasm(format!(
 			"Malformed wasm module: internal memory"
 		)));
+	}
+
+	if let Some(module_doctor) = module_doctor {
+		module_doctor(&mut deserialized_module);
 	}
 
 	let contract_module =

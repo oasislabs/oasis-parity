@@ -185,6 +185,9 @@ pub trait Ext: blockchain_traits::KVStore + blockchain_traits::KVStoreMut {
 	/// Check if running in static context.
 	fn is_static(&self) -> bool;
 
+	/// Check if running a contract constructor.
+	fn is_create(&self) -> bool;
+
 	/// Returns true if the given contract is confidential.
 	fn is_confidential_contract(&self, contract: &Address) -> Result<bool>;
 

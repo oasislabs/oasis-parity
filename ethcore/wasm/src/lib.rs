@@ -38,6 +38,7 @@ mod runtime;
 mod tests;
 mod wasi;
 
+use parity_wasm::elements;
 use vm::{ActionParams, GasLeft, ReturnData};
 use wasmi::{Error as InterpreterError, Trap};
 
@@ -90,7 +91,21 @@ enum ExecutionOutcome {
 
 impl vm::Vm for WasmInterpreter {
 	fn exec(&mut self, params: ActionParams, ext: &mut dyn vm::Ext) -> vm::Result<GasLeft> {
-		let (module, data) = parser::payload(&params, ext.schedule().wasm())?;
+		let is_create = ext.is_create();
+
+		let (mut module, data) = parser::payload(
+			&params,
+			ext.schedule().wasm(),
+			if is_create {
+				Some(subst_main_call)
+			} else {
+				None
+			},
+		)?;
+
+		if is_create {
+			subst_main_call(&mut module);
+		}
 
 		let loaded_module =
 			wasmi::Module::from_parity_wasm_module(module).map_err(Error::Interpreter)?;
@@ -151,8 +166,9 @@ impl vm::Vm for WasmInterpreter {
 			let invoke_result = module_instance.invoke_export("_start", &[], &mut runtime);
 
 			let mut execution_outcome = ExecutionOutcome::NotSpecial;
-			if let Err(InterpreterError::Trap(ref trap)) = &invoke_result {
-				match *trap.kind() {
+			match &invoke_result {
+				Ok(_) => (),
+				Err(InterpreterError::Trap(ref trap)) => match *trap.kind() {
 					wasmi::TrapKind::Host(ref boxed) => {
 						let ref runtime_err = boxed
 							.downcast_ref::<runtime::Error>()
@@ -173,7 +189,12 @@ impl vm::Vm for WasmInterpreter {
 						execution_outcome = ExecutionOutcome::Return;
 					}
 					_ => (),
+				},
+				Err(InterpreterError::Function(_)) if is_create => {
+					// deploy function need not exist
+					execution_outcome = ExecutionOutcome::Return;
 				}
+				_ => (),
 			}
 
 			if let (ExecutionOutcome::NotSpecial, Err(e)) = (execution_outcome, invoke_result) {
@@ -193,7 +214,15 @@ impl vm::Vm for WasmInterpreter {
 			/ U256::from(ext.schedule().wasm().opcodes_div);
 
 		let apply_state = !result.is_err();
-		let output = result.unwrap_or_else(std::convert::identity);
+		let output = if is_create {
+			std::sync::Arc::try_unwrap(params.code.unwrap_or_default())
+				.unwrap_or_else(|arc| arc.to_vec())
+		} else {
+			result.clone().unwrap_or_else(std::convert::identity) // Result<Vec<u8>, Vec<u8>> -> Vec<u8>
+		};
+		{
+			std::str::from_utf8(&result.clone().unwrap_or_else(std::convert::identity));
+		}
 		let output_len = output.len();
 		Ok(GasLeft::NeedsReturn {
 			gas_left,
@@ -201,4 +230,68 @@ impl vm::Vm for WasmInterpreter {
 			data: ReturnData::new(output, 0, output_len),
 		})
 	}
+}
+
+/// Replaces the call to `main` in `_start` with one to `_mantle_deploy`.
+fn subst_main_call(module: &mut elements::Module) {
+	let start_fn_idx = match func_index(module, "_start") {
+		Some(idx) => idx,
+		None => return,
+	};
+	let deploy_fn_idx = match func_index(module, "_mantle_deploy") {
+		Some(idx) => idx,
+		None => return,
+	};
+	let main_fn_idx = match func_index(module, "main") {
+		Some(idx) => idx,
+		None => return,
+	};
+
+	let import_section_len: usize = module
+		.import_section()
+		.map(|import| {
+			import
+				.entries()
+				.iter()
+				.filter(|entry| match entry.external() {
+					&elements::External::Function(_) => true,
+					_ => false,
+				})
+				.count()
+		})
+		.unwrap_or_default();
+
+	let mut start_fn = match module
+		.code_section_mut()
+		.map(|s| &mut s.bodies_mut()[start_fn_idx as usize - import_section_len])
+	{
+		Some(f) => f,
+		None => return,
+	};
+
+	for instr in start_fn.code_mut().elements_mut() {
+		if let elements::Instruction::Call(ref mut idx) = instr {
+			if *idx == main_fn_idx {
+				*idx = deploy_fn_idx;
+			}
+		}
+	}
+}
+
+/// Returns the function index of an export by name.
+fn func_index(module: &elements::Module, name: &str) -> Option<u32> {
+	module
+		.export_section()
+		.iter()
+		.flat_map(|s| s.entries())
+		.find_map(|export| {
+			if export.field() == name {
+				match export.internal() {
+					elements::Internal::Function(idx) => Some(*idx),
+					_ => None,
+				}
+			} else {
+				None
+			}
+		})
 }
