@@ -191,6 +191,13 @@ where
 		return self.static_flag;
 	}
 
+	fn is_create(&self) -> bool {
+		match self.output {
+			OutputPolicy::InitContract(_) => true,
+			_ => false,
+		}
+	}
+
 	fn exists(&self, address: &Address) -> vm::Result<bool> {
 		self.ext_tracer.trace_exists(address);
 		self.state.exists(address).map_err(Into::into)

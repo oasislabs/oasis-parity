@@ -2682,4 +2682,64 @@ mod tests {
 		let trace = ext_tracer.get_rw_counts();
 		assert_eq!(trace, expected_ext_trace);
 	}
+
+	evm_test! {test_wasm_direct_deploy: test_wasm_direct_deploy_int}
+	fn test_wasm_direct_deploy(factory: Factory) {
+		let code = include_bytes!("../res/wasi-tests/target/service/create_ctor.wasm").to_vec();
+
+		let sender = Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681").unwrap();
+		let address = contract_address(
+			CreateContractAddress::FromSenderAndNonce,
+			&sender,
+			&U256::zero(),
+			&[],
+		)
+		.0;
+		let next_address = contract_address(
+			CreateContractAddress::FromSenderAndNonce,
+			&address,
+			&U256::zero(),
+			&[],
+		)
+		.0;
+		let mut params = ActionParams::default();
+		params.address = address.clone();
+		params.sender = sender.clone();
+		params.origin = sender.clone();
+		params.gas = U256::from(1_000_000);
+		params.code = Some(Arc::new(code.to_vec()));
+		params.value = ActionValue::Transfer(U256::from(100));
+		let mut state = get_temp_state_with_factory(factory);
+		state
+			.add_balance(&sender, &U256::from(100), CleanupMode::NoEmpty)
+			.unwrap();
+		let mut info = EnvInfo::default();
+		info.number = 100; // wasm activated at block 10
+		let machine = ::ethereum::new_kovan_wasm_test_machine();
+		let mut substate = Substate::new();
+
+		{
+			let mut ex = Executive::new(&mut state, &info, &machine);
+			ex.create(
+				params,
+				&mut substate,
+				&mut None,
+				&mut NoopTracer,
+				&mut NoopVMTracer,
+				&mut NoopExtTracer,
+			)
+			.unwrap();
+		}
+
+		let new_acct_code_hash = state.code_hash(&address);
+		assert_eq!(new_acct_code_hash, Ok(keccak(code)));
+		let k = b"message";
+		let mut hk = [0u8; 32];
+		hk[..k.len()].copy_from_slice(k.as_ref());
+		let new_acct_data = state.storage_bytes_at(&address, &H256::from(hk));
+		assert_eq!(
+			new_acct_data.as_ref().map(|v| v.as_slice()),
+			Ok(b"hello".as_ref())
+		);
+	}
 }
