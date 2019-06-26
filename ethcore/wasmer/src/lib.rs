@@ -31,6 +31,9 @@ extern crate vm;
 extern crate wasmer_runtime;
 extern crate wasmer_runtime_core;
 
+extern crate wasmer_clif_backend;
+extern crate wasmer_singlepass_backend;
+
 mod panic_payload;
 mod parser;
 mod runtime;
@@ -47,6 +50,7 @@ use std::ffi::c_void;
 use vm::{ActionParams, GasLeft, ReturnData};
 
 use wasmer_runtime::{error, instantiate, memory, memory::MemoryView, Instance, Module};
+use wasmer_runtime_core::backend::{Compiler};
 
 /// Wasmer runtime instance
 #[derive(Default)]
@@ -61,13 +65,22 @@ enum ExecutionOutcome {
 	NotSpecial,
 }
 
+impl WasmRuntime {
+	
+	pub fn get_compiler(&self) -> impl Compiler {
+		
+		//use wasmer_singlepass_backend::SinglePassCompiler as DefaultCompiler;
+		use wasmer_clif_backend::CraneliftCompiler as DefaultCompiler; 
+		DefaultCompiler::new()
+	}
+}
+
 impl vm::Vm for WasmRuntime {
 	fn prepare(&mut self, params: &ActionParams, ext: &mut vm::Ext) -> vm::Result<()> {
 		// Explicitly split the input into code and data
 		let (_, code, data) = parser::payload(&params, ext.schedule().wasm())?;
 
-		// TODO: This line causes a lot of log output, find a way to limit to log level WARN
-		self.module = Some(wasmer_runtime::compile(&code).unwrap());
+		self.module = Some(wasmer_runtime::compile_with(&code, &self.get_compiler()).unwrap());
 		self.data = data.to_vec();
 
 		Ok(())
@@ -77,12 +90,18 @@ impl vm::Vm for WasmRuntime {
 		
 		if let Some(module) = &self.module {
 			
-			let adjusted_gas = params.gas * U256::from(ext.schedule().wasm().opcodes_div)
+			let adjusted_gas_limit = params.gas * U256::from(ext.schedule().wasm().opcodes_div)
 				/ U256::from(ext.schedule().wasm().opcodes_mul);
+
+			if adjusted_gas_limit > ::std::u64::MAX.into() {
+				return Err(vm::Error::Wasm(
+					"Wasm runtime cannot run contracts with gas (wasm adjusted) >= 2^64".to_owned(),
+				));
+			}
 
 			let mut runtime = Runtime::with_params(
 				ext,
-				adjusted_gas.low_u64(), // cannot overflow, checked above
+				adjusted_gas_limit.low_u64(), // cannot overflow, checked above
 				self.data.clone(),
 				RuntimeContext {
 					address: params.address,
@@ -91,8 +110,6 @@ impl vm::Vm for WasmRuntime {
 					value: params.value.value(),
 				},
 			);
-
-			let raw_ptr = &mut runtime as *mut _ as *mut c_void;
 
 			// Default memory descriptor
 			let mut descriptor = wasmer_runtime::wasm::MemoryDescriptor {
@@ -111,19 +128,22 @@ impl vm::Vm for WasmRuntime {
 			let memory_view: MemoryView<u8> = mem_obj.view();
 			let memory_size = memory_view.len() / 65535;
 
+			let raw_ptr = &mut runtime as *mut _ as *mut c_void;
 			let import_object = runtime::imports::get_import_object(mem_obj, raw_ptr);
-
+			
+			// Create the wasmer runtime instance to call function
 			let instance = module.instantiate(&import_object).unwrap();
 
-			let (gas_left, result) = {
-				// cannot overflow if static_region < 2^16,
-				// initial_memory ∈ [0..2^32))
-				// total_charge <- static_region * 2^32 * 2^16
-				// total_charge ∈ [0..2^64) if static_region ∈ [0..2^16)
-				// qed
+			// cannot overflow if static_region < 2^16,
+			// initial_memory ∈ [0..2^32))
+			// total_charge <- static_region * 2^32 * 2^16
+			// total_charge ∈ [0..2^64) if static_region ∈ [0..2^16)
+			// qed
 
-				assert!(runtime.schedule().wasm().initial_mem_cost < 1 << 16);
-				runtime.charge(|s| memory_size as u64 * s.wasm().initial_mem_cost as u64);
+			assert!(runtime.schedule().wasm().initial_mem_cost < 1 << 16);
+			runtime.charge(|s| memory_size as u64 * s.wasm().initial_mem_cost as u64);
+
+			let (gas_left, result) = {
 
 				let invoke_result = instance.call("call", &[]);
 				let mut execution_outcome = ExecutionOutcome::NotSpecial;
@@ -176,3 +196,5 @@ impl vm::Vm for WasmRuntime {
 		}
 	}
 }
+
+
