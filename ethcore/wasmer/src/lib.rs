@@ -52,6 +52,7 @@ use wasmer_runtime::{error, instantiate, memory, memory::MemoryView, Instance, M
 #[derive(Default)]
 pub struct WasmRuntime {
 	module: Option<Module>,
+	data: Vec<u8>,
 }
 
 enum ExecutionOutcome {
@@ -63,25 +64,26 @@ enum ExecutionOutcome {
 impl vm::Vm for WasmRuntime {
 	fn prepare(&mut self, params: &ActionParams, ext: &mut vm::Ext) -> vm::Result<()> {
 		// Explicitly split the input into code and data
-		let (_, code, _) = parser::payload(&params, ext.schedule().wasm())?;
+		let (_, code, data) = parser::payload(&params, ext.schedule().wasm())?;
 
 		// TODO: This line causes a lot of log output, find a way to limit to log level WARN
 		self.module = Some(wasmer_runtime::compile(&code).unwrap());
+		self.data = data.to_vec();
 
 		Ok(())
 	}
 
 	fn exec(&mut self, params: ActionParams, ext: &mut vm::Ext) -> vm::Result<GasLeft> {
+		
 		if let Some(module) = &self.module {
-			let (_, _, data) = parser::payload(&params, ext.schedule().wasm())?;
-
+			
 			let adjusted_gas = params.gas * U256::from(ext.schedule().wasm().opcodes_div)
 				/ U256::from(ext.schedule().wasm().opcodes_mul);
 
 			let mut runtime = Runtime::with_params(
 				ext,
 				adjusted_gas.low_u64(), // cannot overflow, checked above
-				data.to_vec(),
+				self.data.clone(),
 				RuntimeContext {
 					address: params.address,
 					sender: params.sender,

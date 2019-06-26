@@ -20,7 +20,7 @@ macro_rules! load_sample {
 }
 
 fn wasm_runtime() -> WasmRuntime {
-	WasmRuntime { module: None }
+	WasmRuntime::default()
 }
 
 #[bench]

@@ -73,7 +73,7 @@ fn test_finalize(res: Result<GasLeft, vm::Error>) -> Result<U256, vm::Error> {
 }
 
 fn wasm_runtime() -> WasmRuntime {
-	WasmRuntime { module: None }
+	WasmRuntime::default()
 }
 
 /*
