@@ -2695,44 +2695,31 @@ mod tests {
 			&[],
 		)
 		.0;
-		let next_address = contract_address(
-			CreateContractAddress::FromSenderAndNonce,
-			&address,
-			&U256::zero(),
-			&[],
-		)
-		.0;
 		let mut params = ActionParams::default();
 		params.address = address.clone();
 		params.sender = sender.clone();
-		params.origin = sender.clone();
 		params.gas = U256::from(1_000_000);
 		params.code = Some(Arc::new(code.to_vec()));
-		params.value = ActionValue::Transfer(U256::from(100));
 		let mut state = get_temp_state_with_factory(factory);
-		state
-			.add_balance(&sender, &U256::from(100), CleanupMode::NoEmpty)
-			.unwrap();
 		let mut info = EnvInfo::default();
 		info.number = 100; // wasm activated at block 10
 		let machine = ::ethereum::new_kovan_wasm_test_machine();
 		let mut substate = Substate::new();
 
-		{
-			let mut ex = Executive::new(&mut state, &info, &machine);
-			ex.create(
-				params,
-				&mut substate,
-				&mut None,
-				&mut NoopTracer,
-				&mut NoopVMTracer,
-				&mut NoopExtTracer,
-			)
-			.unwrap();
-		}
+		let mut ex = Executive::new(&mut state, &info, &machine);
+		ex.create(
+			params,
+			&mut substate,
+			&mut None,
+			&mut NoopTracer,
+			&mut NoopVMTracer,
+			&mut NoopExtTracer,
+		)
+		.unwrap();
 
 		let new_acct_code_hash = state.code_hash(&address);
 		assert_eq!(new_acct_code_hash, Ok(keccak(code)));
+
 		let k = b"message";
 		let mut hk = [0u8; 32];
 		hk[..k.len()].copy_from_slice(k.as_ref());

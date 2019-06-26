@@ -263,24 +263,23 @@ fn subst_main_call(module: &mut elements::Module) {
 
 	let mut start_fn = match module
 		.code_section_mut()
-		.map(|s| &mut s.bodies_mut()[start_fn_idx - import_section_len])
+		.map(|s| &mut s.bodies_mut()[start_fn_idx as usize - import_section_len])
 	{
 		Some(f) => f,
 		None => return,
 	};
 
 	for instr in start_fn.code_mut().elements_mut() {
-		match instr {
-			elements::Instruction::Call(idx) if *idx as usize == main_fn_idx => {
-				*idx = deploy_fn_idx as u32;
+		if let elements::Instruction::Call(ref mut idx) = instr {
+			if *idx == main_fn_idx {
+				*idx = deploy_fn_idx;
 			}
-			_ => (),
 		}
 	}
 }
 
 /// Returns the function index of an export by name.
-fn func_index(module: &elements::Module, name: &str) -> Option<usize> {
+fn func_index(module: &elements::Module, name: &str) -> Option<u32> {
 	module
 		.export_section()
 		.iter()
@@ -288,7 +287,7 @@ fn func_index(module: &elements::Module, name: &str) -> Option<usize> {
 		.find_map(|export| {
 			if export.field() == name {
 				match export.internal() {
-					elements::Internal::Function(idx) => Some(*idx as usize),
+					elements::Internal::Function(idx) => Some(*idx),
 					_ => None,
 				}
 			} else {
