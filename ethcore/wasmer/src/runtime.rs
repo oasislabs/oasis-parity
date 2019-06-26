@@ -345,7 +345,7 @@ impl<'a> Runtime<'a> {
 	/// * the length of the result
 	pub fn ret(&mut self, ctx: &mut Ctx, ptr: u32, len: u32) -> Result<()> {
 		trace!(target: "wasm", "Contract ret: {} bytes @ {}", len, ptr);
-		
+
 		self.result = self.memory_get(ctx, ptr, len as usize)?;
 
 		Err(Error::Return)
@@ -382,8 +382,6 @@ impl<'a> Runtime<'a> {
 	fn fetch_input(&mut self, ctx: &mut Ctx, ptr: u32) -> Result<()> {
 		let args_len = self.args.len() as u64;
 		self.charge(|s| args_len * s.wasm().memcpy as u64)?;
-
-		println!("Input is: {:?}", &self.args.clone()[..]);
 
 		self.memory_set(ctx, ptr, &self.args.clone()[..])?;
 		Ok(())

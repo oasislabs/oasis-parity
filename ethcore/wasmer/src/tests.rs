@@ -73,9 +73,7 @@ fn test_finalize(res: Result<GasLeft, vm::Error>) -> Result<U256, vm::Error> {
 }
 
 fn wasm_runtime() -> WasmRuntime {
-    WasmRuntime {
-        instance: None,
-    }
+	WasmRuntime { module: None }
 }
 
 /*
@@ -204,7 +202,6 @@ fn identity() {
 	let mut ext = FakeExt::new().with_wasm();
 
 	let (_gas_left, result) = {
-		
 		let mut runtime = wasm_runtime();
 		runtime.prepare(&params, &mut ext);
 
@@ -249,7 +246,6 @@ fn dispersion() {
 	let mut ext = FakeExt::new().with_wasm();
 
 	let (_gas_left, result) = {
-		
 		let mut runtime = wasm_runtime();
 		runtime.prepare(&params, &mut ext);
 
