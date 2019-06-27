@@ -351,9 +351,9 @@ impl<'a> Runtime<'a> {
 		Err(Error::Return)
 	}
 
-	/// Unlike in wasmi, we might re-use the runtime. So we do not destroy the runtime here
-	pub fn into_result(&self) -> Vec<u8> {
-		self.result.clone()
+	/// Destroy the runtime, returning currently recorded result of the execution
+	pub fn into_result(self) -> Vec<u8> {
+		self.result
 	}
 
 	/// Query current gas left for execution
