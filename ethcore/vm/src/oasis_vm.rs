@@ -176,7 +176,7 @@ impl ConfidentialVm {
 		// Execute the code and encrypt the result.
 		let encrypted_result = {
 			let result = self.vm.exec(params, ext)?;
-			self.encrypt_vm_result(result, ext)
+			self.encrypt_vm_result(result)
 		};
 
 		// Shut down the confidential ctx to stop encrypting.
@@ -186,7 +186,7 @@ impl ConfidentialVm {
 	}
 
 	/// Encrypts the execution result of a confidential call.
-	fn encrypt_vm_result(&self, result: GasLeft, _ext: &mut Ext) -> Result<GasLeft> {
+	fn encrypt_vm_result(&self, result: GasLeft) -> Result<GasLeft> {
 		if let GasLeft::NeedsReturn {
 			gas_left,
 			data,
