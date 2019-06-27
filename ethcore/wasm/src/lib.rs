@@ -92,7 +92,6 @@ enum ExecutionOutcome {
 }
 
 impl vm::Vm for WasmInterpreter {
-
 	fn prepare(&mut self, params: &ActionParams, ext: &mut vm::Ext) -> vm::Result<()> {
 		Ok(())
 	}
@@ -202,5 +201,4 @@ impl vm::Vm for WasmInterpreter {
 			})
 		}
 	}
-
 }

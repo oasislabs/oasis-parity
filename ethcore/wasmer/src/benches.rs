@@ -23,23 +23,187 @@ fn wasm_runtime() -> WasmRuntime {
 	WasmRuntime::default()
 }
 
-#[bench]
-fn bench_identity(b: &mut Bencher) {
-	let sender: Address = "01030507090b0d0f11131517191b1d1f21232527".parse().unwrap();
-	let mut ext = FakeExt::new().with_wasm();
+/// Do everything but the contract call itself, used for testing microbenchmarks
+fn prepare_module(params: ActionParams, ext: &mut vm::Ext) -> wasmer_runtime::Instance {
+	let (_, code, data) = parser::payload(&params, ext.schedule().wasm()).unwrap();
 
-	let code = load_sample!("identity.wasm");
+	let module = wasmer_runtime::compile(&code).unwrap();
+
+	let adjusted_gas_limit = params.gas * U256::from(ext.schedule().wasm().opcodes_div)
+		/ U256::from(ext.schedule().wasm().opcodes_mul);
+
+	let mut runtime = Runtime::with_params(
+		ext,
+		adjusted_gas_limit.low_u64(), // cannot overflow, checked above
+		data.to_vec(),
+		RuntimeContext {
+			address: params.address,
+			sender: params.sender,
+			origin: params.origin,
+			value: params.value.value(),
+		},
+	);
+
+	// Default memory descriptor
+	let mut descriptor = wasmer_runtime::wasm::MemoryDescriptor {
+		minimum: wasmer_runtime::units::Pages(0),
+		maximum: Some(wasmer_runtime::units::Pages(0)),
+		shared: false,
+	};
+
+	// Get memory descriptor from code import
+	// TODO handle case if more than 1 present
+	for (_, (_, expected_memory_desc)) in &module.info().imported_memories {
+		descriptor = *expected_memory_desc;
+	}
+
+	let mem_obj = memory::Memory::new(descriptor).unwrap();
+	let memory_view: MemoryView<u8> = mem_obj.view();
+	let memory_size = memory_view.len() / 65535;
+
+	let raw_ptr = &mut runtime as *mut _ as *mut c_void;
+	let import_object = runtime::imports::get_import_object(mem_obj, raw_ptr);
+
+	// Create the wasmer runtime instance to call function
+	module.instantiate(&import_object).unwrap()
+}
+
+#[bench]
+fn microbench_empty(b: &mut Bencher) {
+	let code = load_sample!("empty.wasm");
+	let address: Address = "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6".parse().unwrap();
+
 	let mut params = ActionParams::default();
-	params.sender = sender.clone();
+	params.address = address.clone();
+	params.gas = U256::from(100_000);
+	params.code = Some(Arc::new(code));
+
+	let mut ext = FakeExt::new().with_wasm();
+	let module_instance = prepare_module(params, &mut ext);
+
+	b.iter(|| {
+		module_instance.call("call", &[]);
+	});
+}
+
+#[bench]
+fn microbench_create(b: &mut Bencher) {
+	let mut params = ActionParams::default();
+	params.gas = U256::from(100_000);
+	params.code = Some(Arc::new(load_sample!("creator.wasm")));
+	params.data = Some(vec![0u8, 2, 4, 8, 16, 32, 64, 128]);
+	params.value = ActionValue::transfer(1_000_000_000);
+
+	let mut ext = FakeExt::new().with_wasm();
+	let module_instance = prepare_module(params, &mut ext);
+
+	b.iter(|| {
+		module_instance.call("call", &[]);
+	});
+}
+
+#[bench]
+fn microbench_alloc(b: &mut Bencher) {
+	let code = load_sample!("alloc.wasm");
+
+	let mut params = ActionParams::default();
+	params.gas = U256::from(10_000_000);
+	params.code = Some(Arc::new(code));
+	params.data = Some(vec![0u8]);
+
+	let mut ext = FakeExt::new().with_wasm();
+	let module_instance = prepare_module(params, &mut ext);
+
+	b.iter(|| {
+		module_instance.call("call", &[]);
+	});
+}
+
+#[bench]
+fn microbench_storage_read(b: &mut Bencher) {
+	let code = load_sample!("storage_read.wasm");
+	let address: Address = "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6".parse().unwrap();
+	let mut ext = FakeExt::new().with_wasm();
+	ext.store.insert(
+		"0100000000000000000000000000000000000000000000000000000000000000".into(),
+		address.into(),
+	);
+
+	let mut params = ActionParams::default();
 	params.gas = U256::from(100_000);
 	params.code = Some(Arc::new(code.clone()));
+
+	let module_instance = prepare_module(params, &mut ext);
+
+	b.iter(|| {
+		module_instance.call("call", &[]);
+	});
+}
+
+#[bench]
+fn microbench_keccak(b: &mut Bencher) {
+	let code = load_sample!("keccak.wasm");
+
+	let mut params = ActionParams::default();
+	params.gas = U256::from(100_000);
+	params.code = Some(Arc::new(code));
+	params.data = Some(b"something".to_vec());
+	let mut ext = FakeExt::new().with_wasm();
+
+	let module_instance = prepare_module(params, &mut ext);
+
+	b.iter(|| {
+		module_instance.call("call", &[]);
+	});
+}
+
+#[bench]
+fn bench_empty(b: &mut Bencher) {
+	let code = load_sample!("empty.wasm");
+	let address: Address = "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6".parse().unwrap();
+
+	let mut params = ActionParams::default();
+	params.address = address.clone();
+	params.gas = U256::from(100_000);
+	params.code = Some(Arc::new(code));
+	let mut ext = FakeExt::new().with_wasm();
 
 	let mut runtime = wasm_runtime();
 	runtime.prepare(&params, &mut ext);
 
-	b.iter(|| {
-		let result = runtime.exec(params.clone(), &mut ext);
-	});
+	b.iter(|| runtime.exec(params.clone(), &mut ext));
+}
+
+#[bench]
+fn bench_create(b: &mut Bencher) {
+	let mut params = ActionParams::default();
+	params.gas = U256::from(100_000);
+	params.code = Some(Arc::new(load_sample!("creator.wasm")));
+	params.data = Some(vec![0u8, 2, 4, 8, 16, 32, 64, 128]);
+	params.value = ActionValue::transfer(1_000_000_000);
+
+	let mut ext = FakeExt::new().with_wasm();
+
+	let mut runtime = wasm_runtime();
+	runtime.prepare(&params, &mut ext);
+
+	b.iter(|| runtime.exec(params.clone(), &mut ext));
+}
+
+#[bench]
+fn bench_alloc(b: &mut Bencher) {
+	let code = load_sample!("alloc.wasm");
+
+	let mut params = ActionParams::default();
+	params.gas = U256::from(10_000_000);
+	params.code = Some(Arc::new(code));
+	params.data = Some(vec![0u8]);
+	let mut ext = FakeExt::new().with_wasm();
+
+	let mut runtime = wasm_runtime();
+	runtime.prepare(&params, &mut ext);
+
+	b.iter(|| runtime.exec(params.clone(), &mut ext));
 }
 
 #[bench]
@@ -60,6 +224,24 @@ fn bench_storage_read(b: &mut Bencher) {
 	runtime.prepare(&params, &mut ext);
 
 	b.iter(|| {
-		let result = runtime.exec(params.clone(), &mut ext);
+		runtime.exec(params.clone(), &mut ext);
+	});
+}
+
+#[bench]
+fn bench_keccak(b: &mut Bencher) {
+	let code = load_sample!("keccak.wasm");
+
+	let mut params = ActionParams::default();
+	params.gas = U256::from(100_000);
+	params.code = Some(Arc::new(code));
+	params.data = Some(b"something".to_vec());
+	let mut ext = FakeExt::new().with_wasm();
+
+	let mut runtime = wasm_runtime();
+	runtime.prepare(&params, &mut ext);
+
+	b.iter(|| {
+		runtime.exec(params.clone(), &mut ext);
 	});
 }

@@ -30,9 +30,7 @@ extern crate pwasm_utils as wasm_utils;
 extern crate vm;
 extern crate wasmer_runtime;
 extern crate wasmer_runtime_core;
-
 extern crate wasmer_clif_backend;
-extern crate wasmer_singlepass_backend;
 
 mod panic_payload;
 mod parser;
@@ -50,7 +48,7 @@ use std::ffi::c_void;
 use vm::{ActionParams, GasLeft, ReturnData};
 
 use wasmer_runtime::{error, instantiate, memory, memory::MemoryView, Instance, Module};
-use wasmer_runtime_core::backend::{Compiler};
+use wasmer_runtime_core::backend::Compiler;
 
 /// Wasmer runtime instance
 #[derive(Default)]
@@ -66,11 +64,9 @@ enum ExecutionOutcome {
 }
 
 impl WasmRuntime {
-	
+	// Only cranelift supported for now
 	pub fn get_compiler(&self) -> impl Compiler {
-		
-		//use wasmer_singlepass_backend::SinglePassCompiler as DefaultCompiler;
-		use wasmer_clif_backend::CraneliftCompiler as DefaultCompiler; 
+		use wasmer_clif_backend::CraneliftCompiler as DefaultCompiler;
 		DefaultCompiler::new()
 	}
 }
@@ -87,9 +83,7 @@ impl vm::Vm for WasmRuntime {
 	}
 
 	fn exec(&mut self, params: ActionParams, ext: &mut vm::Ext) -> vm::Result<GasLeft> {
-		
 		if let Some(module) = &self.module {
-			
 			let adjusted_gas_limit = params.gas * U256::from(ext.schedule().wasm().opcodes_div)
 				/ U256::from(ext.schedule().wasm().opcodes_mul);
 
@@ -130,7 +124,7 @@ impl vm::Vm for WasmRuntime {
 
 			let raw_ptr = &mut runtime as *mut _ as *mut c_void;
 			let import_object = runtime::imports::get_import_object(mem_obj, raw_ptr);
-			
+
 			// Create the wasmer runtime instance to call function
 			let instance = module.instantiate(&import_object).unwrap();
 
@@ -144,7 +138,6 @@ impl vm::Vm for WasmRuntime {
 			runtime.charge(|s| memory_size as u64 * s.wasm().initial_mem_cost as u64);
 
 			let (gas_left, result) = {
-
 				let invoke_result = instance.call("call", &[]);
 				let mut execution_outcome = ExecutionOutcome::NotSpecial;
 				if let Err(wasmer_runtime::error::CallError::Runtime(ref trap)) = invoke_result {
@@ -196,5 +189,3 @@ impl vm::Vm for WasmRuntime {
 		}
 	}
 }
-
-
