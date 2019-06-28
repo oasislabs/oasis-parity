@@ -1396,7 +1396,7 @@ impl<B: Backend> State<B> {
 				.as_ref()
 				.expect("Cannot encrypt without a confidential context")
 				.borrow()
-				.encrypt_storage(key.to_vec())
+				.encrypt_storage_key(key.to_vec())
 				.expect("Should be able to encrypt storage keys");
 			keccak(&enc_key)
 		} else {
@@ -1412,8 +1412,8 @@ impl<B: Backend> State<B> {
 			self.confidential_ctx
 				.as_ref()
 				.expect("Cannot encrypt without a confidential context")
-				.borrow()
-				.encrypt_storage(value)
+				.borrow_mut()
+				.encrypt_storage_value(value)
 				.expect("Should be able to encrypt storage")
 		} else {
 			value
@@ -1433,7 +1433,7 @@ impl<B: Backend> State<B> {
 				.as_ref()
 				.expect("Cannot decrypt without a confidential context")
 				.borrow()
-				.decrypt_storage(value)
+				.decrypt_storage_value(value)
 				.expect("Corrupted state")
 		} else {
 			value
@@ -1811,148 +1811,6 @@ mod tests {
 			}),
 			subtraces: 0,
 		}];
-
-		assert_eq!(result.trace, expected_trace);
-	}
-
-	#[test]
-	fn should_not_trace_callcode() {
-		init_log();
-
-		let mut state = get_temp_state();
-
-		let mut info = EnvInfo::default();
-		info.gas_limit = 1_000_000.into();
-		let machine = Spec::new_test_machine();
-
-		let t = Transaction {
-			nonce: 0.into(),
-			gas_price: 0.into(),
-			gas: 100_000.into(),
-			action: Action::Call(0xa.into()),
-			value: 0.into(),
-			data: vec![],
-		}
-		.sign(&secret(), None);
-
-		state
-			.init_code(
-				&0xa.into(),
-				FromHex::from_hex("60006000600060006000600b611000f2").unwrap(),
-			)
-			.unwrap();
-		state
-			.init_code(&0xb.into(), FromHex::from_hex("6000").unwrap())
-			.unwrap();
-		let result = state.apply(&info, &machine, &t, true, false).unwrap();
-
-		let expected_trace = vec![
-			FlatTrace {
-				trace_address: Default::default(),
-				subtraces: 1,
-				action: trace::Action::Call(trace::Call {
-					from: "9cce34f7ab185c7aba1b7c8140d620b4bda941d6".into(),
-					to: 0xa.into(),
-					value: 0.into(),
-					gas: 97900.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
-					input: vec![],
-					call_type: CallType::Call,
-				}),
-				result: trace::Res::Call(trace::CallResult {
-					gas_used: 724.into(), // in post-eip150
-					output: vec![],
-				}),
-			},
-			FlatTrace {
-				trace_address: vec![0].into_iter().collect(),
-				subtraces: 0,
-				action: trace::Action::Call(trace::Call {
-					from: 0xa.into(),
-					to: 0xa.into(),
-					value: 0.into(),
-					gas: 4096.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
-					input: vec![],
-					call_type: CallType::CallCode,
-				}),
-				result: trace::Res::Call(trace::CallResult {
-					gas_used: 3.into(),
-					output: vec![],
-				}),
-			},
-		];
-
-		assert_eq!(result.trace, expected_trace);
-	}
-
-	#[test]
-	fn should_trace_delegatecall_properly() {
-		init_log();
-
-		let mut state = get_temp_state();
-
-		let mut info = EnvInfo::default();
-		info.gas_limit = 1_000_000.into();
-		info.number = 0x789b0;
-		let machine = Spec::new_test_machine();
-
-		let t = Transaction {
-			nonce: 0.into(),
-			gas_price: 0.into(),
-			gas: 100_000.into(),
-			action: Action::Call(0xa.into()),
-			value: 0.into(),
-			data: vec![],
-		}
-		.sign(&secret(), None);
-
-		state
-			.init_code(
-				&0xa.into(),
-				FromHex::from_hex("6000600060006000600b618000f4").unwrap(),
-			)
-			.unwrap();
-		state
-			.init_code(
-				&0xb.into(),
-				FromHex::from_hex("60056000526001601ff3").unwrap(),
-			)
-			.unwrap();
-		let result = state.apply(&info, &machine, &t, true, false).unwrap();
-
-		let expected_trace = vec![
-			FlatTrace {
-				trace_address: Default::default(),
-				subtraces: 1,
-				action: trace::Action::Call(trace::Call {
-					from: "9cce34f7ab185c7aba1b7c8140d620b4bda941d6".into(),
-					to: 0xa.into(),
-					value: 0.into(),
-					gas: 97900.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
-					input: vec![],
-					call_type: CallType::Call,
-				}),
-				result: trace::Res::Call(trace::CallResult {
-					gas_used: U256::from(736), // in post-eip150
-					output: vec![],
-				}),
-			},
-			FlatTrace {
-				trace_address: vec![0].into_iter().collect(),
-				subtraces: 0,
-				action: trace::Action::Call(trace::Call {
-					from: 0xa.into(),
-					to: 0xb.into(),
-					value: 0.into(),
-					gas: 32768.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
-					input: vec![],
-					call_type: CallType::DelegateCall,
-				}),
-				result: trace::Res::Call(trace::CallResult {
-					gas_used: 18.into(),
-					output: vec![5],
-				}),
-			},
-		];
 
 		assert_eq!(result.trace, expected_trace);
 	}

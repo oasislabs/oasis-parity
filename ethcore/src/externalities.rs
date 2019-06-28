@@ -174,15 +174,13 @@ where
 		}
 	}
 
-	fn storage_expiry(&self) -> vm::Result<u64> {
-		self.state
-			.storage_expiry(&self.origin_info.address)
-			.map_err(Into::into)
+	fn storage_expiry(&self, addr: &Address) -> vm::Result<u64> {
+		self.state.storage_expiry(addr).map_err(Into::into)
 	}
 
 	fn seconds_until_expiry(&self) -> vm::Result<u64> {
 		let current_timestamp = self.env_info.timestamp;
-		let expiry_timestamp = self.storage_expiry()?;
+		let expiry_timestamp = self.storage_expiry(&self.origin_info.address)?;
 		if current_timestamp > expiry_timestamp {
 			return Err(vm::Error::ContractExpired);
 		}
@@ -191,6 +189,13 @@ where
 
 	fn is_static(&self) -> bool {
 		return self.static_flag;
+	}
+
+	fn is_create(&self) -> bool {
+		match self.output {
+			OutputPolicy::InitContract(_) => true,
+			_ => false,
+		}
 	}
 
 	fn exists(&self, address: &Address) -> vm::Result<bool> {
@@ -231,18 +236,29 @@ where
 		code: &[u8],
 		address_scheme: CreateContractAddress,
 	) -> ContractCreateResult {
-		if self.state.confidential_ctx.is_some()
-			&& self
-				.state
-				.confidential_ctx
-				.as_ref()
-				.unwrap()
-				.borrow()
-				.activated()
-		{
-			error!("Can't create a contract when executing a confidential contract");
-			return ContractCreateResult::Failed;
-		}
+		let code = {
+			if self.state.confidential_ctx.is_some()
+				&& self
+					.state
+					.confidential_ctx
+					.as_ref()
+					.unwrap()
+					.borrow()
+					.activated()
+			{
+				let mut header_code = OasisContract::make_header(
+					1,
+					json!({
+						"confidential": true
+					})
+					.to_string(),
+				);
+				header_code.append(&mut code.to_vec());
+				header_code
+			} else {
+				code.to_vec()
+			}
+		};
 
 		// create new contract address
 		let (address, code_hash) = match self.state.nonce(&self.origin_info.address) {
@@ -254,7 +270,7 @@ where
 		};
 
 		// Extract contract deployment header, if present.
-		let oasis_contract = match OasisContract::from_code(code) {
+		let oasis_contract = match OasisContract::from_code(&code) {
 			Ok(contract) => contract,
 			Err(_) => return ContractCreateResult::Failed,
 		};
@@ -579,6 +595,62 @@ where
 		self.state
 			.is_confidential_contract(contract)
 			.map_err(|err| vm::Error::Confidential(err))
+	}
+
+	fn as_kvstore(&self) -> &dyn blockchain_traits::KVStore {
+		self
+	}
+
+	fn as_kvstore_mut(&mut self) -> &mut dyn blockchain_traits::KVStoreMut {
+		self
+	}
+}
+
+/// The Parity trie uses H256 (32-byte) keys. Keys used by WASI services
+/// will look like file names. Trie performance is optimized when keys with
+/// similar access patterns share a prefix. This function aims to maximize
+/// performance by preserving the original (hopefully prefixed) paths but
+/// safely defaults to hashing long paths.
+fn slice_to_key(sl: &[u8]) -> H256 {
+	let mut hash = [0u8; 32];
+	if sl.len() > hash.len() {
+		keccak_hash::keccak_256(sl, &mut hash);
+	} else {
+		hash[..sl.len()].copy_from_slice(sl);
+	}
+	H256::from(hash)
+}
+
+impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> blockchain_traits::KVStore for Externalities<'a, T, V, X, B>
+where
+	T: Tracer,
+	V: VMTracer,
+	X: ExtTracer,
+	B: StateBackend,
+{
+	fn contains(&self, key: &[u8]) -> bool {
+		self.storage_bytes_at(&slice_to_key(key)).is_ok()
+	}
+
+	fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
+		self.storage_bytes_at(&slice_to_key(key)).ok()
+	}
+}
+
+impl<'a, T: 'a, V: 'a, X: 'a, B: 'a> blockchain_traits::KVStoreMut for Externalities<'a, T, V, X, B>
+where
+	T: Tracer,
+	V: VMTracer,
+	X: ExtTracer,
+	B: StateBackend,
+{
+	fn set(&mut self, key: &[u8], value: &[u8]) {
+		self.set_storage_bytes(slice_to_key(key), value.to_vec())
+			.ok();
+	}
+
+	fn remove(&mut self, key: &[u8]) {
+		self.set_storage_bytes(slice_to_key(key), Vec::new()).ok();
 	}
 }
 

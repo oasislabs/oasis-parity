@@ -139,6 +139,8 @@ extern crate lazy_static;
 extern crate macros;
 #[macro_use]
 extern crate rlp_derive;
+#[macro_use]
+extern crate serde_json;
 // #[macro_use]
 // extern crate trace_time;
 

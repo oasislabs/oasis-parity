@@ -1,4 +1,5 @@
 use byteorder::{BigEndian, ByteOrder};
+use elastic_array::ElasticArray128;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
@@ -79,22 +80,7 @@ impl OasisContract {
 			code: Arc::new(code),
 		}))
 	}
-}
-
-fn has_header_prefix(data: &[u8]) -> bool {
-	if data.len() < OASIS_HEADER_PREFIX.len() {
-		return false;
-	}
-	let prefix = &data[..OASIS_HEADER_PREFIX.len()];
-	return prefix == OASIS_HEADER_PREFIX;
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use elastic_array::ElasticArray128;
-
-	fn make_data_payload(version: usize, json_str: String) -> Vec<u8> {
+	pub fn make_header(version: usize, json_str: String) -> Vec<u8> {
 		// start with header prefix
 		let mut data = ElasticArray128::from_slice(&OASIS_HEADER_PREFIX[..]);
 
@@ -114,10 +100,28 @@ mod tests {
 		data.append_slice(&length);
 		data.append_slice(&contents);
 
-		// append some dummy body data
-		data.append_slice(b"contract code");
-
 		data.into_vec()
+	}
+}
+
+fn has_header_prefix(data: &[u8]) -> bool {
+	if data.len() < OASIS_HEADER_PREFIX.len() {
+		return false;
+	}
+	let prefix = &data[..OASIS_HEADER_PREFIX.len()];
+	return prefix == OASIS_HEADER_PREFIX;
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use elastic_array::ElasticArray128;
+
+	fn make_data_payload(version: usize, json_str: String) -> Vec<u8> {
+		let mut data = OasisContract::make_header(version, json_str);
+		// append some dummy body data
+		data.append(&mut b"contract code".to_vec());
+		data
 	}
 
 	#[test]

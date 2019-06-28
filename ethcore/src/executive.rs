@@ -1211,12 +1211,12 @@ mod tests {
 						from: "4444444444444444444444444444444444444444".into(),
 						to: "5555555555555555555555555555555555555555".into(),
 						value: 100.into(),
-						gas: 100_000.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
+						gas: 100_000.into(),
 						input: vec![],
 						call_type: CallType::Call
 					}),
 					result: trace::Res::Call(trace::CallResult {
-						gas_used: 33021.into(),
+						gas_used: 33021.into(), // NOTICE: This value will change if the gas model changes, so please update accordingly.
 						output: vec![]
 					}),
 					subtraces: 1,
@@ -2257,85 +2257,6 @@ mod tests {
 		);
 	}
 
-	fn wasm_sample_code() -> Arc<Vec<u8>> {
-		Arc::new(
-			"0061736d01000000010d0360027f7f0060017f0060000002270303656e7603726574000003656e760673656e646572000103656e76066d656d6f727902010110030201020404017000000501000708010463616c6c00020901000ac10101be0102057f017e4100410028020441c0006b22043602042004412c6a41106a220041003602002004412c6a41086a22014200370200200441186a41106a22024100360200200441186a41086a220342003703002004420037022c2004410036021c20044100360218200441186a1001200020022802002202360200200120032903002205370200200441106a2002360200200441086a200537030020042004290318220537022c200420053703002004411410004100200441c0006a3602040b0b0a010041040b0410c00000"
-			.from_hex()
-			.unwrap()
-		)
-	}
-
-	#[test]
-	fn wasm_activated_test() {
-		let contract_address =
-			Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681").unwrap();
-		let sender = Address::from_str("0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
-
-		let mut state = get_temp_state();
-		state
-			.add_balance(&sender, &U256::from(10000000000u64), CleanupMode::NoEmpty)
-			.unwrap();
-		state.commit().unwrap();
-
-		let mut params = ActionParams::default();
-		params.origin = sender.clone();
-		params.sender = sender.clone();
-		params.address = contract_address.clone();
-		params.gas = U256::from(20025);
-		params.code = Some(wasm_sample_code());
-
-		let mut info = EnvInfo::default();
-
-		// 100 > 10
-		info.number = 100;
-		// Network with wasm activated at block 10
-		let machine = ::ethereum::new_kovan_wasm_test_machine();
-		let mut ext_tracer = NoopExtTracer;
-
-		let mut output = [0u8; 20];
-		let FinalizationResult {
-			gas_left: result, ..
-		} = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
-			ex.call(
-				params.clone(),
-				&mut Substate::new(),
-				BytesRef::Fixed(&mut output),
-				&mut NoopTracer,
-				&mut NoopVMTracer,
-				&mut ext_tracer,
-			)
-			.unwrap()
-		};
-
-		//assert_eq!(result, U256::from(15781)); // NOTICE: This value will change if the gas model changes, so please update accordingly.
-		// Transaction successfully returned sender
-		assert_eq!(output[..], sender[..]);
-
-		// 1 < 10
-		info.number = 1;
-
-		let mut output = [0u8; 20];
-		let FinalizationResult {
-			gas_left: result, ..
-		} = {
-			let mut ex = Executive::new(&mut state, &info, &machine);
-			ex.call(
-				params,
-				&mut Substate::new(),
-				BytesRef::Fixed(&mut output),
-				&mut NoopTracer,
-				&mut NoopVMTracer,
-				&mut ext_tracer,
-			)
-			.unwrap()
-		};
-
-		assert_eq!(result, U256::from(20025));
-		// Since transaction errored due to wasm was not activated, result is just empty
-		assert_eq!(output[..], [0u8; 20][..]);
-	}
-
 	// read / write via sload and sstore
 	evm_test! {test_ext_tracer_rw: test_ext_tracer_rw_int}
 	fn test_ext_tracer_rw(factory: Factory) {
@@ -2762,5 +2683,52 @@ mod tests {
 		let expected_ext_trace = (6, 6);
 		let trace = ext_tracer.get_rw_counts();
 		assert_eq!(trace, expected_ext_trace);
+	}
+
+	evm_test! {test_wasm_direct_deploy: test_wasm_direct_deploy_int}
+	fn test_wasm_direct_deploy(factory: Factory) {
+		let code = include_bytes!("../res/wasi-tests/target/service/create_ctor.wasm").to_vec();
+
+		let sender = Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681").unwrap();
+		let address = contract_address(
+			CreateContractAddress::FromSenderAndNonce,
+			&sender,
+			&U256::zero(),
+			&[],
+		)
+		.0;
+		let mut params = ActionParams::default();
+		params.address = address.clone();
+		params.sender = sender.clone();
+		params.gas = U256::from(1_000_000);
+		params.code = Some(Arc::new(code.to_vec()));
+		let mut state = get_temp_state_with_factory(factory);
+		let mut info = EnvInfo::default();
+		info.number = 100; // wasm activated at block 10
+		let machine = ::ethereum::new_kovan_wasm_test_machine();
+		let mut substate = Substate::new();
+
+		let mut ex = Executive::new(&mut state, &info, &machine);
+		ex.create(
+			params,
+			&mut substate,
+			&mut None,
+			&mut NoopTracer,
+			&mut NoopVMTracer,
+			&mut NoopExtTracer,
+		)
+		.unwrap();
+
+		let new_acct_code_hash = state.code_hash(&address);
+		assert_eq!(new_acct_code_hash, Ok(keccak(code)));
+
+		let k = b"message";
+		let mut hk = [0u8; 32];
+		hk[..k.len()].copy_from_slice(k.as_ref());
+		let new_acct_data = state.storage_bytes_at(&address, &H256::from(hk));
+		assert_eq!(
+			new_acct_data.as_ref().map(|v| v.as_slice()),
+			Ok(b"hello".as_ref())
+		);
 	}
 }

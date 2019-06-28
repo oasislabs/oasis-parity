@@ -1,12 +1,6 @@
-use crate::{ActionParams, CallType, Error, Ext, GasLeft, OasisContract, Result, ReturnData, Vm};
+use crate::{ActionParams, CallType, Error, Ext, GasLeft, Result, ReturnData, Vm};
 use ethereum_types::{Address, H256};
 use std::{cell::RefCell, rc::Rc};
-
-/// The H256 topic that the long term public key is logged under for a confidential deploy.
-const CONFIDENTIAL_LOG_TOPIC: [u8; 32] = [
-	255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-	255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-];
 
 /// OasisVm is a wrapper for a WASM or EVM vm for executing all contracts on Oasis.
 pub struct OasisVm {
@@ -130,7 +124,7 @@ impl ConfidentialVm {
 			if ext.depth() == 0 {
 				self.tx(params, ext)
 			} else {
-				self.cross_contract_call(params, ext)
+				self.cross_contract_tx(params, ext)
 			}
 		};
 
@@ -154,17 +148,6 @@ impl ConfidentialVm {
 
 	/// Deploys a confidential contract.
 	fn tx_create(&mut self, params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
-		let (public_key, mut signature) = self
-			.ctx
-			.borrow_mut()
-			.create_long_term_public_key(params.code_address.clone())?;
-
-		let mut log_data = public_key;
-		log_data.append(&mut signature);
-
-		// Store public key in log for retrieval.
-		ext.log(vec![H256::from(CONFIDENTIAL_LOG_TOPIC)], &log_data)?;
-
 		// Activate the confidential context so that we can transparently encrypt/decrypt.
 		self.ctx.borrow_mut().activate(Some(params.address))?;
 
@@ -203,7 +186,7 @@ impl ConfidentialVm {
 		// Execute the code and encrypt the result.
 		let encrypted_result = {
 			let result = self.vm.exec(params, ext)?;
-			self.encrypt_vm_result(result, ext)
+			self.encrypt_vm_result(result)
 		};
 
 		// Shut down the confidential ctx to stop encrypting.
@@ -213,7 +196,7 @@ impl ConfidentialVm {
 	}
 
 	/// Encrypts the execution result of a confidential call.
-	fn encrypt_vm_result(&self, result: GasLeft, ext: &mut Ext) -> Result<GasLeft> {
+	fn encrypt_vm_result(&self, result: GasLeft) -> Result<GasLeft> {
 		if let GasLeft::NeedsReturn {
 			gas_left,
 			data,
@@ -232,6 +215,31 @@ impl ConfidentialVm {
 		Ok(result)
 	}
 
+	/// Executes a cross contract transaction.
+	fn cross_contract_tx(&mut self, params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
+		assert!(self.ctx.borrow().activated() && ext.depth() > 0);
+
+		if params.call_type == CallType::None {
+			self.cross_contract_create(params, ext)
+		} else {
+			self.cross_contract_call(params, ext)
+		}
+	}
+
+	/// Creates a confidential contract from within a confidential contract.
+	fn cross_contract_create(&mut self, params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
+		// Swap the confidential context to the new contract we're creating.
+		let old_contract = self.ctx.borrow_mut().activate(Some(params.address))?;
+
+		// Execute the init code with the underlying vm.
+		let result = self.vm.exec(params, ext);
+
+		// Swap back the confidential ctx to use the keys prior to the cross contract call.
+		self.ctx.borrow_mut().activate(old_contract)?;
+
+		result
+	}
+
 	/// Executes a confidential cross contract call. Here, a confidential context is already active,
 	/// so just perform a context switch by swapping the underlying contract encryption keys.
 	///
@@ -247,7 +255,7 @@ impl ConfidentialVm {
 	/// However, we could do such additional encryption/decryption *here*. This would be
 	/// useful if we wanted to exit out of the enclave with encrypted data and enter into
 	/// a new enclave in the future.
-	fn cross_contract_call(&mut self, mut params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
+	fn cross_contract_call(&mut self, params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
 		self.check_cross_contract_call(&params, ext)?;
 		let address = {
 			if ext.is_confidential_contract(&params.address)? {
@@ -272,7 +280,7 @@ impl ConfidentialVm {
 		// Run the contract execution.
 		let result = self.vm.exec(params, ext);
 		// Swap back the confidential ctx to use the keys prior to the cross contract call.
-		let old_contract = self.ctx.borrow_mut().activate(old_contract)?;
+		let _old_contract = self.ctx.borrow_mut().activate(old_contract)?;
 
 		result
 	}
@@ -359,14 +367,12 @@ pub trait ConfidentialCtx {
 	/// Returns the public key of the peer connecting through an encrypted session to the runtime.
 	/// Returns None if no such key exists, e.g., if a confidential contract is being created.
 	fn peer(&self) -> Option<Vec<u8>>;
-	/// Encrypts the given data to be placed into contract storage	under the context.
+	/// Encrypts the given data to be placed into contract storage under the context.
 	/// The runtime allows *only a given contract* to encrypt/decrypt this data, as
 	/// opposed to the `encrypt` method, which allows a user's client to decrypt.
-	fn encrypt_storage(&self, data: Vec<u8>) -> Result<Vec<u8>>;
-	/// Analog to `encrypt_storage` for decyrpting data.
-	fn decrypt_storage(&self, data: Vec<u8>) -> Result<Vec<u8>>;
-	/// Creates the long term public key for the given contract. If it already
-	/// exists, returns the existing key. The first item is the key, the second
-	/// is a signature over the key by the KeyManager.
-	fn create_long_term_public_key(&mut self, contract: Address) -> Result<(Vec<u8>, Vec<u8>)>;
+	fn encrypt_storage_value(&mut self, data: Vec<u8>) -> Result<Vec<u8>>;
+	/// Encrypts the given data as a contract storage key.
+	fn encrypt_storage_key(&self, data: Vec<u8>) -> Result<Vec<u8>>;
+	/// Analog to `encrypt_storage_value` for decrypting storage values.
+	fn decrypt_storage_value(&self, data: Vec<u8>) -> Result<Vec<u8>>;
 }
