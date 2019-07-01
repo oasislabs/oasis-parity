@@ -46,7 +46,9 @@ fn prepare_module(params: ActionParams, ext: &mut vm::Ext) -> wasmer_runtime::In
 			address: params.address,
 			sender: params.sender,
 			origin: params.origin,
+			code_address: params.code_address,
 			value: params.value.value(),
+			value_str: params.value.value().as_u64().to_string(),
 		},
 	);
 

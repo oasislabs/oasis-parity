@@ -15,37 +15,45 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Wasmer Runtime
-
+#![feature(specialization, type_ascription)]
 #![feature(test)]
 
+extern crate bcfs;
 extern crate byteorder;
-extern crate ethcore_logger;
+extern crate common_types;
 extern crate ethereum_types;
 extern crate keccak_hash as hash;
+extern crate mantle_types;
+extern crate blockchain_traits;
 #[macro_use]
 extern crate log;
-// extern crate libc;
 extern crate parity_wasm;
 extern crate pwasm_utils as wasm_utils;
 extern crate vm;
+extern crate wasi_types;
+extern crate wasm_macros;
+extern crate wasmi;
 extern crate wasmer_runtime;
 extern crate wasmer_runtime_core;
 extern crate wasmer_clif_backend;
 
-mod panic_payload;
+mod env;
 mod parser;
 mod runtime;
 
 #[cfg(test)]
 mod tests;
+mod wasi;
 
 #[cfg(test)]
 mod benches;
 
-use ethereum_types::U256;
-use runtime::{Runtime, RuntimeContext};
-use std::ffi::c_void;
+use parity_wasm::elements;
 use vm::{ActionParams, GasLeft, ReturnData};
+use runtime::{Result, Runtime, RuntimeContext};
+
+use ethereum_types::U256;
+use std::ffi::c_void;
 
 use wasmer_runtime::{error, instantiate, memory, memory::MemoryView, Instance, Module};
 use wasmer_runtime_core::backend::Compiler;
@@ -83,6 +91,14 @@ impl vm::Vm for WasmRuntime {
 	}
 
 	fn exec(&mut self, params: ActionParams, ext: &mut vm::Ext) -> vm::Result<GasLeft> {
+		
+		let is_create = ext.is_create();
+
+		if is_create {
+			let (mut module, _, _) = parser::payload(&params, ext.schedule().wasm())?;
+			subst_main_call(&mut module);
+		}
+
 		if let Some(module) = &self.module {
 			let adjusted_gas_limit = params.gas * U256::from(ext.schedule().wasm().opcodes_div)
 				/ U256::from(ext.schedule().wasm().opcodes_mul);
@@ -101,7 +117,9 @@ impl vm::Vm for WasmRuntime {
 					address: params.address,
 					sender: params.sender,
 					origin: params.origin,
+					code_address: params.code_address,
 					value: params.value.value(),
+					value_str: params.value.value().as_u64().to_string(),
 				},
 			);
 
@@ -120,7 +138,7 @@ impl vm::Vm for WasmRuntime {
 
 			let mem_obj = memory::Memory::new(descriptor).unwrap();
 			let memory_view: MemoryView<u8> = mem_obj.view();
-			let memory_size = memory_view.len() / 65535;
+			let initial_memory_size = memory_view.len() / 65535;
 
 			let raw_ptr = &mut runtime as *mut _ as *mut c_void;
 			let import_object = runtime::imports::get_import_object(mem_obj, raw_ptr);
@@ -135,7 +153,7 @@ impl vm::Vm for WasmRuntime {
 			// qed
 
 			assert!(runtime.schedule().wasm().initial_mem_cost < 1 << 16);
-			runtime.charge(|s| memory_size as u64 * s.wasm().initial_mem_cost as u64);
+			runtime.charge(|s| Some(initial_memory_size as u64 * s.wasm().initial_mem_cost as u64)).unwrap();
 
 			let (gas_left, result) = {
 				let invoke_result = instance.call("call", &[]);
@@ -173,19 +191,89 @@ impl vm::Vm for WasmRuntime {
 			let gas_left = U256::from(gas_left) * U256::from(ext.schedule().wasm().opcodes_mul)
 				/ U256::from(ext.schedule().wasm().opcodes_div);
 
-			if result.is_empty() {
-				trace!(target: "wasm", "Contract execution result is empty.");
-				Ok(GasLeft::Known(gas_left))
+			let apply_state = !result.is_err();
+			let output = if is_create {
+				std::sync::Arc::try_unwrap(params.code.unwrap_or_default())
+					.unwrap_or_else(|arc| arc.to_vec())
 			} else {
-				let len = result.len();
-				Ok(GasLeft::NeedsReturn {
-					gas_left: gas_left,
-					data: ReturnData::new(result, 0, len),
-					apply_state: true,
-				})
+				result.clone().unwrap_or_else(std::convert::identity) // Result<Vec<u8>, Vec<u8>> -> Vec<u8>
+			};
+			{
+				std::str::from_utf8(&result.clone().unwrap_or_else(std::convert::identity));
 			}
+			let output_len = output.len();
+			Ok(GasLeft::NeedsReturn {
+				gas_left,
+				apply_state,
+				data: ReturnData::new(output, 0, output_len),
+			})
+
 		} else {
 			return Err(vm::Error::Wasm(format!("Executing an unprepared contract")));
 		}
 	}
+}
+
+/// Replaces the call to `main` in `_start` with one to `_mantle_deploy`.
+fn subst_main_call(module: &mut elements::Module) {
+	let start_fn_idx = match func_index(module, "_start") {
+		Some(idx) => idx,
+		None => return,
+	};
+	let deploy_fn_idx = match func_index(module, "_mantle_deploy") {
+		Some(idx) => idx,
+		None => return,
+	};
+	let main_fn_idx = match func_index(module, "main") {
+		Some(idx) => idx,
+		None => return,
+	};
+
+	let import_section_len: usize = module
+		.import_section()
+		.map(|import| {
+			import
+				.entries()
+				.iter()
+				.filter(|entry| match entry.external() {
+					&elements::External::Function(_) => true,
+					_ => false,
+				})
+				.count()
+		})
+		.unwrap_or_default();
+
+	let mut start_fn = match module
+		.code_section_mut()
+		.map(|s| &mut s.bodies_mut()[start_fn_idx as usize - import_section_len])
+	{
+		Some(f) => f,
+		None => return,
+	};
+
+	for instr in start_fn.code_mut().elements_mut() {
+		if let elements::Instruction::Call(ref mut idx) = instr {
+			if *idx == main_fn_idx {
+				*idx = deploy_fn_idx;
+			}
+		}
+	}
+}
+
+/// Returns the function index of an export by name.
+fn func_index(module: &elements::Module, name: &str) -> Option<u32> {
+	module
+		.export_section()
+		.iter()
+		.flat_map(|s| s.entries())
+		.find_map(|export| {
+			if export.field() == name {
+				match export.internal() {
+					elements::Internal::Function(idx) => Some(*idx),
+					_ => None,
+				}
+			} else {
+				None
+			}
+		})
 }
