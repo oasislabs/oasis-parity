@@ -18,7 +18,7 @@ vm = { path = "../vm" }
 # ethcore-logger = { path = "../../logger" }
 wasi-types = "0.1"
 keccak-hash = { path = "../../util/hash" }
-wasmi = { git = "https://github.com/oasislabs/wasmi" }
+wasmi = { path = "../wasmi" }
 wasm-macros = { path = "../wasm/macros" }
 wasmer-runtime = "0.4.2"
 wasmer-runtime-core = "0.4.2"

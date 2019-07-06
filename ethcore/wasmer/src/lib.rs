@@ -43,7 +43,6 @@ mod runtime;
 
 #[cfg(test)]
 mod tests;
-mod wasi;
 
 #[cfg(test)]
 mod benches;
@@ -156,7 +155,7 @@ impl vm::Vm for WasmRuntime {
 			runtime.charge(|s| Some(initial_memory_size as u64 * s.wasm().initial_mem_cost as u64)).unwrap();
 
 			let (gas_left, result) = {
-				let invoke_result = instance.call("call", &[]);
+				let invoke_result = instance.call("_start", &[]);
 				let mut execution_outcome = ExecutionOutcome::NotSpecial;
 				if let Err(wasmer_runtime::error::CallError::Runtime(ref trap)) = invoke_result {
 					if let error::RuntimeError::Error { data } = trap {

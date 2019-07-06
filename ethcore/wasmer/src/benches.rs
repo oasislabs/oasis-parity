@@ -1,4 +1,3 @@
-#![feature(test)]
 extern crate test;
 
 use self::test::Bencher;
@@ -76,7 +75,7 @@ fn prepare_module(params: ActionParams, ext: &mut vm::Ext) -> wasmer_runtime::In
 	module.instantiate(&import_object).unwrap()
 }
 
-#[bench]
+/* #[bench]
 fn microbench_empty(b: &mut Bencher) {
 	let code = load_sample!("empty");
 	let address: Address = "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6".parse().unwrap();
@@ -126,4 +125,4 @@ fn bench_event(b: &mut Bencher) {
 	runtime.prepare(&params, &mut ext).unwrap();
 	
 	b.iter(|| runtime.exec(params.clone(), &mut ext));
-}
+} */

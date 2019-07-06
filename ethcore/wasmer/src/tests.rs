@@ -138,6 +138,7 @@ fn io() {
 	assert_eq!(output, "the input was: hello, world!\n");
 }
 
+/*
 #[test]
 fn event() {
 	let code = load_sample!("event");
@@ -285,4 +286,4 @@ fn code_balance() {
 			.map(|bal| bal.as_slice()),
 		Some(balance.to_le_bytes().as_ref())
 	);
-}
+} */

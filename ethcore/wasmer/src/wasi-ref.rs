@@ -5,6 +5,8 @@ use wasmi::P;
 
 use crate::U256;
 
+use wasmer_runtime::{Ctx};
+
 const ADDR_LEN_BYTES: usize = std::mem::size_of::<mantle_types::Address>();
 const ADDR_CHARS: usize = ADDR_LEN_BYTES * 2; // two hex digits per byte
 
@@ -31,14 +33,14 @@ impl<'a> crate::Runtime<'a> {
 		}
 	}
 
-	pub fn args_get(&mut self, _argv: P<P<u8>>, _argv_buf: P<u8>) -> crate::Result<ErrNo> {
+	/* pub fn args_get(&mut self, _argv: P<P<u8>>, _argv_buf: P<u8>) -> crate::Result<ErrNo> {
 		Ok(ErrNo::Success)
-	}
+	} */
 
-	pub fn args_sizes_get(&mut self, argc: P<u32>, _argv_buf_size: P<u32>) -> crate::Result<ErrNo> {
+	/* pub fn args_sizes_get(&mut self, argc: P<u32>, _argv_buf_size: P<u32>) -> crate::Result<ErrNo> {
 		self.memory.set_value(argc, 0)?;
 		Ok(ErrNo::Success)
-	}
+	} */
 
 	pub fn clock_res_get(
 		&mut self,
