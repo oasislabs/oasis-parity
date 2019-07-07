@@ -17,8 +17,8 @@
 use ethereum_types::{Address, U256};
 use std::sync::Arc;
 
-use vm::{self, tests::FakeExt, ActionParams, ActionValue, GasLeft, ReturnData, Vm};
 use crate::WasmRuntime;
+use vm::{self, tests::FakeExt, ActionParams, ActionValue, GasLeft, ReturnData, Vm};
 
 macro_rules! load_sample {
 	($name: expr) => {{
@@ -79,7 +79,6 @@ fn gas_limit() {
 	let mut runtime = wasm_runtime();
 	runtime.prepare(&params, &mut ext).unwrap();
 	test_finalize(runtime.exec(params, &mut ext)).unwrap_err();
-
 }
 
 #[test]
@@ -98,7 +97,7 @@ fn envs() {
 	params.value = ActionValue::transfer(value);
 	params.code = Some(Arc::new(code));
 	let mut ext = FakeExt::new().with_wasm();
-	
+
 	let mut runtime = wasm_runtime();
 	runtime.prepare(&params, &mut ext).unwrap();
 	test_finalize(runtime.exec(params, &mut ext)).unwrap();
@@ -130,15 +129,13 @@ fn io() {
 
 	let mut runtime = wasm_runtime();
 	runtime.prepare(&params, &mut ext).unwrap();
-	
-	let (_apply, return_data, _gas_left) =
-		test_finalize(runtime.exec(params, &mut ext)).unwrap();
+
+	let (_apply, return_data, _gas_left) = test_finalize(runtime.exec(params, &mut ext)).unwrap();
 
 	let output = std::str::from_utf8(&*return_data).unwrap();
 	assert_eq!(output, "the input was: hello, world!\n");
 }
 
-/*
 #[test]
 fn event() {
 	let code = load_sample!("event");
@@ -190,7 +187,7 @@ fn revert_panic() {
 
 	let (gas_left, return_data, apply_state) =
 		test_finalize(runtime.exec(params, &mut ext)).unwrap();
-	
+
 	assert_eq!(apply_state, false);
 	assert!(gas_left > 0);
 	let output = std::str::from_utf8(&*return_data).unwrap();
@@ -208,7 +205,7 @@ fn revert_exit() {
 
 	let mut runtime = wasm_runtime();
 	runtime.prepare(&params, &mut ext).unwrap();
-	
+
 	let (gas_left, return_data, apply_state) =
 		test_finalize(runtime.exec(params, &mut ext)).unwrap();
 	assert_eq!(apply_state, false);
@@ -227,7 +224,7 @@ fn revert_enoent() {
 
 	let mut runtime = wasm_runtime();
 	runtime.prepare(&params, &mut ext).unwrap();
-	
+
 	let (gas_left, _return_data, apply_state) =
 		test_finalize(runtime.exec(params, &mut ext)).unwrap();
 	assert_eq!(apply_state, false);
@@ -250,8 +247,7 @@ fn read_delete() {
 	let mut runtime = wasm_runtime();
 	runtime.prepare(&params, &mut ext).unwrap();
 
-	let (_apply, return_data, _gas_left) =
-		test_finalize(runtime.exec(params, &mut ext)).unwrap();
+	let (_apply, return_data, _gas_left) = test_finalize(runtime.exec(params, &mut ext)).unwrap();
 
 	let output = std::str::from_utf8(&*return_data).unwrap();
 	assert_eq!(output, val_str);
@@ -286,4 +282,4 @@ fn code_balance() {
 			.map(|bal| bal.as_slice()),
 		Some(balance.to_le_bytes().as_ref())
 	);
-} */
+}

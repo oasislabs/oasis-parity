@@ -19,12 +19,12 @@
 #![feature(test)]
 
 extern crate bcfs;
+extern crate blockchain_traits;
 extern crate byteorder;
 extern crate common_types;
 extern crate ethereum_types;
 extern crate keccak_hash as hash;
 extern crate mantle_types;
-extern crate blockchain_traits;
 #[macro_use]
 extern crate log;
 extern crate parity_wasm;
@@ -32,10 +32,10 @@ extern crate pwasm_utils as wasm_utils;
 extern crate vm;
 extern crate wasi_types;
 extern crate wasm_macros;
-extern crate wasmi;
+extern crate wasmer_clif_backend;
 extern crate wasmer_runtime;
 extern crate wasmer_runtime_core;
-extern crate wasmer_clif_backend;
+extern crate wasmi;
 
 mod env;
 mod parser;
@@ -48,8 +48,8 @@ mod tests;
 mod benches;
 
 use parity_wasm::elements;
-use vm::{ActionParams, GasLeft, ReturnData};
 use runtime::{Result, Runtime, RuntimeContext};
+use vm::{ActionParams, GasLeft, ReturnData};
 
 use ethereum_types::U256;
 use std::ffi::c_void;
@@ -90,7 +90,6 @@ impl vm::Vm for WasmRuntime {
 	}
 
 	fn exec(&mut self, params: ActionParams, ext: &mut vm::Ext) -> vm::Result<GasLeft> {
-		
 		let is_create = ext.is_create();
 
 		if is_create {
@@ -152,31 +151,31 @@ impl vm::Vm for WasmRuntime {
 			// qed
 
 			assert!(runtime.schedule().wasm().initial_mem_cost < 1 << 16);
-			runtime.charge(|s| Some(initial_memory_size as u64 * s.wasm().initial_mem_cost as u64)).unwrap();
+			let gas_result = runtime
+				.charge(|s| Some(initial_memory_size as u64 * s.wasm().initial_mem_cost as u64));
+
+			// Hacky, but we need to return error is gas limit is hit
+			if let Err(gas_error) = gas_result {
+				return Err(vm::Error::Wasm(format!("Out of gas: {:?}", gas_error)));
+			};
 
 			let (gas_left, result) = {
 				let invoke_result = instance.call("_start", &[]);
+
 				let mut execution_outcome = ExecutionOutcome::NotSpecial;
-				if let Err(wasmer_runtime::error::CallError::Runtime(ref trap)) = invoke_result {
-					if let error::RuntimeError::Error { data } = trap {
-						if let Some(runtime_err) = data.downcast_ref::<runtime::Error>() {
-							// Expected errors thrown from runtime
-							match runtime_err {
-								runtime::Error::Suicide => {
-									execution_outcome = ExecutionOutcome::Suicide;
-								}
-								runtime::Error::Return => {
-									execution_outcome = ExecutionOutcome::Return;
-								}
-								_ => {}
-							}
-						}
+				match &invoke_result {
+					Ok(_) => (),
+					Err(wasmer_runtime::error::CallError::Runtime(ref trap)) => {
+						// TODO: handle execution outcomes. We assume it was a return for now
+						println!("Trapped Error is: {:?}", trap);
+						runtime.should_revert = true;
+						execution_outcome = ExecutionOutcome::Return;
 					}
+					_ => (),
 				}
 
 				if let (ExecutionOutcome::NotSpecial, Err(e)) = (execution_outcome, invoke_result) {
-					trace!(target: "wasm", "Error executing contract: {:?}", e);
-					return Err(vm::Error::Wasm(format!("Wasm runtime error: {:?}", e)));
+					return Err(vm::Error::Wasm(format!("Wasm contract trap: {:?}", e)));
 				}
 
 				(
@@ -206,7 +205,6 @@ impl vm::Vm for WasmRuntime {
 				apply_state,
 				data: ReturnData::new(output, 0, output_len),
 			})
-
 		} else {
 			return Err(vm::Error::Wasm(format!("Executing an unprepared contract")));
 		}

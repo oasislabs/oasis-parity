@@ -15,9 +15,9 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 use std::{
 	cell::{RefCell, UnsafeCell},
-	sync::Arc,
 	convert::TryFrom,
 	convert::TryInto,
+	sync::Arc,
 };
 
 use bcfs::BCFS;
@@ -27,8 +27,8 @@ use mantle_types::AccountMeta;
 use vm::{self, CallType, MessageCallResult, ReturnData};
 
 use wasi_types::*;
-use wasmi::{self, Error as InterpreterError, Trap, TrapKind, P};
 use wasmer_runtime::{memory::Memory, Ctx};
+use wasmi::{self, Error as InterpreterError, Trap, TrapKind, P};
 
 const ADDR_LEN_BYTES: usize = std::mem::size_of::<mantle_types::Address>();
 const ADDR_CHARS: usize = ADDR_LEN_BYTES * 2; // two hex digits per byte
@@ -605,66 +605,62 @@ impl<'a> Runtime<'a> {
 		Ok(ErrNo::Success as u16)
 	}
 
-	fn memory_get<O: Into<u32>, T: Copy>(&self, ctx: &mut Ctx, offset: O, count: usize) -> Result<&[T]> {
-        Ok(&*self.memory_get_mut(ctx, offset, count)?)
-    }
+	fn memory_get<O: Into<u32>, T: Copy>(
+		&self,
+		ctx: &mut Ctx,
+		offset: O,
+		count: usize,
+	) -> Result<&[T]> {
+		Ok(&*self.memory_get_mut(ctx, offset, count)?)
+	}
 
-	fn memory_get_mut<O: Into<u32>, T: Copy>(&self, ctx: &mut Ctx, ptr: O, count: usize) -> Result<&mut [T]> {
+	fn memory_get_mut<O: Into<u32>, T: Copy>(
+		&self,
+		ctx: &mut Ctx,
+		ptr: O,
+		count: usize,
+	) -> Result<&mut [T]> {
 		let offset = ptr.into() as usize;
 		let mut mem_get_bytes = &ctx.memory(0).view()[offset..(offset + count)];
 
-		let mem_slice = unsafe {
-			std::mem::transmute::<&[std::cell::Cell<u8>], &[u8]>(mem_get_bytes)
-		};
+		let mem_slice =
+			unsafe { std::mem::transmute::<&[std::cell::Cell<u8>], &[u8]>(mem_get_bytes) };
 
-        Ok(
-			unsafe {
-				core::slice::from_raw_parts_mut(mem_slice.as_ptr() as *mut T, count)
-       		}
-		) 
-
+		Ok(unsafe { core::slice::from_raw_parts_mut(mem_slice.as_ptr() as *mut T, count) })
 	}
 
-	fn memory_set<T: Copy, O: Into<P<T>>>(&self, ctx: &mut Ctx, ptr: O, value: &[T]) -> Result<P<T>> {
-		
+	fn memory_set<T: Copy, O: Into<P<T>>>(
+		&self,
+		ctx: &mut Ctx,
+		ptr: O,
+		value: &[u8],
+	) -> Result<P<T>> {
 		let ptr = ptr.into();
 		let offset = ptr.offset() as usize;
-        let nbytes = value.len() * std::mem::size_of::<T>();
-        
-		println!("At start of set, offset is {}", offset);
+		let nbytes = value.len();
 
-		unsafe {
-			let byte_buf: &[u8] = std::slice::from_raw_parts(
-					&value as *const _ as *const u8,
-					nbytes,
-				);
-
-			println!("Memory set given: {:?}", byte_buf);
-
-			ctx.memory(0).view()[offset..(offset + nbytes)]
-					.iter()
-					.zip(byte_buf.iter())
-					.for_each(|(cell, v)| cell.set(*v));
-		}
-
-		println!("At end of set, offset is {}", ptr.offset() + nbytes as u32);
+		ctx.memory(0).view()[offset..(offset + nbytes)]
+			.iter()
+			.zip(value.iter())
+			.for_each(|(cell, v)| cell.set(*v));
 
 		Ok(P {
-            offset: ptr.offset() + nbytes as u32,
-            ty: std::marker::PhantomData
-        })
-
+			offset: ptr.offset() + nbytes as u32,
+			ty: std::marker::PhantomData,
+		})
 	}
 
-	fn memory_set_value<T: Sized, O: Into<P<T>>>(&mut self, ctx: &mut Ctx, ptr: O, value: T) -> Result<()> {
-		
+	fn memory_set_value<T: Sized, O: Into<P<T>>>(
+		&mut self,
+		ctx: &mut Ctx,
+		ptr: O,
+		value: T,
+	) -> Result<()> {
 		let t_size = std::mem::size_of::<T>();
 		let offset = ptr.into().offset() as usize;
-		unsafe {	
-			let byte_buf: &[u8] = std::slice::from_raw_parts(
-				&value as *const _ as *const u8,
-				t_size,
-			);
+		unsafe {
+			let byte_buf: &[u8] =
+				std::slice::from_raw_parts(&value as *const _ as *const u8, t_size);
 			ctx.memory(0).view()[offset..(offset + t_size)]
 				.iter()
 				.zip(byte_buf.iter())
@@ -680,12 +676,7 @@ impl<'a> Runtime<'a> {
 		Ok(())
 	}
 
-	pub fn args_get(
-		&mut self,
-		ctx: &mut Ctx,
-		argv: P<P<u8>>,
-		argv_buf: P<u8>,
-	) -> Result<u16> {
+	pub fn args_get(&mut self, ctx: &mut Ctx, argv: P<P<u8>>, argv_buf: P<u8>) -> Result<u16> {
 		Ok(ErrNo::Success as u16)
 	}
 
@@ -695,20 +686,13 @@ impl<'a> Runtime<'a> {
 		argc: P<u32>,
 		_argv_buf_size: P<u32>,
 	) -> Result<u16> {
-
 		let memory = ctx.memory(0);
 		self.memory_set_value(ctx, argc, 0);
 
 		Ok(ErrNo::Success as u16)
 	}
 
-	pub fn fd_prestat_get(
-		&mut self, 
-		ctx: &mut Ctx,
-		fd: u32, 
-		buf: P<Prestat>
-	) -> Result<u16> {
-		
+	pub fn fd_prestat_get(&mut self, ctx: &mut Ctx, fd: u32, buf: P<Prestat>) -> Result<u16> {
 		let memory = ctx.memory(0);
 		let fd_val = Fd::try_from(fd).unwrap();
 		let path_str = bcfs!(self.bcfs.prestat(fd_val)).to_str().unwrap();
@@ -724,9 +708,10 @@ impl<'a> Runtime<'a> {
 					},
 				},
 			},
-		).unwrap();
+		)
+		.unwrap();
 		Ok(ErrNo::Success as u16)
-	} 
+	}
 
 	pub fn fd_prestat_dir_name(
 		&mut self,
@@ -735,13 +720,13 @@ impl<'a> Runtime<'a> {
 		path_ptr: P<u8>,
 		path_len: u32,
 	) -> Result<u16> {
-		
 		let memory = ctx.memory(0);
 		let fd_val = Fd::try_from(fd).unwrap();
 		let path_str = bcfs!(self.bcfs.prestat(fd_val)).to_str().unwrap();
-		
+
 		self.memory_set(ctx, path_ptr, path_str.as_bytes()).unwrap();
-		self.memory_set_value(ctx, path_len, path_str.len() as u8).unwrap();
+		self.memory_set_value(ctx, path_len, path_str.len() as u8)
+			.unwrap();
 		Ok(ErrNo::Success as u16)
 	}
 
@@ -751,27 +736,31 @@ impl<'a> Runtime<'a> {
 		environ: P<P<u8>>,
 		mut environ_buf: P<u8>,
 	) -> Result<u16> {
-		
 		let environs = self.memory_get_mut::<_, P<u8>>(ctx, environ, 3).unwrap();
-		
+
 		environs[0] = environ_buf;
-		environ_buf = self.memory_set(
-			ctx,
-			environ_buf,
-			format!("ADDRESS={:x}\0", self.context.address).as_bytes(),
-		).unwrap();
+		environ_buf = self
+			.memory_set(
+				ctx,
+				environ_buf,
+				format!("ADDRESS={:x}\0", self.context.address).as_bytes(),
+			)
+			.unwrap();
 		environs[1] = environ_buf;
-		environ_buf = self.memory_set(
-			ctx,
-			environ_buf,
-			format!("SENDER={:x}\0", self.context.sender).as_bytes(),
-		).unwrap();
+		environ_buf = self
+			.memory_set(
+				ctx,
+				environ_buf,
+				format!("SENDER={:x}\0", self.context.sender).as_bytes(),
+			)
+			.unwrap();
 		environs[2] = environ_buf;
 		self.memory_set(
 			ctx,
 			environ_buf,
 			format!("VALUE={}", self.context.value_str).as_bytes(),
-		).unwrap();
+		)
+		.unwrap();
 		Ok(ErrNo::Success as u16)
 	}
 
@@ -789,7 +778,8 @@ impl<'a> Runtime<'a> {
 				+ ADDR_CHARS + "\0ADDRESS=".len()
 				+ ADDR_CHARS + "\0VALUE=".len()
 				+ self.context.value_str.len()) as u32,
-		).unwrap();
+		)
+		.unwrap();
 		Ok(ErrNo::Success as u16)
 	}
 
@@ -802,7 +792,14 @@ impl<'a> Runtime<'a> {
 		nread: P<Size>,
 	) -> Result<u16> {
 		let fd_val = Fd::try_from(fd).unwrap();
-		self.do_read(ctx, fd_val, iovs, Size::try_from(iovs_len).unwrap(), None, nread)
+		self.do_read(
+			ctx,
+			fd_val,
+			iovs,
+			Size::try_from(iovs_len).unwrap(),
+			None,
+			nread,
+		)
 	}
 
 	pub fn fd_write(
@@ -814,47 +811,36 @@ impl<'a> Runtime<'a> {
 		nwritten: P<u32>,
 	) -> Result<u16> {
 		let fd_val = Fd::try_from(fd).unwrap();
-		self.do_write(ctx, fd_val, iovs, Size::try_from(iovs_len).unwrap(), None, nwritten)
+		self.do_write(
+			ctx,
+			fd_val,
+			iovs,
+			Size::try_from(iovs_len).unwrap(),
+			None,
+			nwritten,
+		)
 	}
 
-	pub fn fd_close(
-		&mut self, 
-		ctx: &mut Ctx,
-		fd: u32
-	) -> Result<u16> {
+	pub fn fd_close(&mut self, ctx: &mut Ctx, fd: u32) -> Result<u16> {
 		let fd_val = Fd::try_from(fd).unwrap();
 		bcfs!(self.bcfs.close(fd_val));
 		Ok(ErrNo::Success as u16)
 	}
 
-	pub fn fd_fdstat_get(
-		&mut self,
-		ctx: &mut Ctx,
-		fd: u32, 
-		buf: P<FdStat>
-	) -> Result<u16> {
+	pub fn fd_fdstat_get(&mut self, ctx: &mut Ctx, fd: u32, buf: P<FdStat>) -> Result<u16> {
 		let fd_val = Fd::try_from(fd).unwrap();
 		let stats = bcfs!(self.bcfs.fdstat(fd_val));
 		self.memory_set_value(ctx, buf, stats).unwrap();
 		Ok(ErrNo::Success as u16)
 	}
 
-	pub fn fd_filestat_get(
-		&mut self,
-		ctx: &mut Ctx, 
-		fd: u32, 
-		buf: P<FileStat>
-	) -> Result<u16> {
+	pub fn fd_filestat_get(&mut self, ctx: &mut Ctx, fd: u32, buf: P<FileStat>) -> Result<u16> {
 		let fd_val = Fd::try_from(fd).unwrap();
 		self.memory_set_value(ctx, buf, bcfs!(self.bcfs.filestat(fd_val)))?;
 		Ok(ErrNo::Success as u16)
 	}
 
-	pub fn proc_exit(
-		&mut self, 
-		ctx: &mut Ctx, 
-		rval: u32
-	) -> Result<u16> {
+	pub fn proc_exit(&mut self, ctx: &mut Ctx, rval: u32) -> Result<u16> {
 		self.should_revert = rval != 0;
 		Err(crate::runtime::Error::Return)
 	}
@@ -912,93 +898,74 @@ impl<'a> Runtime<'a> {
 		let path_ptr = path as *const std::path::Path;
 		std::mem::forget(path);
 		let path = unsafe { &*path_ptr }; // aliasing is safe as BCFS doesn't disturb linear memory
-		
+
 		let dir_fd_val = Fd::try_from(dir_fd).unwrap();
 		let prev_len = bcfs!(self.bcfs.unlink(dir_fd_val, path));
-		
+
 		self.ext
 			.inc_sstore_clears(prev_len as u64)
 			.map_err(|_| crate::runtime::Error::StorageUpdateError)?;
 		Ok(ErrNo::Success as u16)
 	}
-
 }
 
 pub mod imports {
 
 	use super::{Memory, Result, Runtime, P};
 	use std::ffi::c_void;
-	use wasmer_runtime::{func, Ctx};
 	use wasi_types::*;
+	use wasmer_runtime::{func, Ctx};
 
-	pub(crate) fn get_import_object(memory: Memory, raw_ptr: *mut c_void) -> wasmer_runtime::ImportObject {
-			let dtor = (|_: *mut c_void| {}) as fn(*mut c_void);
-			wasmer_runtime::imports! {
-				move || { (raw_ptr, dtor) },
-				"env" => {
-					"memory" => memory,
-				},
-				"wasi_unstable" => {
-					"args_get" => func!(args_get),
-					"args_sizes_get" => func!(args_sizes_get),
-					"fd_prestat_get" => func!(fd_prestat_get),
-					"fd_prestat_dir_name" => func!(fd_prestat_dir_name),
-					"environ_get" => func!(environ_get),
-					"environ_sizes_get" => func!(environ_sizes_get),
-					"fd_fdstat_get" => func!(fd_fdstat_get),
-					"fd_filestat_get" => func!(fd_filestat_get),
-					"fd_read" => func!(fd_read),
-					"fd_write" => func!(fd_write),
-					"fd_close" => func!(fd_close),
-					"proc_exit" => func!(proc_exit),
-					"path_open" => func!(path_open),
-					"path_unlink_file" => func!(path_unlink_file),
-				},
-			}
+	pub(crate) fn get_import_object(
+		memory: Memory,
+		raw_ptr: *mut c_void,
+	) -> wasmer_runtime::ImportObject {
+		let dtor = (|_: *mut c_void| {}) as fn(*mut c_void);
+		wasmer_runtime::imports! {
+			move || { (raw_ptr, dtor) },
+			"env" => {
+				"memory" => memory,
+			},
+			"wasi_unstable" => {
+				"args_get" => func!(args_get),
+				"args_sizes_get" => func!(args_sizes_get),
+				"fd_prestat_get" => func!(fd_prestat_get),
+				"fd_prestat_dir_name" => func!(fd_prestat_dir_name),
+				"environ_get" => func!(environ_get),
+				"environ_sizes_get" => func!(environ_sizes_get),
+				"fd_fdstat_get" => func!(fd_fdstat_get),
+				"fd_filestat_get" => func!(fd_filestat_get),
+				"fd_read" => func!(fd_read),
+				"fd_write" => func!(fd_write),
+				"fd_close" => func!(fd_close),
+				"proc_exit" => func!(proc_exit),
+				"path_open" => func!(path_open),
+				"path_unlink_file" => func!(path_unlink_file),
+			},
+		}
 	}
 
-	fn args_get( 
-		ctx: &mut Ctx,
-		argv: P<P<u8>>, 
-		argv_buf: P<u8>
-	) -> Result<u16> {
+	fn args_get(ctx: &mut Ctx, argv: P<P<u8>>, argv_buf: P<u8>) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.args_get(ctx, argv, argv_buf)
 	}
 
-	fn args_sizes_get( 
-		ctx: &mut Ctx,
-		argv: P<u32>, 
-		argv_buf_size: P<u32>
-	) -> Result<u16> {
+	fn args_sizes_get(ctx: &mut Ctx, argv: P<u32>, argv_buf_size: P<u32>) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.args_sizes_get(ctx, argv, argv_buf_size)
 	}
 
-	fn fd_prestat_get( 
-		ctx: &mut Ctx,
-		fd: u32, 
-		buf: P<Prestat>
-	) -> Result<u16> {
+	fn fd_prestat_get(ctx: &mut Ctx, fd: u32, buf: P<Prestat>) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.fd_prestat_get(ctx, fd, buf)
 	}
 
-	fn fd_prestat_dir_name( 
-		ctx: &mut Ctx,
-		fd: u32,
-		path_ptr: P<u8>,
-		path_len: u32,
-	) -> Result<u16> {
+	fn fd_prestat_dir_name(ctx: &mut Ctx, fd: u32, path_ptr: P<u8>, path_len: u32) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.fd_prestat_dir_name(ctx, fd, path_ptr, path_len)
 	}
 
-	fn environ_get(
-		ctx: &mut Ctx,
-		environ: P<P<u8>>,
-		mut environ_buf: P<u8>,
-	) -> Result<u16> {
+	fn environ_get(ctx: &mut Ctx, environ: P<P<u8>>, mut environ_buf: P<u8>) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.environ_get(ctx, environ, environ_buf)
 	}
@@ -1031,39 +998,25 @@ pub mod imports {
 		nwritten: P<u32>,
 	) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-		runtime.fd_write(ctx, fd, iovs, iovs_len, nwritten)		
+		runtime.fd_write(ctx, fd, iovs, iovs_len, nwritten)
 	}
 
-	fn fd_close( 
-		ctx: &mut Ctx,
-		fd: u32
-	) -> Result<u16> {
+	fn fd_close(ctx: &mut Ctx, fd: u32) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.fd_close(ctx, fd)
 	}
 
-	fn fd_fdstat_get(
-		ctx: &mut Ctx,
-		fd: u32,
-		buf: P<FdStat>
-	) -> Result<u16> {
+	fn fd_fdstat_get(ctx: &mut Ctx, fd: u32, buf: P<FdStat>) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.fd_fdstat_get(ctx, fd, buf)
 	}
 
-	pub fn fd_filestat_get(
-		ctx: &mut Ctx, 
-		fd: u32, 
-		buf: P<FileStat>
-	) -> Result<u16> {
+	pub fn fd_filestat_get(ctx: &mut Ctx, fd: u32, buf: P<FileStat>) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.fd_filestat_get(ctx, fd, buf)
 	}
 
-	fn proc_exit(
-		ctx: &mut Ctx,
-		rval: u32,
-	) -> Result<()> {
+	fn proc_exit(ctx: &mut Ctx, rval: u32) -> Result<()> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.proc_exit(ctx, rval);
 		Ok(())
@@ -1082,15 +1035,21 @@ pub mod imports {
 		p_fd: P<Fd>,
 	) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-		runtime.path_open(ctx, dir_fd, dir_flags, path, path_len, open_flags, rights_base, rights_inheriting, fd_flags, p_fd)
+		runtime.path_open(
+			ctx,
+			dir_fd,
+			dir_flags,
+			path,
+			path_len,
+			open_flags,
+			rights_base,
+			rights_inheriting,
+			fd_flags,
+			p_fd,
+		)
 	}
 
-	fn path_unlink_file(
-		ctx: &mut Ctx,
-		dir_fd: u32,
-		path: P<u8>,
-		path_len: u32,
-	) -> Result<u16> {
+	fn path_unlink_file(ctx: &mut Ctx, dir_fd: u32, path: P<u8>, path_len: u32) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.path_unlink_file(ctx, dir_fd, path, path_len)
 	}

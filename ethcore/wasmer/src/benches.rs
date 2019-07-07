@@ -123,6 +123,6 @@ fn bench_event(b: &mut Bencher) {
 
 	let mut runtime = wasm_runtime();
 	runtime.prepare(&params, &mut ext).unwrap();
-	
+
 	b.iter(|| runtime.exec(params.clone(), &mut ext));
 } */
