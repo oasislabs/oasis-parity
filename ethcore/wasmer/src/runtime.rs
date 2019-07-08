@@ -65,6 +65,8 @@ pub struct Runtime<'a> {
 	// unsafety is needed because runtime contains BCFS but is used by bcfs as PendingTransaction
 	pub bcfs: UnsafeCell<BCFS<mantle_types::Address, AccountMeta>>,
 	pub should_revert: bool,
+	// Needed for wasmer since only generic CallError is returned on panic/exit
+	pub should_persist: bool,
 	pub bytes_cache: RefCell<Vec<Arc<Vec<u8>>>>,
 }
 
@@ -400,6 +402,7 @@ impl<'a> Runtime<'a> {
 			output: Vec::new(),
 			err_output: Vec::new(),
 			should_revert: false,
+			should_persist: false,
 			bytes_cache: RefCell::new(Vec::new()),
 		}
 	}
@@ -633,15 +636,19 @@ impl<'a> Runtime<'a> {
 		&self,
 		ctx: &mut Ctx,
 		ptr: O,
-		value: &[u8],
+		value: &[T],
 	) -> Result<P<T>> {
 		let ptr = ptr.into();
 		let offset = ptr.offset() as usize;
 		let nbytes = value.len();
 
+		let byte_buf = unsafe {
+			std::slice::from_raw_parts(value.as_ptr() as *const u8, nbytes)
+		};
+
 		ctx.memory(0).view()[offset..(offset + nbytes)]
 			.iter()
-			.zip(value.iter())
+			.zip(byte_buf.iter())
 			.for_each(|(cell, v)| cell.set(*v));
 
 		Ok(P {
@@ -841,7 +848,7 @@ impl<'a> Runtime<'a> {
 	}
 
 	pub fn proc_exit(&mut self, ctx: &mut Ctx, rval: u32) -> Result<u16> {
-		self.should_revert = rval != 0;
+		self.should_persist = (rval == 0);
 		Err(crate::runtime::Error::Return)
 	}
 

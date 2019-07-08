@@ -312,17 +312,13 @@ impl MemoryInstance {
             .checked_region(&mut buffer, ptr.offset as usize, nbytes)?
             .range();
 
-        println!("At start of set, offset is {}", ptr.offset);
-
         if ptr.offset < self.lowest_used.get() {
             self.lowest_used.set(ptr.offset);
         }
-        
+
         buffer[range].copy_from_slice(unsafe {
             std::slice::from_raw_parts(value.as_ptr() as *const u8, nbytes)
         });
-
-        println!("At end of set, offset is {}", ptr.offset + nbytes as u32);
 
         Ok(P {
             offset: ptr.offset + nbytes as u32,

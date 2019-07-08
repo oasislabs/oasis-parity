@@ -166,9 +166,10 @@ impl vm::Vm for WasmRuntime {
 				match &invoke_result {
 					Ok(_) => (),
 					Err(wasmer_runtime::error::CallError::Runtime(ref trap)) => {
-						// TODO: handle execution outcomes. We assume it was a return for now
-						println!("Trapped Error is: {:?}", trap);
-						runtime.should_revert = true;
+						// This flag only set from a proc exit, if not set, assume panic and we need to revert
+						if !runtime.should_persist {
+							runtime.should_revert = true;
+						}
 						execution_outcome = ExecutionOutcome::Return;
 					}
 					_ => (),
