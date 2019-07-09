@@ -31,12 +31,12 @@ extern crate parity_wasm;
 extern crate pwasm_utils as wasm_utils;
 extern crate vm;
 extern crate wasi_types;
-extern crate wasm_macros;
 extern crate wasmer_clif_backend;
 extern crate wasmer_runtime_core;
 
 mod parser;
 mod runtime;
+mod wasi;
 
 #[cfg(test)]
 mod tests;

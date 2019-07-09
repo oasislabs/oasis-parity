@@ -15,8 +15,6 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 use std::{
 	cell::{RefCell, UnsafeCell},
-	convert::TryFrom,
-	convert::TryInto,
 	sync::Arc,
 };
 
@@ -35,18 +33,6 @@ use wasmer_runtime_core::memory::ptr::{WasmPtr, Array, Item};
 
 const ADDR_LEN_BYTES: usize = std::mem::size_of::<mantle_types::Address>();
 const ADDR_CHARS: usize = ADDR_LEN_BYTES * 2; // two hex digits per byte
-
-macro_rules! bcfs {
-	( $self:ident . bcfs . $fn:ident ( $($args:expr),+ )  ) => {
-		// Unsafety is required because BCFS is mutably borrowed with `self`
-		// but also takes a `PendingTransaction` which also happens to be `self.
-		// This is okay because BCFS doesn't modify itself through `PendingTransaction`.
-		match unsafe { &mut *$self.bcfs.get() }.$fn($self, $( $args ),+ ) {
-			Ok(result) => result,
-			Err(errno) => return Ok(errno as u16)
-		}
-	}
-}
 
 pub struct RuntimeContext {
 	pub address: Address,
@@ -481,404 +467,6 @@ impl<'a> Runtime<'a> {
 		Ok(self.gas_limit - self.gas_counter)
 	}
 
-	fn do_read(
-		&mut self,
-		ctx: &mut Ctx,
-		fd: Fd,
-		iovs: WasmPtr<IoVec, Array>,
-		iovs_len: Size,
-		offset: Option<FileSize>,
-		nread: WasmPtr<Size, Array>,
-	) -> Result<u16> {
-		let iovs: &[IoVec] = self.memory_get(ctx, iovs.offset(), iovs_len as usize)?;
-		let mut ioslices = iovs
-			.iter()
-			.map(|iov| {
-				let mem_slice = self.memory_get_mut::<u8>(ctx, iov.buf, iov.len as usize)?;
-				let p = mem_slice.as_mut_ptr();
-				std::mem::forget(mem_slice);
-				// Launder the slice to get around borrow of `self` by `iovs` so that
-				// it can be used by `bcfs` via `PendingTransaction`.
-				Ok(std::io::IoSliceMut::new(unsafe {
-					std::slice::from_raw_parts_mut(p, iov.len as usize)
-				}))
-			})
-			.collect::<std::result::Result<Vec<_>, crate::runtime::Error>>()?;
-
-		let nbytes = match offset {
-			Some(offset) => bcfs!(self.bcfs.pread_vectored(fd, &mut ioslices, offset)),
-			None => bcfs!(self.bcfs.read_vectored(fd, &mut ioslices)),
-		};
-
-		// Charge sload gas, scaled by number of bytes.
-		let sload_gas = U256::from(self.schedule().sload_gas);
-		let bytes_len = U256::from(nbytes);
-
-		// gas <- ceiling(sload_gas * bytes_len / 32)
-		// Cannot overflow as gas and len are converted from u64s.
-		let mut gas = sload_gas * bytes_len / U256::from(32);
-		if sload_gas * bytes_len % U256::from(32) != U256::from(0) {
-			gas = gas + U256::from(1);
-		}
-
-		// Charge gas after checking for u64 overflow.
-		if gas > U256::from(std::u64::MAX) {
-			return Err(crate::runtime::Error::GasLimit);
-		} else {
-			self.adjusted_charge(|_| Some(gas.as_u64()))?;
-		}
-
-		self.memory_set_value(
-			ctx,
-			nread.offset(),
-			nbytes,
-			/* match nbytes.try_into() {
-				Ok(nbytes) => nbytes,
-				Err(_) => return Ok(ErrNo::MFile as u16),
-			}, */
-		)?;
-
-		Ok(ErrNo::Success as u16)
-	}
-
-	fn do_write(
-		&mut self,
-		ctx: &mut Ctx,
-		fd: Fd,
-		iovs: WasmPtr<IoVec>,
-		iovs_len: Size,
-		offset: Option<FileSize>,
-		nwritten: WasmPtr<u32>,
-	) -> Result<u16> {
-		// TODO: refunds
-		let iovs: &[IoVec] = self.memory_get_mut(ctx, iovs.offset(), iovs_len as usize).unwrap();
-		let ioslices = iovs
-			.iter()
-			.map(|iov| {
-				let mem_slice = self.memory_get::<u8>(ctx, iov.buf, iov.len as usize).unwrap();
-				let p = mem_slice.as_ptr();
-				std::mem::forget(mem_slice);
-				// Launder the slice to get around borrow of `self` by `iovs` so that
-				// it can be used by `bcfs` via `PendingTransaction`.
-				Ok(std::io::IoSlice::new(unsafe {
-					std::slice::from_raw_parts(p, iov.len as usize)
-				}))
-			})
-			.collect::<std::result::Result<Vec<_>, crate::runtime::Error>>()?;
-
-		let nbytes = match offset {
-			Some(offset) => bcfs!(self.bcfs.pwrite_vectored(fd, &ioslices, offset)),
-			None => bcfs!(self.bcfs.write_vectored(fd, &ioslices)),
-		};
-		self.storage_bytes_charge(nbytes as u64, true /* reset */)?;
-		self.storage_bytes_charge(nbytes as u64, false /* reset */)?;
-		self.memory_set_value(
-			ctx,
-			nwritten.offset(),
-			nbytes,
-			/* match nbytes.try_into() {
-				Ok(nbytes) => nbytes,
-				Err(_) => return Ok(ErrNo::MFile as u16),
-			}, */
-		)?;
-		Ok(ErrNo::Success as u16)
-	}
-
-	fn memory_get<T: Copy>(
-		&self,
-		ctx: &mut Ctx,
-		offset: u32,
-		count: usize,
-	) -> Result<&[T]> {
-		Ok(&*self.memory_get_mut(ctx, offset, count)?)
-	}
-
-	fn memory_get_mut<T: Copy>(
-		&self,
-		ctx: &mut Ctx,
-		ptr: u32,
-		count: usize,
-	) -> Result<&mut [T]> {
-		let offset = ptr as usize;
-		let mut mem_get_bytes = &ctx.memory(0).view()[offset..(offset + count)];
-
-		let mem_slice =
-			unsafe { std::mem::transmute::<&[std::cell::Cell<u8>], &[u8]>(mem_get_bytes) };
-
-		Ok(unsafe { core::slice::from_raw_parts_mut(mem_slice.as_ptr() as *mut T, count) })
-	}
-
-	fn memory_set<T: Copy>(
-		&self,
-		ctx: &mut Ctx,
-		ptr: u32,
-		value: &[T],
-	) -> Result<WasmPtr<T>> {
-		let offset = ptr as usize;
-		let nbytes = value.len();
-
-		let byte_buf = unsafe {
-			std::slice::from_raw_parts(value.as_ptr() as *const u8, nbytes)
-		};
-
-		ctx.memory(0).view()[offset..(offset + nbytes)]
-			.iter()
-			.zip(byte_buf.iter())
-			.for_each(|(cell, v)| cell.set(*v));
-
-		Ok(WasmPtr::new(ptr + nbytes as u32))
-	}
-
-	fn memory_set_value<T: Copy>(
-		&mut self,
-		ctx: &mut Ctx,
-		ptr: u32,
-		value: T,
-	) -> Result<()> {
-		let t_size = std::mem::size_of::<T>();
-		let offset = ptr as usize;
-		unsafe {
-			let byte_buf: &[u8] =
-				std::slice::from_raw_parts(&value as *const _ as *const u8, t_size);
-			ctx.memory(0).view()[offset..(offset + t_size)]
-				.iter()
-				.zip(byte_buf.iter())
-				.for_each(|(cell, v)| cell.set(*v));
-		}
-		Ok(())
-	}
-
-	pub fn args_get(&mut self, ctx: &mut Ctx, argv: WasmPtr<WasmPtr<u8, Array>, Array>, argv_buf: WasmPtr<u8, Array>) -> Result<u16> {
-		Ok(ErrNo::Success as u16)
-	}
-
-	pub fn args_sizes_get(
-		&mut self,
-		ctx: &mut Ctx,
-		argc: WasmPtr<u32>,
-		_argv_buf_size: WasmPtr<u32>,
-	) -> Result<u16> {
-		let memory = ctx.memory(0);
-		self.memory_set_value(ctx, argc.offset(), 0);
-
-		Ok(ErrNo::Success as u16)
-	}
-
-	pub fn fd_prestat_get(&mut self, ctx: &mut Ctx, fd: u32, buf: WasmPtr<Prestat>) -> Result<u16> {
-		let memory = ctx.memory(0);
-		let fd_val = Fd::try_from(fd).unwrap();
-		let path_str = bcfs!(self.bcfs.prestat(fd_val)).to_str().unwrap();
-
-		self.memory_set_value(
-			ctx,
-			buf.offset(),
-			Prestat {
-				resource_type: PreopenType::Dir {
-					name_len: match path_str.len().try_into() {
-						Ok(name_len) => name_len,
-						Err(_) => return Ok(ErrNo::NameTooLong as u16),
-					},
-				},
-			},
-		)
-		.unwrap();
-		Ok(ErrNo::Success as u16)
-	}
-
-	pub fn fd_prestat_dir_name(
-		&mut self,
-		ctx: &mut Ctx,
-		fd: u32,
-		path_ptr: WasmPtr<u8>,
-		path_len: u32,
-	) -> Result<u16> {
-		let memory = ctx.memory(0);
-		let fd_val = Fd::try_from(fd).unwrap();
-		let path_str = bcfs!(self.bcfs.prestat(fd_val)).to_str().unwrap();
-
-		self.memory_set(ctx, path_ptr.offset(), path_str.as_bytes()).unwrap();
-		self.memory_set_value(ctx, path_len, path_str.len() as u8)
-			.unwrap();
-		Ok(ErrNo::Success as u16)
-	}
-
-	pub fn environ_get(
-		&mut self,
-		ctx: &mut Ctx,
-		environ: WasmPtr<WasmPtr<u8>>,
-		mut environ_buf: WasmPtr<u8>,
-	) -> Result<u16> {
-		let environs = self.memory_get_mut::<WasmPtr<u8>>(ctx, environ.offset(), 3).unwrap();
-
-		environs[0] = environ_buf;
-		environ_buf = self
-			.memory_set(
-				ctx,
-				environ_buf.offset(),
-				format!("ADDRESS={:x}\0", self.context.address).as_bytes(),
-			)
-			.unwrap();
-		environs[1] = environ_buf;
-		environ_buf = self
-			.memory_set(
-				ctx,
-				environ_buf.offset(),
-				format!("SENDER={:x}\0", self.context.sender).as_bytes(),
-			)
-			.unwrap();
-		environs[2] = environ_buf;
-		self.memory_set(
-			ctx,
-			environ_buf.offset(),
-			format!("VALUE={}", self.context.value_str).as_bytes(),
-		)
-		.unwrap();
-		Ok(ErrNo::Success as u16)
-	}
-
-	pub fn environ_sizes_get(
-		&mut self,
-		ctx: &mut Ctx,
-		environ_count: WasmPtr<u32>,
-		environ_buf_size: WasmPtr<u32>,
-	) -> Result<u16> {
-		self.memory_set_value(ctx, environ_count.offset(), 3u32)?; // sender, address, value
-		self.memory_set_value(
-			ctx,
-			environ_buf_size.offset(),
-			("SENDER=".len()
-				+ ADDR_CHARS + "\0ADDRESS=".len()
-				+ ADDR_CHARS + "\0VALUE=".len()
-				+ self.context.value_str.len()) as u32,
-		)
-		.unwrap();
-		Ok(ErrNo::Success as u16)
-	}
-
-	pub fn fd_read(
-		&mut self,
-		ctx: &mut Ctx,
-		fd: u32,
-		iovs: WasmPtr<IoVec, Array>,
-		iovs_len: u32,
-		nread: WasmPtr<Size, Array>,
-	) -> Result<u16> {
-		let fd_val = Fd::try_from(fd).unwrap();
-		self.do_read(
-			ctx,
-			fd_val,
-			iovs,
-			Size::try_from(iovs_len).unwrap(),
-			None,
-			nread,
-		)
-	}
-
-	pub fn fd_write(
-		&mut self,
-		ctx: &mut Ctx,
-		fd: u32,
-		iovs: WasmPtr<IoVec>,
-		iovs_len: u32,
-		nwritten: WasmPtr<u32>,
-	) -> Result<u16> {
-		let fd_val = Fd::try_from(fd).unwrap();
-		self.do_write(
-			ctx,
-			fd_val,
-			iovs,
-			Size::try_from(iovs_len).unwrap(),
-			None,
-			nwritten,
-		)
-	}
-
-	pub fn fd_close(&mut self, ctx: &mut Ctx, fd: u32) -> Result<u16> {
-		let fd_val = Fd::try_from(fd).unwrap();
-		bcfs!(self.bcfs.close(fd_val));
-		Ok(ErrNo::Success as u16)
-	}
-
-	pub fn fd_fdstat_get(&mut self, ctx: &mut Ctx, fd: u32, buf: WasmPtr<FdStat>) -> Result<u16> {
-		let fd_val = Fd::try_from(fd).unwrap();
-		let stats = bcfs!(self.bcfs.fdstat(fd_val));
-		self.memory_set_value(ctx, buf.offset(), stats).unwrap();
-		Ok(ErrNo::Success as u16)
-	}
-
-	pub fn fd_filestat_get(&mut self, ctx: &mut Ctx, fd: u32, buf: WasmPtr<FileStat>) -> Result<u16> {
-		let fd_val = Fd::try_from(fd).unwrap();
-		self.memory_set_value(ctx, buf.offset(), bcfs!(self.bcfs.filestat(fd_val)))?;
-		Ok(ErrNo::Success as u16)
-	}
-
-	pub fn proc_exit(&mut self, ctx: &mut Ctx, rval: u32) -> Result<u16> {
-		self.should_persist = (rval == 0);
-		Err(crate::runtime::Error::Return)
-	}
-
-	pub fn path_open(
-		&mut self,
-		ctx: &mut Ctx,
-		dir_fd: u32,
-		_dir_flags: u32,
-		path: WasmPtr<u8>,
-		path_len: u32,
-		open_flags: u16,
-		_rights_base: u64,
-		_rights_inheriting: u64,
-		fd_flags: u16,
-		p_fd: WasmPtr<Fd>,
-	) -> Result<u16> {
-		let path = std::path::Path::new(
-			// NB: immutable borrow of `self`
-			match std::str::from_utf8(self.memory_get(ctx, path.offset(), path_len as usize)?) {
-				Ok(path_str) => path_str,
-				Err(_) => return Ok(ErrNo::Inval as u16),
-			},
-		);
-		let path_ptr = path as *const std::path::Path;
-		std::mem::forget(path);
-		let path = unsafe { &*path_ptr }; // aliasing is safe as BCFS doesn't disturb linear memory
-
-		// Convert from primatives to wasi_types
-		let dir_fd_val = Fd::try_from(dir_fd).unwrap();
-		let open_flags_val = OpenFlags::from_bits(open_flags).unwrap();
-		let fd_flags_val = FdFlags::from_bits(fd_flags).unwrap();
-
-		let fd = bcfs!(self // NB: mutable borrow of `self as PendingTransaction``
-			.bcfs
-			.open(dir_fd_val, path, open_flags_val, fd_flags_val));
-		self.memory_set_value(ctx, p_fd.offset(), fd)?;
-		Ok(ErrNo::Success as u16)
-	}
-
-	pub fn path_unlink_file(
-		&mut self,
-		ctx: &mut Ctx,
-		dir_fd: u32,
-		path: WasmPtr<u8, Array>,
-		path_len: u32,
-	) -> Result<u16> {
-		let path = std::path::Path::new(
-			// NB: immutable borrow of `self`
-			match std::str::from_utf8(self.memory_get(ctx, path.offset(), path_len as usize)?) {
-				Ok(path_str) => path_str,
-				Err(_) => return Ok(ErrNo::Inval as u16),
-			},
-		);
-		let path_ptr = path as *const std::path::Path;
-		std::mem::forget(path);
-		let path = unsafe { &*path_ptr }; // aliasing is safe as BCFS doesn't disturb linear memory
-
-		let dir_fd_val = Fd::try_from(dir_fd).unwrap();
-		let prev_len = bcfs!(self.bcfs.unlink(dir_fd_val, path));
-
-		self.ext
-			.inc_sstore_clears(prev_len as u64)
-			.map_err(|_| crate::runtime::Error::StorageUpdateError)?;
-		Ok(ErrNo::Success as u16)
-	}
 }
 
 pub mod imports {
@@ -903,18 +491,46 @@ pub mod imports {
 			"wasi_unstable" => {
 				"args_get" => func!(args_get),
 				"args_sizes_get" => func!(args_sizes_get),
-				"fd_prestat_get" => func!(fd_prestat_get),
-				"fd_prestat_dir_name" => func!(fd_prestat_dir_name),
+				"clock_res_get" => func!(clock_res_get),
+				"clock_time_get" => func!(clock_time_get),
 				"environ_get" => func!(environ_get),
 				"environ_sizes_get" => func!(environ_sizes_get),
-				"fd_fdstat_get" => func!(fd_fdstat_get),
-				"fd_filestat_get" => func!(fd_filestat_get),
-				"fd_read" => func!(fd_read),
-				"fd_write" => func!(fd_write),
+				"fd_advise" => func!(fd_advise),
+				"fd_allocate" => func!(fd_allocate),
 				"fd_close" => func!(fd_close),
-				"proc_exit" => func!(proc_exit),
+				"fd_datasync" => func!(fd_datasync),
+				"fd_fdstat_get" => func!(fd_fdstat_get),
+				"fd_fdstat_set_flags" => func!(fd_fdstat_set_flags),
+				"fd_fdstat_set_rights" => func!(fd_fdstat_set_rights),
+				"fd_filestat_get" => func!(fd_filestat_get),
+				"fd_filestat_set_size" => func!(fd_filestat_set_size),
+				"fd_filestat_set_times" => func!(fd_filestat_set_times),
+				"fd_pread" => func!(fd_pread),
+				"fd_prestat_dir_name" => func!(fd_prestat_dir_name),
+				"fd_prestat_get" => func!(fd_prestat_get),
+				"fd_pwrite" => func!(fd_pwrite),
+				"fd_read" => func!(fd_read),
+				"fd_readdir" => func!(fd_readdir),
+				"fd_renumber" => func!(fd_renumber),
+				"fd_seek" => func!(fd_seek),
+				"fd_sync" => func!(fd_sync),
+				"fd_tell" => func!(fd_tell),
+				"fd_write" => func!(fd_write),
+				"path_create_directory" => func!(path_create_directory),
+				"path_filestat_get" => func!(path_filestat_get),
+				"path_filestat_set_times" => func!(path_filestat_set_times),
+				"path_link" => func!(path_link),
 				"path_open" => func!(path_open),
+				"path_readlink" => func!(path_readlink),
+				"path_remove_directory" => func!(path_remove_directory),
+				"path_rename" => func!(path_rename),
 				"path_unlink_file" => func!(path_unlink_file),
+				"path_symlink" => func!(path_symlink),
+				"poll_oneoff" => func!(poll_oneoff),
+				"proc_exit" => func!(proc_exit),
+				"proc_raise" => func!(proc_raise),
+				"random_get" => func!(random_get),
+				"sched_yield" => func!(sched_yield),
 			},
 		}
 	}
@@ -929,14 +545,14 @@ pub mod imports {
 		runtime.args_sizes_get(ctx, argv, argv_buf_size)
 	}
 
-	fn fd_prestat_get(ctx: &mut Ctx, fd: u32, buf: WasmPtr<Prestat>) -> Result<u16> {
+	fn clock_res_get(ctx: &mut Ctx, clock_id: u8, resolution: WasmPtr<Timestamp>) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-		runtime.fd_prestat_get(ctx, fd, buf)
+		runtime.clock_res_get(ctx, clock_id, resolution)
 	}
 
-	fn fd_prestat_dir_name(ctx: &mut Ctx, fd: u32, path_ptr: WasmPtr<u8>, path_len: u32) -> Result<u16> {
+	fn clock_time_get(ctx: &mut Ctx, clock_id: u8, precision: u64, time: WasmPtr<Timestamp>) -> crate::Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-		runtime.fd_prestat_dir_name(ctx, fd, path_ptr, path_len)
+		runtime.clock_time_get(ctx, clock_id, precision, time)
 	}
 
 	fn environ_get(ctx: &mut Ctx, environ: WasmPtr<WasmPtr<u8>>, mut environ_buf: WasmPtr<u8>) -> Result<u16> {
@@ -953,6 +569,112 @@ pub mod imports {
 		runtime.environ_sizes_get(ctx, environ_count, environ_buf_size)
 	}
 
+	fn fd_advise(
+		ctx: &mut Ctx,
+		fd: u32,
+		offset: u64,
+		len: u64,
+		advice: u8,
+	) -> crate::Result<u16> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.fd_advise(fd, offset, len, advice)
+	}
+
+	fn fd_allocate(
+		ctx: &mut Ctx,
+		fd: u32,
+		offset: u64,
+		len: u64,
+	) -> crate::Result<u16> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.fd_allocate(fd, offset, len)
+	}
+
+	fn fd_close(ctx: &mut Ctx, fd: u32) -> Result<u16> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.fd_close(ctx, fd)
+	}
+
+	fn fd_datasync(ctx: &mut Ctx, fd: u32) -> crate::Result<u16> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.fd_datasync(fd)
+	}
+
+	fn fd_fdstat_get(ctx: &mut Ctx, fd: u32, buf: WasmPtr<FdStat>) -> Result<u16> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.fd_fdstat_get(ctx, fd, buf)
+	}
+
+	fn fd_fdstat_set_flags(ctx: &mut Ctx, fd: u32, flags: u16) -> crate::Result<u16> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.fd_fdstat_set_flags(fd, flags)
+	}
+
+	fn fd_fdstat_set_rights(
+		ctx: &mut Ctx,
+		fd: u32,
+		rights_base: u64,
+		rights_inheriting: u64,
+	) -> crate::Result<u16> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.fd_fdstat_set_rights(fd, rights_base, rights_inheriting)
+	}
+
+	fn fd_filestat_get(ctx: &mut Ctx, fd: u32, buf: WasmPtr<FileStat>) -> Result<u16> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.fd_filestat_get(ctx, fd, buf)
+	}
+
+	fn fd_filestat_set_size(ctx: &mut Ctx, fd: u32, size: u64) -> crate::Result<u16> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.fd_filestat_set_size(fd, size)
+	}
+
+	fn fd_filestat_set_times(
+		ctx: &mut Ctx,
+		fd: u32,
+		atime: u64,
+		mtime: u64,
+		flags: u16,
+	) -> crate::Result<u16> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.fd_filestat_set_times(fd, atime, mtime, flags)
+	}
+
+	fn fd_pread(
+		ctx: &mut Ctx,
+		fd: u32,
+		iovs: WasmPtr<IoVec, Array>,
+		iovs_len: u32,
+		offset: u64,
+		nread: WasmPtr<Size, Array>,
+	) -> crate::Result<u16> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.fd_pread(ctx, fd, iovs, iovs_len, offset, nread)
+	}
+
+	fn fd_prestat_get(ctx: &mut Ctx, fd: u32, buf: WasmPtr<Prestat>) -> Result<u16> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.fd_prestat_get(ctx, fd, buf)
+	}
+
+	fn fd_prestat_dir_name(ctx: &mut Ctx, fd: u32, path_ptr: WasmPtr<u8>, path_len: u32) -> Result<u16> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.fd_prestat_dir_name(ctx, fd, path_ptr, path_len)
+	}
+
+	fn fd_pwrite(
+		ctx: &mut Ctx,
+		fd: u32,
+		iovs: WasmPtr<IoVec>,
+		iovs_len: u32,
+		offset: u64,
+		nwritten: WasmPtr<Size>,
+	) -> crate::Result<u16> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.fd_pwrite(ctx, fd, iovs, iovs_len, offset, nwritten)
+	}
+
 	fn fd_read(
 		ctx: &mut Ctx,
 		fd: u32,
@@ -962,6 +684,48 @@ pub mod imports {
 	) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.fd_read(ctx, fd, iovs, iovs_len, nread)
+	}
+
+	fn fd_readdir(
+		ctx: &mut Ctx,
+		fd: u32,
+		buf: WasmPtr<u8>,
+		buf_len: u32,
+		dircookie: u64,
+		buf_used: WasmPtr<u32>,
+	) -> crate::Result<u16> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.fd_readdir(fd, buf, buf_len, dircookie, buf_used)
+	}
+
+	fn fd_renumber(
+		ctx: &mut Ctx,
+		to: u32,
+		from: u32
+	) -> crate::Result<u16> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.fd_renumber(to, from)
+	}
+
+	fn fd_seek(
+		ctx: &mut Ctx,
+		fd: u32,
+		offset: i64,
+		whence: u8,
+		new_offset: WasmPtr<FileSize>,
+	) -> crate::Result<u16> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.fd_seek(ctx, fd, offset, whence, new_offset)
+	}
+	
+	fn fd_sync(ctx: &mut Ctx, fd: u32) -> crate::Result<u16> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.fd_sync(fd)
+	}
+
+	fn fd_tell(ctx: &mut Ctx, fd: u32, offset: WasmPtr<FileSize>) -> crate::Result<u16> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.fd_tell(ctx, fd, offset)
 	}
 
 	fn fd_write(
@@ -975,25 +739,54 @@ pub mod imports {
 		runtime.fd_write(ctx, fd, iovs, iovs_len, nwritten)
 	}
 
-	fn fd_close(ctx: &mut Ctx, fd: u32) -> Result<u16> {
+	fn path_create_directory(
+		ctx: &mut Ctx, 
+		fd: u32,
+		path: WasmPtr<u8>,
+		path_len: u32,
+	) -> crate::Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-		runtime.fd_close(ctx, fd)
+		runtime.path_create_directory(fd, path, path_len)
 	}
 
-	fn fd_fdstat_get(ctx: &mut Ctx, fd: u32, buf: WasmPtr<FdStat>) -> Result<u16> {
+	fn path_filestat_get(
+		ctx: &mut Ctx,
+		fd: u32,
+		lookup_flags: u32,
+		path: WasmPtr<u8>,
+		path_len: u32,
+		filestat_buf: WasmPtr<FileStat>,
+	) -> crate::Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-		runtime.fd_fdstat_get(ctx, fd, buf)
+		runtime.path_filestat_get(fd, lookup_flags, path, path_len, filestat_buf)
 	}
 
-	pub fn fd_filestat_get(ctx: &mut Ctx, fd: u32, buf: WasmPtr<FileStat>) -> Result<u16> {
+	pub fn path_filestat_set_times(
+		ctx: &mut Ctx,
+		fd: u32,
+		lookup_flags: u32,
+		path: WasmPtr<u8>,
+		path_len: u32,
+		atime: u64,
+		mtime: u64,
+		fstflags: u16,
+	) -> crate::Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-		runtime.fd_filestat_get(ctx, fd, buf)
+		runtime.path_filestat_set_times(fd, lookup_flags, path, path_len, atime, mtime, fstflags)
 	}
 
-	fn proc_exit(ctx: &mut Ctx, rval: u32) -> Result<()> {
+	pub fn path_link(
+		ctx: &mut Ctx,
+		old_fd: u32,
+		old_lookup_flags: u32,
+		old_path: WasmPtr<u8>,
+		old_path_len: u32,
+		new_fd: u32,
+		new_path: WasmPtr<u8>,
+		new_path_len: u32,
+	) -> crate::Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-		runtime.proc_exit(ctx, rval);
-		Ok(())
+		runtime.path_link(old_fd, old_lookup_flags, old_path, old_path_len, new_fd, new_path, new_path_len)
 	}
 
 	fn path_open(
@@ -1023,9 +816,83 @@ pub mod imports {
 		)
 	}
 
+	fn path_readlink(
+		ctx: &mut Ctx,
+		path: WasmPtr<u8>,
+		path_len: u32,
+		buf: WasmPtr<u8>,
+		buf_len: u32,
+		buf_used: WasmPtr<u32>,
+	) -> crate::Result<u16> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.path_readlink(path, path_len, buf, buf_len, buf_used)
+	}
+
+	fn path_remove_directory(
+		ctx: &mut Ctx,
+		fd: u32,
+		path: WasmPtr<u8>,
+		path_len: u32,
+	) -> crate::Result<u16> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.path_remove_directory(fd, path, path_len)
+	}
+
+	fn path_rename(
+		ctx: &mut Ctx,
+		old_fd: u32,
+		old_lookup_flags: u32,
+		old_path: WasmPtr<u8>,
+		old_path_len: u32,
+		new_fd: u32,
+		new_path: WasmPtr<u8>,
+		new_path_len: u32,
+	) -> crate::Result<u16> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.path_rename(old_fd, old_lookup_flags, old_path, old_path_len, new_fd, new_path, new_path_len)
+	}
+
+	fn path_symlink(
+		ctx: &mut Ctx,
+		from_path: WasmPtr<u8>,
+		from_path_len: u32,
+		rel_fd: u32,
+		to_path: WasmPtr<u8>,
+		to_path_len: u32,
+	) -> crate::Result<u16> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.path_symlink(from_path, from_path_len, rel_fd, to_path, to_path_len)
+	}
+
 	fn path_unlink_file(ctx: &mut Ctx, dir_fd: u32, path: WasmPtr<u8, Array>, path_len: u32) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.path_unlink_file(ctx, dir_fd, path, path_len)
+	}
+
+	fn poll_oneoff(ctx: &mut Ctx, ptr_in: WasmPtr<u32>, ptr_out: WasmPtr<u32>, n_subs: u32) -> crate::Result<u16> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.poll_oneoff(ptr_in, ptr_out, n_subs)
+	}
+
+	fn proc_exit(ctx: &mut Ctx, rval: u32) -> Result<()> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.proc_exit(ctx, rval);
+		Ok(())
+	}
+
+	fn proc_raise(ctx: &mut Ctx, sig: u8) -> crate::Result<u16> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.proc_raise(sig)
+	}
+
+	fn random_get(ctx: &mut Ctx, buf: WasmPtr<u8>, buf_len: u32) -> crate::Result<u16> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.random_get(buf, buf_len)
+	}
+
+	fn sched_yield(ctx: &mut Ctx) -> crate::Result<u16> {
+		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
+		runtime.sched_yield()
 	}
 
 }
