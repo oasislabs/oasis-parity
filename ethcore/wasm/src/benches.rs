@@ -31,33 +31,33 @@ fn wasm_interpreter() -> WasmInterpreter {
 
 /// Do everything but the contract call itself, used for testing microbenchmarks
 fn prepare_module(params: ActionParams, ext: &mut vm::Ext) -> (Runtime, wasmi::ModuleRef) {
+	let is_create = ext.is_create();
 
-    let is_create = ext.is_create();
-
-    let (mut module, data) = parser::payload(
-        &params,
-        ext.schedule().wasm(),
-        if is_create {
-            Some(subst_main_call)
-        } else {
-            None
-        },
-    ).unwrap();
+	let (mut module, data) = parser::payload(
+		&params,
+		ext.schedule().wasm(),
+		if is_create {
+			Some(subst_main_call)
+		} else {
+			None
+		},
+	)
+	.unwrap();
 
 	let loaded_module = wasmi::Module::from_parity_wasm_module(module)
 		.map_err(Error::Interpreter)
 		.unwrap();
 
 	let instantiation_resolver = env::ImportResolver::with_limit(<u32>::max_value() - 1);
-    
-    let module_instance = wasmi::ModuleInstance::new(
-        &loaded_module,
-        &wasmi::ImportsBuilder::new()
-            .with_resolver("env", &instantiation_resolver)
-            .with_resolver("wasi_unstable", &instantiation_resolver),
-    )
-    .map_err(Error::Interpreter)
-    .unwrap();
+
+	let module_instance = wasmi::ModuleInstance::new(
+		&loaded_module,
+		&wasmi::ImportsBuilder::new()
+			.with_resolver("env", &instantiation_resolver)
+			.with_resolver("wasi_unstable", &instantiation_resolver),
+	)
+	.map_err(Error::Interpreter)
+	.unwrap();
 
 	let adjusted_gas = params.gas * U256::from(ext.schedule().wasm().opcodes_div)
 		/ U256::from(ext.schedule().wasm().opcodes_mul);
@@ -108,7 +108,6 @@ fn microbench_empty(b: &mut Bencher) {
 	});
 }
 
-
 #[bench]
 fn bench_empty(b: &mut Bencher) {
 	let code = load_sample!("empty");
@@ -128,7 +127,6 @@ fn bench_empty(b: &mut Bencher) {
 
 #[bench]
 fn bench_event(b: &mut Bencher) {
-
 	let code = load_sample!("event");
 	let mut params = ActionParams::default();
 	params.gas = U256::from(1_000_000);
@@ -138,6 +136,6 @@ fn bench_event(b: &mut Bencher) {
 
 	let mut interpreter = wasm_interpreter();
 	interpreter.prepare(&params, &mut ext).unwrap();
-	
+
 	b.iter(|| interpreter.exec(params.clone(), &mut ext));
 }

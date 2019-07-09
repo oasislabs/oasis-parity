@@ -62,5 +62,4 @@ pub trait Vm {
 	fn exec(&mut self, params: ActionParams, ext: &mut Ext) -> Result<GasLeft>;
 
 	fn prepare(&mut self, params: &ActionParams, ext: &mut Ext) -> Result<()>;
-
 }
