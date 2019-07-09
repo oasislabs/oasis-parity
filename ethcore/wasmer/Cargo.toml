@@ -18,11 +18,9 @@ vm = { path = "../vm" }
 # ethcore-logger = { path = "../../logger" }
 wasi-types = "0.1"
 keccak-hash = { path = "../../util/hash" }
-wasmi = { path = "../wasmi" }
 wasm-macros = { path = "../wasm/macros" }
-wasmer-runtime = "0.4.2"
-wasmer-runtime-core = "0.4.2"
-wasmer-clif-backend = "0.4.2"
+wasmer-clif-backend = { path = "../clif-backend" }
+wasmer-runtime-core = "0.5.2"
 rayon = "1.0.3"
 
 [dev-dependencies]

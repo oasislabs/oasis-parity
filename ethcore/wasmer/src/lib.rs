@@ -33,11 +33,8 @@ extern crate vm;
 extern crate wasi_types;
 extern crate wasm_macros;
 extern crate wasmer_clif_backend;
-extern crate wasmer_runtime;
 extern crate wasmer_runtime_core;
-extern crate wasmi;
 
-mod env;
 mod parser;
 mod runtime;
 
@@ -54,9 +51,7 @@ use vm::{ActionParams, GasLeft, ReturnData};
 use ethereum_types::U256;
 use std::ffi::c_void;
 
-use wasmer_runtime::{error, instantiate, memory, memory::MemoryView, Instance, Module};
-use wasmer_runtime_core::backend::Compiler;
-
+use wasmer_runtime_core::{error, backend::Compiler, memory, memory::MemoryView, Instance, Module};
 /// Wasmer runtime instance
 #[derive(Default)]
 pub struct WasmRuntime {
@@ -70,20 +65,16 @@ enum ExecutionOutcome {
 	NotSpecial,
 }
 
-impl WasmRuntime {
-	// Only cranelift supported for now
-	pub fn get_compiler(&self) -> impl Compiler {
-		use wasmer_clif_backend::CraneliftCompiler as DefaultCompiler;
-		DefaultCompiler::new()
-	}
-}
-
 impl vm::Vm for WasmRuntime {
 	fn prepare(&mut self, params: &ActionParams, ext: &mut vm::Ext) -> vm::Result<()> {
 		// Explicitly split the input into code and data
 		let (_, code, data) = parser::payload(&params, ext.schedule().wasm())?;
 
-		self.module = Some(wasmer_runtime::compile_with(&code, &self.get_compiler()).unwrap());
+		self.module = Some(wasmer_runtime_core::compile_with(
+			&code, 
+			&wasmer_clif_backend::CraneliftCompiler::new()
+		).unwrap());
+
 		self.data = data.to_vec();
 
 		Ok(())
@@ -122,9 +113,9 @@ impl vm::Vm for WasmRuntime {
 			);
 
 			// Default memory descriptor
-			let mut descriptor = wasmer_runtime::wasm::MemoryDescriptor {
-				minimum: wasmer_runtime::units::Pages(0),
-				maximum: Some(wasmer_runtime::units::Pages(0)),
+			let mut descriptor = wasmer_runtime_core::types::MemoryDescriptor {
+				minimum: wasmer_runtime_core::units::Pages(0),
+				maximum: Some(wasmer_runtime_core::units::Pages(0)),
 				shared: false,
 			};
 
@@ -165,7 +156,7 @@ impl vm::Vm for WasmRuntime {
 				let mut execution_outcome = ExecutionOutcome::NotSpecial;
 				match &invoke_result {
 					Ok(_) => (),
-					Err(wasmer_runtime::error::CallError::Runtime(ref trap)) => {
+					Err(wasmer_runtime_core::error::CallError::Runtime(ref trap)) => {
 						// This flag only set from a proc exit, if not set, assume panic and we need to revert
 						if !runtime.should_persist {
 							runtime.should_revert = true;

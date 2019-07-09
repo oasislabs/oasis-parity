@@ -27,8 +27,11 @@ use mantle_types::AccountMeta;
 use vm::{self, CallType, MessageCallResult, ReturnData};
 
 use wasi_types::*;
-use wasmer_runtime::{memory::Memory, Ctx};
-use wasmi::{self, Error as InterpreterError, Trap, TrapKind, P};
+use wasmer_runtime_core::{func};
+use wasmer_runtime_core::memory::{Memory};
+use wasmer_runtime_core::vm::{Ctx};
+use wasmer_runtime_core::types::{WasmExternType};
+use wasmer_runtime_core::memory::ptr::{WasmPtr, Array, Item};
 
 const ADDR_LEN_BYTES: usize = std::mem::size_of::<mantle_types::Address>();
 const ADDR_CHARS: usize = ADDR_LEN_BYTES * 2; // two hex digits per byte
@@ -325,35 +328,6 @@ pub enum Error {
 	Panic(String),
 }
 
-impl wasmi::HostError for Error {}
-
-impl From<Trap> for Error {
-	fn from(trap: Trap) -> Self {
-		match *trap.kind() {
-			TrapKind::Unreachable => Error::Unreachable,
-			TrapKind::MemoryAccessOutOfBounds => Error::MemoryAccessViolation,
-			TrapKind::TableAccessOutOfBounds | TrapKind::ElemUninitialized => {
-				Error::InvalidVirtualCall
-			}
-			TrapKind::DivisionByZero => Error::DivisionByZero,
-			TrapKind::InvalidConversionToInt => Error::InvalidConversionToInt,
-			TrapKind::UnexpectedSignature => Error::InvalidVirtualCall,
-			TrapKind::StackOverflow => Error::StackOverflow,
-			TrapKind::Host(_) => Error::Other,
-		}
-	}
-}
-
-impl From<InterpreterError> for Error {
-	fn from(err: InterpreterError) -> Self {
-		match err {
-			InterpreterError::Value(_) => Error::InvalidSyscall,
-			InterpreterError::Memory(_) => Error::MemoryAccessViolation,
-			_ => Error::Other,
-		}
-	}
-}
-
 impl ::std::fmt::Display for Error {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
 		match *self {
@@ -511,16 +485,16 @@ impl<'a> Runtime<'a> {
 		&mut self,
 		ctx: &mut Ctx,
 		fd: Fd,
-		iovs: P<IoVec>,
+		iovs: WasmPtr<IoVec, Array>,
 		iovs_len: Size,
 		offset: Option<FileSize>,
-		nread: P<Size>,
+		nread: WasmPtr<Size, Array>,
 	) -> Result<u16> {
-		let iovs: &[IoVec] = self.memory_get(ctx, iovs, iovs_len as usize)?;
+		let iovs: &[IoVec] = self.memory_get(ctx, iovs.offset(), iovs_len as usize)?;
 		let mut ioslices = iovs
 			.iter()
 			.map(|iov| {
-				let mem_slice = self.memory_get_mut::<_, u8>(ctx, iov.buf, iov.len as usize)?;
+				let mem_slice = self.memory_get_mut::<u8>(ctx, iov.buf, iov.len as usize)?;
 				let p = mem_slice.as_mut_ptr();
 				std::mem::forget(mem_slice);
 				// Launder the slice to get around borrow of `self` by `iovs` so that
@@ -529,7 +503,7 @@ impl<'a> Runtime<'a> {
 					std::slice::from_raw_parts_mut(p, iov.len as usize)
 				}))
 			})
-			.collect::<std::result::Result<Vec<_>, wasmi::Error>>()?;
+			.collect::<std::result::Result<Vec<_>, crate::runtime::Error>>()?;
 
 		let nbytes = match offset {
 			Some(offset) => bcfs!(self.bcfs.pread_vectored(fd, &mut ioslices, offset)),
@@ -556,11 +530,12 @@ impl<'a> Runtime<'a> {
 
 		self.memory_set_value(
 			ctx,
-			nread,
-			match nbytes.try_into() {
+			nread.offset(),
+			nbytes,
+			/* match nbytes.try_into() {
 				Ok(nbytes) => nbytes,
 				Err(_) => return Ok(ErrNo::MFile as u16),
-			},
+			}, */
 		)?;
 
 		Ok(ErrNo::Success as u16)
@@ -570,17 +545,17 @@ impl<'a> Runtime<'a> {
 		&mut self,
 		ctx: &mut Ctx,
 		fd: Fd,
-		iovs: P<IoVec>,
+		iovs: WasmPtr<IoVec>,
 		iovs_len: Size,
 		offset: Option<FileSize>,
-		nwritten: P<u32>,
+		nwritten: WasmPtr<u32>,
 	) -> Result<u16> {
 		// TODO: refunds
-		let iovs: &[IoVec] = self.memory_get_mut(ctx, iovs, iovs_len as usize)?;
+		let iovs: &[IoVec] = self.memory_get_mut(ctx, iovs.offset(), iovs_len as usize).unwrap();
 		let ioslices = iovs
 			.iter()
 			.map(|iov| {
-				let mem_slice = self.memory_get::<_, u8>(ctx, iov.buf, iov.len as usize)?;
+				let mem_slice = self.memory_get::<u8>(ctx, iov.buf, iov.len as usize).unwrap();
 				let p = mem_slice.as_ptr();
 				std::mem::forget(mem_slice);
 				// Launder the slice to get around borrow of `self` by `iovs` so that
@@ -589,7 +564,7 @@ impl<'a> Runtime<'a> {
 					std::slice::from_raw_parts(p, iov.len as usize)
 				}))
 			})
-			.collect::<std::result::Result<Vec<_>, wasmi::Error>>()?;
+			.collect::<std::result::Result<Vec<_>, crate::runtime::Error>>()?;
 
 		let nbytes = match offset {
 			Some(offset) => bcfs!(self.bcfs.pwrite_vectored(fd, &ioslices, offset)),
@@ -599,31 +574,32 @@ impl<'a> Runtime<'a> {
 		self.storage_bytes_charge(nbytes as u64, false /* reset */)?;
 		self.memory_set_value(
 			ctx,
-			nwritten,
-			match nbytes.try_into() {
+			nwritten.offset(),
+			nbytes,
+			/* match nbytes.try_into() {
 				Ok(nbytes) => nbytes,
 				Err(_) => return Ok(ErrNo::MFile as u16),
-			},
+			}, */
 		)?;
 		Ok(ErrNo::Success as u16)
 	}
 
-	fn memory_get<O: Into<u32>, T: Copy>(
+	fn memory_get<T: Copy>(
 		&self,
 		ctx: &mut Ctx,
-		offset: O,
+		offset: u32,
 		count: usize,
 	) -> Result<&[T]> {
 		Ok(&*self.memory_get_mut(ctx, offset, count)?)
 	}
 
-	fn memory_get_mut<O: Into<u32>, T: Copy>(
+	fn memory_get_mut<T: Copy>(
 		&self,
 		ctx: &mut Ctx,
-		ptr: O,
+		ptr: u32,
 		count: usize,
 	) -> Result<&mut [T]> {
-		let offset = ptr.into() as usize;
+		let offset = ptr as usize;
 		let mut mem_get_bytes = &ctx.memory(0).view()[offset..(offset + count)];
 
 		let mem_slice =
@@ -632,14 +608,13 @@ impl<'a> Runtime<'a> {
 		Ok(unsafe { core::slice::from_raw_parts_mut(mem_slice.as_ptr() as *mut T, count) })
 	}
 
-	fn memory_set<T: Copy, O: Into<P<T>>>(
+	fn memory_set<T: Copy>(
 		&self,
 		ctx: &mut Ctx,
-		ptr: O,
+		ptr: u32,
 		value: &[T],
-	) -> Result<P<T>> {
-		let ptr = ptr.into();
-		let offset = ptr.offset() as usize;
+	) -> Result<WasmPtr<T>> {
+		let offset = ptr as usize;
 		let nbytes = value.len();
 
 		let byte_buf = unsafe {
@@ -651,20 +626,17 @@ impl<'a> Runtime<'a> {
 			.zip(byte_buf.iter())
 			.for_each(|(cell, v)| cell.set(*v));
 
-		Ok(P {
-			offset: ptr.offset() + nbytes as u32,
-			ty: std::marker::PhantomData,
-		})
+		Ok(WasmPtr::new(ptr + nbytes as u32))
 	}
 
-	fn memory_set_value<T: Sized, O: Into<P<T>>>(
+	fn memory_set_value<T: Copy>(
 		&mut self,
 		ctx: &mut Ctx,
-		ptr: O,
+		ptr: u32,
 		value: T,
 	) -> Result<()> {
 		let t_size = std::mem::size_of::<T>();
-		let offset = ptr.into().offset() as usize;
+		let offset = ptr as usize;
 		unsafe {
 			let byte_buf: &[u8] =
 				std::slice::from_raw_parts(&value as *const _ as *const u8, t_size);
@@ -676,37 +648,30 @@ impl<'a> Runtime<'a> {
 		Ok(())
 	}
 
-	fn memory_zero(&mut self, ctx: &mut Ctx, offset: u32, len: usize) -> Result<()> {
-		ctx.memory(0).view()[offset as usize..(offset as usize + len)]
-			.iter()
-			.for_each(|cell| cell.set(0u8));
-		Ok(())
-	}
-
-	pub fn args_get(&mut self, ctx: &mut Ctx, argv: P<P<u8>>, argv_buf: P<u8>) -> Result<u16> {
+	pub fn args_get(&mut self, ctx: &mut Ctx, argv: WasmPtr<WasmPtr<u8, Array>, Array>, argv_buf: WasmPtr<u8, Array>) -> Result<u16> {
 		Ok(ErrNo::Success as u16)
 	}
 
 	pub fn args_sizes_get(
 		&mut self,
 		ctx: &mut Ctx,
-		argc: P<u32>,
-		_argv_buf_size: P<u32>,
+		argc: WasmPtr<u32>,
+		_argv_buf_size: WasmPtr<u32>,
 	) -> Result<u16> {
 		let memory = ctx.memory(0);
-		self.memory_set_value(ctx, argc, 0);
+		self.memory_set_value(ctx, argc.offset(), 0);
 
 		Ok(ErrNo::Success as u16)
 	}
 
-	pub fn fd_prestat_get(&mut self, ctx: &mut Ctx, fd: u32, buf: P<Prestat>) -> Result<u16> {
+	pub fn fd_prestat_get(&mut self, ctx: &mut Ctx, fd: u32, buf: WasmPtr<Prestat>) -> Result<u16> {
 		let memory = ctx.memory(0);
 		let fd_val = Fd::try_from(fd).unwrap();
 		let path_str = bcfs!(self.bcfs.prestat(fd_val)).to_str().unwrap();
 
 		self.memory_set_value(
 			ctx,
-			buf,
+			buf.offset(),
 			Prestat {
 				resource_type: PreopenType::Dir {
 					name_len: match path_str.len().try_into() {
@@ -724,14 +689,14 @@ impl<'a> Runtime<'a> {
 		&mut self,
 		ctx: &mut Ctx,
 		fd: u32,
-		path_ptr: P<u8>,
+		path_ptr: WasmPtr<u8>,
 		path_len: u32,
 	) -> Result<u16> {
 		let memory = ctx.memory(0);
 		let fd_val = Fd::try_from(fd).unwrap();
 		let path_str = bcfs!(self.bcfs.prestat(fd_val)).to_str().unwrap();
 
-		self.memory_set(ctx, path_ptr, path_str.as_bytes()).unwrap();
+		self.memory_set(ctx, path_ptr.offset(), path_str.as_bytes()).unwrap();
 		self.memory_set_value(ctx, path_len, path_str.len() as u8)
 			.unwrap();
 		Ok(ErrNo::Success as u16)
@@ -740,16 +705,16 @@ impl<'a> Runtime<'a> {
 	pub fn environ_get(
 		&mut self,
 		ctx: &mut Ctx,
-		environ: P<P<u8>>,
-		mut environ_buf: P<u8>,
+		environ: WasmPtr<WasmPtr<u8>>,
+		mut environ_buf: WasmPtr<u8>,
 	) -> Result<u16> {
-		let environs = self.memory_get_mut::<_, P<u8>>(ctx, environ, 3).unwrap();
+		let environs = self.memory_get_mut::<WasmPtr<u8>>(ctx, environ.offset(), 3).unwrap();
 
 		environs[0] = environ_buf;
 		environ_buf = self
 			.memory_set(
 				ctx,
-				environ_buf,
+				environ_buf.offset(),
 				format!("ADDRESS={:x}\0", self.context.address).as_bytes(),
 			)
 			.unwrap();
@@ -757,14 +722,14 @@ impl<'a> Runtime<'a> {
 		environ_buf = self
 			.memory_set(
 				ctx,
-				environ_buf,
+				environ_buf.offset(),
 				format!("SENDER={:x}\0", self.context.sender).as_bytes(),
 			)
 			.unwrap();
 		environs[2] = environ_buf;
 		self.memory_set(
 			ctx,
-			environ_buf,
+			environ_buf.offset(),
 			format!("VALUE={}", self.context.value_str).as_bytes(),
 		)
 		.unwrap();
@@ -774,13 +739,13 @@ impl<'a> Runtime<'a> {
 	pub fn environ_sizes_get(
 		&mut self,
 		ctx: &mut Ctx,
-		environ_count: P<u32>,
-		environ_buf_size: P<u32>,
+		environ_count: WasmPtr<u32>,
+		environ_buf_size: WasmPtr<u32>,
 	) -> Result<u16> {
-		self.memory_set_value(ctx, environ_count, 3u32)?; // sender, address, value
+		self.memory_set_value(ctx, environ_count.offset(), 3u32)?; // sender, address, value
 		self.memory_set_value(
 			ctx,
-			environ_buf_size,
+			environ_buf_size.offset(),
 			("SENDER=".len()
 				+ ADDR_CHARS + "\0ADDRESS=".len()
 				+ ADDR_CHARS + "\0VALUE=".len()
@@ -794,9 +759,9 @@ impl<'a> Runtime<'a> {
 		&mut self,
 		ctx: &mut Ctx,
 		fd: u32,
-		iovs: P<IoVec>,
+		iovs: WasmPtr<IoVec, Array>,
 		iovs_len: u32,
-		nread: P<Size>,
+		nread: WasmPtr<Size, Array>,
 	) -> Result<u16> {
 		let fd_val = Fd::try_from(fd).unwrap();
 		self.do_read(
@@ -813,9 +778,9 @@ impl<'a> Runtime<'a> {
 		&mut self,
 		ctx: &mut Ctx,
 		fd: u32,
-		iovs: P<IoVec>,
+		iovs: WasmPtr<IoVec>,
 		iovs_len: u32,
-		nwritten: P<u32>,
+		nwritten: WasmPtr<u32>,
 	) -> Result<u16> {
 		let fd_val = Fd::try_from(fd).unwrap();
 		self.do_write(
@@ -834,16 +799,16 @@ impl<'a> Runtime<'a> {
 		Ok(ErrNo::Success as u16)
 	}
 
-	pub fn fd_fdstat_get(&mut self, ctx: &mut Ctx, fd: u32, buf: P<FdStat>) -> Result<u16> {
+	pub fn fd_fdstat_get(&mut self, ctx: &mut Ctx, fd: u32, buf: WasmPtr<FdStat>) -> Result<u16> {
 		let fd_val = Fd::try_from(fd).unwrap();
 		let stats = bcfs!(self.bcfs.fdstat(fd_val));
-		self.memory_set_value(ctx, buf, stats).unwrap();
+		self.memory_set_value(ctx, buf.offset(), stats).unwrap();
 		Ok(ErrNo::Success as u16)
 	}
 
-	pub fn fd_filestat_get(&mut self, ctx: &mut Ctx, fd: u32, buf: P<FileStat>) -> Result<u16> {
+	pub fn fd_filestat_get(&mut self, ctx: &mut Ctx, fd: u32, buf: WasmPtr<FileStat>) -> Result<u16> {
 		let fd_val = Fd::try_from(fd).unwrap();
-		self.memory_set_value(ctx, buf, bcfs!(self.bcfs.filestat(fd_val)))?;
+		self.memory_set_value(ctx, buf.offset(), bcfs!(self.bcfs.filestat(fd_val)))?;
 		Ok(ErrNo::Success as u16)
 	}
 
@@ -857,17 +822,17 @@ impl<'a> Runtime<'a> {
 		ctx: &mut Ctx,
 		dir_fd: u32,
 		_dir_flags: u32,
-		path: P<u8>,
+		path: WasmPtr<u8>,
 		path_len: u32,
 		open_flags: u16,
 		_rights_base: u64,
 		_rights_inheriting: u64,
 		fd_flags: u16,
-		p_fd: P<Fd>,
+		p_fd: WasmPtr<Fd>,
 	) -> Result<u16> {
 		let path = std::path::Path::new(
 			// NB: immutable borrow of `self`
-			match std::str::from_utf8(self.memory_get(ctx, path, path_len as usize)?) {
+			match std::str::from_utf8(self.memory_get(ctx, path.offset(), path_len as usize)?) {
 				Ok(path_str) => path_str,
 				Err(_) => return Ok(ErrNo::Inval as u16),
 			},
@@ -884,7 +849,7 @@ impl<'a> Runtime<'a> {
 		let fd = bcfs!(self // NB: mutable borrow of `self as PendingTransaction``
 			.bcfs
 			.open(dir_fd_val, path, open_flags_val, fd_flags_val));
-		self.memory_set_value(ctx, p_fd, fd)?;
+		self.memory_set_value(ctx, p_fd.offset(), fd)?;
 		Ok(ErrNo::Success as u16)
 	}
 
@@ -892,12 +857,12 @@ impl<'a> Runtime<'a> {
 		&mut self,
 		ctx: &mut Ctx,
 		dir_fd: u32,
-		path: P<u8>,
+		path: WasmPtr<u8, Array>,
 		path_len: u32,
 	) -> Result<u16> {
 		let path = std::path::Path::new(
 			// NB: immutable borrow of `self`
-			match std::str::from_utf8(self.memory_get(ctx, path, path_len as usize)?) {
+			match std::str::from_utf8(self.memory_get(ctx, path.offset(), path_len as usize)?) {
 				Ok(path_str) => path_str,
 				Err(_) => return Ok(ErrNo::Inval as u16),
 			},
@@ -918,21 +883,23 @@ impl<'a> Runtime<'a> {
 
 pub mod imports {
 
-	use super::{Memory, Result, Runtime, P};
+	use super::{func, Memory, Result, Runtime, Ctx, WasmPtr, Array, Item};
 	use std::ffi::c_void;
 	use wasi_types::*;
-	use wasmer_runtime::{func, Ctx};
+	use wasmer_runtime_core;
 
 	pub(crate) fn get_import_object(
 		memory: Memory,
 		raw_ptr: *mut c_void,
-	) -> wasmer_runtime::ImportObject {
+	) -> wasmer_runtime_core::import::ImportObject {
+		
 		let dtor = (|_: *mut c_void| {}) as fn(*mut c_void);
-		wasmer_runtime::imports! {
+
+		wasmer_runtime_core::imports! {
 			move || { (raw_ptr, dtor) },
 			"env" => {
 				"memory" => memory,
-			},
+			}, 
 			"wasi_unstable" => {
 				"args_get" => func!(args_get),
 				"args_sizes_get" => func!(args_sizes_get),
@@ -952,35 +919,35 @@ pub mod imports {
 		}
 	}
 
-	fn args_get(ctx: &mut Ctx, argv: P<P<u8>>, argv_buf: P<u8>) -> Result<u16> {
+	fn args_get(ctx: &mut Ctx, argv: WasmPtr<WasmPtr<u8, Array>, Array>, argv_buf: WasmPtr<u8, Array>) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.args_get(ctx, argv, argv_buf)
 	}
 
-	fn args_sizes_get(ctx: &mut Ctx, argv: P<u32>, argv_buf_size: P<u32>) -> Result<u16> {
+	fn args_sizes_get(ctx: &mut Ctx, argv: WasmPtr<u32>, argv_buf_size: WasmPtr<u32>) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.args_sizes_get(ctx, argv, argv_buf_size)
 	}
 
-	fn fd_prestat_get(ctx: &mut Ctx, fd: u32, buf: P<Prestat>) -> Result<u16> {
+	fn fd_prestat_get(ctx: &mut Ctx, fd: u32, buf: WasmPtr<Prestat>) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.fd_prestat_get(ctx, fd, buf)
 	}
 
-	fn fd_prestat_dir_name(ctx: &mut Ctx, fd: u32, path_ptr: P<u8>, path_len: u32) -> Result<u16> {
+	fn fd_prestat_dir_name(ctx: &mut Ctx, fd: u32, path_ptr: WasmPtr<u8>, path_len: u32) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.fd_prestat_dir_name(ctx, fd, path_ptr, path_len)
 	}
 
-	fn environ_get(ctx: &mut Ctx, environ: P<P<u8>>, mut environ_buf: P<u8>) -> Result<u16> {
+	fn environ_get(ctx: &mut Ctx, environ: WasmPtr<WasmPtr<u8>>, mut environ_buf: WasmPtr<u8>) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.environ_get(ctx, environ, environ_buf)
 	}
 
 	fn environ_sizes_get(
 		ctx: &mut Ctx,
-		environ_count: P<u32>,
-		environ_buf_size: P<u32>,
+		environ_count: WasmPtr<u32>,
+		environ_buf_size: WasmPtr<u32>,
 	) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.environ_sizes_get(ctx, environ_count, environ_buf_size)
@@ -989,9 +956,9 @@ pub mod imports {
 	fn fd_read(
 		ctx: &mut Ctx,
 		fd: u32,
-		iovs: P<IoVec>,
+		iovs: WasmPtr<IoVec, Array>,
 		iovs_len: u32,
-		nread: P<Size>,
+		nread: WasmPtr<Size, Array>,
 	) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.fd_read(ctx, fd, iovs, iovs_len, nread)
@@ -1000,9 +967,9 @@ pub mod imports {
 	fn fd_write(
 		ctx: &mut Ctx,
 		fd: u32,
-		iovs: P<IoVec>,
+		iovs: WasmPtr<IoVec>,
 		iovs_len: u32,
-		nwritten: P<u32>,
+		nwritten: WasmPtr<u32>,
 	) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.fd_write(ctx, fd, iovs, iovs_len, nwritten)
@@ -1013,12 +980,12 @@ pub mod imports {
 		runtime.fd_close(ctx, fd)
 	}
 
-	fn fd_fdstat_get(ctx: &mut Ctx, fd: u32, buf: P<FdStat>) -> Result<u16> {
+	fn fd_fdstat_get(ctx: &mut Ctx, fd: u32, buf: WasmPtr<FdStat>) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.fd_fdstat_get(ctx, fd, buf)
 	}
 
-	pub fn fd_filestat_get(ctx: &mut Ctx, fd: u32, buf: P<FileStat>) -> Result<u16> {
+	pub fn fd_filestat_get(ctx: &mut Ctx, fd: u32, buf: WasmPtr<FileStat>) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.fd_filestat_get(ctx, fd, buf)
 	}
@@ -1033,13 +1000,13 @@ pub mod imports {
 		ctx: &mut Ctx,
 		dir_fd: u32,
 		dir_flags: u32,
-		path: P<u8>,
+		path: WasmPtr<u8>,
 		path_len: u32,
 		open_flags: u16,
 		rights_base: u64,
 		rights_inheriting: u64,
 		fd_flags: u16,
-		p_fd: P<Fd>,
+		p_fd: WasmPtr<Fd>,
 	) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.path_open(
@@ -1056,7 +1023,7 @@ pub mod imports {
 		)
 	}
 
-	fn path_unlink_file(ctx: &mut Ctx, dir_fd: u32, path: P<u8>, path_len: u32) -> Result<u16> {
+	fn path_unlink_file(ctx: &mut Ctx, dir_fd: u32, path: WasmPtr<u8, Array>, path_len: u32) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.path_unlink_file(ctx, dir_fd, path, path_len)
 	}

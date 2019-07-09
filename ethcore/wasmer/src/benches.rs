@@ -8,6 +8,7 @@ use ethereum_types::{Address, H256, U256};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use wasmer_clif_backend;
 use super::WasmRuntime;
 use vm::tests::{FakeCall, FakeCallType, FakeExt};
 use vm::{self, ActionParams, ActionValue, GasLeft, Vm};
@@ -29,10 +30,13 @@ fn wasm_runtime() -> WasmRuntime {
 }
 
 /// Do everything but the contract call itself, used for testing microbenchmarks
-fn prepare_module(params: ActionParams, ext: &mut vm::Ext) -> wasmer_runtime::Instance {
+fn prepare_module(params: ActionParams, ext: &mut vm::Ext) -> wasmer_runtime_core::Instance {
 	let (_, code, data) = parser::payload(&params, ext.schedule().wasm()).unwrap();
 
-	let module = wasmer_runtime::compile(&code).unwrap();
+	let module = wasmer_runtime_core::compile_with(
+		&code, 
+		&wasmer_clif_backend::CraneliftCompiler::new()
+	).unwrap();
 
 	let adjusted_gas_limit = params.gas * U256::from(ext.schedule().wasm().opcodes_div)
 		/ U256::from(ext.schedule().wasm().opcodes_mul);
@@ -52,9 +56,9 @@ fn prepare_module(params: ActionParams, ext: &mut vm::Ext) -> wasmer_runtime::In
 	);
 
 	// Default memory descriptor
-	let mut descriptor = wasmer_runtime::wasm::MemoryDescriptor {
-		minimum: wasmer_runtime::units::Pages(0),
-		maximum: Some(wasmer_runtime::units::Pages(0)),
+	let mut descriptor = wasmer_runtime_core::types::MemoryDescriptor {
+		minimum: wasmer_runtime_core::units::Pages(0),
+		maximum: Some(wasmer_runtime_core::units::Pages(0)),
 		shared: false,
 	};
 
@@ -91,8 +95,7 @@ fn microbench_empty(b: &mut Bencher) {
 	b.iter(|| {
 		module_instance.call("call", &[]);
 	});
-}
-
+} 
 
 #[bench]
 fn bench_empty(b: &mut Bencher) {
