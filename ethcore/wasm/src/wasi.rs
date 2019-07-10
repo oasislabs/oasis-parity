@@ -535,6 +535,16 @@ impl<'a> crate::Runtime<'a> {
 			})
 			.collect::<std::result::Result<Vec<_>, wasmi::Error>>()?;
 
+		#[cfg(debug_assertions)]
+		{
+			use std::io::Write;
+			if u32::from(fd) == 1 {
+				std::io::stdout().write_vectored(&ioslices).unwrap();
+			} else if u32::from(fd) == 2 {
+				std::io::stderr().write_vectored(&ioslices).unwrap();
+			}
+		}
+
 		let prev_size = bcfs!(self.bcfs.filestat(fd)).file_size;
 
 		let nbytes = match offset {
