@@ -535,12 +535,19 @@ impl<'a> crate::Runtime<'a> {
 			})
 			.collect::<std::result::Result<Vec<_>, wasmi::Error>>()?;
 
+		let prev_size = bcfs!(self.bcfs.filestat(fd)).file_size;
+
 		let nbytes = match offset {
 			Some(offset) => bcfs!(self.bcfs.pwrite_vectored(fd, &ioslices, offset)),
 			None => bcfs!(self.bcfs.write_vectored(fd, &ioslices)),
 		};
-		self.storage_bytes_charge(nbytes as u64, true /* reset */)?;
-		self.storage_bytes_charge(nbytes as u64, false /* reset */)?;
+
+		let new_size = bcfs!(self.bcfs.filestat(fd)).file_size;
+		self.storage_bytes_charge(
+			new_size,
+			new_size == prev_size, /* charge at the reset rate */
+		)?;
+
 		self.memory.set_value(
 			nwritten,
 			match nbytes.try_into() {
@@ -548,6 +555,7 @@ impl<'a> crate::Runtime<'a> {
 				Err(_) => return Ok(ErrNo::MFile),
 			},
 		)?;
+
 		Ok(ErrNo::Success)
 	}
 }
