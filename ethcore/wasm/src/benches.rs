@@ -157,7 +157,6 @@ fn bench_read_delete(b: &mut Bencher) {
 
 #[bench]
 fn bench_factorial(b: &mut Bencher) {
-
 	let code = load_sample!("factorial");
 	let mut params = ActionParams::default();
 	params.data = Some(b"20".to_vec());
@@ -166,7 +165,7 @@ fn bench_factorial(b: &mut Bencher) {
 	let mut ext = FakeExt::new().with_wasm();
 
 	let mut interpreter = wasm_interpreter();
-	
+
 	b.iter(|| interpreter.exec(params.clone(), &mut ext));
 }
 

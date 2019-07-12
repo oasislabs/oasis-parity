@@ -280,7 +280,8 @@ fn math_factorial() {
 	let mut ext = FakeExt::new().with_wasm();
 
 	let mut interpreter = wasm_interpreter();
-	let (_apply, return_data, _gas_left) = test_finalize(interpreter.exec(params, &mut ext)).unwrap();
+	let (_apply, return_data, _gas_left) =
+		test_finalize(interpreter.exec(params, &mut ext)).unwrap();
 
 	let output = std::str::from_utf8(&*return_data).unwrap();
 	assert_eq!(output, "the output is: 120\n");
@@ -296,9 +297,9 @@ fn math_fib() {
 	let mut ext = FakeExt::new().with_wasm();
 
 	let mut interpreter = wasm_interpreter();
-	let (_apply, return_data, _gas_left) = test_finalize(interpreter.exec(params, &mut ext)).unwrap();
+	let (_apply, return_data, _gas_left) =
+		test_finalize(interpreter.exec(params, &mut ext)).unwrap();
 
 	let output = std::str::from_utf8(&*return_data).unwrap();
 	assert_eq!(output, "the output is: 89\n");
 }
-

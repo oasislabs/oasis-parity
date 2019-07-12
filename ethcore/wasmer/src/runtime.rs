@@ -25,11 +25,11 @@ use mantle_types::AccountMeta;
 use vm::{self, CallType, MessageCallResult, ReturnData};
 
 use wasi_types::*;
-use wasmer_runtime_core::{func};
-use wasmer_runtime_core::memory::{Memory};
-use wasmer_runtime_core::vm::{Ctx};
-use wasmer_runtime_core::types::{WasmExternType};
-use wasmer_runtime_core::memory::ptr::{WasmPtr, Array, Item};
+use wasmer_runtime_core::func;
+use wasmer_runtime_core::memory::ptr::{Array, Item, WasmPtr};
+use wasmer_runtime_core::memory::Memory;
+use wasmer_runtime_core::types::WasmExternType;
+use wasmer_runtime_core::vm::Ctx;
 
 const ADDR_LEN_BYTES: usize = std::mem::size_of::<mantle_types::Address>();
 const ADDR_CHARS: usize = ADDR_LEN_BYTES * 2; // two hex digits per byte
@@ -466,12 +466,11 @@ impl<'a> Runtime<'a> {
 		}
 		Ok(self.gas_limit - self.gas_counter)
 	}
-
 }
 
 pub mod imports {
 
-	use super::{func, Memory, Result, Runtime, Ctx, WasmPtr, Array, Item};
+	use super::{func, Array, Ctx, Item, Memory, Result, Runtime, WasmPtr};
 	use std::ffi::c_void;
 	use wasi_types::*;
 	use wasmer_runtime_core;
@@ -480,14 +479,13 @@ pub mod imports {
 		memory: Memory,
 		raw_ptr: *mut c_void,
 	) -> wasmer_runtime_core::import::ImportObject {
-		
 		let dtor = (|_: *mut c_void| {}) as fn(*mut c_void);
 
 		wasmer_runtime_core::imports! {
 			move || { (raw_ptr, dtor) },
 			"env" => {
 				"memory" => memory,
-			}, 
+			},
 			"wasi_unstable" => {
 				"args_get" => func!(args_get),
 				"args_sizes_get" => func!(args_sizes_get),
@@ -535,12 +533,20 @@ pub mod imports {
 		}
 	}
 
-	fn args_get(ctx: &mut Ctx, argv: WasmPtr<WasmPtr<u8, Array>, Array>, argv_buf: WasmPtr<u8, Array>) -> Result<u16> {
+	fn args_get(
+		ctx: &mut Ctx,
+		argv: WasmPtr<WasmPtr<u8, Array>, Array>,
+		argv_buf: WasmPtr<u8, Array>,
+	) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.args_get(ctx, argv, argv_buf)
 	}
 
-	fn args_sizes_get(ctx: &mut Ctx, argv: WasmPtr<u32>, argv_buf_size: WasmPtr<u32>) -> Result<u16> {
+	fn args_sizes_get(
+		ctx: &mut Ctx,
+		argv: WasmPtr<u32>,
+		argv_buf_size: WasmPtr<u32>,
+	) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.args_sizes_get(ctx, argv, argv_buf_size)
 	}
@@ -550,12 +556,21 @@ pub mod imports {
 		runtime.clock_res_get(ctx, clock_id, resolution)
 	}
 
-	fn clock_time_get(ctx: &mut Ctx, clock_id: u8, precision: u64, time: WasmPtr<Timestamp>) -> crate::Result<u16> {
+	fn clock_time_get(
+		ctx: &mut Ctx,
+		clock_id: u8,
+		precision: u64,
+		time: WasmPtr<Timestamp>,
+	) -> crate::Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.clock_time_get(ctx, clock_id, precision, time)
 	}
 
-	fn environ_get(ctx: &mut Ctx, environ: WasmPtr<WasmPtr<u8>>, mut environ_buf: WasmPtr<u8>) -> Result<u16> {
+	fn environ_get(
+		ctx: &mut Ctx,
+		environ: WasmPtr<WasmPtr<u8>>,
+		mut environ_buf: WasmPtr<u8>,
+	) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.environ_get(ctx, environ, environ_buf)
 	}
@@ -569,23 +584,12 @@ pub mod imports {
 		runtime.environ_sizes_get(ctx, environ_count, environ_buf_size)
 	}
 
-	fn fd_advise(
-		ctx: &mut Ctx,
-		fd: u32,
-		offset: u64,
-		len: u64,
-		advice: u8,
-	) -> crate::Result<u16> {
+	fn fd_advise(ctx: &mut Ctx, fd: u32, offset: u64, len: u64, advice: u8) -> crate::Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.fd_advise(fd, offset, len, advice)
 	}
 
-	fn fd_allocate(
-		ctx: &mut Ctx,
-		fd: u32,
-		offset: u64,
-		len: u64,
-	) -> crate::Result<u16> {
+	fn fd_allocate(ctx: &mut Ctx, fd: u32, offset: u64, len: u64) -> crate::Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.fd_allocate(fd, offset, len)
 	}
@@ -658,7 +662,12 @@ pub mod imports {
 		runtime.fd_prestat_get(ctx, fd, buf)
 	}
 
-	fn fd_prestat_dir_name(ctx: &mut Ctx, fd: u32, path_ptr: WasmPtr<u8>, path_len: u32) -> Result<u16> {
+	fn fd_prestat_dir_name(
+		ctx: &mut Ctx,
+		fd: u32,
+		path_ptr: WasmPtr<u8>,
+		path_len: u32,
+	) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.fd_prestat_dir_name(ctx, fd, path_ptr, path_len)
 	}
@@ -698,11 +707,7 @@ pub mod imports {
 		runtime.fd_readdir(fd, buf, buf_len, dircookie, buf_used)
 	}
 
-	fn fd_renumber(
-		ctx: &mut Ctx,
-		to: u32,
-		from: u32
-	) -> crate::Result<u16> {
+	fn fd_renumber(ctx: &mut Ctx, to: u32, from: u32) -> crate::Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.fd_renumber(to, from)
 	}
@@ -717,7 +722,7 @@ pub mod imports {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.fd_seek(ctx, fd, offset, whence, new_offset)
 	}
-	
+
 	fn fd_sync(ctx: &mut Ctx, fd: u32) -> crate::Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.fd_sync(fd)
@@ -740,7 +745,7 @@ pub mod imports {
 	}
 
 	fn path_create_directory(
-		ctx: &mut Ctx, 
+		ctx: &mut Ctx,
 		fd: u32,
 		path: WasmPtr<u8>,
 		path_len: u32,
@@ -786,7 +791,15 @@ pub mod imports {
 		new_path_len: u32,
 	) -> crate::Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-		runtime.path_link(old_fd, old_lookup_flags, old_path, old_path_len, new_fd, new_path, new_path_len)
+		runtime.path_link(
+			old_fd,
+			old_lookup_flags,
+			old_path,
+			old_path_len,
+			new_fd,
+			new_path,
+			new_path_len,
+		)
 	}
 
 	fn path_open(
@@ -849,7 +862,15 @@ pub mod imports {
 		new_path_len: u32,
 	) -> crate::Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
-		runtime.path_rename(old_fd, old_lookup_flags, old_path, old_path_len, new_fd, new_path, new_path_len)
+		runtime.path_rename(
+			old_fd,
+			old_lookup_flags,
+			old_path,
+			old_path_len,
+			new_fd,
+			new_path,
+			new_path_len,
+		)
 	}
 
 	fn path_symlink(
@@ -864,12 +885,22 @@ pub mod imports {
 		runtime.path_symlink(from_path, from_path_len, rel_fd, to_path, to_path_len)
 	}
 
-	fn path_unlink_file(ctx: &mut Ctx, dir_fd: u32, path: WasmPtr<u8, Array>, path_len: u32) -> Result<u16> {
+	fn path_unlink_file(
+		ctx: &mut Ctx,
+		dir_fd: u32,
+		path: WasmPtr<u8, Array>,
+		path_len: u32,
+	) -> Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.path_unlink_file(ctx, dir_fd, path, path_len)
 	}
 
-	fn poll_oneoff(ctx: &mut Ctx, ptr_in: WasmPtr<u32>, ptr_out: WasmPtr<u32>, n_subs: u32) -> crate::Result<u16> {
+	fn poll_oneoff(
+		ctx: &mut Ctx,
+		ptr_in: WasmPtr<u32>,
+		ptr_out: WasmPtr<u32>,
+		n_subs: u32,
+	) -> crate::Result<u16> {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.poll_oneoff(ptr_in, ptr_out, n_subs)
 	}

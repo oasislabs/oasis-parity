@@ -49,11 +49,13 @@ use runtime::{Result, Runtime, RuntimeContext};
 use vm::{ActionParams, GasLeft, ReturnData};
 
 use ethereum_types::U256;
-use std::ffi::c_void;
 use std::convert::TryInto;
+use std::ffi::c_void;
 
-use wasmer_runtime::{Module};
-use wasmer_runtime_core::{error, memory, memory::MemoryView, Instance, module, module::ModuleInfo};
+use wasmer_runtime::Module;
+use wasmer_runtime_core::{
+	error, memory, memory::MemoryView, module, module::ModuleInfo, Instance,
+};
 /// Wasmer runtime instance
 #[derive(Default)]
 pub struct WasmRuntime {
@@ -69,18 +71,12 @@ enum ExecutionOutcome {
 
 impl vm::Vm for WasmRuntime {
 	fn prepare(&mut self, params: &ActionParams, ext: &mut vm::Ext) -> vm::Result<()> {
-		
 		let is_create = ext.is_create();
-		
-		// Explicitly split the input into code and data
-		let (_, code, data) = parser::payload(
-			&params,
-			ext.schedule().wasm(),
-		)?;
 
-		let mut module = wasmer_runtime::compile(
-			&code,
-		).unwrap();
+		// Explicitly split the input into code and data
+		let (_, code, data) = parser::payload(&params, ext.schedule().wasm())?;
+
+		let mut module = wasmer_runtime::compile(&code).unwrap();
 
 		if is_create {
 			subst_main_call(&mut module);
@@ -93,7 +89,6 @@ impl vm::Vm for WasmRuntime {
 	}
 
 	fn exec(&mut self, params: ActionParams, ext: &mut vm::Ext) -> vm::Result<GasLeft> {
-		
 		let is_create = ext.is_create();
 
 		if let Some(module) = &self.module {
@@ -213,7 +208,6 @@ impl vm::Vm for WasmRuntime {
 
 /// Replaces the call to `main` in `_start` with one to `_mantle_deploy`.
 fn subst_main_call(module: &mut Module) {
-
 	let module_info = module.info();
 
 	let start_fn_idx = match func_index(module_info, "_start") {
@@ -231,7 +225,6 @@ fn subst_main_call(module: &mut Module) {
 
 	// TODO: Unimplemented
 	// Need to get mutable access to the exports and replace function index, same as in wasmi
-
 }
 
 /// Returns the function index of an export by name.
@@ -240,7 +233,7 @@ fn func_index(module: &ModuleInfo, name: &str) -> Option<module::ExportIndex> {
 		match export_idx {
 			module::ExportIndex::Func(func_idx) => {
 				return Some(module::ExportIndex::Func(*func_idx));
-			},
+			}
 			_ => return None,
 		};
 	}

@@ -8,10 +8,10 @@ use ethereum_types::{Address, H256, U256};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use wasmer_runtime;
 use super::WasmRuntime;
 use vm::tests::{FakeCall, FakeCallType, FakeExt};
 use vm::{self, ActionParams, ActionValue, GasLeft, Vm};
+use wasmer_runtime;
 
 macro_rules! load_sample {
 	($name: expr) => {{
@@ -33,9 +33,7 @@ fn wasm_runtime() -> WasmRuntime {
 fn prepare_module(params: ActionParams, ext: &mut vm::Ext) -> wasmer_runtime_core::Instance {
 	let (_, code, data) = parser::payload(&params, ext.schedule().wasm()).unwrap();
 
-	let module = wasmer_runtime::compile(
-		&code,
-	).unwrap();
+	let module = wasmer_runtime::compile(&code).unwrap();
 
 	let adjusted_gas_limit = params.gas * U256::from(ext.schedule().wasm().opcodes_div)
 		/ U256::from(ext.schedule().wasm().opcodes_mul);
@@ -94,7 +92,7 @@ fn microbench_empty(b: &mut Bencher) {
 	b.iter(|| {
 		module_instance.call("_start", &[]);
 	});
-}  
+}
 
 #[bench]
 fn bench_empty(b: &mut Bencher) {
@@ -115,7 +113,6 @@ fn bench_empty(b: &mut Bencher) {
 
 #[bench]
 fn bench_event(b: &mut Bencher) {
-
 	let code = load_sample!("event");
 	let mut params = ActionParams::default();
 	params.gas = U256::from(1_000_000);
@@ -131,7 +128,6 @@ fn bench_event(b: &mut Bencher) {
 
 #[bench]
 fn bench_read_delete(b: &mut Bencher) {
-
 	let code = load_sample!("read_delete");
 	let mut params = ActionParams::default();
 	params.gas = U256::from(1_000_000);
@@ -151,7 +147,6 @@ fn bench_read_delete(b: &mut Bencher) {
 
 #[bench]
 fn bench_factorial(b: &mut Bencher) {
-
 	let code = load_sample!("factorial");
 	let mut params = ActionParams::default();
 	params.data = Some(b"20".to_vec());

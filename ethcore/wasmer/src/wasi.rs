@@ -1,10 +1,10 @@
-use std::convert::{TryInto, TryFrom};
+use std::convert::{TryFrom, TryInto};
 
-use wasi_types::*;
 use crate::U256;
+use wasi_types::*;
 
-use wasmer_runtime_core::vm::{Ctx};
-use wasmer_runtime_core::memory::ptr::{WasmPtr, Array, Item};
+use wasmer_runtime_core::memory::ptr::{Array, Item, WasmPtr};
+use wasmer_runtime_core::vm::Ctx;
 
 const ADDR_LEN_BYTES: usize = std::mem::size_of::<mantle_types::Address>();
 const ADDR_CHARS: usize = ADDR_LEN_BYTES * 2; // two hex digits per byte
@@ -31,7 +31,12 @@ impl<'a> crate::Runtime<'a> {
 		}
 	}
 
-	pub fn args_get(&mut self, ctx: &mut Ctx, argv: WasmPtr<WasmPtr<u8, Array>, Array>, argv_buf: WasmPtr<u8, Array>) -> crate::Result<u16> {
+	pub fn args_get(
+		&mut self,
+		ctx: &mut Ctx,
+		argv: WasmPtr<WasmPtr<u8, Array>, Array>,
+		argv_buf: WasmPtr<u8, Array>,
+	) -> crate::Result<u16> {
 		Ok(ErrNo::Success as u16)
 	}
 
@@ -73,8 +78,11 @@ impl<'a> crate::Runtime<'a> {
 	) -> crate::Result<u16> {
 		let clock_id_converted = ClockId::try_from(clock_id).unwrap();
 		match clock_id_converted {
-			ClockId::RealTime | ClockId::Monotonic => self
-				.memory_set_value(ctx, time.offset(), Timestamp::from_sec(self.ext.env_info().timestamp))?,
+			ClockId::RealTime | ClockId::Monotonic => self.memory_set_value(
+				ctx,
+				time.offset(),
+				Timestamp::from_sec(self.ext.env_info().timestamp),
+			)?,
 			_ => return Ok(ErrNo::Inval as u16),
 		}
 		Ok(ErrNo::Success as u16)
@@ -86,7 +94,9 @@ impl<'a> crate::Runtime<'a> {
 		environ: WasmPtr<WasmPtr<u8>>,
 		mut environ_buf: WasmPtr<u8>,
 	) -> crate::Result<u16> {
-		let environs = self.memory_get_mut::<WasmPtr<u8>>(ctx, environ.offset(), 3).unwrap();
+		let environs = self
+			.memory_get_mut::<WasmPtr<u8>>(ctx, environ.offset(), 3)
+			.unwrap();
 
 		environs[0] = environ_buf;
 		environ_buf = self
@@ -144,12 +154,7 @@ impl<'a> crate::Runtime<'a> {
 		Ok(ErrNo::Success as u16)
 	}
 
-	pub fn fd_allocate(
-		&mut self,
-		_fd: u32,
-		_offset: u64,
-		_len: u64,
-	) -> crate::Result<u16> {
+	pub fn fd_allocate(&mut self, _fd: u32, _offset: u64, _len: u64) -> crate::Result<u16> {
 		// unimplemented(dontneed): storage is allocated on demand
 		Ok(ErrNo::Success as u16)
 	}
@@ -166,7 +171,12 @@ impl<'a> crate::Runtime<'a> {
 		Ok(ErrNo::Success as u16)
 	}
 
-	pub fn fd_fdstat_get(&mut self, ctx: &mut Ctx, fd: u32, buf: WasmPtr<FdStat>) -> crate::Result<u16> {
+	pub fn fd_fdstat_get(
+		&mut self,
+		ctx: &mut Ctx,
+		fd: u32,
+		buf: WasmPtr<FdStat>,
+	) -> crate::Result<u16> {
 		let fd_val = Fd::try_from(fd).unwrap();
 		let stats = bcfs!(self.bcfs.fdstat(fd_val));
 		self.memory_set_value(ctx, buf.offset(), stats).unwrap();
@@ -186,7 +196,12 @@ impl<'a> crate::Runtime<'a> {
 		Ok(ErrNo::NotCapable as u16)
 	}
 
-	pub fn fd_filestat_get(&mut self, ctx: &mut Ctx, fd: u32, buf: WasmPtr<FileStat>) -> crate::Result<u16> {
+	pub fn fd_filestat_get(
+		&mut self,
+		ctx: &mut Ctx,
+		fd: u32,
+		buf: WasmPtr<FileStat>,
+	) -> crate::Result<u16> {
 		let fd_val = Fd::try_from(fd).unwrap();
 		self.memory_set_value(ctx, buf.offset(), bcfs!(self.bcfs.filestat(fd_val)))?;
 		Ok(ErrNo::Success as u16)
@@ -232,13 +247,19 @@ impl<'a> crate::Runtime<'a> {
 		let fd_val = Fd::try_from(fd).unwrap();
 		let path_str = bcfs!(self.bcfs.prestat(fd_val)).to_str().unwrap();
 
-		self.memory_set(ctx, path_ptr.offset(), path_str.as_bytes()).unwrap();
+		self.memory_set(ctx, path_ptr.offset(), path_str.as_bytes())
+			.unwrap();
 		self.memory_set_value(ctx, path_len, path_str.len() as u8)
 			.unwrap();
 		Ok(ErrNo::Success as u16)
 	}
-	
-	pub fn fd_prestat_get(&mut self, ctx: &mut Ctx, fd: u32, buf: WasmPtr<Prestat>) -> crate::Result<u16> {
+
+	pub fn fd_prestat_get(
+		&mut self,
+		ctx: &mut Ctx,
+		fd: u32,
+		buf: WasmPtr<Prestat>,
+	) -> crate::Result<u16> {
 		let memory = ctx.memory(0);
 		let fd_val = Fd::try_from(fd).unwrap();
 		let path_str = bcfs!(self.bcfs.prestat(fd_val)).to_str().unwrap();
@@ -271,7 +292,6 @@ impl<'a> crate::Runtime<'a> {
 		let fd_converted = Fd::try_from(fd).unwrap();
 		self.do_write(ctx, fd_converted, iovs, iovs_len, Some(offset), nwritten)
 	}
-
 
 	pub fn fd_read(
 		&mut self,
@@ -329,7 +349,12 @@ impl<'a> crate::Runtime<'a> {
 		self.fd_datasync(fd) // there's no metadata
 	}
 
-	pub fn fd_tell(&mut self, ctx: &mut Ctx, fd: u32, offset: WasmPtr<FileSize>) -> crate::Result<u16> {
+	pub fn fd_tell(
+		&mut self,
+		ctx: &mut Ctx,
+		fd: u32,
+		offset: WasmPtr<FileSize>,
+	) -> crate::Result<u16> {
 		let fd_converted = Fd::try_from(fd).unwrap();
 		let pos = bcfs!(self.bcfs.tell(fd_converted));
 		self.memory_set_value(ctx, offset.offset(), pos)?;
@@ -508,7 +533,12 @@ impl<'a> crate::Runtime<'a> {
 		Ok(ErrNo::Success as u16)
 	}
 
-	pub fn poll_oneoff(&mut self, _in: WasmPtr<u32>, _out: WasmPtr<u32>, _n_subs: u32) -> crate::Result<u16> {
+	pub fn poll_oneoff(
+		&mut self,
+		_in: WasmPtr<u32>,
+		_out: WasmPtr<u32>,
+		_n_subs: u32,
+	) -> crate::Result<u16> {
 		Ok(ErrNo::Success as u16) // unimplemented(dontneed): nothing to poll
 	}
 
@@ -531,7 +561,6 @@ impl<'a> crate::Runtime<'a> {
 }
 
 impl<'a> crate::Runtime<'a> {
-	
 	fn do_read(
 		&mut self,
 		ctx: &mut Ctx,
@@ -602,11 +631,15 @@ impl<'a> crate::Runtime<'a> {
 		nwritten: WasmPtr<u32>,
 	) -> crate::Result<u16> {
 		// TODO: refunds
-		let iovs: &[IoVec] = self.memory_get_mut(ctx, iovs.offset(), iovs_len as usize).unwrap();
+		let iovs: &[IoVec] = self
+			.memory_get_mut(ctx, iovs.offset(), iovs_len as usize)
+			.unwrap();
 		let ioslices = iovs
 			.iter()
 			.map(|iov| {
-				let mem_slice = self.memory_get::<u8>(ctx, iov.buf, iov.len as usize).unwrap();
+				let mem_slice = self
+					.memory_get::<u8>(ctx, iov.buf, iov.len as usize)
+					.unwrap();
 				let p = mem_slice.as_ptr();
 				std::mem::forget(mem_slice);
 				// Launder the slice to get around borrow of `self` by `iovs` so that
@@ -635,13 +668,7 @@ impl<'a> crate::Runtime<'a> {
 		Ok(ErrNo::Success as u16)
 	}
 
-
-	fn memory_get<T: Copy>(
-		&self,
-		ctx: &mut Ctx,
-		offset: u32,
-		count: usize,
-	) -> crate::Result<&[T]> {
+	fn memory_get<T: Copy>(&self, ctx: &mut Ctx, offset: u32, count: usize) -> crate::Result<&[T]> {
 		Ok(&*self.memory_get_mut(ctx, offset, count)?)
 	}
 
@@ -669,9 +696,7 @@ impl<'a> crate::Runtime<'a> {
 		let offset = ptr as usize;
 		let nbytes = value.len();
 
-		let byte_buf = unsafe {
-			std::slice::from_raw_parts(value.as_ptr() as *const u8, nbytes)
-		};
+		let byte_buf = unsafe { std::slice::from_raw_parts(value.as_ptr() as *const u8, nbytes) };
 
 		ctx.memory(0).view()[offset..(offset + nbytes)]
 			.iter()
@@ -699,5 +724,4 @@ impl<'a> crate::Runtime<'a> {
 		}
 		Ok(())
 	}
-
 }
