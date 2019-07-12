@@ -19,8 +19,8 @@ vm = { path = "../vm" }
 wasi-types = "0.1"
 keccak-hash = { path = "../../util/hash" }
 wasm-macros = { path = "../wasm/macros" }
-wasmer-clif-backend = { path = "clif-backend" }
-wasmer-runtime-core = "0.5.2"
+wasmer-runtime = "0.5.5"
+wasmer-runtime-core = "0.5.5"
 rayon = "1.0.3"
 
 [dev-dependencies]

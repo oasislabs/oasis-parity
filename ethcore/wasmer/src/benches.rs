@@ -8,7 +8,7 @@ use ethereum_types::{Address, H256, U256};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use wasmer_clif_backend;
+use wasmer_runtime;
 use super::WasmRuntime;
 use vm::tests::{FakeCall, FakeCallType, FakeExt};
 use vm::{self, ActionParams, ActionValue, GasLeft, Vm};
@@ -33,9 +33,8 @@ fn wasm_runtime() -> WasmRuntime {
 fn prepare_module(params: ActionParams, ext: &mut vm::Ext) -> wasmer_runtime_core::Instance {
 	let (_, code, data) = parser::payload(&params, ext.schedule().wasm()).unwrap();
 
-	let module = wasmer_runtime_core::compile_with(
-		&code, 
-		&wasmer_clif_backend::CraneliftCompiler::new()
+	let module = wasmer_runtime::compile(
+		&code,
 	).unwrap();
 
 	let adjusted_gas_limit = params.gas * U256::from(ext.schedule().wasm().opcodes_div)

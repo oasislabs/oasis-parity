@@ -31,7 +31,7 @@ extern crate parity_wasm;
 extern crate pwasm_utils as wasm_utils;
 extern crate vm;
 extern crate wasi_types;
-extern crate wasmer_clif_backend;
+extern crate wasmer_runtime;
 extern crate wasmer_runtime_core;
 
 mod parser;
@@ -52,7 +52,8 @@ use ethereum_types::U256;
 use std::ffi::c_void;
 use std::convert::TryInto;
 
-use wasmer_runtime_core::{error, backend::Compiler, memory, memory::MemoryView, Instance, Module, module, module::ModuleInfo};
+use wasmer_runtime::{Module};
+use wasmer_runtime_core::{error, memory, memory::MemoryView, Instance, module, module::ModuleInfo};
 /// Wasmer runtime instance
 #[derive(Default)]
 pub struct WasmRuntime {
@@ -77,9 +78,8 @@ impl vm::Vm for WasmRuntime {
 			ext.schedule().wasm(),
 		)?;
 
-		let mut module = wasmer_runtime_core::compile_with(
+		let mut module = wasmer_runtime::compile(
 			&code,
-			&wasmer_clif_backend::CraneliftCompiler::new()
 		).unwrap();
 
 		if is_create {
