@@ -409,6 +409,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					address: new_address,
 					sender: sender.clone(),
 					origin: sender.clone(),
+					origin_nonce: nonce,
 					gas: init_gas,
 					gas_price: t.gas_price,
 					value: ActionValue::Transfer(t.value),
@@ -446,6 +447,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					address: address.clone(),
 					sender: sender.clone(),
 					origin: sender.clone(),
+					origin_nonce: nonce,
 					gas: init_gas,
 					gas_price: t.gas_price,
 					value: ActionValue::Transfer(t.value),
@@ -2703,6 +2705,7 @@ mod tests {
 		let mut state = get_temp_state_with_factory(factory);
 		let mut info = EnvInfo::default();
 		info.number = 100; // wasm activated at block 10
+		info.last_hashes = Arc::new(vec![H256::zero()]);
 		let machine = ::ethereum::new_kovan_wasm_test_machine();
 		let mut substate = Substate::new();
 

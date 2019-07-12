@@ -98,6 +98,9 @@ pub trait Ext: blockchain_traits::KVStore + blockchain_traits::KVStoreMut {
 	/// Balance of the origin account.
 	fn origin_balance(&self) -> Result<U256>;
 
+	/// Nonce of the origin account.
+	fn origin_nonce(&self) -> U256;
+
 	/// Returns address balance.
 	fn balance(&self, address: &Address) -> Result<U256>;
 
