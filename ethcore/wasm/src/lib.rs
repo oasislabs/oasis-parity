@@ -16,6 +16,7 @@
 
 //! Wasm Interpreter
 #![feature(specialization, type_ascription)]
+#![feature(test)]
 
 extern crate bcfs;
 extern crate byteorder;
@@ -34,9 +35,13 @@ extern crate wasmi;
 mod env;
 mod parser;
 mod runtime;
+
 #[cfg(test)]
 mod tests;
 mod wasi;
+
+#[cfg(test)]
+mod benches;
 
 use parity_wasm::elements;
 use vm::{ActionParams, GasLeft, ReturnData};
@@ -90,6 +95,10 @@ enum ExecutionOutcome {
 }
 
 impl vm::Vm for WasmInterpreter {
+	fn prepare(&mut self, params: &ActionParams, ext: &mut dyn vm::Ext) -> vm::Result<()> {
+		Ok(())
+	}
+
 	fn exec(&mut self, params: ActionParams, ext: &mut dyn vm::Ext) -> vm::Result<GasLeft> {
 		let is_create = ext.is_create();
 

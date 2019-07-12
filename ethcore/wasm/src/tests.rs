@@ -285,3 +285,37 @@ fn code_balance() {
 		Some(balance.to_le_bytes().as_ref())
 	);
 }
+
+#[test]
+fn math_factorial() {
+	let code = load_sample!("factorial");
+	let mut params = ActionParams::default();
+	params.data = Some(b"5".to_vec());
+	params.gas = U256::from(1_000_000);
+	params.code = Some(Arc::new(code));
+	let mut ext = FakeExt::new().with_wasm();
+
+	let mut interpreter = wasm_interpreter();
+	let (_apply, return_data, _gas_left) =
+		test_finalize(interpreter.exec(params, &mut ext)).unwrap();
+
+	let output = std::str::from_utf8(&*return_data).unwrap();
+	assert_eq!(output, "the output is: 120\n");
+}
+
+#[test]
+fn math_fib() {
+	let code = load_sample!("fibonacci");
+	let mut params = ActionParams::default();
+	params.data = Some(b"10".to_vec());
+	params.gas = U256::from(1_000_000);
+	params.code = Some(Arc::new(code));
+	let mut ext = FakeExt::new().with_wasm();
+
+	let mut interpreter = wasm_interpreter();
+	let (_apply, return_data, _gas_left) =
+		test_finalize(interpreter.exec(params, &mut ext)).unwrap();
+
+	let output = std::str::from_utf8(&*return_data).unwrap();
+	assert_eq!(output, "the output is: 89\n");
+}

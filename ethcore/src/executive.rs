@@ -520,7 +520,9 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		);
 		trace!(target: "executive", "ext.schedule.have_delegate_call: {}", ext.schedule().have_delegate_call);
 		let mut vm = vm_factory.create(ctx, &params, &schedule);
-		let ret = vm.exec(params, &mut ext);
+		vm.prepare(&params, &mut ext).unwrap();
+
+		let ret = vm.exec(params.clone(), &mut ext);
 
 		ret.finalize(ext)
 	}

@@ -4,17 +4,23 @@ version = "0.1.0"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 
 [dependencies]
+bcfs = "0.2"
 byteorder = "1.0"
+blockchain-traits = "0.2"
+common-types = { path = "../types" }
 ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
 log = "0.3"
+mantle-types = "0.2"
 parity-wasm = "0.31"
 # libc = "0.2"
 pwasm-utils = "0.2"
 vm = { path = "../vm" }
 # ethcore-logger = { path = "../../logger" }
+wasi-types = "0.1"
 keccak-hash = { path = "../../util/hash" }
-wasmer-runtime = "0.4.2"
-wasmer-runtime-core = "0.4.2"
+wasm-macros = { path = "../wasm/macros" }
+wasmer-runtime = "0.5.5"
+wasmer-runtime-core = "0.5.5"
 rayon = "1.0.3"
 
 [dev-dependencies]

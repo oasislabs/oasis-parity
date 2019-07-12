@@ -26,6 +26,10 @@ use parking_lot::{RwLock, RwLockReadGuard};
 lazy_static! {
 	static ref LOG_DUMMY: () = {
 		let mut builder = LogBuilder::new();
+
+		// Cranelift outputs unreadable amounts of INFO logs
+		builder.filter(Some("cranelift_wasm"), LogLevelFilter::Warn);
+
 		builder.filter(None, LogLevelFilter::Info);
 
 		if let Ok(log) = env::var("RUST_LOG") {

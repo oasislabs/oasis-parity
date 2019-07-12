@@ -42,6 +42,10 @@ impl Vm for OasisVm {
 
 		result
 	}
+
+	fn prepare(&mut self, params: &ActionParams, ext: &mut Ext) -> Result<()> {
+		self.vm.prepare(&params, ext)
+	}
 }
 
 impl OasisVm {
@@ -72,6 +76,10 @@ impl Vm for ConfidentialVm {
 		else {
 			self.vm.exec(params, ext)
 		}
+	}
+
+	fn prepare(&mut self, params: &ActionParams, ext: &mut Ext) -> Result<()> {
+		self.vm.prepare(&params, ext)
 	}
 }
 

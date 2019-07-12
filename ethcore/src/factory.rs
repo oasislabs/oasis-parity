@@ -65,7 +65,7 @@ impl VmFactory {
 				&& params.code.as_ref().map_or(false, |code| {
 					code.len() > 4 && &code[0..4] == WASM_MAGIC_NUMBER
 				}) {
-				Box::new(WasmRuntime)
+				Box::new(WasmRuntime::default())
 			} else {
 				self.evm.create(&params.gas)
 			}
