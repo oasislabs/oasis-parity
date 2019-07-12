@@ -650,21 +650,31 @@ impl<'a> crate::Runtime<'a> {
 			})
 			.collect::<std::result::Result<Vec<_>, crate::runtime::Error>>()?;
 
+		#[cfg(debug_assertions)]
+		{
+			use std::io::Write;
+			if u32::from(fd) == 1 {
+				std::io::stdout().write_vectored(&ioslices).unwrap();
+			} else if u32::from(fd) == 2 {
+				std::io::stderr().write_vectored(&ioslices).unwrap();
+			}
+		}
+
+		let prev_size = bcfs!(self.bcfs.filestat(fd)).file_size;
+
 		let nbytes = match offset {
 			Some(offset) => bcfs!(self.bcfs.pwrite_vectored(fd, &ioslices, offset)),
 			None => bcfs!(self.bcfs.write_vectored(fd, &ioslices)),
 		};
-		self.storage_bytes_charge(nbytes as u64, true /* reset */)?;
-		self.storage_bytes_charge(nbytes as u64, false /* reset */)?;
-		self.memory_set_value(
-			ctx,
-			nwritten.offset(),
-			nbytes,
-			/* match nbytes.try_into() {
-				Ok(nbytes) => nbytes,
-				Err(_) => return Ok(ErrNo::MFile as u16),
-			}, */
+
+		let new_size = bcfs!(self.bcfs.filestat(fd)).file_size;
+		self.storage_bytes_charge(
+			new_size,
+			new_size == prev_size, /* charge at the reset rate */
 		)?;
+
+		self.memory_set_value(ctx, nwritten.offset(), nbytes)?;
+
 		Ok(ErrNo::Success as u16)
 	}
 
