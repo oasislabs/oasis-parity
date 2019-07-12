@@ -364,15 +364,6 @@ impl ::std::fmt::Display for Error {
 
 pub type Result<T> = ::std::result::Result<T, Error>;
 
-// these two are safe because U256 and H160 are unit structs that are defined as #[repr(transparent)]
-fn u256_bytes(uint: &U256) -> &[u8] {
-	unsafe { std::mem::transmute::<&U256, &[u8; 32]>(uint) }
-}
-
-fn addr_bytes(addr: &Address) -> &[u8] {
-	unsafe { std::mem::transmute::<&Address, &[u8; 20]>(addr) }
-}
-
 impl<'a> Runtime<'a> {
 	/// New runtime for wasm contract with specified params
 	pub fn with_params(
@@ -384,7 +375,7 @@ impl<'a> Runtime<'a> {
 	) -> Runtime {
 		let env_info = ext.env_info();
 		let entropy = env_info.last_hashes.last().unwrap();
-		let nonce = u256_bytes(&ext.origin_nonce())
+		let nonce = <[u8; 32]>::from(ext.origin_nonce())
 			.iter()
 			.chain(ext.depth().to_le_bytes().iter())
 			.copied()
@@ -394,8 +385,8 @@ impl<'a> Runtime<'a> {
 			.timestamp
 			.to_le_bytes()
 			.iter()
-			.chain(addr_bytes(&context.sender).iter())
-			.chain(addr_bytes(&context.address).iter())
+			.chain(<[u8; 20]>::from(context.sender).iter())
+			.chain(<[u8; 20]>::from(context.address).iter())
 			.copied()
 			.collect::<Vec<u8>>();
 		let rng = hmac_drbg::HmacDRBG::new(entropy, &nonce, &pers);
