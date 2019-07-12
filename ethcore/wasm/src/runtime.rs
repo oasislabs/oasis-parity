@@ -34,6 +34,8 @@ pub struct RuntimeContext {
 	pub value_str: String,
 }
 
+pub const RNG_HASH_BYTES: usize = 256 / 8; // sha256
+
 pub struct Runtime<'a> {
 	pub gas_counter: u64,
 	pub gas_limit: u64,
