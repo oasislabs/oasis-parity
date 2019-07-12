@@ -158,6 +158,10 @@ impl Ext for FakeExt {
 		unimplemented!()
 	}
 
+	fn origin_nonce(&self) -> U256 {
+		unimplemented!()
+	}
+
 	fn balance(&self, address: &Address) -> Result<U256> {
 		Ok(self.balances[address])
 	}

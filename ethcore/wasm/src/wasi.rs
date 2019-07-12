@@ -444,8 +444,10 @@ impl<'a> crate::Runtime<'a> {
 		Ok(ErrNo::Success) // unimplemented(dontneed): no controlling process
 	}
 
-	pub fn random_get(&mut self, _buf: P<u8>, _buf_len: Size) -> crate::Result<ErrNo> {
-		Ok(ErrNo::NoSys) // unimplemented(todo): seed prng with blockhash
+	pub fn random_get(&mut self, buf: P<u8>, buf_len: Size) -> crate::Result<ErrNo> {
+		self.rng
+			.generate_to_slice(self.memory.get_mut(buf, buf_len as usize)?, None);
+		Ok(ErrNo::Success)
 	}
 
 	pub fn sched_yield(&mut self) -> crate::Result<ErrNo> {
