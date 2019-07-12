@@ -50,8 +50,9 @@ use vm::{ActionParams, GasLeft, ReturnData};
 
 use ethereum_types::U256;
 use std::ffi::c_void;
+use std::convert::TryInto;
 
-use wasmer_runtime_core::{error, backend::Compiler, memory, memory::MemoryView, Instance, Module};
+use wasmer_runtime_core::{error, backend::Compiler, memory, memory::MemoryView, Instance, Module, module, module::ModuleInfo};
 /// Wasmer runtime instance
 #[derive(Default)]
 pub struct WasmRuntime {
@@ -67,26 +68,33 @@ enum ExecutionOutcome {
 
 impl vm::Vm for WasmRuntime {
 	fn prepare(&mut self, params: &ActionParams, ext: &mut vm::Ext) -> vm::Result<()> {
+		
+		let is_create = ext.is_create();
+		
 		// Explicitly split the input into code and data
-		let (_, code, data) = parser::payload(&params, ext.schedule().wasm())?;
+		let (_, code, data) = parser::payload(
+			&params,
+			ext.schedule().wasm(),
+		)?;
 
-		self.module = Some(wasmer_runtime_core::compile_with(
-			&code, 
+		let mut module = wasmer_runtime_core::compile_with(
+			&code,
 			&wasmer_clif_backend::CraneliftCompiler::new()
-		).unwrap());
+		).unwrap();
 
+		if is_create {
+			subst_main_call(&mut module);
+		}
+
+		self.module = Some(module);
 		self.data = data.to_vec();
 
 		Ok(())
 	}
 
 	fn exec(&mut self, params: ActionParams, ext: &mut vm::Ext) -> vm::Result<GasLeft> {
+		
 		let is_create = ext.is_create();
-
-		if is_create {
-			let (mut module, _, _) = parser::payload(&params, ext.schedule().wasm())?;
-			subst_main_call(&mut module);
-		}
 
 		if let Some(module) = &self.module {
 			let adjusted_gas_limit = params.gas * U256::from(ext.schedule().wasm().opcodes_div)
@@ -204,65 +212,36 @@ impl vm::Vm for WasmRuntime {
 }
 
 /// Replaces the call to `main` in `_start` with one to `_mantle_deploy`.
-fn subst_main_call(module: &mut elements::Module) {
-	let start_fn_idx = match func_index(module, "_start") {
+fn subst_main_call(module: &mut Module) {
+
+	let module_info = module.info();
+
+	let start_fn_idx = match func_index(module_info, "_start") {
 		Some(idx) => idx,
 		None => return,
 	};
-	let deploy_fn_idx = match func_index(module, "_mantle_deploy") {
+	let deploy_fn_idx = match func_index(module_info, "_mantle_deploy") {
 		Some(idx) => idx,
 		None => return,
 	};
-	let main_fn_idx = match func_index(module, "main") {
+	let mut main_fn_idx = match func_index(module_info, "main") {
 		Some(idx) => idx,
 		None => return,
 	};
 
-	let import_section_len: usize = module
-		.import_section()
-		.map(|import| {
-			import
-				.entries()
-				.iter()
-				.filter(|entry| match entry.external() {
-					&elements::External::Function(_) => true,
-					_ => false,
-				})
-				.count()
-		})
-		.unwrap_or_default();
+	// TODO: replace function index
 
-	let mut start_fn = match module
-		.code_section_mut()
-		.map(|s| &mut s.bodies_mut()[start_fn_idx as usize - import_section_len])
-	{
-		Some(f) => f,
-		None => return,
-	};
-
-	for instr in start_fn.code_mut().elements_mut() {
-		if let elements::Instruction::Call(ref mut idx) = instr {
-			if *idx == main_fn_idx {
-				*idx = deploy_fn_idx;
-			}
-		}
-	}
 }
 
 /// Returns the function index of an export by name.
-fn func_index(module: &elements::Module, name: &str) -> Option<u32> {
-	module
-		.export_section()
-		.iter()
-		.flat_map(|s| s.entries())
-		.find_map(|export| {
-			if export.field() == name {
-				match export.internal() {
-					elements::Internal::Function(idx) => Some(*idx),
-					_ => None,
-				}
-			} else {
-				None
-			}
-		})
+fn func_index(module: &ModuleInfo, name: &str) -> Option<module::ExportIndex> {
+	if let Some((_, export_idx)) = module.exports.get_key_value(name) {
+		match export_idx {
+			module::ExportIndex::Func(func_idx) => {
+				return Some(module::ExportIndex::Func(*func_idx));
+			},
+			_ => return None,
+		};
+	}
+	None
 }

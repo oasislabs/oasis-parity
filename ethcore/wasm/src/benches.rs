@@ -120,7 +120,6 @@ fn bench_empty(b: &mut Bencher) {
 	let mut ext = FakeExt::new().with_wasm();
 
 	let mut interpreter = wasm_interpreter();
-	interpreter.prepare(&params, &mut ext);
 
 	b.iter(|| interpreter.exec(params.clone(), &mut ext));
 }
@@ -135,7 +134,52 @@ fn bench_event(b: &mut Bencher) {
 	let mut ext = FakeExt::new().with_wasm();
 
 	let mut interpreter = wasm_interpreter();
-	interpreter.prepare(&params, &mut ext).unwrap();
+	b.iter(|| interpreter.exec(params.clone(), &mut ext));
+}
+
+#[bench]
+fn bench_read_delete(b: &mut Bencher) {
+	let code = load_sample!("read_delete");
+	let mut params = ActionParams::default();
+	params.gas = U256::from(1_000_000);
+	params.value = ActionValue::Transfer(0.into());
+	params.code = Some(Arc::new(code));
+
+	let mut ext = FakeExt::new().with_wasm();
+	let key = b"value".to_vec();
+	let val_str = "the_value";
+	ext.store.insert(key.clone(), val_str.as_bytes().to_vec());
+
+	let mut interpreter = wasm_interpreter();
+
+	b.iter(|| interpreter.exec(params.clone(), &mut ext));
+}
+
+#[bench]
+fn bench_factorial(b: &mut Bencher) {
+
+	let code = load_sample!("factorial");
+	let mut params = ActionParams::default();
+	params.data = Some(b"20".to_vec());
+	params.gas = U256::from(1_000_000);
+	params.code = Some(Arc::new(code));
+	let mut ext = FakeExt::new().with_wasm();
+
+	let mut interpreter = wasm_interpreter();
+	
+	b.iter(|| interpreter.exec(params.clone(), &mut ext));
+}
+
+#[bench]
+fn bench_fib(b: &mut Bencher) {
+	let code = load_sample!("fibonacci");
+	let mut params = ActionParams::default();
+	params.data = Some(b"5".to_vec());
+	params.gas = U256::from(1_000_000);
+	params.code = Some(Arc::new(code));
+	let mut ext = FakeExt::new().with_wasm();
+
+	let mut interpreter = wasm_interpreter();
 
 	b.iter(|| interpreter.exec(params.clone(), &mut ext));
 }
