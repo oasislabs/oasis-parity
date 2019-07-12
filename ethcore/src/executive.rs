@@ -2705,6 +2705,7 @@ mod tests {
 		let mut state = get_temp_state_with_factory(factory);
 		let mut info = EnvInfo::default();
 		info.number = 100; // wasm activated at block 10
+		info.last_hashes = Arc::new(vec![H256::zero()]);
 		let machine = ::ethereum::new_kovan_wasm_test_machine();
 		let mut substate = Substate::new();
 

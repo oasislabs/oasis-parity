@@ -43,6 +43,7 @@ pub enum OutputPolicy<'a, 'b> {
 }
 
 /// Transaction properties that externalities need to know about.
+#[derive(Default)]
 pub struct OriginInfo {
 	address: Address,
 	origin: Address,
@@ -676,12 +677,7 @@ mod tests {
 	use trace::{NoopTracer, NoopVMTracer};
 
 	fn get_test_origin() -> OriginInfo {
-		OriginInfo {
-			address: Address::zero(),
-			origin: Address::zero(),
-			gas_price: U256::zero(),
-			value: U256::zero(),
-		}
+		Default::default()
 	}
 
 	fn get_test_env_info() -> EnvInfo {
