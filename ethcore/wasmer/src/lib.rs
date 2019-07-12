@@ -229,7 +229,8 @@ fn subst_main_call(module: &mut Module) {
 		None => return,
 	};
 
-	// TODO: replace function index
+	// TODO: Unimplemented
+	// Need to get mutable access to the exports and replace function index, same as in wasmi
 
 }
 
