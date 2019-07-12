@@ -79,7 +79,9 @@ pub fn test_finalize(res: Result<GasLeft>) -> Result<U256> {
 impl FakeExt {
 	/// New fake externalities
 	pub fn new() -> Self {
-		FakeExt::default()
+		let mut this = FakeExt::default();
+		this.info.last_hashes = Arc::new(vec![H256::zero()]);
+		this
 	}
 
 	/// New fake externalities with byzantium schedule rules
@@ -159,7 +161,7 @@ impl Ext for FakeExt {
 	}
 
 	fn origin_nonce(&self) -> U256 {
-		unimplemented!()
+		U256::zero()
 	}
 
 	fn balance(&self, address: &Address) -> Result<U256> {
