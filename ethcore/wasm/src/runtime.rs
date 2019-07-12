@@ -381,7 +381,7 @@ impl<'a> Runtime<'a> {
 			.copied()
 			.collect::<Vec<u8>>();
 		//^ origin nonce will not be unique for a sub-call, so we swizzle in the current depth
-		let pers = env_info
+		let personalization_string = env_info
 			.timestamp
 			.to_le_bytes()
 			.iter()
@@ -389,7 +389,8 @@ impl<'a> Runtime<'a> {
 			.chain(<[u8; 20]>::from(context.address).iter())
 			.copied()
 			.collect::<Vec<u8>>();
-		let rng = hmac_drbg::HmacDRBG::new(entropy, &nonce, &pers);
+		// per https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-90Ar1.pdf
+		let rng = hmac_drbg::HmacDRBG::new(entropy, &nonce, &personalization_string);
 
 		Runtime {
 			bcfs: UnsafeCell::new(BCFS::new(*eaddr2maddr(&context.address), "oasis")),
