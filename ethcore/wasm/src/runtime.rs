@@ -374,7 +374,7 @@ impl<'a> Runtime<'a> {
 		context: RuntimeContext,
 	) -> Runtime {
 		let env_info = ext.env_info();
-		let entropy = env_info.last_hashes.last().unwrap();
+		let entropy = env_info.last_hashes.first().unwrap();
 		let nonce = <[u8; 32]>::from(ext.origin_nonce())
 			.iter()
 			.chain(ext.depth().to_le_bytes().iter())
