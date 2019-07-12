@@ -34,6 +34,8 @@ pub struct RuntimeContext {
 	pub value_str: String,
 }
 
+pub const RNG_HASH_BYTES: usize = 256 / 8; // sha256
+
 pub struct Runtime<'a> {
 	pub gas_counter: u64,
 	pub gas_limit: u64,
@@ -47,6 +49,7 @@ pub struct Runtime<'a> {
 	pub bcfs: UnsafeCell<BCFS<mantle_types::Address, AccountMeta>>,
 	pub should_revert: bool,
 	pub bytes_cache: RefCell<Vec<Arc<Vec<u8>>>>,
+	pub rng: hmac_drbg::HmacDRBG<sha2::Sha256>,
 }
 
 pub struct Receipt {
@@ -372,6 +375,25 @@ impl<'a> Runtime<'a> {
 		args: Vec<u8>,
 		context: RuntimeContext,
 	) -> Runtime {
+		let env_info = ext.env_info();
+		let entropy = env_info.last_hashes.first().unwrap();
+		let nonce = <[u8; 32]>::from(ext.origin_nonce())
+			.iter()
+			.chain(ext.depth().to_le_bytes().iter())
+			.copied()
+			.collect::<Vec<u8>>();
+		//^ origin nonce will not be unique for a sub-call, so we swizzle in the current depth
+		let personalization_string = env_info
+			.timestamp
+			.to_le_bytes()
+			.iter()
+			.chain(<[u8; 20]>::from(context.sender).iter())
+			.chain(<[u8; 20]>::from(context.address).iter())
+			.copied()
+			.collect::<Vec<u8>>();
+		// per https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-90Ar1.pdf
+		let rng = hmac_drbg::HmacDRBG::new(entropy, &nonce, &personalization_string);
+
 		Runtime {
 			bcfs: UnsafeCell::new(BCFS::new(*eaddr2maddr(&context.address), "oasis")),
 			gas_counter: 0,
@@ -380,6 +402,7 @@ impl<'a> Runtime<'a> {
 			ext,
 			context,
 			args,
+			rng,
 			output: Vec::new(),
 			err_output: Vec::new(),
 			should_revert: false,

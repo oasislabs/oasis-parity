@@ -3,6 +3,7 @@ use std::convert::TryInto;
 use wasi_types::*;
 use wasmi::P;
 
+use crate::runtime::RNG_HASH_BYTES;
 use crate::U256;
 
 const ADDR_LEN_BYTES: usize = std::mem::size_of::<mantle_types::Address>();
@@ -444,8 +445,17 @@ impl<'a> crate::Runtime<'a> {
 		Ok(ErrNo::Success) // unimplemented(dontneed): no controlling process
 	}
 
-	pub fn random_get(&mut self, _buf: P<u8>, _buf_len: Size) -> crate::Result<ErrNo> {
-		Ok(ErrNo::NoSys) // unimplemented(todo): seed prng with blockhash
+	pub fn random_get(&mut self, buf: P<u8>, buf_len: Size) -> crate::Result<ErrNo> {
+		let buf_len = buf_len as usize;
+		let rng_buf_blocks = (buf_len + RNG_HASH_BYTES) / RNG_HASH_BYTES;
+		let rng_buf_len = rng_buf_blocks * RNG_HASH_BYTES;
+		let mut rng_buf = Vec::with_capacity(rng_buf_len);
+		unsafe { rng_buf.set_len(rng_buf_len) };
+		self.rng.generate_to_slice(&mut rng_buf, None);
+		self.memory
+			.get_mut(buf, buf_len)?
+			.copy_from_slice(&rng_buf[..buf_len]);
+		Ok(ErrNo::Success)
 	}
 
 	pub fn sched_yield(&mut self) -> crate::Result<ErrNo> {

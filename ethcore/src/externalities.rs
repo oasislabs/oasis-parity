@@ -43,9 +43,11 @@ pub enum OutputPolicy<'a, 'b> {
 }
 
 /// Transaction properties that externalities need to know about.
+#[derive(Default)]
 pub struct OriginInfo {
 	address: Address,
 	origin: Address,
+	origin_nonce: U256,
 	gas_price: U256,
 	value: U256,
 }
@@ -56,6 +58,7 @@ impl OriginInfo {
 		OriginInfo {
 			address: params.address.clone(),
 			origin: params.origin.clone(),
+			origin_nonce: params.origin_nonce,
 			gas_price: params.gas_price,
 			value: match params.value {
 				ActionValue::Transfer(val) | ActionValue::Apparent(val) => val,
@@ -213,6 +216,10 @@ where
 		self.balance(&self.origin_info.address).map_err(Into::into)
 	}
 
+	fn origin_nonce(&self) -> U256 {
+		self.origin_info.origin_nonce
+	}
+
 	fn balance(&self, address: &Address) -> vm::Result<U256> {
 		self.ext_tracer.trace_balance(address);
 		self.state.balance(address).map_err(Into::into)
@@ -281,6 +288,7 @@ where
 			address: address.clone(),
 			sender: self.origin_info.address.clone(),
 			origin: self.origin_info.origin.clone(),
+			origin_nonce: self.origin_info.origin_nonce,
 			gas: *gas,
 			gas_price: self.origin_info.gas_price,
 			value: ActionValue::Transfer(*value),
@@ -378,6 +386,7 @@ where
 			value: ActionValue::Apparent(self.origin_info.value),
 			code_address: code_address.clone(),
 			origin: self.origin_info.origin.clone(),
+			origin_nonce: self.origin_info.origin_nonce,
 			gas: *gas,
 			gas_price: self.origin_info.gas_price,
 			// Code stripped of contract header, if present.
@@ -668,12 +677,7 @@ mod tests {
 	use trace::{NoopTracer, NoopVMTracer};
 
 	fn get_test_origin() -> OriginInfo {
-		OriginInfo {
-			address: Address::zero(),
-			origin: Address::zero(),
-			gas_price: U256::zero(),
-			value: U256::zero(),
-		}
+		Default::default()
 	}
 
 	fn get_test_env_info() -> EnvInfo {

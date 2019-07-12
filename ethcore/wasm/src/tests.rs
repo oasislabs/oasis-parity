@@ -49,7 +49,6 @@ fn wasm_interpreter() -> WasmInterpreter {
 	WasmInterpreter
 }
 
-/// Empty contract does almost nothing except producing 1 (one) local node debug log message
 #[test]
 fn empty() {
 	let code = load_sample!("empty");
@@ -62,7 +61,24 @@ fn empty() {
 	let mut ext = FakeExt::new().with_wasm();
 
 	let mut interpreter = wasm_interpreter();
-	test_finalize(interpreter.exec(params, &mut ext)).unwrap();
+	let (_, _, apply_state) = test_finalize(interpreter.exec(params, &mut ext)).unwrap();
+	assert!(apply_state);
+}
+
+#[test]
+fn rng() {
+	let code = load_sample!("rng");
+	let address: Address = "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6".parse().unwrap();
+
+	let mut params = ActionParams::default();
+	params.address = address.clone();
+	params.gas = U256::from(1_000_000);
+	params.code = Some(Arc::new(code));
+	let mut ext = FakeExt::new().with_wasm();
+
+	let mut interpreter = wasm_interpreter();
+	let (_, _, apply_state) = test_finalize(interpreter.exec(params, &mut ext)).unwrap();
+	assert!(apply_state);
 }
 
 #[test]
