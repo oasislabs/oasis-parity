@@ -638,8 +638,9 @@ where
 	B: StateBackend,
 {
 	fn contains(&self, key: &[u8]) -> bool {
+		let key = self.state.to_storage_key(&slice_to_key(key));
 		self.state
-			._storage_at(&self.origin_info.address, &slice_to_key(key))
+			._storage_at(&self.origin_info.address, &key)
 			.as_ref()
 			.map(Option::is_some)
 			.unwrap_or_default()
