@@ -5,15 +5,15 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-bcfs = "0.2"
-blockchain-traits = "0.2"
+bcfs = { git = "https://github.com/oasislabs/mantle" }
+blockchain-traits = { git = "https://github.com/oasislabs/mantle" }
 byteorder = "1.0"
 common-types = { path = "../types" }
 ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
 hmac-drbg = "=0.1.2"
 keccak-hash = { path = "../../util/hash" }
 log = "0.3"
-mantle-types = "0.2"
+mantle-types = { git = "https://github.com/oasislabs/mantle" }
 parity-wasm = "0.31"
 pwasm-utils = "0.2"
 sha2 = "0.6"
