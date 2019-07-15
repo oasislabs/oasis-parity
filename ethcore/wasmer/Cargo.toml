@@ -10,7 +10,7 @@ blockchain-traits = { git = "https://github.com/oasislabs/mantle" }
 common-types = { path = "../types" }
 ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
 log = "0.3"
-mantle-types = "0.2"
+mantle-types = { git = "https://github.com/oasislabs/mantle" }
 parity-wasm = "0.31"
 # libc = "0.2"
 pwasm-utils = "0.2"

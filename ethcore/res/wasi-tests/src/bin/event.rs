@@ -14,7 +14,6 @@ fn main() {
 		log_f.write(&vec![i as u8; i]).unwrap();
 	});
 	let data = b"hello, world!";
-	log_f.write(&(data.len() as u32).to_le_bytes()).unwrap();
 	log_f.write(data).unwrap();
 	log_f.flush().unwrap();
 }
