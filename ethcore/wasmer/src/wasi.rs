@@ -6,7 +6,7 @@ use wasi_types::*;
 use wasmer_runtime_core::memory::ptr::{Array, Item, WasmPtr};
 use wasmer_runtime_core::vm::Ctx;
 
-const ADDR_LEN_BYTES: usize = std::mem::size_of::<mantle_types::Address>();
+const ADDR_LEN_BYTES: usize = std::mem::size_of::<oasis_types::Address>();
 const ADDR_CHARS: usize = ADDR_LEN_BYTES * 2; // two hex digits per byte
 
 macro_rules! bcfs {
