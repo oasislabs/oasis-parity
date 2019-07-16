@@ -70,4 +70,4 @@ fake-fetch = { path = "../util/fake-fetch" }
 kvdb-memorydb = { path = "../util/kvdb-memorydb" }
 macros = { path = "../util/macros" }
 pretty_assertions = "0.1"
-transaction-pool = { path = "../transaction-pool" }
+#transaction-pool = { path = "../transaction-pool" }

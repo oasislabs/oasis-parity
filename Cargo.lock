@@ -1974,7 +1974,6 @@ dependencies = [
  "tempdir 0.3.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "tiny-keccak 1.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-timer 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "transaction-pool 1.12.0",
  "transient-hashmap 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "vm 0.1.0",
 ]
@@ -3167,24 +3166,6 @@ version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "serde 1.0.94 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "trace-time"
-version = "0.1.0"
-dependencies = [
- "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "transaction-pool"
-version = "1.12.0"
-dependencies = [
- "error-chain 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "ethereum-types 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "smallvec 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "trace-time 0.1.0",
 ]
 
 [[package]]
