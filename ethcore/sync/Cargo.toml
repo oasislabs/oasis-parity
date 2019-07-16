@@ -9,10 +9,10 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 ethcore-bytes = { path = "../../util/bytes" }
-ethcore-network = { path = "../../util/network" }
-ethcore-network-devp2p = { path = "../../util/network-devp2p" }
+#ethcore-network = { path = "../../util/network" }
+#ethcore-network-devp2p = { path = "../../util/network-devp2p" }
 ethcore-io = { path = "../../util/io" }
-ethcore-light = { path = "../light" }
+#ethcore-light = { path = "../light" }
 ethcore-transaction = { path = "../transaction" }
 ethcore = { path = ".." }
 ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }

@@ -8,8 +8,8 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 ethcore = { path = ".."}
-ethcore-network = { path = "../../util/network" }
-ethcore-network-devp2p = { path = "../../util/network-devp2p" }
+#ethcore-network = { path = "../../util/network" }
+#ethcore-network-devp2p = { path = "../../util/network-devp2p" }
 ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
 log = "0.3"
 parking_lot = "0.5"

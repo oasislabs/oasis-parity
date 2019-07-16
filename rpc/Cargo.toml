@@ -55,7 +55,7 @@ ethkey = { path = "../ethkey" }
 #fetch = { path = "../util/fetch" }
 #hardware-wallet = { path = "../hw" }
 keccak-hash = { path = "../util/hash" }
-node-health = { path = "../dapps/node-health" }
+#node-health = { path = "../dapps/node-health" }
 parity-reactor = { path = "../util/reactor" }
 #parity-updater = { path = "../updater" }
 parity-version = { path = "../util/version" }
@@ -65,7 +65,7 @@ stats = { path = "../util/stats" }
 vm = { path = "../ethcore/vm" }
 
 [dev-dependencies]
-ethcore-network = { path = "../util/network" }
+#ethcore-network = { path = "../util/network" }
 fake-fetch = { path = "../util/fake-fetch" }
 kvdb-memorydb = { path = "../util/kvdb-memorydb" }
 macros = { path = "../util/macros" }

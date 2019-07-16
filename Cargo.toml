@@ -34,43 +34,41 @@ jsonrpc-core = { git = "https://github.com/paritytech/jsonrpc.git", branch = "pa
 ethcore = { path = "ethcore" }
 ethcore-bytes = { path = "util/bytes" }
 ethcore-io = { path = "util/io" }
-ethcore-light = { path = "ethcore/light" }
+#ethcore-light = { path = "ethcore/light" }
 ethcore-logger = { path = "logger" }
-ethcore-miner = { path = "miner" }
-ethcore-network = { path = "util/network" }
-ethcore-private-tx = { path = "ethcore/private-tx" }
-ethcore-service = { path = "ethcore/service" }
-ethcore-sync = { path = "ethcore/sync" }
+#ethcore-miner = { path = "miner" }
+#ethcore-private-tx = { path = "ethcore/private-tx" }
+#ethcore-service = { path = "ethcore/service" }
+#ethcore-sync = { path = "ethcore/sync" }
 ethcore-transaction = { path = "ethcore/transaction" }
 ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
-node-filter = { path = "ethcore/node_filter" }
+#node-filter = { path = "ethcore/node_filter" }
 ethkey = { path = "ethkey" }
-node-health = { path = "dapps/node-health" }
+#node-health = { path = "dapps/node-health" }
 rlp = { path = "util/rlp" }
-rpc-cli = { path = "rpc_cli" }
-parity-hash-fetch = { path = "hash-fetch" }
-parity-ipfs-api = { path = "ipfs" }
-parity-local-store = { path = "local-store" }
+#rpc-cli = { path = "rpc_cli" }
+#parity-hash-fetch = { path = "hash-fetch" }
+#parity-ipfs-api = { path = "ipfs" }
+#parity-local-store = { path = "local-store" }
 parity-reactor = { path = "util/reactor" }
 parity-rpc = { path = "rpc" }
-parity-rpc-client = { path = "rpc_client" }
-parity-updater = { path = "updater" }
+#parity-rpc-client = { path = "rpc_client" }
+#parity-updater = { path = "updater" }
 parity-version = { path = "util/version" }
-parity-whisper = { path = "whisper" }
+#parity-whisper = { path = "whisper" }
 path = { path = "util/path" }
 dir = { path = "util/dir" }
 panic_hook = { path = "util/panic_hook" }
 keccak-hash = { path = "util/hash" }
-migration-rocksdb = { path = "util/migration-rocksdb" }
 kvdb = { path = "util/kvdb" }
 # kvdb-rocksdb = { path = "util/kvdb-rocksdb" }
 journaldb = { path = "util/journaldb" }
 mem = { path = "util/mem" }
 
-parity-dapps = { path = "dapps", optional = true }
-ethcore-secretstore = { path = "secret_store", optional = true }
+#parity-dapps = { path = "dapps", optional = true }
+#ethcore-secretstore = { path = "secret_store", optional = true }
 
-registrar = { path = "registrar" }
+#registrar = { path = "registrar" }
 
 [build-dependencies]
 rustc_version = "0.2"
@@ -88,14 +86,14 @@ winapi = { version = "0.3.4", features = ["winsock2", "winuser", "shellapi"] }
 daemonize = { git = "https://github.com/paritytech/daemonize" }
 
 [features]
-default = ["dapps"]
-dapps = ["parity-dapps"]
+default = []
+#dapps = ["parity-dapps"]
 json-tests = ["ethcore/json-tests"]
 test-heavy = ["ethcore/test-heavy"]
 evm-debug = ["ethcore/evm-debug"]
 evm-debug-tests = ["ethcore/evm-debug-tests"]
 slow-blocks = ["ethcore/slow-blocks"]
-secretstore = ["ethcore-secretstore"]
+#secretstore = ["ethcore-secretstore"]
 final = ["parity-version/final"]
 deadlock_detection = ["parking_lot/deadlock_detection"]
 ethkey-test = ["ethkey/test"]
@@ -103,10 +101,6 @@ use-wasmer-runtime = ["ethcore/use-wasmer-runtime"]
 
 [lib]
 path = "parity/lib.rs"
-
-[[bin]]
-path = "parity/main.rs"
-name = "parity"
 
 [profile.dev]
 panic = "unwind"
@@ -118,19 +112,12 @@ panic = "abort"
 
 [workspace]
 members = [
-	"chainspec",
-	"dapps/js-glue",
-	"ethcore/wasm/macros",
-	"ethcore/wasm/run",
-	"ethcore/types",
-	"ethkey/cli",
-	"ethstore/cli",
-	"evmbin",
-	"miner",
-	"parity-clib",
-	"transaction-pool",
-	"whisper",
-	"whisper/cli",
+	"ethcore",
+	"ethkey",
+	"util/mem",
+	"util/path",
+	"util/reactor",
+	"rpc",
 ]
 
 [patch.crates-io]

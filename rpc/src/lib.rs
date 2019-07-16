@@ -60,7 +60,7 @@ extern crate ethkey;
 //extern crate ethstore;
 extern crate vm;
 //extern crate fetch;
-extern crate node_health;
+//extern crate node_health;
 extern crate parity_reactor;
 //extern crate parity_updater as updater;
 extern crate keccak_hash as hash;
