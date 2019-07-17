@@ -102,7 +102,11 @@ impl vm::Vm for WasmInterpreter {
 	fn exec(&mut self, params: ActionParams, ext: &mut dyn vm::Ext) -> vm::Result<GasLeft> {
 		let is_create = ext.is_create();
 
-		let (mut module, data) = parser::payload(
+		let parser::ParsedModule {
+			mut module,
+			code,
+			data,
+		} = parser::payload(
 			&params,
 			ext.schedule().wasm(),
 			if is_create {
@@ -111,10 +115,6 @@ impl vm::Vm for WasmInterpreter {
 				None
 			},
 		)?;
-
-		if is_create {
-			subst_main_call(&mut module);
-		}
 
 		let loaded_module =
 			wasmi::Module::from_parity_wasm_module(module).map_err(Error::Interpreter)?;
@@ -224,8 +224,7 @@ impl vm::Vm for WasmInterpreter {
 
 		let apply_state = !result.is_err();
 		let output = if is_create {
-			std::sync::Arc::try_unwrap(params.code.unwrap_or_default())
-				.unwrap_or_else(|arc| arc.to_vec())
+			code.to_vec()
 		} else {
 			result.clone().unwrap_or_else(std::convert::identity) // Result<Vec<u8>, Vec<u8>> -> Vec<u8>
 		};
