@@ -47,6 +47,12 @@ fn gas_rules(wasm_costs: &vm::WasmCosts) -> rules::Set {
 	//.with_forbidden_floats()
 }
 
+pub struct ParsedModule<'a> {
+	pub module: elements::Module,
+	pub code: &'a [u8],
+	pub data: &'a [u8],
+}
+
 /// Splits payload to code and data according to params.params_type, also
 /// loads the module instance from payload and injects gas counter according
 /// to schedule.
@@ -54,7 +60,7 @@ pub fn payload<'a>(
 	params: &'a vm::ActionParams,
 	wasm_costs: &vm::WasmCosts,
 	module_doctor: Option<impl Fn(&mut elements::Module)>,
-) -> Result<(elements::Module, &'a [u8]), vm::Error> {
+) -> Result<ParsedModule<'a>, vm::Error> {
 	let code = match params.code {
 		Some(ref code) => &code[..],
 		None => {
@@ -96,19 +102,26 @@ pub fn payload<'a>(
 		wasm_utils::stack_height::inject_limiter(contract_module, wasm_costs.max_stack_height)
 			.map_err(|_| vm::Error::Wasm(format!("Wasm contract error: stack limiter failure")))?;
 
-	let data = match params.params_type {
+	let (code, data): (&[u8], &[u8]) = match params.params_type {
 		vm::ParamsType::Embedded => {
 			if data_position < code.len() {
-				&code[data_position..]
+				code.split_at(data_position)
 			} else {
-				&[]
+				(code, &[])
 			}
 		}
-		vm::ParamsType::Separate => match params.data {
-			Some(ref s) => &s[..],
-			None => &[],
-		},
+		vm::ParamsType::Separate => (
+			code,
+			match params.data {
+				Some(ref s) => &s[..],
+				None => &[],
+			},
+		),
 	};
 
-	Ok((contract_module, data))
+	Ok(ParsedModule {
+		module: contract_module,
+		code,
+		data,
+	})
 }

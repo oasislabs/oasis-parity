@@ -33,7 +33,9 @@ fn wasm_interpreter() -> WasmInterpreter {
 fn prepare_module(params: ActionParams, ext: &mut vm::Ext) -> (Runtime, wasmi::ModuleRef) {
 	let is_create = ext.is_create();
 
-	let (mut module, data) = parser::payload(
+	let parser::ParsedModule {
+		mut module, data, ..
+	} = parser::payload(
 		&params,
 		ext.schedule().wasm(),
 		if is_create {
