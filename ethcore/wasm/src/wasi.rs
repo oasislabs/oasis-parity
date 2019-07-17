@@ -6,7 +6,7 @@ use wasmi::P;
 use crate::runtime::RNG_HASH_BYTES;
 use crate::U256;
 
-const ADDR_LEN_BYTES: usize = std::mem::size_of::<mantle_types::Address>();
+const ADDR_LEN_BYTES: usize = std::mem::size_of::<oasis_types::Address>();
 const ADDR_CHARS: usize = ADDR_LEN_BYTES * 2; // two hex digits per byte
 
 macro_rules! bcfs {

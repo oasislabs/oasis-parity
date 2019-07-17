@@ -24,7 +24,7 @@ extern crate byteorder;
 extern crate common_types;
 extern crate ethereum_types;
 extern crate keccak_hash as hash;
-extern crate mantle_types;
+extern crate oasis_types;
 #[macro_use]
 extern crate log;
 extern crate parity_wasm;
@@ -206,7 +206,7 @@ impl vm::Vm for WasmRuntime {
 	}
 }
 
-/// Replaces the call to `main` in `_start` with one to `_mantle_deploy`.
+/// Replaces the call to `main` in `_start` with one to `_oasis_deploy`.
 fn subst_main_call(module: &mut Module) {
 	let module_info = module.info();
 
@@ -214,7 +214,7 @@ fn subst_main_call(module: &mut Module) {
 		Some(idx) => idx,
 		None => return,
 	};
-	let deploy_fn_idx = match func_index(module_info, "_mantle_deploy") {
+	let deploy_fn_idx = match func_index(module_info, "_oasis_deploy") {
 		Some(idx) => idx,
 		None => return,
 	};

@@ -241,13 +241,13 @@ impl vm::Vm for WasmInterpreter {
 	}
 }
 
-/// Replaces the call to `main` in `_start` with one to `_mantle_deploy`.
+/// Replaces the call to `main` in `_start` with one to `_oasis_deploy`.
 fn subst_main_call(module: &mut elements::Module) {
 	let start_fn_idx = match func_index(module, "_start") {
 		Some(idx) => idx,
 		None => return,
 	};
-	let deploy_fn_idx = match func_index(module, "_mantle_deploy") {
+	let deploy_fn_idx = match func_index(module, "_oasis_deploy") {
 		Some(idx) => idx,
 		None => return,
 	};

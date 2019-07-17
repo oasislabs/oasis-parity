@@ -1,5 +1,5 @@
 #[no_mangle]
-unsafe extern "C" fn _mantle_deploy() {
+unsafe extern "C" fn _oasis_deploy() {
 	std::fs::write("message", "hello").expect("no file");
 }
 

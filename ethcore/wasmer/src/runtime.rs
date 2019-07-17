@@ -21,7 +21,7 @@ use std::{
 use bcfs::BCFS;
 use blockchain_traits::{KVStore, KVStoreMut, PendingTransaction, TransactionOutcome};
 use ethereum_types::{Address, H256, U256};
-use mantle_types::AccountMeta;
+use oasis_types::AccountMeta;
 use vm::{self, CallType, MessageCallResult, ReturnData};
 
 use wasi_types::*;
@@ -31,7 +31,7 @@ use wasmer_runtime_core::memory::Memory;
 use wasmer_runtime_core::types::WasmExternType;
 use wasmer_runtime_core::vm::Ctx;
 
-const ADDR_LEN_BYTES: usize = std::mem::size_of::<mantle_types::Address>();
+const ADDR_LEN_BYTES: usize = std::mem::size_of::<oasis_types::Address>();
 const ADDR_CHARS: usize = ADDR_LEN_BYTES * 2; // two hex digits per byte
 
 pub struct RuntimeContext {
@@ -52,7 +52,7 @@ pub struct Runtime<'a> {
 	pub output: Vec<u8>,
 	pub err_output: Vec<u8>,
 	// unsafety is needed because runtime contains BCFS but is used by bcfs as PendingTransaction
-	pub bcfs: UnsafeCell<BCFS<mantle_types::Address, AccountMeta>>,
+	pub bcfs: UnsafeCell<BCFS<oasis_types::Address, AccountMeta>>,
 	pub should_revert: bool,
 	// Needed for wasmer since only generic CallError is returned on panic/exit
 	pub should_persist: bool,
@@ -60,15 +60,15 @@ pub struct Runtime<'a> {
 }
 
 pub struct Receipt {
-	caller: mantle_types::Address,
-	callee: mantle_types::Address,
+	caller: oasis_types::Address,
+	callee: oasis_types::Address,
 	gas_used: u64,
 	outcome: TransactionOutcome,
 	output: ReturnData,
 }
 
 impl blockchain_traits::Receipt for Receipt {
-	type Address = mantle_types::Address;
+	type Address = oasis_types::Address;
 
 	fn caller(&self) -> &Self::Address {
 		&self.caller
@@ -98,8 +98,8 @@ impl blockchain_traits::Receipt for Receipt {
 }
 
 impl<'a> PendingTransaction for Runtime<'a> {
-	type Address = mantle_types::Address;
-	type AccountMeta = mantle_types::AccountMeta;
+	type Address = oasis_types::Address;
+	type AccountMeta = oasis_types::AccountMeta;
 
 	fn address(&self) -> &Self::Address {
 		eaddr2maddr(&self.context.address)
@@ -257,12 +257,12 @@ impl<'a> PendingTransaction for Runtime<'a> {
 	}
 }
 
-pub fn maddr2eaddr(addr: &mantle_types::Address) -> &ethereum_types::Address {
+pub fn maddr2eaddr(addr: &oasis_types::Address) -> &ethereum_types::Address {
 	// this is safe because both `Address` types are newtypes containing [u8; 32]
 	unsafe { std::mem::transmute(addr) }
 }
 
-pub fn eaddr2maddr(addr: &ethereum_types::Address) -> &mantle_types::Address {
+pub fn eaddr2maddr(addr: &ethereum_types::Address) -> &oasis_types::Address {
 	// this is safe because both `Address` types are newtypes containing [u8; 32]
 	unsafe { std::mem::transmute(addr) }
 }
