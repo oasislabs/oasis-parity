@@ -90,12 +90,9 @@ panic = "abort"
 
 [workspace]
 members = [
-	"ethcore",
-	"ethkey",
-	"util/mem",
-	"util/path",
-	"util/reactor",
-	"rpc",
+	"ethcore/wasm/macros",
+	"ethcore/wasm/run",
+	"ethcore/types",
 ]
 
 [patch.crates-io]
