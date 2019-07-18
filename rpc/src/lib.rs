@@ -49,26 +49,17 @@ extern crate ethcore_bytes as bytes;
 extern crate ethcore_crypto as crypto;
 extern crate ethcore_devtools as devtools;
 extern crate ethcore_io as io;
-//extern crate ethcore_light as light;
 extern crate ethcore_logger;
-//extern crate ethcore_miner as miner;
-//extern crate ethcore_private_tx;
-//extern crate ethcore_sync as sync;
 extern crate ethcore_transaction as transaction;
 extern crate ethereum_types;
 extern crate ethkey;
-//extern crate ethstore;
-extern crate vm;
-//extern crate fetch;
-extern crate node_health;
-extern crate parity_reactor;
-//extern crate parity_updater as updater;
 extern crate keccak_hash as hash;
+extern crate parity_reactor;
 extern crate parity_version as version;
+extern crate patricia_trie as trie;
 extern crate rlp;
 extern crate stats;
-//extern crate hardware_wallet;
-extern crate patricia_trie as trie;
+extern crate vm;
 
 #[macro_use]
 extern crate log;
@@ -115,11 +106,10 @@ pub use ipc::{
 };
 pub use jsonrpc_pubsub::Session as PubSubSession;
 
-pub use v1::{dapps, informant, Metadata, NetworkSettings, Origin};
-//pub use v1::block_import::is_major_importing;
 pub use authcodes::{AuthCodes, TimeProvider};
 pub use http_common::HttpMetaExtractor;
 pub use v1::extractors::{RpcExtractor, WsDispatcher, WsExtractor, WsStats};
+pub use v1::{dapps, informant, Metadata, NetworkSettings, Origin};
 
 use http::tokio_core;
 use std::net::SocketAddr;

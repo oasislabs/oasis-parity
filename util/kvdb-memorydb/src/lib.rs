@@ -14,12 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-// extern crate parking_lot;
 extern crate kvdb;
 
-use std::collections::{BTreeMap, HashMap};
-// use parking_lot::RwLock;
 use kvdb::{DBOp, DBTransaction, DBValue, KeyValueDB, Result};
+use std::collections::{BTreeMap, HashMap};
 use std::sync::RwLock;
 
 /// A key-value database fulfilling the `KeyValueDB` trait, living in memory.

@@ -8,7 +8,6 @@ ethereum-types = { version = "0.3", default-features = false, features = ["std",
 quick-error = "1.2"
 # TODO: Remove when merged upstream (briansmith/ring#738).
 ring = { git = "https://github.com/akash-fortanix/ring", branch = "sgx-target" }
-# rust-crypto = "0.2.36"
 ripemd160 = "0.8.0"
 tiny-keccak = "1.4"
 

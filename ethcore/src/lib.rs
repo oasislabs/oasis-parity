@@ -61,25 +61,17 @@
 extern crate bloomchain;
 extern crate bn;
 extern crate byteorder;
-// extern crate crossbeam;
 pub extern crate common_types as types;
-// extern crate ethash;
 extern crate ethcore_bloom_journal as bloom_journal;
-extern crate ethcore_crypto;
-// extern crate ethcore_io as io;
 extern crate ethcore_bytes as bytes;
-// extern crate ethcore_logger;
-// extern crate ethcore_miner;
-// extern crate ethcore_stratum;
+extern crate ethcore_crypto;
 pub extern crate ethcore_transaction as transaction;
 extern crate ethereum_types;
 pub extern crate ethjson;
 extern crate ethkey;
-// extern crate hardware_wallet;
 extern crate hashdb;
 extern crate itertools;
 extern crate lru_cache;
-// extern crate num_cpus;
 extern crate num_bigint;
 extern crate num_integer;
 extern crate num_traits;
@@ -88,30 +80,22 @@ mod num {
 	pub use num_integer::*;
 	pub use num_traits::*;
 }
-extern crate parity_machine;
-// extern crate parking_lot;
-#[cfg(test)]
-extern crate rand;
-// extern crate rayon;
+extern crate ethabi;
 extern crate heapsize;
 extern crate keccak_hash as hash;
-extern crate memorydb;
-extern crate patricia_trie as trie;
-pub extern crate rlp;
-extern crate rlp_compress;
-extern crate triehash;
-// extern crate ansi_term;
 pub extern crate kvdb;
 extern crate kvdb_memorydb;
+extern crate memorydb;
+extern crate parity_machine;
+extern crate patricia_trie as trie;
+#[cfg(test)]
+extern crate rand;
+pub extern crate rlp;
+extern crate rlp_compress;
+extern crate rustc_hex;
+extern crate triehash;
 extern crate unexpected;
 extern crate util_error;
-// extern crate snappy;
-//
-extern crate ethabi;
-extern crate rustc_hex;
-// extern crate stats;
-// extern crate stop_guard;
-// extern crate using_queue;
 pub extern crate vm;
 
 extern crate wasm;
@@ -141,19 +125,12 @@ extern crate macros;
 extern crate rlp_derive;
 #[macro_use]
 extern crate serde_json;
-// #[macro_use]
-// extern crate trace_time;
 
 #[cfg_attr(test, macro_use)]
 extern crate evm;
 
-// pub extern crate ethstore;
-
 #[macro_use]
 pub mod views;
-
-// #[cfg(test)]
-// extern crate kvdb_rocksdb;
 
 pub mod block;
 pub mod db;
