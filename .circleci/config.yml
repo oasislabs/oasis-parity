@@ -3,9 +3,6 @@ jobs:
   build:
     docker:
       - image: oasislabs/testing:0.3.0
-        auth:
-          username: $DOCKERHUB_USERNAME
-          password: $DOCKERHUB_PASSWORD
     resource_class: xlarge
     steps:
       # Check out source from github
