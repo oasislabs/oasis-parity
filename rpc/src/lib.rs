@@ -42,7 +42,6 @@ extern crate jsonrpc_http_server as http;
 extern crate jsonrpc_ipc_server as ipc;
 extern crate jsonrpc_pubsub;
 
-extern crate ethash;
 #[cfg_attr(test, macro_use)]
 extern crate ethcore;
 extern crate ethcore_bytes as bytes;
