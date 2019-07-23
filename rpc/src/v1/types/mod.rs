@@ -22,26 +22,21 @@ mod block_number;
 mod bytes;
 mod call_request;
 mod confirmations;
-//mod consensus_status;
 mod dapps;
-//mod derivation;
 mod filter;
 mod hash;
 mod histogram;
 mod index;
 mod log;
 mod node_kind;
+mod private_receipt;
 mod provenance;
 mod receipt;
 mod rpc_settings;
 mod secretstore;
-mod transaction_outcome;
-//mod sync;
-//mod trace;
-//mod trace_filter;
-mod private_receipt;
 mod transaction;
 mod transaction_condition;
+mod transaction_outcome;
 mod transaction_request;
 mod uint;
 mod work;
@@ -57,33 +52,23 @@ pub use self::confirmations::{
 	ConfirmationPayload, ConfirmationRequest, ConfirmationResponse, ConfirmationResponseWithToken,
 	DecryptRequest, Either, SignRequest, TransactionModification,
 };
-//pub use self::consensus_status::*;
 pub use self::dapps::LocalDapp;
-//pub use self::derivation::{DeriveHash, DeriveHierarchical, Derive};
 pub use self::filter::{Filter, FilterChanges, TxFilter};
 pub use self::hash::{H160, H2048, H256, H512, H520, H64};
 pub use self::histogram::Histogram;
 pub use self::index::Index;
 pub use self::log::Log;
 pub use self::node_kind::{Availability, Capability, NodeKind};
+pub use self::private_receipt::{
+	PrivateTransactionReceipt, PrivateTransactionReceiptAndTransaction,
+};
 pub use self::provenance::{DappId, Origin};
 pub use self::receipt::Receipt;
 pub use self::rpc_settings::RpcSettings;
 pub use self::secretstore::EncryptedDocumentKey;
-pub use self::transaction_outcome::TransactionOutcome;
-/*
-pub use self::sync::{
-	SyncStatus, SyncInfo, Peers, PeerInfo, PeerNetworkInfo, PeerProtocolsInfo,
-	TransactionStats, ChainStatus, EthProtocolInfo, PipProtocolInfo,
-};
-*/
-//pub use self::trace::{LocalizedTrace, TraceResults};
-//pub use self::trace_filter::TraceFilter;
-pub use self::private_receipt::{
-	PrivateTransactionReceipt, PrivateTransactionReceiptAndTransaction,
-};
 pub use self::transaction::{LocalTransactionStatus, RichRawTransaction, Transaction};
 pub use self::transaction_condition::TransactionCondition;
+pub use self::transaction_outcome::TransactionOutcome;
 pub use self::transaction_request::TransactionRequest;
 pub use self::uint::{U128, U256, U64};
 pub use self::work::Work;
