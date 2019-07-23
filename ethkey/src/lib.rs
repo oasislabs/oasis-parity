@@ -17,7 +17,6 @@
 // #![warn(missing_docs)]
 
 extern crate byteorder;
-extern crate edit_distance;
 extern crate ethereum_types;
 extern crate mem;
 #[macro_use]
