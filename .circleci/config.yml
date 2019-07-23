@@ -36,7 +36,7 @@ jobs:
           name: Build other gateway dependencies
           command: cargo build --package mem --package parity-reactor --package parity-rpc --package path
 
-      # Test ethcore
+      # Run cargo tests
       - run:
-          name: Run ethcore tests
+          name: Run cargo tests
           command: cargo test --package ethcore --package ethcore-transaction --package ethkey --package vm --package wasm --package wasmer --features "ethkey-test"
