@@ -35,7 +35,6 @@ jsonrpc-ipc-server = { git = "https://github.com/paritytech/jsonrpc.git", branch
 jsonrpc-macros = { git = "https://github.com/paritytech/jsonrpc.git", branch = "parity-1.11" }
 jsonrpc-pubsub = { git = "https://github.com/paritytech/jsonrpc.git", branch = "parity-1.11" }
 
-ethash = { path = "../ethash" }
 ethcore = { path = "../ethcore" }
 ethcore-bytes = { path = "../util/bytes" }
 ethcore-crypto = { path = "../ethcore/crypto" }

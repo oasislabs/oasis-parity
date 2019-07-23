@@ -16,40 +16,22 @@
 
 //! Consensus engine specification and basic implementations.
 
-// mod authority_round;
-// mod basic_authority;
 mod instant_seal;
 mod null_engine;
-// mod signer;
-// mod tendermint;
-// mod transition;
-// mod validator_set;
-// mod vote_collector;
-//
-// pub mod block_reward;
-// pub mod epoch;
-//
-// pub use self::authority_round::AuthorityRound;
-// pub use self::basic_authority::BasicAuthority;
-// pub use self::epoch::{EpochVerifier, Transition as EpochTransition};
+
 pub use self::instant_seal::InstantSeal;
 pub use self::null_engine::NullEngine;
-// pub use self::tendermint::Tendermint;
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Weak};
 use std::{error, fmt};
 
-// use self::epoch::PendingTransition;
-
-// use account_provider::AccountProvider;
 use builtin::Builtin;
 use error::Error;
 use header::{BlockNumber, Header};
-use vm::{CreateContractAddress, EnvInfo, Schedule};
-// use snapshot::SnapshotComponents;
 use spec::CommonParams;
 use transaction::{self, SignedTransaction, UnverifiedTransaction};
+use vm::{CreateContractAddress, EnvInfo, Schedule};
 
 use bytes::Bytes;
 use ethereum_types::{Address, H256, U256};
