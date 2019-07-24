@@ -18,6 +18,7 @@
 #![feature(specialization, type_ascription)]
 #![feature(test)]
 
+extern crate base64;
 extern crate bcfs;
 extern crate byteorder;
 extern crate common_types;
@@ -157,6 +158,7 @@ impl vm::Vm for WasmInterpreter {
 					code_address: params.code_address,
 					value: params.value.value(),
 					value_str: params.value.value().as_u64().to_string(),
+					aad: params.aad.clone(),
 				},
 			);
 

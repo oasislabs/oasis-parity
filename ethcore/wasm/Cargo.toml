@@ -5,6 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
+base64 = "0.10"
 bcfs = { git = "https://github.com/oasislabs/oasis-rs" }
 blockchain-traits = { git = "https://github.com/oasislabs/oasis-rs" }
 byteorder = "1.0"
