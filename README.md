@@ -1,5 +1,7 @@
 # Parity
 
+[![CircleCI](https://circleci.com/gh/oasislabs/oasis-parity.svg?style=svg)](https://circleci.com/gh/oasislabs/oasis-parity)
+
 Forked from https://github.com/paritytech/parity-ethereum/.
 
 Major changes made by Oasis Labs:
