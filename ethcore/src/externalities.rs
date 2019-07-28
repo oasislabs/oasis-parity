@@ -282,11 +282,6 @@ where
 			Err(_) => return ContractCreateResult::Failed,
 		};
 
-		let aad = match &self.state.confidential_ctx {
-			None => None,
-			Some(ctx) => ctx.as_ref().borrow().peer(),
-		};
-
 		// prepare the params
 		let params = ActionParams {
 			code_address: address.clone(),
@@ -308,7 +303,7 @@ where
 			call_type: CallType::None,
 			params_type: vm::ParamsType::Embedded,
 			oasis_contract: oasis_contract,
-			aad: aad,
+			aad: None,
 		};
 
 		if !self.static_flag {
@@ -386,11 +381,6 @@ where
 			None
 		};
 
-		let aad = match &self.state.confidential_ctx {
-			None => None,
-			Some(ctx) => ctx.as_ref().borrow().peer(),
-		};
-
 		let mut params = ActionParams {
 			sender: sender_address.clone(),
 			address: receive_address.clone(),
@@ -409,7 +399,7 @@ where
 			call_type: call_type,
 			params_type: vm::ParamsType::Separate,
 			oasis_contract: oasis_contract,
-			aad: aad,
+			aad: None, // will be populated by ConfidentialVM if in c10l context
 		};
 
 		if let Some(value) = value {

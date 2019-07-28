@@ -15,7 +15,7 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Wasm Interpreter
-#![feature(specialization, type_ascription)]
+#![feature(specialization, stmt_expr_attributes, type_ascription)]
 #![feature(test)]
 
 extern crate base64;
@@ -158,7 +158,7 @@ impl vm::Vm for WasmInterpreter {
 					code_address: params.code_address,
 					value: params.value.value(),
 					value_str: params.value.value().as_u64().to_string(),
-					aad: params.aad.clone(),
+					aad_str: params.aad.as_ref().map(base64::encode).unwrap_or_default(),
 				},
 			);
 

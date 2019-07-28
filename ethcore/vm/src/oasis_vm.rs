@@ -179,7 +179,8 @@ impl ConfidentialVm {
 			.ctx
 			.borrow_mut()
 			.decrypt_session(params.data.as_ref().unwrap().to_vec())?;
-		params.data = Some(unencrypted_tx_data);
+		params.data = Some(unencrypted_tx_data.decrypted_data);
+		params.aad = Some(unencrypted_tx_data.additional_data);
 
 		// Execute the code and encrypt the result.
 		let encrypted_result = {
@@ -346,31 +347,45 @@ pub trait ConfidentialCtx {
 	///
 	/// Returns the address of the contract for the old encryption context.
 	fn activate(&mut self, contract: Option<Address>) -> Result<Option<Address>>;
+
 	/// Deactivates the context. If called, subsequent calls to `encrypt_*` should fail.
 	fn deactivate(&mut self);
+
 	/// Returns true if a confidential contract has previously been called.
 	fn activated(&self) -> bool;
+
 	/// Returns true if the confidential context is encrypting the state's storage.
 	fn is_encrypting(&self) -> bool;
+
 	/// Encrypts the given data under the given context, i.e., using the active session
 	/// and contract keys so that the *client* which initiated the transaction to open the
 	/// context can decrypt the data. Returns an error if the confidential context is
 	/// not open.
 	fn encrypt_session(&mut self, data: Vec<u8>) -> Result<Vec<u8>>;
+
 	/// Decrypting a session sets the context such that subsequent calls to `encrypt_sesion`
 	/// are targeted at the session `peer()`.
 	///
 	/// Assumes `encrypted_payload` is of the form	NONCE || PEER_PUBLIC_SESSION_KEY || CIPHER.
-	fn decrypt_session(&mut self, encrypted_payload: Vec<u8>) -> Result<Vec<u8>>;
+	fn decrypt_session(&mut self, encrypted_payload: Vec<u8>) -> Result<AuthenticatedPayload>;
+
 	/// Returns the public key of the peer connecting through an encrypted session to the runtime.
 	/// Returns None if no such key exists, e.g., if a confidential contract is being created.
 	fn peer(&self) -> Option<Vec<u8>>;
+
 	/// Encrypts the given data to be placed into contract storage under the context.
 	/// The runtime allows *only a given contract* to encrypt/decrypt this data, as
 	/// opposed to the `encrypt` method, which allows a user's client to decrypt.
 	fn encrypt_storage_value(&mut self, data: Vec<u8>) -> Result<Vec<u8>>;
+
 	/// Encrypts the given data as a contract storage key.
 	fn encrypt_storage_key(&self, data: Vec<u8>) -> Result<Vec<u8>>;
+
 	/// Analog to `encrypt_storage_value` for decrypting storage values.
 	fn decrypt_storage_value(&self, data: Vec<u8>) -> Result<Vec<u8>>;
+}
+
+pub struct AuthenticatedPayload {
+	decrypted_data: Vec<u8>,
+	additional_data: Vec<u8>,
 }

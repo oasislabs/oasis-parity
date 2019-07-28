@@ -97,7 +97,7 @@ pub struct ActionParams {
 	/// The Oasis contract extracted from the code (if header is present).
 	pub oasis_contract: Option<OasisContract>,
 	/// The AAD (Additional Authenticated Data) of confidential execution.
-	pub aad: Option<Vec<u8>>,
+	pub aad: Option<Bytes>,
 }
 
 impl Default for ActionParams {

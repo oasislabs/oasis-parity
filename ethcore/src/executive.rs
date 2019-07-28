@@ -395,11 +395,6 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 			&mut substate.to_cleanup_mode(&schedule),
 		)?;
 
-		let aad = match &self.state.confidential_ctx {
-			None => None,
-			Some(ctx) => ctx.as_ref().borrow().peer(),
-		};
-
 		let (result, output) = match t.action {
 			Action::Create => {
 				let (new_address, code_hash) = contract_address(
@@ -428,7 +423,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					call_type: CallType::None,
 					params_type: vm::ParamsType::Embedded,
 					oasis_contract: oasis_contract,
-					aad: aad.clone(),
+					aad: None,
 				};
 				let mut out = if output_from_create {
 					Some(vec![])
@@ -466,7 +461,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					call_type: CallType::Call,
 					params_type: vm::ParamsType::Separate,
 					oasis_contract: oasis_contract,
-					aad: aad.clone(),
+					aad: None, // will be populated by ConfidentialVM if in a c10l context
 				};
 				let mut out = vec![];
 				(
