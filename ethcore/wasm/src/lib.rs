@@ -96,18 +96,14 @@ enum ExecutionOutcome {
 }
 
 impl vm::Vm for WasmInterpreter {
-	fn prepare(&mut self, params: &ActionParams, ext: &mut dyn vm::Ext) -> vm::Result<()> {
+	fn prepare(&mut self, _params: &ActionParams, _ext: &mut dyn vm::Ext) -> vm::Result<()> {
 		Ok(())
 	}
 
 	fn exec(&mut self, params: ActionParams, ext: &mut dyn vm::Ext) -> vm::Result<GasLeft> {
 		let is_create = ext.is_create();
 
-		let parser::ParsedModule {
-			mut module,
-			code,
-			data,
-		} = parser::payload(
+		let parser::ParsedModule { module, code, data } = parser::payload(
 			&params,
 			ext.schedule().wasm(),
 			if is_create {
@@ -230,9 +226,6 @@ impl vm::Vm for WasmInterpreter {
 		} else {
 			result.clone().unwrap_or_else(std::convert::identity) // Result<Vec<u8>, Vec<u8>> -> Vec<u8>
 		};
-		{
-			std::str::from_utf8(&result.clone().unwrap_or_else(std::convert::identity));
-		}
 		let output_len = output.len();
 		Ok(GasLeft::NeedsReturn {
 			gas_left,
@@ -271,7 +264,7 @@ fn subst_main_call(module: &mut elements::Module) {
 		})
 		.unwrap_or_default();
 
-	let mut start_fn = match module
+	let start_fn = match module
 		.code_section_mut()
 		.map(|s| &mut s.bodies_mut()[start_fn_idx as usize - import_section_len])
 	{

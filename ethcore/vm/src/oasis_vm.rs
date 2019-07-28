@@ -386,6 +386,6 @@ pub trait ConfidentialCtx {
 }
 
 pub struct AuthenticatedPayload {
-	decrypted_data: Vec<u8>,
-	additional_data: Vec<u8>,
+	pub decrypted_data: Vec<u8>,
+	pub additional_data: Vec<u8>,
 }
