@@ -96,6 +96,8 @@ pub struct ActionParams {
 	pub params_type: ParamsType,
 	/// The Oasis contract extracted from the code (if header is present).
 	pub oasis_contract: Option<OasisContract>,
+	/// The Authenticated Additional Data sent with a confidential transaction's data.
+	pub aad: Option<Bytes>,
 }
 
 impl Default for ActionParams {
@@ -116,6 +118,7 @@ impl Default for ActionParams {
 			call_type: CallType::None,
 			params_type: ParamsType::Separate,
 			oasis_contract: None,
+			aad: None,
 		}
 	}
 }
@@ -141,6 +144,7 @@ impl From<ethjson::vm::Transaction> for ActionParams {
 			}, // TODO @debris is this correct?
 			params_type: ParamsType::Separate,
 			oasis_contract: None,
+			aad: None,
 		}
 	}
 }

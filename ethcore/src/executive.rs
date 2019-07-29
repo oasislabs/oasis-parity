@@ -423,6 +423,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					call_type: CallType::None,
 					params_type: vm::ParamsType::Embedded,
 					oasis_contract: oasis_contract,
+					aad: None,
 				};
 				let mut out = if output_from_create {
 					Some(vec![])
@@ -460,6 +461,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					call_type: CallType::Call,
 					params_type: vm::ParamsType::Separate,
 					oasis_contract: oasis_contract,
+					aad: None, // will be populated by ConfidentialVM if in a c10l context
 				};
 				let mut out = vec![];
 				(

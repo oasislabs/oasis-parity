@@ -76,7 +76,7 @@ impl<'a> crate::Runtime<'a> {
 		environ: P<P<u8>>,
 		mut environ_buf: P<u8>,
 	) -> crate::Result<ErrNo> {
-		let environs = self.memory.get_mut(environ, 3)?;
+		let environs = self.memory.get_mut(environ, 4)?;
 		environs[0] = environ_buf;
 		environ_buf = self.memory.set(
 			environ_buf,
@@ -90,7 +90,12 @@ impl<'a> crate::Runtime<'a> {
 		environs[2] = environ_buf;
 		self.memory.set(
 			environ_buf,
-			format!("VALUE={}", self.context.value_str).as_bytes(),
+			format!("AAD={}\0", self.context.aad_str).as_bytes(),
+		)?;
+		environs[3] = environ_buf;
+		self.memory.set(
+			environ_buf,
+			format!("VALUE={}\0", self.context.value_str).as_bytes(),
 		)?;
 		Ok(ErrNo::Success)
 	}
@@ -100,13 +105,16 @@ impl<'a> crate::Runtime<'a> {
 		environ_count: P<u32>,
 		environ_buf_size: P<u32>,
 	) -> crate::Result<ErrNo> {
-		self.memory.set_value(environ_count, 3u32)?; // sender, address, value
+		self.memory.set_value(environ_count, 4u32)?; // sender, address, aad, value
 		self.memory.set_value(
 			environ_buf_size,
-			("SENDER=".len()
-				+ ADDR_CHARS + "\0ADDRESS=".len()
-				+ ADDR_CHARS + "\0VALUE=".len()
-				+ self.context.value_str.len()) as u32,
+			#[rustfmt::skip] (
+				"SENDER=".len() + ADDR_CHARS +
+				"\0ADDRESS=".len() + ADDR_CHARS +
+				"\0AAD=".len() + self.context.aad_str.len() +
+				"\0VALUE=".len() + self.context.value_str.len() +
+				"\0".len()
+			) as u32,
 		)?;
 		Ok(ErrNo::Success)
 	}

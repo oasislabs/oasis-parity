@@ -32,6 +32,7 @@ pub struct RuntimeContext {
 	pub code_address: Address,
 	pub value: U256,
 	pub value_str: String,
+	pub aad_str: String,
 }
 
 pub const RNG_HASH_BYTES: usize = 256 / 8; // sha256

@@ -643,6 +643,7 @@ impl Spec {
 					call_type: CallType::None,
 					params_type: ParamsType::Embedded,
 					oasis_contract: None,
+					aad: None,
 				};
 
 				let mut substate = Substate::new();

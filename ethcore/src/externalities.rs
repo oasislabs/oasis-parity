@@ -303,6 +303,7 @@ where
 			call_type: CallType::None,
 			params_type: vm::ParamsType::Embedded,
 			oasis_contract: oasis_contract,
+			aad: None,
 		};
 
 		if !self.static_flag {
@@ -398,6 +399,7 @@ where
 			call_type: call_type,
 			params_type: vm::ParamsType::Separate,
 			oasis_contract: oasis_contract,
+			aad: None, // will be populated by ConfidentialVM if in c10l context
 		};
 
 		if let Some(value) = value {

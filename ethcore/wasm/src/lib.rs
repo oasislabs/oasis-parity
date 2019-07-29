@@ -15,9 +15,10 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Wasm Interpreter
-#![feature(specialization, type_ascription)]
+#![feature(specialization, stmt_expr_attributes, type_ascription)]
 #![feature(test)]
 
+extern crate base64;
 extern crate bcfs;
 extern crate byteorder;
 extern crate common_types;
@@ -95,18 +96,14 @@ enum ExecutionOutcome {
 }
 
 impl vm::Vm for WasmInterpreter {
-	fn prepare(&mut self, params: &ActionParams, ext: &mut dyn vm::Ext) -> vm::Result<()> {
+	fn prepare(&mut self, _params: &ActionParams, _ext: &mut dyn vm::Ext) -> vm::Result<()> {
 		Ok(())
 	}
 
 	fn exec(&mut self, params: ActionParams, ext: &mut dyn vm::Ext) -> vm::Result<GasLeft> {
 		let is_create = ext.is_create();
 
-		let parser::ParsedModule {
-			mut module,
-			code,
-			data,
-		} = parser::payload(
+		let parser::ParsedModule { module, code, data } = parser::payload(
 			&params,
 			ext.schedule().wasm(),
 			if is_create {
@@ -157,6 +154,7 @@ impl vm::Vm for WasmInterpreter {
 					code_address: params.code_address,
 					value: params.value.value(),
 					value_str: params.value.value().as_u64().to_string(),
+					aad_str: params.aad.as_ref().map(base64::encode).unwrap_or_default(),
 				},
 			);
 
@@ -228,9 +226,6 @@ impl vm::Vm for WasmInterpreter {
 		} else {
 			result.clone().unwrap_or_else(std::convert::identity) // Result<Vec<u8>, Vec<u8>> -> Vec<u8>
 		};
-		{
-			std::str::from_utf8(&result.clone().unwrap_or_else(std::convert::identity));
-		}
 		let output_len = output.len();
 		Ok(GasLeft::NeedsReturn {
 			gas_left,
@@ -269,7 +264,7 @@ fn subst_main_call(module: &mut elements::Module) {
 		})
 		.unwrap_or_default();
 
-	let mut start_fn = match module
+	let start_fn = match module
 		.code_section_mut()
 		.map(|s| &mut s.bodies_mut()[start_fn_idx as usize - import_section_len])
 	{

@@ -82,6 +82,7 @@ fn prepare_module(params: ActionParams, ext: &mut vm::Ext) -> (Runtime, wasmi::M
 			code_address: params.code_address,
 			value: params.value.value(),
 			value_str: params.value.value().as_u64().to_string(),
+			aad_str: params.aad.as_ref().map(base64::encode).unwrap_or_default(),
 		},
 	);
 
