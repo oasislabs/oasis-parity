@@ -96,7 +96,7 @@ pub struct ActionParams {
 	pub params_type: ParamsType,
 	/// The Oasis contract extracted from the code (if header is present).
 	pub oasis_contract: Option<OasisContract>,
-	/// The AAD (Additional Authenticated Data) of confidential execution.
+	/// The Authenticated Additional Data sent with a confidential transaction's data.
 	pub aad: Option<Bytes>,
 }
 
