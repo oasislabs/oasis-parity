@@ -497,32 +497,10 @@ where
 
 		let address = self.origin_info.address.clone();
 
-		let data = {
-			if self.state.is_encrypting()
-				&& self
-					.state
-					.confidential_ctx
-					.as_ref()
-					.expect("The state must have a confidential context if it is encrypting")
-					.borrow()
-					.peer()
-					.is_some()
-			{
-				self.state
-					.confidential_ctx
-					.as_ref()
-					.expect("The state must have a confidential context if it is encrypting")
-					.borrow_mut()
-					.encrypt_session(data.to_vec())?
-			} else {
-				data.to_vec()
-			}
-		};
-
 		self.substate.logs.push(LogEntry {
 			address: address,
 			topics: topics,
-			data: data,
+			data: data.to_vec(),
 		});
 
 		Ok(())
