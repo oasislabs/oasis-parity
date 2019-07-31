@@ -41,6 +41,7 @@ slow-blocks = ["ethcore/slow-blocks"]
 final = ["parity-version/final"]
 ethkey-test = ["ethkey/test"]
 use-wasmer-runtime = ["ethcore/use-wasmer-runtime"]
+wasi-debug-stdio = ["ethcore/wasi-debug-stdio"]
 
 [lib]
 path = "parity/lib.rs"
