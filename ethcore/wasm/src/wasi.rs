@@ -553,7 +553,7 @@ impl<'a> crate::Runtime<'a> {
 			})
 			.collect::<std::result::Result<Vec<_>, wasmi::Error>>()?;
 
-		#[cfg(debug_assertions)]
+		#[cfg(feature = "wasi-debug-stdio")]
 		{
 			use std::io::Write;
 			if u32::from(fd) == 1 {

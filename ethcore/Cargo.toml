@@ -89,3 +89,5 @@ disable-non-confidential = []
 ethkey-test = ["ethkey/test"]
 # Distinguish using wasmi or wasmer as the runtime backend
 use-wasmer-runtime = ["wasmer"]
+# Print wasi stdout/stderr.
+wasi-debug-stdio = ["wasm/wasi-debug-stdio"]
