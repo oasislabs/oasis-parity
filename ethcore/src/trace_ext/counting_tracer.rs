@@ -30,10 +30,10 @@ use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
 use std::vec;
 
-use ethereum_types::{H256, U256, Address};
+use ethereum_types::{Address, H256, U256};
 
-use trace_ext::ext_tracer::ExtTracer;
 use trace_ext::bloomfilter::BloomFilter;
+use trace_ext::ext_tracer::ExtTracer;
 
 struct GlobalPersistentLocation {
 	contract: Address,
@@ -68,17 +68,18 @@ impl ConflictSet {
 	/// Create a new ConflictSet with the given expected size, false-positive rate, etc.
 	fn new(expected_item_count: usize, false_positive_prob: f64) -> Self {
 		Self {
-			read_set: BloomFilter::new_for_fp_rate(expected_item_count,
-							       false_positive_prob),
+			read_set: BloomFilter::new_for_fp_rate(expected_item_count, false_positive_prob),
 			read_count: 0,
-			write_set: BloomFilter::new_for_fp_rate(expected_item_count,
-								false_positive_prob),
+			write_set: BloomFilter::new_for_fp_rate(expected_item_count, false_positive_prob),
 			write_count: 0,
 		}
 	}
 
 	fn add_to_set(set: &mut BloomFilter, ctr: &mut u64, contract: &Address, key: &H256) {
-		let obj = GlobalPersistentLocation{ contract: *contract, location: *key };
+		let obj = GlobalPersistentLocation {
+			contract: *contract,
+			location: *key,
+		};
 		if !set.check(&obj) {
 			*ctr += 1;
 			set.set(&obj);
@@ -118,12 +119,14 @@ impl CountingTracer {
 	pub fn new_extended(expected_item_count: usize, false_positive_rate: f64) -> Self {
 		Self {
 			contract: Address::zero(),
-			trace: Arc::new(Mutex::new(ConflictSet::new(expected_item_count,
-								    false_positive_rate))),
+			trace: Arc::new(Mutex::new(ConflictSet::new(
+				expected_item_count,
+				false_positive_rate,
+			))),
 		}
 	}
 
-        // new_subtracer
+	// new_subtracer
 	pub fn new_subtracer(&self, contract: &Address) -> Self {
 		Self {
 			contract: *contract,
@@ -139,30 +142,27 @@ impl CountingTracer {
 
 impl ExtTracer for CountingTracer {
 	fn trace_storage_at(&self, key: &H256) {
-                let mut trace = self.trace.lock().unwrap();
+		let mut trace = self.trace.lock().unwrap();
 
-                trace.add_read(&self.contract, key);
+		trace.add_read(&self.contract, key);
 	}
 
 	/// Transaction execution writes into persistent state.
 	fn trace_set_storage(&self, key: &H256) {
-                let mut trace = self.trace.lock().unwrap();
+		let mut trace = self.trace.lock().unwrap();
 
-                trace.add_write(&self.contract, key);
+		trace.add_write(&self.contract, key);
 	}
 
 	/// Transaction (indirectly) performs an exists query.
-	fn trace_exists(&self, address: &Address) {
-	}
+	fn trace_exists(&self, address: &Address) {}
 
 	/// Transactions (indirectly) performs an exists_and_not_null query.
-	fn trace_exists_and_not_null(&self, address: &Address) {
-	}
+	fn trace_exists_and_not_null(&self, address: &Address) {}
 
 	/// Transaction performs an origin_balance or balance query.  Unlike Ext, we do not know
 	/// origin address, so it must be provided by Ext implementations.
-	fn trace_balance(&self, origin_address: &Address) {
-	}
+	fn trace_balance(&self, origin_address: &Address) {}
 
 	/// subtracer returns an Ext tracer for use for the context of the sub-transaction call.
 	fn subtracer(&mut self, code_address: &Address) -> Self {
@@ -173,13 +173,15 @@ impl ExtTracer for CountingTracer {
 #[test]
 fn test_count() {
 	let mut ct = CountingTracer::new(); // with defaults
-	{ // lifetime of st
+	{
+		// lifetime of st
 		let mut st = ct.subtracer(&Address::from("cd1722f3947def4cf144679da39c4c32bdc35681"));
 		st.trace_storage_at(&H256::from(&U256::zero()));
 		st.trace_storage_at(&H256::from(&U256::from(1)));
 		st.trace_set_storage(&H256::from(&U256::zero()));
 		// subcontract invocation
-		{ // lifetime of st2
+		{
+			// lifetime of st2
 			let mut st2 = st.subtracer(&Address::from("0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6"));
 			st2.trace_storage_at(&H256::from(&U256::zero()));
 			st2.trace_storage_at(&H256::from(&U256::from(1)));

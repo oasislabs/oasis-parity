@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
 use jsonrpc_core::IoHandler;
-use v1::{Net, NetClient};
+use std::sync::Arc;
 use v1::tests::helpers::{Config, TestSyncProvider};
+use v1::{Net, NetClient};
 
 fn sync_provider() -> Arc<TestSyncProvider> {
 	Arc::new(TestSyncProvider::new(Config {

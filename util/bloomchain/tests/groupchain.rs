@@ -19,9 +19,9 @@ extern crate rustc_hex;
 
 mod util;
 
-use bloomchain::{Bloom, Config};
 use bloomchain::group::BloomGroupChain;
-use util::{BloomGroupMemoryDatabase, FromHex, for_each_bloom, generate_n_random_blooms};
+use bloomchain::{Bloom, Config};
+use util::{for_each_bloom, generate_n_random_blooms, BloomGroupMemoryDatabase, FromHex};
 
 #[test]
 fn simple_bloom_group_search() {
@@ -139,7 +139,7 @@ fn file_test_bloom_group_search() {
 	let mut db = BloomGroupMemoryDatabase::default();
 	let blooms_file = include_bytes!("data/blooms.txt");
 
-	for_each_bloom(blooms_file, | block_number, bloom | {
+	for_each_bloom(blooms_file, |block_number, bloom| {
 		let modified_blooms = {
 			let chain = BloomGroupChain::new(config, &db);
 			chain.insert(block_number, bloom)
@@ -150,7 +150,7 @@ fn file_test_bloom_group_search() {
 		db.insert_blooms(modified_blooms);
 	});
 
-	for_each_bloom(blooms_file, | block_number, bloom | {
+	for_each_bloom(blooms_file, |block_number, bloom| {
 		let chain = BloomGroupChain::new(config, &db);
 		let blocks = chain.with_bloom(&(block_number..block_number), &bloom);
 		assert_eq!(blocks.len(), 1);
@@ -167,7 +167,6 @@ fn random_bloom_group_replacement() {
 	let blooms = generate_n_random_blooms(insertions);
 
 	for (i, bloom) in blooms.iter().enumerate() {
-
 		let modified_blooms = {
 			let chain = BloomGroupChain::new(config, &db);
 			chain.replace(&(i..i), vec![bloom.clone()])

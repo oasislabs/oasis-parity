@@ -16,11 +16,11 @@
 
 //! Evm factory.
 //!
-use std::sync::Arc;
-use vm::Vm;
-use ethereum_types::U256;
 use super::interpreter::SharedCache;
 use super::vmtype::VMType;
+use ethereum_types::U256;
+use std::sync::Arc;
+use vm::Vm;
 
 /// Evm factory. Creates appropriate Evm.
 #[derive(Clone)]
@@ -34,10 +34,16 @@ impl Factory {
 	/// Might choose implementation depending on supplied gas.
 	pub fn create(&self, gas: &U256) -> Box<Vm> {
 		match self.evm {
-			VMType::Interpreter => if Self::can_fit_in_usize(gas) {
-				Box::new(super::interpreter::Interpreter::<usize>::new(self.evm_cache.clone()))
-			} else {
-				Box::new(super::interpreter::Interpreter::<U256>::new(self.evm_cache.clone()))
+			VMType::Interpreter => {
+				if Self::can_fit_in_usize(gas) {
+					Box::new(super::interpreter::Interpreter::<usize>::new(
+						self.evm_cache.clone(),
+					))
+				} else {
+					Box::new(super::interpreter::Interpreter::<U256>::new(
+						self.evm_cache.clone(),
+					))
+				}
 			}
 		}
 	}

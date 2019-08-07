@@ -14,14 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::ops::Deref;
 use std::collections::BTreeMap;
+use std::ops::Deref;
 
 use ethcore::encoded::Header as EthHeader;
 
-use serde::{Serialize, Serializer};
 use serde::ser::Error;
-use v1::types::{Bytes, Transaction, H160, H256, H2048, U256};
+use serde::{Serialize, Serializer};
+use v1::types::{Bytes, Transaction, H160, H2048, H256, U256};
 
 /// Block Transactions
 #[derive(Debug)]
@@ -29,29 +29,31 @@ pub enum BlockTransactions {
 	/// Only hashes
 	Hashes(Vec<H256>),
 	/// Full transactions
-	Full(Vec<Transaction>)
+	Full(Vec<Transaction>),
 }
 
 impl Serialize for BlockTransactions {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where S: Serializer {
+	where
+		S: Serializer,
+	{
 		match *self {
 			BlockTransactions::Hashes(ref hashes) => hashes.serialize(serializer),
-			BlockTransactions::Full(ref ts) => ts.serialize(serializer)
+			BlockTransactions::Full(ref ts) => ts.serialize(serializer),
 		}
 	}
 }
 
 /// Block representation
 #[derive(Debug, Serialize)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct Block {
 	/// Hash of the block
 	pub hash: Option<H256>,
 	/// Hash of the parent
 	pub parent_hash: H256,
 	/// Hash of the uncles
-	#[serde(rename="sha3Uncles")]
+	#[serde(rename = "sha3Uncles")]
 	pub uncles_hash: H256,
 	/// Authors address
 	pub author: H160,
@@ -91,14 +93,14 @@ pub struct Block {
 
 /// Block header representation.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct Header {
 	/// Hash of the block
 	pub hash: Option<H256>,
 	/// Hash of the parent
 	pub parent_hash: H256,
 	/// Hash of the uncles
-	#[serde(rename="sha3Uncles")]
+	#[serde(rename = "sha3Uncles")]
 	pub uncles_hash: H256,
 	/// Authors address
 	pub author: H160,
@@ -187,7 +189,10 @@ impl<T> Deref for Rich<T> {
 }
 
 impl<T: Serialize> Serialize for Rich<T> {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
 		use serde_json::{to_value, Value};
 
 		let serialized = (to_value(&self.inner), to_value(&self.extra_info));
@@ -197,17 +202,19 @@ impl<T: Serialize> Serialize for Rich<T> {
 			// and serialize
 			value.serialize(serializer)
 		} else {
-			Err(S::Error::custom("Unserializable structures: expected objects"))
+			Err(S::Error::custom(
+				"Unserializable structures: expected objects",
+			))
 		}
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use std::collections::BTreeMap;
+	use super::{Block, BlockTransactions, Header, RichBlock, RichHeader};
 	use serde_json;
-	use v1::types::{Transaction, H64, H160, H256, H2048, Bytes, U256};
-	use super::{Block, RichBlock, BlockTransactions, Header, RichHeader};
+	use std::collections::BTreeMap;
+	use v1::types::{Bytes, Transaction, H160, H2048, H256, H64, U256};
 
 	#[test]
 	fn test_serialize_block_transactions() {
@@ -217,7 +224,10 @@ mod tests {
 
 		let t = BlockTransactions::Hashes(vec![H256::default().into()]);
 		let serialized = serde_json::to_string(&t).unwrap();
-		assert_eq!(serialized, r#"["0x0000000000000000000000000000000000000000000000000000000000000000"]"#);
+		assert_eq!(
+			serialized,
+			r#"["0x0000000000000000000000000000000000000000000000000000000000000000"]"#
+		);
 	}
 
 	#[test]

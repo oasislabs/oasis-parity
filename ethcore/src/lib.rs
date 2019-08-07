@@ -56,69 +56,58 @@
 
 // Recursion limit required because of
 // error_chain foreign_links.
-#![recursion_limit="128"]
+#![recursion_limit = "128"]
 
 extern crate bloomchain;
 extern crate bn;
 extern crate byteorder;
-// extern crate crossbeam;
 pub extern crate common_types as types;
-// extern crate ethash;
 extern crate ethcore_bloom_journal as bloom_journal;
-extern crate ethcore_crypto;
-// extern crate ethcore_io as io;
 extern crate ethcore_bytes as bytes;
-// extern crate ethcore_logger;
-// extern crate ethcore_miner;
-// extern crate ethcore_stratum;
+extern crate ethcore_crypto;
 pub extern crate ethcore_transaction as transaction;
 extern crate ethereum_types;
 pub extern crate ethjson;
 extern crate ethkey;
-// extern crate hardware_wallet;
 extern crate hashdb;
 extern crate itertools;
 extern crate lru_cache;
-// extern crate num_cpus;
-extern crate num_integer;
 extern crate num_bigint;
+extern crate num_integer;
 extern crate num_traits;
 mod num {
-	pub use num_integer::*;
 	pub use num_bigint::*;
+	pub use num_integer::*;
 	pub use num_traits::*;
 }
-extern crate parity_machine;
-// extern crate parking_lot;
-#[cfg(test)]
-extern crate rand;
-// extern crate rayon;
-pub extern crate rlp;
-extern crate rlp_compress;
-extern crate keccak_hash as hash;
+extern crate ethabi;
 extern crate heapsize;
-extern crate memorydb;
-extern crate patricia_trie as trie;
-extern crate triehash;
-// extern crate ansi_term;
-extern crate unexpected;
+extern crate keccak_hash as hash;
 pub extern crate kvdb;
 extern crate kvdb_memorydb;
-extern crate util_error;
-// extern crate snappy;
-//
-extern crate ethabi;
+extern crate memorydb;
+extern crate parity_machine;
+extern crate patricia_trie as trie;
+#[cfg(test)]
+extern crate rand;
+pub extern crate rlp;
+extern crate rlp_compress;
 extern crate rustc_hex;
-// extern crate stats;
-// extern crate stop_guard;
-// extern crate using_queue;
+extern crate triehash;
+extern crate unexpected;
+extern crate util_error;
 pub extern crate vm;
+
 extern crate wasm;
-extern crate memory_cache;
+
+#[cfg(feature = "use-wasmer-runtime")]
+extern crate wasmer;
+
+extern crate failure;
 pub extern crate journaldb;
+extern crate memory_cache;
 #[cfg(test)]
 extern crate tempdir;
-extern crate failure;
 
 #[macro_use]
 extern crate ethabi_derive;
@@ -134,23 +123,16 @@ extern crate lazy_static;
 extern crate macros;
 #[macro_use]
 extern crate rlp_derive;
-// #[macro_use]
-// extern crate trace_time;
+#[macro_use]
+extern crate serde_json;
 
 #[cfg_attr(test, macro_use)]
 extern crate evm;
 
-// pub extern crate ethstore;
-
 #[macro_use]
 pub mod views;
 
-// #[cfg(test)]
-// extern crate kvdb_rocksdb;
-
-// pub mod account_provider;
 pub mod block;
-// pub mod client;
 pub mod db;
 pub mod encoded;
 pub mod engines;
@@ -161,38 +143,30 @@ pub mod executed;
 pub mod executive;
 pub mod header;
 pub mod machine;
-// pub mod miner;
+pub mod mkvs;
 pub mod pod_state;
-// pub mod snapshot;
 pub mod spec;
 pub mod state;
 pub mod state_db;
 pub mod trace;
 /// Ext (Externalities) tracing
 pub mod trace_ext;
-// pub mod verification;
 
-mod cache_manager;
-mod blooms;
-mod pod_account;
 pub mod account_db;
-mod builtin;
-mod externalities;
 pub mod blockchain;
+mod blooms;
+mod builtin;
+mod cache_manager;
+mod externalities;
 pub mod factory;
-// mod tx_filter;
+mod pod_account;
 
-// #[cfg(test)]
-// mod tests;
 #[cfg(test)]
 #[cfg(feature = "json-tests")]
 mod json_tests;
 #[cfg(any(test, feature = "test-helpers"))]
 pub mod test_helpers;
-// #[cfg(test)]
-// mod test_helpers_internal;
 
-pub use types::*;
-pub use executive::contract_address;
 pub use evm::CreateContractAddress;
-
+pub use executive::contract_address;
+pub use types::*;

@@ -19,8 +19,8 @@
 pub mod error;
 pub mod filter;
 pub mod flat;
-pub mod trace;
 pub mod localized;
+pub mod trace;
 
 use self::flat::FlatTransactionTraces;
 

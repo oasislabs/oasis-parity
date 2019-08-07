@@ -16,9 +16,9 @@
 
 //! Blockchain test state deserializer.
 
-use std::collections::BTreeMap;
-use hash::Address;
 use blockchain::account::Account;
+use hash::Address;
+use std::collections::BTreeMap;
 
 /// Blockchain test state deserializer.
 #[derive(Debug, PartialEq, Deserialize, Clone)]

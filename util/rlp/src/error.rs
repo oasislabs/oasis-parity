@@ -6,8 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::fmt;
 use std::error::Error as StdError;
+use std::fmt;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 /// Error concerning the RLP decoder.

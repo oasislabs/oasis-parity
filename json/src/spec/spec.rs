@@ -16,10 +16,10 @@
 
 //! Spec deserialization.
 
-use std::io::Read;
 use serde_json;
 use serde_json::Error;
-use spec::{Params, Genesis, Engine, State, HardcodedSync};
+use spec::{Engine, Genesis, HardcodedSync, Params, State};
+use std::io::Read;
 
 /// Spec deserialization.
 #[derive(Debug, PartialEq, Deserialize)]
@@ -27,7 +27,7 @@ pub struct Spec {
 	/// Spec name.
 	pub name: String,
 	/// Special fork name.
-	#[serde(rename="dataDir")]
+	#[serde(rename = "dataDir")]
 	pub data_dir: Option<String>,
 	/// Engine.
 	pub engine: Engine,
@@ -40,13 +40,16 @@ pub struct Spec {
 	/// Boot nodes.
 	pub nodes: Option<Vec<String>>,
 	/// Hardcoded synchronization for the light client.
-	#[serde(rename="hardcodedSync")]
+	#[serde(rename = "hardcodedSync")]
 	pub hardcoded_sync: Option<HardcodedSync>,
 }
 
 impl Spec {
 	/// Loads test from json.
-	pub fn load<R>(reader: R) -> Result<Self, Error> where R: Read {
+	pub fn load<R>(reader: R) -> Result<Self, Error>
+	where
+		R: Read,
+	{
 		serde_json::from_reader(reader)
 	}
 }

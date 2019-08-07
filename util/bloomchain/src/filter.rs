@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::ops::Range;
 use bloom::Bloom;
 use number::Number;
+use std::ops::Range;
 
 /// Should be used to filter blocks from `BloomChain`.
 pub trait Filter {

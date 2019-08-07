@@ -19,11 +19,11 @@
 extern crate futures;
 extern crate tokio_core;
 
-use std::{fmt, thread};
+use futures::{Future, IntoFuture};
 use std::sync::mpsc;
 use std::time::Duration;
-use futures::{Future, IntoFuture};
-pub use tokio_core::reactor::{Remote as TokioRemote, Handle, Timeout};
+use std::{fmt, thread};
+pub use tokio_core::reactor::{Handle, Remote as TokioRemote, Timeout};
 
 /// Event Loop for futures.
 /// Wrapper around `tokio::reactor::Core`.
@@ -39,11 +39,14 @@ impl EventLoop {
 		let (stop, stopped) = futures::oneshot();
 		let (tx, rx) = mpsc::channel();
 		let handle = thread::spawn(move || {
-			let mut el = tokio_core::reactor::Core::new().expect("Creating an event loop should not fail.");
+			let mut el =
+				tokio_core::reactor::Core::new().expect("Creating an event loop should not fail.");
 			tx.send(el.remote()).expect("Rx is blocking upper thread.");
 			let _ = el.run(futures::empty().select(stopped));
 		});
-		let remote = rx.recv().expect("tx is transfered to a newly spawned thread.");
+		let remote = rx
+			.recv()
+			.expect("tx is transfered to a newly spawned thread.");
 
 		EventLoop {
 			remote: Remote {
@@ -109,9 +112,7 @@ impl Remote {
 
 	/// Synchronous remote, used mostly for tests.
 	pub fn new_sync() -> Self {
-		Remote {
-			inner: Mode::Sync,
-		}
+		Remote { inner: Mode::Sync }
 	}
 
 	/// Spawns a new thread for each future (use only for tests).
@@ -122,84 +123,101 @@ impl Remote {
 	}
 
 	/// Spawn a future to this event loop
-	pub fn spawn<R>(&self, r: R) where
-        R: IntoFuture<Item=(), Error=()> + Send + 'static,
-        R::Future: 'static,
+	pub fn spawn<R>(&self, r: R)
+	where
+		R: IntoFuture<Item = (), Error = ()> + Send + 'static,
+		R::Future: 'static,
 	{
 		match self.inner {
 			Mode::Tokio(ref remote) => remote.spawn(move |_| r),
 			Mode::Sync => {
-				let _= r.into_future().wait();
-			},
+				let _ = r.into_future().wait();
+			}
 			Mode::ThreadPerFuture => {
 				thread::spawn(move || {
-					let _= r.into_future().wait();
+					let _ = r.into_future().wait();
 				});
-			},
+			}
 		}
 	}
 
 	/// Spawn a new future returned by given closure.
-	pub fn spawn_fn<F, R>(&self, f: F) where
+	pub fn spawn_fn<F, R>(&self, f: F)
+	where
 		F: FnOnce(&Handle) -> R + Send + 'static,
-        R: IntoFuture<Item=(), Error=()>,
-        R::Future: 'static,
+		R: IntoFuture<Item = (), Error = ()>,
+		R::Future: 'static,
 	{
 		match self.inner {
 			Mode::Tokio(ref remote) => remote.spawn(move |handle| f(handle)),
 			Mode::Sync => {
-				let mut core = tokio_core::reactor::Core::new().expect("Creating an event loop should not fail.");
+				let mut core = tokio_core::reactor::Core::new()
+					.expect("Creating an event loop should not fail.");
 				let handle = core.handle();
 				let _ = core.run(f(&handle).into_future());
-			},
+			}
 			Mode::ThreadPerFuture => {
 				thread::spawn(move || {
-					let mut core = tokio_core::reactor::Core::new().expect("Creating an event loop should not fail.");
+					let mut core = tokio_core::reactor::Core::new()
+						.expect("Creating an event loop should not fail.");
 					let handle = core.handle();
 					let _ = core.run(f(&handle).into_future());
 				});
-			},
+			}
 		}
 	}
 
 	/// Spawn a new future and wait for it or for a timeout to occur.
-	pub fn spawn_with_timeout<F, R, T>(&self, f: F, duration: Duration, on_timeout: T) where
+	pub fn spawn_with_timeout<F, R, T>(&self, f: F, duration: Duration, on_timeout: T)
+	where
 		T: FnOnce() -> () + Send + 'static,
 		F: FnOnce(&Handle) -> R + Send + 'static,
-		R: IntoFuture<Item=(), Error=()>,
+		R: IntoFuture<Item = (), Error = ()>,
 		R::Future: 'static,
 	{
 		match self.inner {
 			Mode::Tokio(ref remote) => remote.spawn(move |handle| {
 				let future = f(handle).into_future();
 				let timeout = Timeout::new(duration, handle).expect("Event loop is still up.");
-				future.select(timeout.then(move |_| {
-					on_timeout();
-					Ok(())
-				})).then(|_| Ok(()))
+				future
+					.select(timeout.then(move |_| {
+						on_timeout();
+						Ok(())
+					}))
+					.then(|_| Ok(()))
 			}),
 			Mode::Sync => {
-				let mut core = tokio_core::reactor::Core::new().expect("Creating an event loop should not fail.");
+				let mut core = tokio_core::reactor::Core::new()
+					.expect("Creating an event loop should not fail.");
 				let handle = core.handle();
 				let future = f(&handle).into_future();
 				let timeout = Timeout::new(duration, &handle).expect("Event loop is still up.");
-				let _: Result<(), ()> = core.run(future.select(timeout.then(move |_| {
-					on_timeout();
-					Ok(())
-				})).then(|_| Ok(())));
-			},
+				let _: Result<(), ()> = core.run(
+					future
+						.select(timeout.then(move |_| {
+							on_timeout();
+							Ok(())
+						}))
+						.then(|_| Ok(())),
+				);
+			}
 			Mode::ThreadPerFuture => {
 				thread::spawn(move || {
-					let mut core = tokio_core::reactor::Core::new().expect("Creating an event loop should not fail.");
+					let mut core = tokio_core::reactor::Core::new()
+						.expect("Creating an event loop should not fail.");
 					let handle = core.handle();
 					let future = f(&handle).into_future();
 					let timeout = Timeout::new(duration, &handle).expect("Event loop is still up.");
-					let _: Result<(), ()> = core.run(future.select(timeout.then(move |_| {
-						on_timeout();
-						Ok(())
-					})).then(|_| Ok(())));
+					let _: Result<(), ()> = core.run(
+						future
+							.select(timeout.then(move |_| {
+								on_timeout();
+								Ok(())
+							}))
+							.then(|_| Ok(())),
+					);
 				});
-			},
+			}
 		}
 	}
 }
@@ -207,7 +225,7 @@ impl Remote {
 /// A handle to running event loop. Dropping the handle will cause event loop to finish.
 pub struct EventLoopHandle {
 	close: Option<futures::Complete<()>>,
-	handle: Option<thread::JoinHandle<()>>
+	handle: Option<thread::JoinHandle<()>>,
 }
 
 impl From<EventLoop> for EventLoopHandle {
@@ -225,13 +243,17 @@ impl Drop for EventLoopHandle {
 impl EventLoopHandle {
 	/// Blocks current thread and waits until the event loop is finished.
 	pub fn wait(mut self) -> thread::Result<()> {
-		self.handle.take()
-			.expect("Handle is taken only in `wait`, `wait` is consuming; qed").join()
+		self.handle
+			.take()
+			.expect("Handle is taken only in `wait`, `wait` is consuming; qed")
+			.join()
 	}
 
 	/// Finishes this event loop.
 	pub fn close(mut self) {
-		let _ = self.close.take()
+		let _ = self
+			.close
+			.take()
 			.expect("Close is taken only in `close` and `drop`. `close` is consuming; qed")
 			.send(());
 	}

@@ -19,38 +19,39 @@
 use std::collections::HashMap;
 
 // use account_provider::AccountProvider;
-use ethereum_types::{H256, U256, Address};
-use block::{OpenBlock, Drain};
+use block::{Drain, OpenBlock};
 use blockchain::{BlockChain, Config as BlockChainConfig, ExtrasInsert};
 use bytes::Bytes;
+use ethereum_types::{Address, H256, U256};
 // use client::{Client, ClientConfig, ChainInfo, ImportBlock, ChainNotify, ChainMessageType, PrepareOpenBlock};
 use ethkey::KeyPair;
 use evm::Factory as EvmFactory;
 use factory::Factories;
 use hash::keccak;
-use hashdb::{AsHashDB, HashDB, DBValue};
+use hashdb::{AsHashDB, DBValue, HashDB};
 use header::Header;
 use memorydb::MemoryDB;
 // use io::*;
 // use miner::Miner;
 // use parking_lot::RwLock;
+use crate::mkvs::MemoryMKVS;
+use rand::prelude::*;
 use rlp::{self, RlpStream};
 use spec::Spec;
-use state_db::StateDB;
 use state::*;
+use state_db::StateDB;
 use std::sync::Arc;
-use transaction::{Action, Transaction, SignedTransaction};
+use transaction::{Action, SignedTransaction, Transaction};
 use views::BlockView;
-use rand::prelude::*;
 
 pub fn random_address() -> Address {
-    let val: u64 = random();
-    Address::from(val)
+	let val: u64 = random();
+	Address::from(val)
 }
 
 pub fn random_h256() -> H256 {
-    let val: u64 = random();
-    H256::from(val)
+	let val: u64 = random();
+	H256::from(val)
 }
 
 /// Creates test block with corresponding header
@@ -74,7 +75,11 @@ fn create_unverifiable_block_header(order: u32, parent_hash: H256) -> Header {
 	header
 }
 
-fn create_unverifiable_block_with_extra(order: u32, parent_hash: H256, extra: Option<Bytes>) -> Bytes {
+fn create_unverifiable_block_with_extra(
+	order: u32,
+	parent_hash: H256,
+	extra: Option<Bytes>,
+) -> Bytes {
 	let mut header = create_unverifiable_block_header(order, parent_hash);
 	header.set_extra_data(match extra {
 		Some(extra_data) => extra_data,
@@ -92,7 +97,11 @@ fn create_unverifiable_block(order: u32, parent_hash: H256) -> Bytes {
 }
 
 /// Creates test block with corresponding header and data
-pub fn create_test_block_with_data(header: &Header, transactions: &[SignedTransaction], uncles: &[Header]) -> Bytes {
+pub fn create_test_block_with_data(
+	header: &Header,
+	transactions: &[SignedTransaction],
+	uncles: &[Header],
+) -> Bytes {
 	let mut rlp = RlpStream::new_list(3);
 	rlp.append(header);
 	rlp.begin_list(transactions.len());
@@ -114,7 +123,9 @@ impl TempBackend {
 }
 
 impl HashDB for TempBackend {
-	fn keys(&self) -> HashMap<H256, i32> { self.0.keys() }
+	fn keys(&self) -> HashMap<H256, i32> {
+		self.0.keys()
+	}
 	fn get(&self, key: &H256) -> Option<DBValue> {
 		self.0.get(key)
 	}
@@ -131,7 +142,7 @@ impl HashDB for TempBackend {
 		self.0.emplace(key, value)
 	}
 
-	fn remove(&mut self, _key: &H256) { }
+	fn remove(&mut self, _key: &H256) {}
 }
 
 /*
@@ -324,16 +335,25 @@ fn new_db() -> Arc<::kvdb::KeyValueDB> {
 /// Generates dummy blockchain with corresponding amount of blocks
 pub fn generate_dummy_blockchain(block_number: u32) -> BlockChain {
 	let db = new_db();
-	let bc = BlockChain::new(BlockChainConfig::default(), &create_unverifiable_block(0, H256::zero()), db.clone());
+	let bc = BlockChain::new(
+		BlockChainConfig::default(),
+		&create_unverifiable_block(0, H256::zero()),
+		db.clone(),
+	);
 
 	let mut batch = db.transaction();
 	for block_order in 1..block_number {
 		// Total difficulty is always 0 here.
-		bc.insert_block(&mut batch, &create_unverifiable_block(block_order, bc.best_block_hash()), vec![], ExtrasInsert {
-			fork_choice: ::engines::ForkChoice::New,
-			is_finalized: false,
-			metadata: None,
-		});
+		bc.insert_block(
+			&mut batch,
+			&create_unverifiable_block(block_order, bc.best_block_hash()),
+			vec![],
+			ExtrasInsert {
+				fork_choice: ::engines::ForkChoice::New,
+				is_finalized: false,
+				metadata: None,
+			},
+		);
 		bc.commit();
 	}
 	db.write(batch).unwrap();
@@ -343,16 +363,25 @@ pub fn generate_dummy_blockchain(block_number: u32) -> BlockChain {
 /// Generates dummy blockchain with corresponding amount of blocks (using creation with extra method for blocks creation)
 pub fn generate_dummy_blockchain_with_extra(block_number: u32) -> BlockChain {
 	let db = new_db();
-	let bc = BlockChain::new(BlockChainConfig::default(), &create_unverifiable_block(0, H256::zero()), db.clone());
+	let bc = BlockChain::new(
+		BlockChainConfig::default(),
+		&create_unverifiable_block(0, H256::zero()),
+		db.clone(),
+	);
 
 	let mut batch = db.transaction();
 	for block_order in 1..block_number {
 		// Total difficulty is always 0 here.
-		bc.insert_block(&mut batch, &create_unverifiable_block_with_extra(block_order, bc.best_block_hash(), None), vec![], ExtrasInsert {
-			fork_choice: ::engines::ForkChoice::New,
-			is_finalized: false,
-			metadata: None,
-		});
+		bc.insert_block(
+			&mut batch,
+			&create_unverifiable_block_with_extra(block_order, bc.best_block_hash(), None),
+			vec![],
+			ExtrasInsert {
+				fork_choice: ::engines::ForkChoice::New,
+				is_finalized: false,
+				metadata: None,
+			},
+		);
 		bc.commit();
 	}
 	db.write(batch).unwrap();
@@ -362,22 +391,28 @@ pub fn generate_dummy_blockchain_with_extra(block_number: u32) -> BlockChain {
 /// Returns empty dummy blockchain
 pub fn generate_dummy_empty_blockchain() -> BlockChain {
 	let db = new_db();
-	let bc = BlockChain::new(BlockChainConfig::default(), &create_unverifiable_block(0, H256::zero()), db.clone());
+	let bc = BlockChain::new(
+		BlockChainConfig::default(),
+		&create_unverifiable_block(0, H256::zero()),
+		db.clone(),
+	);
 	bc
 }
 
 /// Returns temp state
 pub fn get_temp_state() -> State<::state_db::StateDB> {
 	let journal_db = get_temp_state_db();
-	State::new(journal_db, U256::from(0), Default::default())
+	let mkvs = Box::new(MemoryMKVS::new());
+	State::new(mkvs, journal_db, U256::from(0), Default::default())
 }
 
 /// Returns temp state using coresponding factory
 pub fn get_temp_state_with_factory(factory: EvmFactory) -> State<::state_db::StateDB> {
 	let journal_db = get_temp_state_db();
+	let mkvs = Box::new(MemoryMKVS::new());
 	let mut factories = Factories::default();
 	factories.vm = factory.into();
-	State::new(journal_db, U256::from(0), factories)
+	State::new(mkvs, journal_db, U256::from(0), factories)
 }
 
 /// Returns temp state db
@@ -399,13 +434,17 @@ pub fn get_good_dummy_block_seq(count: usize) -> Vec<Bytes> {
 }
 
 /// Returns sequence of hashes of the dummy blocks beginning from corresponding parent
-pub fn get_good_dummy_block_fork_seq(start_number: usize, count: usize, parent_hash: &H256) -> Vec<Bytes> {
+pub fn get_good_dummy_block_fork_seq(
+	start_number: usize,
+	count: usize,
+	parent_hash: &H256,
+) -> Vec<Bytes> {
 	let test_spec = Spec::new_test();
 	let genesis_gas = test_spec.genesis_header().gas_limit().clone();
 	let mut rolling_timestamp = start_number as u64 * 10;
 	let mut parent = *parent_hash;
 	let mut r = Vec::new();
-	for i in start_number .. start_number + count + 1 {
+	for i in start_number..start_number + count + 1 {
 		let mut block_header = Header::new();
 		block_header.set_gas_limit(genesis_gas);
 		block_header.set_difficulty(U256::from(i) * U256([0, 1, 0, 0]));

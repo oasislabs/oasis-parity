@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use transaction::{Transaction, SignedTransaction, Action};
 use ethereum_types::U256;
+use transaction::{Action, SignedTransaction, Transaction};
 
 use jsonrpc_core::Error;
 use v1::helpers::CallRequest;
@@ -40,5 +40,6 @@ pub fn sign_call(request: CallRequest, gas_cap: bool) -> Result<SignedTransactio
 		gas_price: request.gas_price.unwrap_or_else(|| 0.into()),
 		value: request.value.unwrap_or(0.into()),
 		data: request.data.unwrap_or_default(),
-	}.fake_sign(from))
+	}
+	.fake_sign(from))
 }

@@ -27,7 +27,7 @@ pub struct BlockInfo {
 	/// Total block difficulty.
 	pub total_difficulty: U256,
 	/// Block location in blockchain.
-	pub location: BlockLocation
+	pub location: BlockLocation,
 }
 
 /// Describes location of newly inserted block.

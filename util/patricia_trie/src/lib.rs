@@ -15,15 +15,13 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Trie interface and implementation.
-// extern crate rand;
-extern crate ethereum_types;
-extern crate keccak_hash as keccak;
-extern crate rlp;
-extern crate hashdb;
-extern crate ethcore_bytes as bytes;
 extern crate elastic_array;
+extern crate ethcore_bytes as bytes;
+extern crate ethereum_types;
+extern crate hashdb;
+extern crate keccak_hash as keccak;
 extern crate memorydb;
-// extern crate ethcore_logger;
+extern crate rlp;
 
 #[cfg(test)]
 extern crate trie_standardmap as standardmap;
@@ -31,17 +29,17 @@ extern crate trie_standardmap as standardmap;
 #[macro_use]
 extern crate log;
 
-use std::{fmt, error};
 use ethereum_types::H256;
+use hashdb::{DBValue, HashDB};
 use keccak::KECCAK_NULL_RLP;
-use hashdb::{HashDB, DBValue};
+use std::{error, fmt};
 
 pub mod node;
-pub mod triedb;
-pub mod triedbmut;
+pub mod recorder;
 pub mod sectriedb;
 pub mod sectriedbmut;
-pub mod recorder;
+pub mod triedb;
+pub mod triedbmut;
 
 mod fatdb;
 mod fatdbmut;
@@ -49,13 +47,13 @@ mod lookup;
 mod nibbleslice;
 mod nibblevec;
 
-pub use self::triedbmut::TrieDBMut;
-pub use self::triedb::{TrieDB, TrieDBIterator};
-pub use self::sectriedbmut::SecTrieDBMut;
-pub use self::sectriedb::SecTrieDB;
 pub use self::fatdb::{FatDB, FatDBIterator};
 pub use self::fatdbmut::FatDBMut;
 pub use self::recorder::Recorder;
+pub use self::sectriedb::SecTrieDB;
+pub use self::sectriedbmut::SecTrieDBMut;
+pub use self::triedb::{TrieDB, TrieDBIterator};
+pub use self::triedbmut::TrieDBMut;
 
 /// Trie Errors.
 ///
@@ -75,9 +73,10 @@ impl fmt::Display for TrieError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match *self {
 			TrieError::InvalidStateRoot(ref root) => write!(f, "Invalid state root: {}", root),
-			TrieError::IncompleteDatabase(ref missing) =>
-				write!(f, "Database missing expected key: {}", missing),
-			TrieError::DecoderError(ref err) =>  write!(f, "Decoding failed with {}", err),
+			TrieError::IncompleteDatabase(ref missing) => {
+				write!(f, "Database missing expected key: {}", missing)
+			}
+			TrieError::DecoderError(ref err) => write!(f, "Decoding failed with {}", err),
 		}
 	}
 }
@@ -93,7 +92,9 @@ impl error::Error for TrieError {
 }
 
 impl From<rlp::DecoderError> for Box<TrieError> {
-	fn from(e: rlp::DecoderError) -> Self { Box::new(TrieError::DecoderError(e)) }
+	fn from(e: rlp::DecoderError) -> Self {
+		Box::new(TrieError::DecoderError(e))
+	}
 }
 
 /// Trie result type. Boxed to avoid copying around extra space for `H256`s on successful queries.
@@ -115,28 +116,40 @@ pub trait Query {
 	fn decode(self, &[u8]) -> Self::Item;
 
 	/// Record that a node has been passed through.
-	fn record(&mut self, &H256, &[u8], u32) { }
+	fn record(&mut self, &H256, &[u8], u32) {}
 }
 
 impl<'a> Query for &'a mut Recorder {
 	type Item = DBValue;
 
-	fn decode(self, value: &[u8]) -> DBValue { DBValue::from_slice(value) }
+	fn decode(self, value: &[u8]) -> DBValue {
+		DBValue::from_slice(value)
+	}
 	fn record(&mut self, hash: &H256, data: &[u8], depth: u32) {
 		(&mut **self).record(hash, data, depth);
 	}
 }
 
-impl<F, T> Query for F where F: for<'a> FnOnce(&'a [u8]) -> T {
+impl<F, T> Query for F
+where
+	F: for<'a> FnOnce(&'a [u8]) -> T,
+{
 	type Item = T;
 
-	fn decode(self, value: &[u8]) -> T { (self)(value) }
+	fn decode(self, value: &[u8]) -> T {
+		(self)(value)
+	}
 }
 
-impl<'a, F, T> Query for (&'a mut Recorder, F) where F: FnOnce(&[u8]) -> T {
+impl<'a, F, T> Query for (&'a mut Recorder, F)
+where
+	F: FnOnce(&[u8]) -> T,
+{
 	type Item = T;
 
-	fn decode(self, value: &[u8]) -> T { (self.1)(value) }
+	fn decode(self, value: &[u8]) -> T {
+		(self.1)(value)
+	}
 	fn record(&mut self, hash: &H256, data: &[u8], depth: u32) {
 		self.0.record(hash, data, depth)
 	}
@@ -148,7 +161,9 @@ pub trait Trie {
 	fn root(&self) -> &H256;
 
 	/// Is the trie empty?
-	fn is_empty(&self) -> bool { *self.root() == KECCAK_NULL_RLP }
+	fn is_empty(&self) -> bool {
+		*self.root() == KECCAK_NULL_RLP
+	}
 
 	/// Does the trie contain a given key?
 	fn contains(&self, key: &[u8]) -> Result<bool> {
@@ -156,14 +171,18 @@ pub trait Trie {
 	}
 
 	/// What is the value of the given key in this trie?
-	fn get<'a, 'key>(&'a self, key: &'key [u8]) -> Result<Option<DBValue>> where 'a: 'key {
+	fn get<'a, 'key>(&'a self, key: &'key [u8]) -> Result<Option<DBValue>>
+	where
+		'a: 'key,
+	{
 		self.get_with(key, DBValue::from_slice)
 	}
 
 	/// Search for the key with the given query parameter. See the docs of the `Query`
 	/// trait for more details.
-	fn get_with<'a, 'key, Q: Query>(&'a self, key: &'key [u8], query: Q)
-		-> Result<Option<Q::Item>> where 'a: 'key;
+	fn get_with<'a, 'key, Q: Query>(&'a self, key: &'key [u8], query: Q) -> Result<Option<Q::Item>>
+	where
+		'a: 'key;
 
 	/// Returns a depth-first iterator over the elements of trie.
 	fn iter<'a>(&'a self) -> Result<Box<TrieIterator<Item = TrieItem> + 'a>>;
@@ -183,7 +202,9 @@ pub trait TrieMut {
 	}
 
 	/// What is the value of the given key in this trie?
-	fn get<'a, 'key>(&'a self, key: &'key [u8]) -> Result<Option<DBValue>> where 'a: 'key;
+	fn get<'a, 'key>(&'a self, key: &'key [u8]) -> Result<Option<DBValue>>
+	where
+		'a: 'key;
 
 	/// Insert a `key`/`value` pair into the trie. An empty value is equivalent to removing
 	/// `key` from the trie. Returns the old value associated with this key, if it existed.
@@ -195,7 +216,7 @@ pub trait TrieMut {
 }
 
 /// A trie iterator that also supports random access.
-pub trait TrieIterator : Iterator {
+pub trait TrieIterator: Iterator {
 	/// Position the iterator on the first element with key > `key`
 	fn seek(&mut self, key: &[u8]) -> Result<()>;
 }
@@ -259,7 +280,8 @@ impl<'db> Trie for TrieKinds<'db> {
 	}
 
 	fn get_with<'a, 'key, Q: Query>(&'a self, key: &'key [u8], query: Q) -> Result<Option<Q::Item>>
-		where 'a: 'key
+	where
+		'a: 'key,
 	{
 		wrapper!(self, get_with, key, query)
 	}
@@ -272,9 +294,7 @@ impl<'db> Trie for TrieKinds<'db> {
 impl TrieFactory {
 	/// Creates new factory.
 	pub fn new(spec: TrieSpec) -> Self {
-		TrieFactory {
-			spec: spec,
-		}
+		TrieFactory { spec: spec }
 	}
 
 	/// Create new immutable instance of Trie.
@@ -296,7 +316,11 @@ impl TrieFactory {
 	}
 
 	/// Create new mutable instance of trie and check for errors.
-	pub fn from_existing<'db>(&self, db: &'db mut HashDB, root: &'db mut H256) -> Result<Box<TrieMut + 'db>> {
+	pub fn from_existing<'db>(
+		&self,
+		db: &'db mut HashDB,
+		root: &'db mut H256,
+	) -> Result<Box<TrieMut + 'db>> {
 		match self.spec {
 			TrieSpec::Generic => Ok(Box::new(TrieDBMut::from_existing(db, root)?)),
 			TrieSpec::Secure => Ok(Box::new(SecTrieDBMut::from_existing(db, root)?)),
@@ -305,5 +329,7 @@ impl TrieFactory {
 	}
 
 	/// Returns true iff the trie DB is a fat DB (allows enumeration of keys).
-	pub fn is_fat(&self) -> bool { self.spec == TrieSpec::Fat }
+	pub fn is_fat(&self) -> bool {
+		self.spec == TrieSpec::Fat
+	}
 }

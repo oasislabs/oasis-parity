@@ -15,12 +15,12 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 //! DB backend wrapper for Account trie
-use std::collections::HashMap;
-use hash::{KECCAK_NULL_RLP, keccak};
 use ethereum_types::H256;
-use kvdb::DBValue;
+use hash::{keccak, KECCAK_NULL_RLP};
 use hashdb::HashDB;
+use kvdb::DBValue;
 use rlp::NULL_RLP;
+use std::collections::HashMap;
 
 #[cfg(test)]
 use ethereum_types::Address;
@@ -51,7 +51,9 @@ pub enum Factory {
 }
 
 impl Default for Factory {
-	fn default() -> Self { Factory::Mangled }
+	fn default() -> Self {
+		Factory::Mangled
+	}
 }
 
 impl Factory {
@@ -97,7 +99,7 @@ impl<'db> AccountDB<'db> {
 	}
 }
 
-impl<'db> HashDB for AccountDB<'db>{
+impl<'db> HashDB for AccountDB<'db> {
 	fn keys(&self) -> HashMap<H256, i32> {
 		unimplemented!()
 	}
@@ -152,11 +154,14 @@ impl<'db> AccountDBMut<'db> {
 
 	#[cfg(test)]
 	pub fn immutable(&'db self) -> AccountDB<'db> {
-		AccountDB { db: self.db, address_hash: self.address_hash.clone() }
+		AccountDB {
+			db: self.db,
+			address_hash: self.address_hash.clone(),
+		}
 	}
 }
 
-impl<'db> HashDB for AccountDBMut<'db>{
+impl<'db> HashDB for AccountDBMut<'db> {
 	fn keys(&self) -> HashMap<H256, i32> {
 		unimplemented!()
 	}
@@ -238,7 +243,7 @@ impl<'db> HashDB for Wrapping<'db> {
 
 struct WrappingMut<'db>(&'db mut HashDB);
 
-impl<'db> HashDB for WrappingMut<'db>{
+impl<'db> HashDB for WrappingMut<'db> {
 	fn keys(&self) -> HashMap<H256, i32> {
 		unimplemented!()
 	}

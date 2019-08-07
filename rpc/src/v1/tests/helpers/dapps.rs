@@ -16,8 +16,8 @@
 
 //! Test implementation of dapps service.
 
-use v1::types::LocalDapp;
 use v1::helpers::dapps::DappsService;
+use v1::types::LocalDapp;
 
 /// Test implementation of dapps service. Will always return the same list of dapps.
 #[derive(Default, Clone)]

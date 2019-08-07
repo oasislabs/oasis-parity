@@ -14,24 +14,24 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
-use std::thread::{JoinHandle, self};
-use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use crossbeam::sync::chase_lev;
 use service_mio::{HandlerId, IoChannel, IoContext};
+use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
+use std::sync::Arc;
+use std::thread::{self, JoinHandle};
 use IoHandler;
 use LOCAL_STACK_SIZE;
 
 use std::sync::{Condvar as SCondvar, Mutex as SMutex};
 
-const STACK_SIZE: usize = 16*1024*1024;
+const STACK_SIZE: usize = 16 * 1024 * 1024;
 
 pub enum WorkType<Message> {
 	Readable,
 	Writable,
 	Hup,
 	Timeout,
-	Message(Arc<Message>)
+	Message(Arc<Message>),
 }
 
 pub struct Work<Message> {
@@ -52,13 +52,16 @@ pub struct Worker {
 
 impl Worker {
 	/// Creates a new worker instance.
-	pub fn new<Message>(index: usize,
-						stealer: chase_lev::Stealer<Work<Message>>,
-						channel: IoChannel<Message>,
-						wait: Arc<SCondvar>,
-						wait_mutex: Arc<SMutex<()>>,
-					   ) -> Worker
-					where Message: Send + Sync + 'static {
+	pub fn new<Message>(
+		index: usize,
+		stealer: chase_lev::Stealer<Work<Message>>,
+		channel: IoChannel<Message>,
+		wait: Arc<SCondvar>,
+		wait_mutex: Arc<SMutex<()>>,
+	) -> Worker
+	where
+		Message: Send + Sync + 'static,
+	{
 		let deleting = Arc::new(AtomicBool::new(false));
 		let mut worker = Worker {
 			thread: None,
@@ -66,20 +69,28 @@ impl Worker {
 			deleting: deleting.clone(),
 			wait_mutex: wait_mutex.clone(),
 		};
-		worker.thread = Some(thread::Builder::new().stack_size(STACK_SIZE).name(format!("IO Worker #{}", index)).spawn(
-			move || {
-				LOCAL_STACK_SIZE.with(|val| val.set(STACK_SIZE));
-				Worker::work_loop(stealer, channel.clone(), wait, wait_mutex.clone(), deleting)
-			})
-			.expect("Error creating worker thread"));
+		worker.thread = Some(
+			thread::Builder::new()
+				.stack_size(STACK_SIZE)
+				.name(format!("IO Worker #{}", index))
+				.spawn(move || {
+					LOCAL_STACK_SIZE.with(|val| val.set(STACK_SIZE));
+					Worker::work_loop(stealer, channel.clone(), wait, wait_mutex.clone(), deleting)
+				})
+				.expect("Error creating worker thread"),
+		);
 		worker
 	}
 
-	fn work_loop<Message>(stealer: chase_lev::Stealer<Work<Message>>,
-						channel: IoChannel<Message>, wait: Arc<SCondvar>,
-						wait_mutex: Arc<SMutex<()>>,
-						deleting: Arc<AtomicBool>)
-						where Message: Send + Sync + 'static {
+	fn work_loop<Message>(
+		stealer: chase_lev::Stealer<Work<Message>>,
+		channel: IoChannel<Message>,
+		wait: Arc<SCondvar>,
+		wait_mutex: Arc<SMutex<()>>,
+		deleting: Arc<AtomicBool>,
+	) where
+		Message: Send + Sync + 'static,
+	{
 		loop {
 			{
 				let lock = wait_mutex.lock().expect("Poisoned work_loop mutex");
@@ -98,22 +109,30 @@ impl Worker {
 		}
 	}
 
-	fn do_work<Message>(work: Work<Message>, channel: IoChannel<Message>) where Message: Send + Sync + 'static {
+	fn do_work<Message>(work: Work<Message>, channel: IoChannel<Message>)
+	where
+		Message: Send + Sync + 'static,
+	{
 		match work.work_type {
 			WorkType::Readable => {
-				work.handler.stream_readable(&IoContext::new(channel, work.handler_id), work.token);
-			},
+				work.handler
+					.stream_readable(&IoContext::new(channel, work.handler_id), work.token);
+			}
 			WorkType::Writable => {
-				work.handler.stream_writable(&IoContext::new(channel, work.handler_id), work.token);
+				work.handler
+					.stream_writable(&IoContext::new(channel, work.handler_id), work.token);
 			}
 			WorkType::Hup => {
-				work.handler.stream_hup(&IoContext::new(channel, work.handler_id), work.token);
+				work.handler
+					.stream_hup(&IoContext::new(channel, work.handler_id), work.token);
 			}
 			WorkType::Timeout => {
-				work.handler.timeout(&IoContext::new(channel, work.handler_id), work.token);
+				work.handler
+					.timeout(&IoContext::new(channel, work.handler_id), work.token);
 			}
 			WorkType::Message(message) => {
-				work.handler.message(&IoContext::new(channel, work.handler_id), &*message);
+				work.handler
+					.message(&IoContext::new(channel, work.handler_id), &*message);
 			}
 		}
 	}

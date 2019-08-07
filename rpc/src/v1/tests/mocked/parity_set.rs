@@ -14,20 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
-use std::str::FromStr;
+use ethereum_types::{Address, U256};
 use rustc_hex::FromHex;
-use ethereum_types::{U256, Address};
+use std::str::FromStr;
+use std::sync::Arc;
 
-use ethcore::miner::MinerService;
 use ethcore::client::TestBlockChainClient;
-use sync::ManageNetwork;
+use ethcore::miner::MinerService;
 use futures_cpupool::CpuPool;
+use sync::ManageNetwork;
 
-use jsonrpc_core::IoHandler;
-use v1::{ParitySet, ParitySetClient};
-use v1::tests::helpers::{TestMinerService, TestUpdater, TestDappsService};
 use super::manage_network::TestManageNetwork;
+use jsonrpc_core::IoHandler;
+use v1::tests::helpers::{TestDappsService, TestMinerService, TestUpdater};
+use v1::{ParitySet, ParitySetClient};
 
 use fake_fetch::FakeFetch;
 
@@ -47,7 +47,8 @@ fn updater_service() -> Arc<TestUpdater> {
 	Arc::new(TestUpdater::default())
 }
 
-pub type TestParitySetClient = ParitySetClient<TestBlockChainClient, TestMinerService, TestUpdater, FakeFetch<usize>>;
+pub type TestParitySetClient =
+	ParitySetClient<TestBlockChainClient, TestMinerService, TestUpdater, FakeFetch<usize>>;
 
 fn parity_set_client(
 	client: &Arc<TestBlockChainClient>,
@@ -57,7 +58,15 @@ fn parity_set_client(
 ) -> TestParitySetClient {
 	let dapps_service = Arc::new(TestDappsService);
 	let pool = CpuPool::new(1);
-	ParitySetClient::new(client, miner, updater, &(net.clone() as Arc<ManageNetwork>), Some(dapps_service), FakeFetch::new(Some(1)), pool)
+	ParitySetClient::new(
+		client,
+		miner,
+		updater,
+		&(net.clone() as Arc<ManageNetwork>),
+		Some(dapps_service),
+		FakeFetch::new(Some(1)),
+		pool,
+	)
 }
 
 #[test]
@@ -128,7 +137,10 @@ fn rpc_parity_set_gas_floor_target() {
 	let response = r#"{"jsonrpc":"2.0","result":true,"id":1}"#;
 
 	assert_eq!(io.handle_request_sync(request), Some(response.to_owned()));
-	assert_eq!(miner.authoring_params().gas_range_target.0, U256::from_str("cd1722f3947def4cf144679da39c4c32bdc35681").unwrap());
+	assert_eq!(
+		miner.authoring_params().gas_range_target.0,
+		U256::from_str("cd1722f3947def4cf144679da39c4c32bdc35681").unwrap()
+	);
 }
 
 #[test]
@@ -145,7 +157,12 @@ fn rpc_parity_set_extra_data() {
 	let response = r#"{"jsonrpc":"2.0","result":true,"id":1}"#;
 
 	assert_eq!(io.handle_request_sync(request), Some(response.to_owned()));
-	assert_eq!(miner.authoring_params().extra_data, "cd1722f3947def4cf144679da39c4c32bdc35681".from_hex().unwrap());
+	assert_eq!(
+		miner.authoring_params().extra_data,
+		"cd1722f3947def4cf144679da39c4c32bdc35681"
+			.from_hex()
+			.unwrap()
+	);
 }
 
 #[test]
@@ -161,7 +178,10 @@ fn rpc_parity_set_author() {
 	let response = r#"{"jsonrpc":"2.0","result":true,"id":1}"#;
 
 	assert_eq!(io.handle_request_sync(request), Some(response.to_owned()));
-	assert_eq!(miner.authoring_params().author, Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681").unwrap());
+	assert_eq!(
+		miner.authoring_params().author,
+		Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681").unwrap()
+	);
 }
 
 #[test]
@@ -177,7 +197,10 @@ fn rpc_parity_set_engine_signer() {
 	let response = r#"{"jsonrpc":"2.0","result":true,"id":1}"#;
 
 	assert_eq!(io.handle_request_sync(request), Some(response.to_owned()));
-	assert_eq!(miner.authoring_params().author, Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681").unwrap());
+	assert_eq!(
+		miner.authoring_params().author,
+		Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681").unwrap()
+	);
 	assert_eq!(*miner.password.read(), "password".to_string());
 }
 
@@ -213,7 +236,7 @@ fn rpc_parity_set_hash_content() {
 
 #[test]
 fn rpc_parity_remove_transaction() {
-	use transaction::{Transaction, Action};
+	use transaction::{Action, Transaction};
 
 	let miner = miner_service();
 	let client = client_service();
@@ -228,12 +251,15 @@ fn rpc_parity_remove_transaction() {
 		gas: 0x76c0.into(),
 		action: Action::Call(5.into()),
 		value: 0x9184e72au64.into(),
-		data: vec![]
+		data: vec![],
 	};
 	let signed = tx.fake_sign(2.into());
 	let hash = signed.hash();
 
-	let request = r#"{"jsonrpc": "2.0", "method": "parity_removeTransaction", "params":[""#.to_owned() + &format!("0x{:x}", hash) + r#""], "id": 1}"#;
+	let request = r#"{"jsonrpc": "2.0", "method": "parity_removeTransaction", "params":[""#
+		.to_owned()
+		+ &format!("0x{:x}", hash)
+		+ r#""], "id": 1}"#;
 	let response = r#"{"jsonrpc":"2.0","result":{"blockHash":null,"blockNumber":null,"chainId":null,"condition":null,"creates":null,"from":"0x0000000000000000000000000000000000000002","gas":"0x76c0","gasPrice":"0x9184e72a000","hash":"0xa2e0da8a8064e0b9f93e95a53c2db6d01280efb8ac72a708d25487e67dd0f8fc","input":"0x","nonce":"0x1","publicKey":null,"r":"0x1","raw":"0xe9018609184e72a0008276c0940000000000000000000000000000000000000005849184e72a80800101","s":"0x1","standardV":"0x4","to":"0x0000000000000000000000000000000000000005","transactionIndex":null,"v":"0x0","value":"0x9184e72a"},"id":1}"#;
 
 	miner.pending_transactions.lock().insert(hash, signed);

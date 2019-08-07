@@ -21,8 +21,8 @@ pub mod block;
 pub mod blockchain;
 pub mod header;
 pub mod state;
-pub mod transaction;
 pub mod test;
+pub mod transaction;
 
 pub use self::account::Account;
 pub use self::block::Block;

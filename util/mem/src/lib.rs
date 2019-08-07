@@ -34,9 +34,7 @@ impl<T: AsMut<[u8]>> Drop for Memzero<T> {
 		let n = self.mem.as_mut().len();
 		let p = self.mem.as_mut().as_mut_ptr();
 		for i in 0..n {
-			unsafe {
-				ptr::write_volatile(p.offset(i as isize), 0)
-			}
+			unsafe { ptr::write_volatile(p.offset(i as isize), 0) }
 		}
 	}
 }

@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-pub mod position;
 pub mod manager;
+pub mod position;
 
-pub use self::position::Position;
 pub use self::manager::Manager;
+pub use self::position::Position;

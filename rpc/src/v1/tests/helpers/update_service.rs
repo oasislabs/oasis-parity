@@ -16,9 +16,11 @@
 
 //! Test implementation of fetch client.
 
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use semver::Version;
-use updater::{Service as UpdateService, CapState, ReleaseInfo, VersionInfo, OperationsInfo, ReleaseTrack};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use updater::{
+	CapState, OperationsInfo, ReleaseInfo, ReleaseTrack, Service as UpdateService, VersionInfo,
+};
 
 /// Test implementation of fetcher. Will always return the same file.
 #[derive(Default)]
@@ -72,7 +74,13 @@ impl UpdateService for TestUpdater {
 	fn version_info(&self) -> VersionInfo {
 		VersionInfo {
 			track: ReleaseTrack::Beta,
-			version: Version{major: 1, minor: 5, patch: 0, build: vec![], pre: vec![]},
+			version: Version {
+				major: 1,
+				minor: 5,
+				patch: 0,
+				build: vec![],
+				pre: vec![],
+			},
 			hash: 150.into(),
 		}
 	}
@@ -84,7 +92,13 @@ impl UpdateService for TestUpdater {
 			track: ReleaseInfo {
 				version: VersionInfo {
 					track: ReleaseTrack::Beta,
-					version: Version{major: 1, minor: 5, patch: 1, build: vec![], pre: vec![]},
+					version: Version {
+						major: 1,
+						minor: 5,
+						patch: 1,
+						build: vec![],
+						pre: vec![],
+					},
 					hash: 151.into(),
 				},
 				is_critical: true,

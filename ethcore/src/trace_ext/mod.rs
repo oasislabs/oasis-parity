@@ -16,7 +16,7 @@
 
 /// ExtTracer-specific error enum.
 pub mod error;
-/// ExtTracer trait for tracing Ext (Externalities) calls. 
+/// ExtTracer trait for tracing Ext (Externalities) calls.
 pub mod ext_tracer;
 /// FullExtTracer full externalities tracing.
 pub mod full_ext_tracer;
@@ -27,7 +27,7 @@ mod bloomfilter;
 /// CountingExtTracer that just estimates the sizes of the conflict sets.
 pub mod counting_tracer;
 
-pub use self::ext_tracer::ExtTracer;
 pub use self::counting_tracer::CountingTracer;
-pub use self::full_ext_tracer::{FullExtTracer, FullTracerRecord, FullTracerCallTrace};
+pub use self::ext_tracer::ExtTracer;
+pub use self::full_ext_tracer::{FullExtTracer, FullTracerCallTrace, FullTracerRecord};
 pub use self::noop::NoopExtTracer;

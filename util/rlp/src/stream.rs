@@ -6,9 +6,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use byteorder::{BigEndian, ByteOrder};
+use elastic_array::{ElasticArray1024, ElasticArray16};
 use std::borrow::Borrow;
-use byteorder::{ByteOrder, BigEndian};
-use elastic_array::{ElasticArray16, ElasticArray1024};
 use traits::Encodable;
 
 #[derive(Debug, Copy, Clone)]
@@ -71,7 +71,10 @@ impl RlpStream {
 	/// 	assert_eq!(out, vec![0xc8, 0x83, b'c', b'a', b't', 0x83, b'd', b'o', b'g']);
 	/// }
 	/// ```
-	pub fn append<'a, E>(&'a mut self, value: &E) -> &'a mut Self where E: Encodable {
+	pub fn append<'a, E>(&'a mut self, value: &E) -> &'a mut Self
+	where
+		E: Encodable,
+	{
 		self.finished_list = false;
 		value.rlp_append(self);
 		if !self.finished_list {
@@ -81,7 +84,11 @@ impl RlpStream {
 	}
 
 	/// Appends list of values to the end of stream, chainable.
-	pub fn append_list<'a, E, K>(&'a mut self, values: &[K]) -> &'a mut Self where E: Encodable, K: Borrow<E> {
+	pub fn append_list<'a, E, K>(&'a mut self, values: &[K]) -> &'a mut Self
+	where
+		E: Encodable,
+		K: Borrow<E>,
+	{
 		self.begin_list(values.len());
 		for value in values {
 			self.append(value.borrow());
@@ -91,7 +98,10 @@ impl RlpStream {
 
 	/// Appends value to the end of stream, but do not count it as an appended item.
 	/// It's useful for wrapper types
-	pub fn append_internal<'a, E>(&'a mut self, value: &E) -> &'a mut Self where E: Encodable {
+	pub fn append_internal<'a, E>(&'a mut self, value: &E) -> &'a mut Self
+	where
+		E: Encodable,
+	{
 		value.rlp_append(self);
 		self
 	}
@@ -118,15 +128,16 @@ impl RlpStream {
 				self.buffer.push(0xc0u8);
 				self.note_appended(1);
 				self.finished_list = true;
-			},
+			}
 			_ => {
 				// payload is longer than 1 byte only for lists > 55 bytes
 				// by pushing always this 1 byte we may avoid unnecessary shift of data
 				self.buffer.push(0);
 
 				let position = self.buffer.len();
-				self.unfinished_lists.push(ListInfo::new(position, Some(len)));
-			},
+				self.unfinished_lists
+					.push(ListInfo::new(position, Some(len)));
+			}
 		}
 
 		// return chainable self
@@ -182,7 +193,12 @@ impl RlpStream {
 	}
 
 	/// Appends raw (pre-serialised) RLP data. Checks for size oveflow.
-	pub fn append_raw_checked<'a>(&'a mut self, bytes: &[u8], item_count: usize, max_size: usize) -> bool {
+	pub fn append_raw_checked<'a>(
+		&'a mut self,
+		bytes: &[u8],
+		item_count: usize,
+		max_size: usize,
+	) -> bool {
 		if self.estimate_size(bytes.len()) > max_size {
 			return false;
 		}
@@ -264,7 +280,7 @@ impl RlpStream {
 		match self.is_finished() {
 			//true => self.encoder.out().into_vec(),
 			true => self.buffer.into_vec(),
-			false => panic!()
+			false => panic!(),
 		}
 	}
 
@@ -280,7 +296,9 @@ impl RlpStream {
 			Some(ref mut x) => {
 				x.current += inserted_items;
 				match x.max {
-					Some(ref max) if x.current > *max => panic!("You cannot append more items then you expect!"),
+					Some(ref max) if x.current > *max => {
+						panic!("You cannot append more items then you expect!")
+					}
 					Some(ref max) => x.current == *max,
 					_ => false,
 				}
@@ -304,7 +322,7 @@ impl RlpStream {
 	pub fn drain(self) -> ElasticArray1024<u8> {
 		match self.is_finished() {
 			true => self.buffer,
-			false => panic!()
+			false => panic!(),
 		}
 	}
 
@@ -327,7 +345,7 @@ pub struct BasicEncoder<'a> {
 impl<'a> BasicEncoder<'a> {
 	fn new(stream: &'a mut RlpStream) -> Self {
 		BasicEncoder {
-			buffer: &mut stream.buffer
+			buffer: &mut stream.buffer,
 		}
 	}
 
@@ -337,7 +355,8 @@ impl<'a> BasicEncoder<'a> {
 		let size_bytes = 4 - leading_empty_bytes as u8;
 		let mut buffer = [0u8; 4];
 		BigEndian::write_u32(&mut buffer, size);
-		self.buffer.insert_slice(position, &buffer[leading_empty_bytes..]);
+		self.buffer
+			.insert_slice(position, &buffer[leading_empty_bytes..]);
 		size_bytes as u8
 	}
 
@@ -347,7 +366,7 @@ impl<'a> BasicEncoder<'a> {
 		match len {
 			0...55 => {
 				self.buffer[pos - 1] = 0xc0u8 + len as u8;
-			},
+			}
 			_ => {
 				let inserted_bytes = self.insert_size(len, pos);
 				self.buffer[pos - 1] = 0xf7u8 + inserted_bytes;
@@ -363,7 +382,7 @@ impl<'a> BasicEncoder<'a> {
 			// byte is its own encoding if < 0x80
 			1 if value[0] < 0x80 => self.buffer.push(value[0]),
 			// (prefix + length), followed by the string
-			len @ 1 ... 55 => {
+			len @ 1...55 => {
 				self.buffer.push(0x80u8 + len as u8);
 				self.buffer.append_slice(value);
 			}

@@ -16,15 +16,15 @@
 
 //! Transaction data structure.
 
-use std::ops::Deref;
-use ethereum_types::{H256, H160, Address, U256};
 use error;
+use ethereum_types::{Address, H160, H256, U256};
 use ethjson;
-use ethkey::{self, Secret, Signature, Public, recover, public_to_address};
+use ethkey::{self, public_to_address, recover, Public, Secret, Signature};
 use evm::Schedule;
 use hash::keccak;
 use heapsize::HeapSizeOf;
-use rlp::{self, RlpStream, Rlp, DecoderError, Encodable};
+use rlp::{self, DecoderError, Encodable, Rlp, RlpStream};
+use std::ops::Deref;
 
 pub type Bytes = Vec<u8>;
 pub type BlockNumber = u64;
@@ -33,7 +33,10 @@ pub type BlockNumber = u64;
 pub const UNSIGNED_SENDER: Address = H160([0xff; 20]);
 
 /// System sender address for internal state updates.
-pub const SYSTEM_ADDRESS: Address = H160([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,0xff, 0xff, 0xff, 0xff,0xff, 0xff, 0xff, 0xff,0xff, 0xff, 0xff, 0xfe]);
+pub const SYSTEM_ADDRESS: Address = H160([
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xfe,
+]);
 
 /// Transaction action type.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,7 +49,9 @@ pub enum Action {
 }
 
 impl Default for Action {
-	fn default() -> Action { Action::Create }
+	fn default() -> Action {
+		Action::Create
+	}
 }
 
 impl rlp::Decodable for Action {
@@ -81,7 +86,11 @@ pub enum Condition {
 pub mod signature {
 	/// Adds chain id into v
 	pub fn add_chain_replay_protection(v: u64, chain_id: Option<u64>) -> u64 {
-		v + if let Some(n) = chain_id { 35 + n * 2 } else { 27 }
+		v + if let Some(n) = chain_id {
+			35 + n * 2
+		} else {
+			27
+		}
 	}
 
 	/// Returns refined v
@@ -91,7 +100,7 @@ pub mod signature {
 			v if v == 27 => 0,
 			v if v == 28 => 1,
 			v if v > 36 => ((v - 1) % 2) as u8,
-			 _ => 4
+			_ => 4,
 		}
 	}
 }
@@ -170,7 +179,7 @@ impl From<ethjson::transaction::Transaction> for UnverifiedTransaction {
 				gas: t.gas_limit.into(),
 				action: match to {
 					Some(to) => Action::Call(to.into()),
-					None => Action::Create
+					None => Action::Create,
 				},
 				value: t.value.into(),
 				data: t.data.into(),
@@ -179,7 +188,8 @@ impl From<ethjson::transaction::Transaction> for UnverifiedTransaction {
 			s: t.s.into(),
 			v: t.v.into(),
 			hash: 0.into(),
-		}.compute_hash()
+		}
+		.compute_hash()
 	}
 }
 
@@ -207,7 +217,8 @@ impl Transaction {
 			s: sig.s().into(),
 			v: signature::add_chain_replay_protection(sig.v() as u64, chain_id),
 			hash: 0.into(),
-		}.compute_hash()
+		}
+		.compute_hash()
 	}
 
 	/// Useful for test incorrectly signed transactions.
@@ -219,7 +230,8 @@ impl Transaction {
 			s: U256::one(),
 			v: 0,
 			hash: 0.into(),
-		}.compute_hash()
+		}
+		.compute_hash()
 	}
 
 	/// Specify the sender; this won't survive the serialize/deserialize process, but can be cloned.
@@ -231,7 +243,8 @@ impl Transaction {
 				s: U256::one(),
 				v: 0,
 				hash: 0.into(),
-			}.compute_hash(),
+			}
+			.compute_hash(),
 			sender: from,
 			public: None,
 		}
@@ -246,16 +259,26 @@ impl Transaction {
 				s: U256::zero(),
 				v: chain_id,
 				hash: 0.into(),
-			}.compute_hash(),
+			}
+			.compute_hash(),
 			sender: UNSIGNED_SENDER,
 			public: None,
 		}
 	}
 
 	/// Get the transaction cost in gas for the given params.
-	pub fn gas_required_for(is_create: bool, data: &[u8], schedule: &Schedule, confidential: bool) -> u64 {
+	pub fn gas_required_for(
+		is_create: bool,
+		data: &[u8],
+		schedule: &Schedule,
+		confidential: bool,
+	) -> u64 {
 		data.iter().fold(
-			(if is_create {schedule.tx_create_gas} else {schedule.tx_gas}) as u64,
+			(if is_create {
+				schedule.tx_create_gas
+			} else {
+				schedule.tx_gas
+			}) as u64,
 			|g, b| {
 				// The data field of a confidential transaction has a variable number of zeroes,
 				// depending upon the encryption. As a result, under the  normal Ethereum gas
@@ -266,16 +289,27 @@ impl Transaction {
 				let byte_cost = if confidential {
 					schedule.tx_data_non_zero_gas as u64
 				} else {
-					(match *b { 0 => schedule.tx_data_zero_gas, _ => schedule.tx_data_non_zero_gas }) as u64
+					(match *b {
+						0 => schedule.tx_data_zero_gas,
+						_ => schedule.tx_data_non_zero_gas,
+					}) as u64
 				};
 				g + byte_cost
-			}
+			},
 		)
 	}
 
 	/// Get the transaction cost in gas for this transaction.
 	pub fn gas_required(&self, schedule: &Schedule, confidential: bool) -> u64 {
-		Self::gas_required_for(match self.action{Action::Create=>true, Action::Call(_)=>false},	&self.data, schedule, confidential)
+		Self::gas_required_for(
+			match self.action {
+				Action::Create => true,
+				Action::Call(_) => false,
+			},
+			&self.data,
+			schedule,
+			confidential,
+		)
 	}
 }
 
@@ -327,17 +361,19 @@ impl rlp::Decodable for UnverifiedTransaction {
 }
 
 impl rlp::Encodable for UnverifiedTransaction {
-	fn rlp_append(&self, s: &mut RlpStream) { self.rlp_append_sealed_transaction(s) }
+	fn rlp_append(&self, s: &mut RlpStream) {
+		self.rlp_append_sealed_transaction(s)
+	}
 }
 
 impl UnverifiedTransaction {
 	pub fn new(unsigned: Transaction, v: u64, r: U256, s: U256, hash: H256) -> Self {
-		UnverifiedTransaction{
+		UnverifiedTransaction {
 			unsigned,
 			v,
 			r,
 			s,
-			hash
+			hash,
 		}
 	}
 
@@ -372,10 +408,14 @@ impl UnverifiedTransaction {
 		&self.unsigned
 	}
 
-	pub fn standard_v(&self) -> u8 { signature::check_replay_protection(self.v) }
+	pub fn standard_v(&self) -> u8 {
+		signature::check_replay_protection(self.v)
+	}
 
 	/// The `v` value that appears in the RLP.
-	pub fn original_v(&self) -> u64 { self.v }
+	pub fn original_v(&self) -> u64 {
+		self.v
+	}
 
 	/// The chain ID, or `None` if this is a global transaction.
 	pub fn chain_id(&self) -> Option<u64> {
@@ -407,28 +447,45 @@ impl UnverifiedTransaction {
 
 	/// Recovers the public key of the sender.
 	pub fn recover_public(&self) -> Result<Public, ethkey::Error> {
-		Ok(recover(&self.signature(), &self.unsigned.hash(self.chain_id()))?)
+		Ok(recover(
+			&self.signature(),
+			&self.unsigned.hash(self.chain_id()),
+		)?)
 	}
 
 	/// Do basic validation, checking for valid signature and minimum gas,
 	// TODO: consider use in block validation.
 	#[cfg(feature = "json-tests")]
-	pub fn validate(self, schedule: &Schedule, require_low: bool, allow_chain_id_of_one: bool, allow_empty_signature: bool)
-		-> Result<UnverifiedTransaction, error::Error>
-	{
+	pub fn validate(
+		self,
+		schedule: &Schedule,
+		require_low: bool,
+		allow_chain_id_of_one: bool,
+		allow_empty_signature: bool,
+	) -> Result<UnverifiedTransaction, error::Error> {
 		let chain_id = if allow_chain_id_of_one { Some(1) } else { None };
 		self.verify_basic(require_low, chain_id, allow_empty_signature)?;
 		if !allow_empty_signature || !self.is_unsigned() {
 			self.recover_public()?;
 		}
 		if self.gas < U256::from(self.gas_required(&schedule)) {
-			return Err(error::Error::InvalidGasLimit(::unexpected::OutOfBounds{min: Some(U256::from(self.gas_required(&schedule))), max: None, found: self.gas}).into())
+			return Err(error::Error::InvalidGasLimit(::unexpected::OutOfBounds {
+				min: Some(U256::from(self.gas_required(&schedule))),
+				max: None,
+				found: self.gas,
+			})
+			.into());
 		}
 		Ok(self)
 	}
 
 	/// Verify basic signature params. Does not attempt sender recovery.
-	pub fn verify_basic(&self, check_low_s: bool, chain_id: Option<u64>, allow_empty_signature: bool) -> Result<(), error::Error> {
+	pub fn verify_basic(
+		&self,
+		check_low_s: bool,
+		chain_id: Option<u64>,
+		allow_empty_signature: bool,
+	) -> Result<(), error::Error> {
 		if check_low_s && !(allow_empty_signature && self.is_unsigned()) {
 			self.check_low_s()?;
 		}
@@ -437,12 +494,15 @@ impl UnverifiedTransaction {
 			return Err(ethkey::Error::InvalidSignature.into());
 		}
 		// EIP-86: Transactions of this form MUST have gasprice = 0, nonce = 0, value = 0, and do NOT increment the nonce of account 0.
-		if allow_empty_signature && self.is_unsigned() && !(self.gas_price.is_zero() && self.value.is_zero() && self.nonce.is_zero()) {
-			return Err(ethkey::Error::InvalidSignature.into())
+		if allow_empty_signature
+			&& self.is_unsigned()
+			&& !(self.gas_price.is_zero() && self.value.is_zero() && self.nonce.is_zero())
+		{
+			return Err(ethkey::Error::InvalidSignature.into());
 		}
 		match (self.chain_id(), chain_id) {
-			(None, _) => {},
-			(Some(n), Some(m)) if n == m => {},
+			(None, _) => {}
+			(Some(n), Some(m)) if n == m => {}
 			_ => return Err(error::Error::InvalidChainId),
 		};
 		Ok(())
@@ -464,7 +524,9 @@ impl HeapSizeOf for SignedTransaction {
 }
 
 impl rlp::Encodable for SignedTransaction {
-	fn rlp_append(&self, s: &mut RlpStream) { self.transaction.rlp_append_sealed_transaction(s) }
+	fn rlp_append(&self, s: &mut RlpStream) {
+		self.transaction.rlp_append_sealed_transaction(s)
+	}
 }
 
 impl Deref for SignedTransaction {
@@ -595,7 +657,9 @@ impl PendingTransaction {
 impl Deref for PendingTransaction {
 	type Target = SignedTransaction;
 
-	fn deref(&self) -> &SignedTransaction { &self.transaction }
+	fn deref(&self) -> &SignedTransaction {
+		&self.transaction
+	}
 }
 
 impl From<SignedTransaction> for PendingTransaction {
@@ -616,22 +680,28 @@ mod tests {
 	#[test]
 	fn sender_test() {
 		let bytes = ::rustc_hex::FromHex::from_hex("f85f800182520894095e7baea6a6c7c4c2dfeb977efac326af552d870a801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804").unwrap();
-		let t: UnverifiedTransaction = rlp::decode(&bytes).expect("decoding UnverifiedTransaction failed");
+		let t: UnverifiedTransaction =
+			rlp::decode(&bytes).expect("decoding UnverifiedTransaction failed");
 		assert_eq!(t.data, b"");
 		assert_eq!(t.gas, U256::from(0x5208u64));
 		assert_eq!(t.gas_price, U256::from(0x01u64));
 		assert_eq!(t.nonce, U256::from(0x00u64));
 		if let Action::Call(ref to) = t.action {
 			assert_eq!(*to, "095e7baea6a6c7c4c2dfeb977efac326af552d87".into());
-		} else { panic!(); }
+		} else {
+			panic!();
+		}
 		assert_eq!(t.value, U256::from(0x0au64));
-		assert_eq!(public_to_address(&t.recover_public().unwrap()), "0f65fe9276bc9a24ae7083ae28e2660ef72df99e".into());
+		assert_eq!(
+			public_to_address(&t.recover_public().unwrap()),
+			"0f65fe9276bc9a24ae7083ae28e2660ef72df99e".into()
+		);
 		assert_eq!(t.chain_id(), None);
 	}
 
 	#[test]
 	fn signing() {
-		use ethkey::{Random, Generator};
+		use ethkey::{Generator, Random};
 
 		let key = Random.generate().unwrap();
 		let t = Transaction {
@@ -640,8 +710,9 @@ mod tests {
 			gas_price: U256::from(3000),
 			gas: U256::from(50_000),
 			value: U256::from(1),
-			data: b"Hello!".to_vec()
-		}.sign(&key.secret(), None);
+			data: b"Hello!".to_vec(),
+		}
+		.sign(&key.secret(), None);
 		assert_eq!(Address::from(keccak(key.public())), t.sender());
 		assert_eq!(t.chain_id(), None);
 	}
@@ -654,8 +725,9 @@ mod tests {
 			gas_price: U256::from(3000),
 			gas: U256::from(50_000),
 			value: U256::from(1),
-			data: b"Hello!".to_vec()
-		}.fake_sign(Address::from(0x69));
+			data: b"Hello!".to_vec(),
+		}
+		.fake_sign(Address::from(0x69));
 		assert_eq!(Address::from(0x69), t.sender());
 		assert_eq!(t.chain_id(), None);
 
@@ -666,7 +738,7 @@ mod tests {
 
 	#[test]
 	fn should_recover_from_chain_specific_signing() {
-		use ethkey::{Random, Generator};
+		use ethkey::{Generator, Random};
 		let key = Random.generate().unwrap();
 		let t = Transaction {
 			action: Action::Create,
@@ -674,8 +746,9 @@ mod tests {
 			gas_price: U256::from(3000),
 			gas: U256::from(50_000),
 			value: U256::from(1),
-			data: b"Hello!".to_vec()
-		}.sign(&key.secret(), Some(69));
+			data: b"Hello!".to_vec(),
+		}
+		.sign(&key.secret(), Some(69));
 		assert_eq!(Address::from(keccak(key.public())), t.sender());
 		assert_eq!(t.chain_id(), Some(69));
 	}
@@ -685,7 +758,8 @@ mod tests {
 		use rustc_hex::FromHex;
 
 		let test_vector = |tx_data: &str, address: &'static str| {
-			let signed = rlp::decode(&FromHex::from_hex(tx_data).unwrap()).expect("decoding tx data failed");
+			let signed =
+				rlp::decode(&FromHex::from_hex(tx_data).unwrap()).expect("decoding tx data failed");
 			let signed = SignedTransaction::new(signed).unwrap();
 			assert_eq!(signed.sender(), address.into());
 			println!("chainid: {:?}", signed.chain_id());

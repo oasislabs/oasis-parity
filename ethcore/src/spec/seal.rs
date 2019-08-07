@@ -16,9 +16,9 @@
 
 //! Spec seal.
 
-use rlp::RlpStream;
-use ethereum_types::{H64, H256, H520};
+use ethereum_types::{H256, H520, H64};
 use ethjson;
+use rlp::RlpStream;
 
 /// Classic ethereum seal.
 pub struct Ethereum {
@@ -92,16 +92,16 @@ impl From<ethjson::spec::Seal> for Seal {
 		match s {
 			ethjson::spec::Seal::Ethereum(eth) => Seal::Ethereum(Ethereum {
 				nonce: eth.nonce.into(),
-				mix_hash: eth.mix_hash.into()
+				mix_hash: eth.mix_hash.into(),
 			}),
 			ethjson::spec::Seal::AuthorityRound(ar) => Seal::AuthorityRound(AuthorityRound {
 				step: ar.step.into(),
-				signature: ar.signature.into()
+				signature: ar.signature.into(),
 			}),
 			ethjson::spec::Seal::Tendermint(tender) => Seal::Tendermint(Tendermint {
 				round: tender.round.into(),
 				proposal: tender.proposal.into(),
-				precommits: tender.precommits.into_iter().map(Into::into).collect()
+				precommits: tender.precommits.into_iter().map(Into::into).collect(),
 			}),
 			ethjson::spec::Seal::Generic(g) => Seal::Generic(Generic(g.into())),
 		}

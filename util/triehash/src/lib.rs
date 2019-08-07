@@ -23,12 +23,12 @@ extern crate ethereum_types;
 extern crate keccak_hash as hash;
 extern crate rlp;
 
-use std::collections::BTreeMap;
-use std::cmp;
 use elastic_array::{ElasticArray4, ElasticArray8};
 use ethereum_types::H256;
 use hash::keccak;
 use rlp::RlpStream;
+use std::cmp;
+use std::collections::BTreeMap;
 
 fn shared_prefix_len<T: Eq>(first: &[T], second: &[T]) -> usize {
 	let len = cmp::min(first.len(), second.len());
@@ -48,8 +48,9 @@ fn shared_prefix_len<T: Eq>(first: &[T], second: &[T]) -> usize {
 /// }
 /// ```
 pub fn ordered_trie_root<I, A>(input: I) -> H256
-	where I: IntoIterator<Item = A>,
-		  A: AsRef<[u8]>,
+where
+	I: IntoIterator<Item = A>,
+	A: AsRef<[u8]>,
 {
 	let gen_input: Vec<_> = input
 		// first put elements into btree to sort them by nibbles
@@ -60,7 +61,7 @@ pub fn ordered_trie_root<I, A>(input: I) -> H256
 		.collect::<BTreeMap<_, _>>()
 		// then move them to a vector
 		.into_iter()
-		.map(|(k, v)| (as_nibbles(&k), v) )
+		.map(|(k, v)| (as_nibbles(&k), v))
 		.collect();
 
 	gen_trie_root(&gen_input)
@@ -84,9 +85,10 @@ pub fn ordered_trie_root<I, A>(input: I) -> H256
 /// }
 /// ```
 pub fn trie_root<I, A, B>(input: I) -> H256
-	where I: IntoIterator<Item = (A, B)>,
-		  A: AsRef<[u8]> + Ord,
-		  B: AsRef<[u8]>,
+where
+	I: IntoIterator<Item = (A, B)>,
+	A: AsRef<[u8]> + Ord,
+	B: AsRef<[u8]>,
 {
 	let gen_input: Vec<_> = input
 		// first put elements into btree to sort them and to remove duplicates
@@ -94,7 +96,7 @@ pub fn trie_root<I, A, B>(input: I) -> H256
 		.collect::<BTreeMap<_, _>>()
 		// then move them to a vector
 		.into_iter()
-		.map(|(k, v)| (as_nibbles(k.as_ref()), v) )
+		.map(|(k, v)| (as_nibbles(k.as_ref()), v))
 		.collect();
 
 	gen_trie_root(&gen_input)
@@ -118,9 +120,10 @@ pub fn trie_root<I, A, B>(input: I) -> H256
 /// }
 /// ```
 pub fn sec_trie_root<I, A, B>(input: I) -> H256
-	where I: IntoIterator<Item = (A, B)>,
-		  A: AsRef<[u8]>,
-		  B: AsRef<[u8]>,
+where
+	I: IntoIterator<Item = (A, B)>,
+	A: AsRef<[u8]>,
+	B: AsRef<[u8]>,
 {
 	let gen_input: Vec<_> = input
 		// first put elements into btree to sort them and to remove duplicates
@@ -129,7 +132,7 @@ pub fn sec_trie_root<I, A, B>(input: I) -> H256
 		.collect::<BTreeMap<_, _>>()
 		// then move them to a vector
 		.into_iter()
-		.map(|(k, v)| (as_nibbles(&k), v) )
+		.map(|(k, v)| (as_nibbles(&k), v))
 		.collect();
 
 	gen_trie_root(&gen_input)
@@ -196,7 +199,11 @@ fn as_nibbles(bytes: &[u8]) -> ElasticArray8<u8> {
 	res
 }
 
-fn hash256rlp<A: AsRef<[u8]>, B: AsRef<[u8]>>(input: &[(A, B)], pre_len: usize, stream: &mut RlpStream) {
+fn hash256rlp<A: AsRef<[u8]>, B: AsRef<[u8]>>(
+	input: &[(A, B)],
+	pre_len: usize,
+	stream: &mut RlpStream,
+) {
 	let inlen = input.len();
 
 	// in case of empty slice, just append empty data
@@ -219,11 +226,12 @@ fn hash256rlp<A: AsRef<[u8]>, B: AsRef<[u8]>>(input: &[(A, B)], pre_len: usize, 
 	}
 
 	// get length of the longest shared prefix in slice keys
-	let shared_prefix = input.iter()
+	let shared_prefix = input
+		.iter()
 		// skip first element
 		.skip(1)
 		// get minimum number of shared nibbles between first and each successive
-		.fold(key.len(), | acc, &(ref k, _) | {
+		.fold(key.len(), |acc, &(ref k, _)| {
 			cmp::min(shared_prefix_len(key, k.as_ref()), acc)
 		});
 
@@ -244,42 +252,53 @@ fn hash256rlp<A: AsRef<[u8]>, B: AsRef<[u8]>>(input: &[(A, B)], pre_len: usize, 
 	// if first key len is equal to prefix_len, move to next element
 	let mut begin = match pre_len == key.len() {
 		true => 1,
-		false => 0
+		false => 0,
 	};
 
 	// iterate over all possible nibbles
 	for i in 0..16 {
 		// cout how many successive elements have same next nibble
 		let len = match begin < input.len() {
-			true => input[begin..].iter()
-				.take_while(| pair | pair.0.as_ref()[pre_len] == i )
+			true => input[begin..]
+				.iter()
+				.take_while(|pair| pair.0.as_ref()[pre_len] == i)
 				.count(),
-			false => 0
+			false => 0,
 		};
 
 		// if at least 1 successive element has the same nibble
 		// append their suffixes
 		match len {
-			0 => { stream.append_empty_data(); },
-			_ => hash256aux(&input[begin..(begin + len)], pre_len + 1, stream)
+			0 => {
+				stream.append_empty_data();
+			}
+			_ => hash256aux(&input[begin..(begin + len)], pre_len + 1, stream),
 		}
 		begin += len;
 	}
 
 	// if fist key len is equal prefix, append its value
 	match pre_len == key.len() {
-		true => { stream.append(&value); },
-		false => { stream.append_empty_data(); }
+		true => {
+			stream.append(&value);
+		}
+		false => {
+			stream.append_empty_data();
+		}
 	};
 }
 
-fn hash256aux<A: AsRef<[u8]>, B: AsRef<[u8]>>(input: &[(A, B)], pre_len: usize, stream: &mut RlpStream) {
+fn hash256aux<A: AsRef<[u8]>, B: AsRef<[u8]>>(
+	input: &[(A, B)],
+	pre_len: usize,
+	stream: &mut RlpStream,
+) {
 	let mut s = RlpStream::new();
 	hash256rlp(input, pre_len, &mut s);
 	let out = s.out();
 	match out.len() {
 		0...31 => stream.append_raw(&out, 1),
-		_ => stream.append(&keccak(out))
+		_ => stream.append(&keccak(out)),
 	};
 }
 
@@ -297,7 +316,7 @@ fn test_nibbles() {
 
 #[cfg(test)]
 mod tests {
-	use super::{trie_root, shared_prefix_len, hex_prefix_encode};
+	use super::{hex_prefix_encode, shared_prefix_len, trie_root};
 
 	#[test]
 	fn test_hex_prefix_encode() {
@@ -334,43 +353,48 @@ mod tests {
 
 	#[test]
 	fn simple_test() {
-		assert_eq!(trie_root(vec![
-			(b"A", b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as &[u8])
-		]), "d23786fb4a010da3ce639d66d5e904a11dbc02746d1ce25029e53290cabf28ab".into());
+		assert_eq!(
+			trie_root(vec![(
+				b"A",
+				b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as &[u8]
+			)]),
+			"d23786fb4a010da3ce639d66d5e904a11dbc02746d1ce25029e53290cabf28ab".into()
+		);
 	}
 
 	#[test]
 	fn test_triehash_out_of_order() {
-		assert!(trie_root(vec![
-			(vec![0x01u8, 0x23], vec![0x01u8, 0x23]),
-			(vec![0x81u8, 0x23], vec![0x81u8, 0x23]),
-			(vec![0xf1u8, 0x23], vec![0xf1u8, 0x23]),
-		]) ==
-		trie_root(vec![
-			(vec![0x01u8, 0x23], vec![0x01u8, 0x23]),
-			(vec![0xf1u8, 0x23], vec![0xf1u8, 0x23]),
-			(vec![0x81u8, 0x23], vec![0x81u8, 0x23]),
-		]));
+		assert!(
+			trie_root(vec![
+				(vec![0x01u8, 0x23], vec![0x01u8, 0x23]),
+				(vec![0x81u8, 0x23], vec![0x81u8, 0x23]),
+				(vec![0xf1u8, 0x23], vec![0xf1u8, 0x23]),
+			]) == trie_root(vec![
+				(vec![0x01u8, 0x23], vec![0x01u8, 0x23]),
+				(vec![0xf1u8, 0x23], vec![0xf1u8, 0x23]),
+				(vec![0x81u8, 0x23], vec![0x81u8, 0x23]),
+			])
+		);
 	}
 
 	#[test]
 	fn test_shared_prefix() {
-		let a = vec![1,2,3,4,5,6];
-		let b = vec![4,2,3,4,5,6];
+		let a = vec![1, 2, 3, 4, 5, 6];
+		let b = vec![4, 2, 3, 4, 5, 6];
 		assert_eq!(shared_prefix_len(&a, &b), 0);
 	}
 
 	#[test]
 	fn test_shared_prefix2() {
-		let a = vec![1,2,3,3,5];
-		let b = vec![1,2,3];
+		let a = vec![1, 2, 3, 3, 5];
+		let b = vec![1, 2, 3];
 		assert_eq!(shared_prefix_len(&a, &b), 3);
 	}
 
 	#[test]
 	fn test_shared_prefix3() {
-		let a = vec![1,2,3,4,5,6];
-		let b = vec![1,2,3,4,5,6];
+		let a = vec![1, 2, 3, 4, 5, 6];
+		let b = vec![1, 2, 3, 4, 5, 6];
 		assert_eq!(shared_prefix_len(&a, &b), 6);
 	}
 }

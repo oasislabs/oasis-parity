@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use {syn, quote};
+use {quote, syn};
 
 pub fn impl_encodable(ast: &syn::DeriveInput) -> quote::Tokens {
 	let body = match ast.data {
@@ -22,7 +22,12 @@ pub fn impl_encodable(ast: &syn::DeriveInput) -> quote::Tokens {
 		_ => panic!("#[derive(RlpEncodable)] is only defined for structs."),
 	};
 
-	let stmts: Vec<_> = body.fields.iter().enumerate().map(encodable_field_map).collect();
+	let stmts: Vec<_> = body
+		.fields
+		.iter()
+		.enumerate()
+		.map(encodable_field_map)
+		.collect();
 	let name = &ast.ident;
 
 	let stmts_len = stmts.len();
@@ -99,24 +104,39 @@ fn encodable_field(index: usize, field: &syn::Field) -> quote::Tokens {
 
 	match field.ty {
 		syn::Type::Path(ref path) => {
-			let top_segment = path.path.segments.first().expect("there must be at least 1 segment");
+			let top_segment = path
+				.path
+				.segments
+				.first()
+				.expect("there must be at least 1 segment");
 			let ident = &top_segment.value().ident;
 			if &ident.to_string() == "Vec" {
 				let inner_ident = match top_segment.value().arguments {
 					syn::PathArguments::AngleBracketed(ref angle) => {
-						let ty = angle.args.first().expect("Vec has only one angle bracketed type; qed");
+						let ty = angle
+							.args
+							.first()
+							.expect("Vec has only one angle bracketed type; qed");
 						match **ty.value() {
-							syn::GenericArgument::Type(syn::Type::Path(ref path)) => &path.path.segments.first().expect("there must be at least 1 segment").value().ident,
+							syn::GenericArgument::Type(syn::Type::Path(ref path)) => {
+								&path
+									.path
+									.segments
+									.first()
+									.expect("there must be at least 1 segment")
+									.value()
+									.ident
+							}
 							_ => panic!("rlp_derive not supported"),
 						}
-					},
+					}
 					_ => unreachable!("Vec has only one angle bracketed type; qed"),
 				};
 				quote! { stream.append_list::<#inner_ident, _>(&#id); }
 			} else {
 				quote! { stream.append(&#id); }
 			}
-		},
+		}
 		_ => panic!("rlp_derive not supported"),
 	}
 }

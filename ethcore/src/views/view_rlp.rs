@@ -16,7 +16,7 @@
 
 //! Wrapper for view rlp expected to be valid with debug info
 
-use rlp::{Rlp, Decodable, DecoderError};
+use rlp::{Decodable, DecoderError, Rlp};
 
 /// Wrapper for trusted rlp, which is expected to be valid, for use in views
 /// When created with view!, records the file and line where it was created for debugging
@@ -27,33 +27,37 @@ pub struct ViewRlp<'a> {
 	line: u32,
 }
 
-impl<'a, 'view> ViewRlp<'a> where 'a : 'view {
+impl<'a, 'view> ViewRlp<'a>
+where
+	'a: 'view,
+{
 	#[doc(hidden)]
 	pub fn new(bytes: &'a [u8], file: &'a str, line: u32) -> Self {
 		ViewRlp {
 			rlp: Rlp::new(bytes),
 			file,
-			line
+			line,
 		}
 	}
 
 	/// Returns a new instance replacing existing rlp with new rlp, maintaining debug info
 	fn new_from_rlp(&self, rlp: Rlp<'a>) -> Self {
-		ViewRlp { 
-			rlp, 
+		ViewRlp {
+			rlp,
 			file: self.file,
-			line: self.line 
+			line: self.line,
 		}
 	}
 
 	fn maybe_at(&self, index: usize) -> Option<ViewRlp<'a>> {
-		self.rlp.at(index)
-			.map(|rlp| self.new_from_rlp(rlp))
-			.ok()
+		self.rlp.at(index).map(|rlp| self.new_from_rlp(rlp)).ok()
 	}
 
 	fn expect_valid_rlp<T>(&self, r: Result<T, DecoderError>) -> T {
-		r.expect(&format!("View rlp is trusted and should be valid. Constructed in {} on line {}", self.file, self.line))
+		r.expect(&format!(
+			"View rlp is trusted and should be valid. Constructed in {} on line {}",
+			self.file, self.line
+		))
 	}
 
 	/// Returns rlp at the given index, panics if no rlp at that index
@@ -68,17 +72,26 @@ impl<'a, 'view> ViewRlp<'a> where 'a : 'view {
 	}
 
 	/// Returns decoded value of this rlp, panics if rlp not valid
-	pub fn as_val<T>(&self) -> T where T: Decodable {
+	pub fn as_val<T>(&self) -> T
+	where
+		T: Decodable,
+	{
 		self.expect_valid_rlp(self.rlp.as_val())
 	}
 
 	/// Returns decoded value at the given index, panics not present or valid at that index
-	pub fn val_at<T>(&self, index: usize) -> T where T : Decodable {
+	pub fn val_at<T>(&self, index: usize) -> T
+	where
+		T: Decodable,
+	{
 		self.expect_valid_rlp(self.rlp.val_at(index))
-	} 
+	}
 
 	/// Returns decoded list of values, panics if rlp is invalid
-	pub fn list_at<T>(&self, index: usize) -> Vec<T> where T: Decodable {
+	pub fn list_at<T>(&self, index: usize) -> Vec<T>
+	where
+		T: Decodable,
+	{
 		self.expect_valid_rlp(self.rlp.list_at(index))
 	}
 
@@ -94,12 +107,18 @@ impl<'a, 'view> ViewRlp<'a> where 'a : 'view {
 }
 
 /// Iterator over rlp-slice list elements.
-pub struct ViewRlpIterator<'a, 'view> where 'a: 'view {
+pub struct ViewRlpIterator<'a, 'view>
+where
+	'a: 'view,
+{
 	rlp: &'view ViewRlp<'a>,
 	index: usize,
 }
 
-impl<'a, 'view> IntoIterator for &'view ViewRlp<'a> where 'a: 'view {
+impl<'a, 'view> IntoIterator for &'view ViewRlp<'a>
+where
+	'a: 'view,
+{
 	type Item = ViewRlp<'a>;
 	type IntoIter = ViewRlpIterator<'a, 'view>;
 

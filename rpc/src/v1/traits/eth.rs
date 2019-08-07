@@ -15,12 +15,12 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Eth rpc interface.
-use jsonrpc_core::{Result, BoxFuture};
+use jsonrpc_core::{BoxFuture, Result};
 use jsonrpc_macros::Trailing;
 
-use v1::types::{RichBlock, BlockNumber, Bytes, CallRequest, Filter, FilterChanges, Index};
+use v1::types::{BlockNumber, Bytes, CallRequest, Filter, FilterChanges, Index, RichBlock};
 use v1::types::{Log, Receipt, Transaction, Work};
-use v1::types::{H64, H160, H256, U256};
+use v1::types::{H160, H256, H64, U256};
 
 build_rpc_trait! {
 	/// Eth rpc interface.
@@ -57,7 +57,7 @@ build_rpc_trait! {
 
 		/// Returns highest block number.
 		#[rpc(name = "eth_blockNumber")]
-		fn block_number(&self) -> Result<U256>;
+		fn block_number(&self) -> BoxFuture<U256>;
 
 		/// Returns balance of the given account.
 		#[rpc(name = "eth_getBalance")]
@@ -183,11 +183,11 @@ build_rpc_trait! {
 	pub trait EthFilter {
 		/// Returns id of new filter.
 		#[rpc(name = "eth_newFilter")]
-		fn new_filter(&self, Filter) -> Result<U256>;
+		fn new_filter(&self, Filter) -> BoxFuture<U256>;
 
 		/// Returns id of new block filter.
 		#[rpc(name = "eth_newBlockFilter")]
-		fn new_block_filter(&self) -> Result<U256>;
+		fn new_block_filter(&self) -> BoxFuture<U256>;
 
 		/// Returns id of new block filter.
 		#[rpc(name = "eth_newPendingTransactionFilter")]

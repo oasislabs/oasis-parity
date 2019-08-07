@@ -4,6 +4,8 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
+blockchain-traits = { git = "https://github.com/oasislabs/oasis-rs" }
+oasis-types = { git = "https://github.com/oasislabs/oasis-rs" }
 byteorder = "1.0"
 ethcore-bytes = { path = "../../util/bytes" }
 ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
@@ -15,6 +17,4 @@ rlp = { path = "../../util/rlp" }
 keccak-hash = { path = "../../util/hash" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-
-[dev-dependencies]
 elastic-array = "0.10"

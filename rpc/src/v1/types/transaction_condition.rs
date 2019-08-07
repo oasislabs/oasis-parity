@@ -21,10 +21,10 @@ use transaction;
 #[serde(deny_unknown_fields)]
 pub enum TransactionCondition {
 	/// Valid at this minimum block number.
-	#[serde(rename="block")]
+	#[serde(rename = "block")]
 	Number(u64),
 	/// Valid at given unix time.
-	#[serde(rename="time")]
+	#[serde(rename = "time")]
 	Timestamp(u64),
 }
 
@@ -55,12 +55,24 @@ mod tests {
 	fn condition_deserialization() {
 		let s = r#"[{ "block": 51 }, { "time": 10 }]"#;
 		let deserialized: Vec<TransactionCondition> = serde_json::from_str(s).unwrap();
-		assert_eq!(deserialized, vec![TransactionCondition::Number(51), TransactionCondition::Timestamp(10)])
+		assert_eq!(
+			deserialized,
+			vec![
+				TransactionCondition::Number(51),
+				TransactionCondition::Timestamp(10)
+			]
+		)
 	}
 
 	#[test]
 	fn condition_into() {
-		assert_eq!(transaction::Condition::Number(100), TransactionCondition::Number(100).into());
-		assert_eq!(transaction::Condition::Timestamp(100), TransactionCondition::Timestamp(100).into());
+		assert_eq!(
+			transaction::Condition::Number(100),
+			TransactionCondition::Number(100).into()
+		);
+		assert_eq!(
+			transaction::Condition::Timestamp(100),
+			TransactionCondition::Timestamp(100).into()
+		);
 	}
 }

@@ -15,25 +15,34 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 extern crate fetch;
-extern crate hyper;
 extern crate futures;
+extern crate hyper;
 
-use hyper::StatusCode;
+use fetch::{Fetch, Request, Url};
 use futures::{future, future::FutureResult};
-use fetch::{Fetch, Url, Request};
+use hyper::StatusCode;
 
 #[derive(Clone, Default)]
-pub struct FakeFetch<T> where T: Clone + Send + Sync {
+pub struct FakeFetch<T>
+where
+	T: Clone + Send + Sync,
+{
 	val: Option<T>,
 }
 
-impl<T> FakeFetch<T> where T: Clone + Send + Sync {
+impl<T> FakeFetch<T>
+where
+	T: Clone + Send + Sync,
+{
 	pub fn new(t: Option<T>) -> Self {
-		FakeFetch { val : t }
+		FakeFetch { val: t }
 	}
 }
 
-impl<T: 'static> Fetch for FakeFetch<T> where T: Clone + Send+ Sync {
+impl<T: 'static> Fetch for FakeFetch<T>
+where
+	T: Clone + Send + Sync,
+{
 	type Result = FutureResult<fetch::Response, fetch::Error>;
 
 	fn fetch(&self, request: Request, abort: fetch::Abort) -> Self::Result {
@@ -42,14 +51,18 @@ impl<T: 'static> Fetch for FakeFetch<T> where T: Clone + Send+ Sync {
 			let r = hyper::Response::new().with_body(&b"Some content"[..]);
 			fetch::client::Response::new(u, r, abort)
 		} else {
-			fetch::client::Response::new(u, hyper::Response::new().with_status(StatusCode::NotFound), abort)
+			fetch::client::Response::new(
+				u,
+				hyper::Response::new().with_status(StatusCode::NotFound),
+				abort,
+			)
 		})
 	}
 
 	fn get(&self, url: &str, abort: fetch::Abort) -> Self::Result {
 		let url: Url = match url.parse() {
 			Ok(u) => u,
-			Err(e) => return future::err(e.into())
+			Err(e) => return future::err(e.into()),
 		};
 		self.fetch(Request::get(url), abort)
 	}
@@ -57,7 +70,7 @@ impl<T: 'static> Fetch for FakeFetch<T> where T: Clone + Send+ Sync {
 	fn post(&self, url: &str, abort: fetch::Abort) -> Self::Result {
 		let url: Url = match url.parse() {
 			Ok(u) => u,
-			Err(e) => return future::err(e.into())
+			Err(e) => return future::err(e.into()),
 		};
 		self.fetch(Request::post(url), abort)
 	}

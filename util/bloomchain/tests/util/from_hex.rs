@@ -14,11 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use rustc_hex::FromHex as RustcFromHex;
 use bloomchain::Bloom;
+use rustc_hex::FromHex as RustcFromHex;
 
 pub trait FromHex {
-	fn from_hex(s: &str) -> Self where Self: Sized;
+	fn from_hex(s: &str) -> Self
+	where
+		Self: Sized;
 }
 
 impl FromHex for Bloom {

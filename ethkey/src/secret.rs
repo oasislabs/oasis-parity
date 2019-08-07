@@ -14,14 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+use ethereum_types::H256;
+use mem::Memzero;
+use rustc_hex::ToHex;
+use secp256k1::constants::SECRET_KEY_SIZE as SECP256K1_SECRET_KEY_SIZE;
+use secp256k1::key;
 use std::fmt;
 use std::ops::Deref;
 use std::str::FromStr;
-use rustc_hex::ToHex;
-use secp256k1::constants::{SECRET_KEY_SIZE as SECP256K1_SECRET_KEY_SIZE};
-use secp256k1::key;
-use ethereum_types::H256;
-use mem::Memzero;
 use {Error, SECP256K1};
 
 #[derive(Clone, PartialEq, Eq)]
@@ -49,7 +49,11 @@ impl fmt::Debug for Secret {
 
 impl fmt::Display for Secret {
 	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-		write!(fmt, "Secret: 0x{:x}{:x}..{:x}{:x}", self.inner[0], self.inner[1], self.inner[30], self.inner[31])
+		write!(
+			fmt,
+			"Secret: 0x{:x}{:x}..{:x}{:x}",
+			self.inner[0], self.inner[1], self.inner[30], self.inner[31]
+		)
 	}
 }
 
@@ -57,16 +61,20 @@ impl Secret {
 	/// Creates a `Secret` from the given slice, returning `None` if the slice length != 32.
 	pub fn from_slice(key: &[u8]) -> Option<Self> {
 		if key.len() != 32 {
-			return None
+			return None;
 		}
 		let mut h = H256::default();
 		h.copy_from_slice(&key[0..32]);
-		Some(Secret { inner: Memzero::from(h) })
+		Some(Secret {
+			inner: Memzero::from(h),
+		})
 	}
 
 	/// Creates zero key, which is invalid for crypto operations, but valid for math operation.
 	pub fn zero() -> Self {
-		Secret { inner: Memzero::from(H256::default()) }
+		Secret {
+			inner: Memzero::from(H256::default()),
+		}
 	}
 
 	/// Imports and validates the key.
@@ -87,7 +95,7 @@ impl Secret {
 			(true, false) => {
 				*self = other.clone();
 				Ok(())
-			},
+			}
 			(false, false) => {
 				let mut key_secret = self.to_secp256k1_secret()?;
 				let other_secret = other.to_secp256k1_secret()?;
@@ -95,7 +103,7 @@ impl Secret {
 
 				*self = key_secret.into();
 				Ok(())
-			},
+			}
 		}
 	}
 
@@ -106,7 +114,7 @@ impl Secret {
 			(true, false) => {
 				*self = other.clone();
 				self.neg()
-			},
+			}
 			(false, false) => {
 				let mut key_secret = self.to_secp256k1_secret()?;
 				let mut other_secret = other.to_secp256k1_secret()?;
@@ -115,7 +123,7 @@ impl Secret {
 
 				*self = key_secret.into();
 				Ok(())
-			},
+			}
 		}
 	}
 
@@ -125,14 +133,14 @@ impl Secret {
 			true => {
 				*self = key::MINUS_ONE_KEY.into();
 				Ok(())
-			},
+			}
 			false => {
 				let mut key_secret = self.to_secp256k1_secret()?;
 				key_secret.add_assign(&SECP256K1, &key::MINUS_ONE_KEY)?;
 
 				*self = key_secret.into();
 				Ok(())
-			},
+			}
 		}
 	}
 
@@ -143,7 +151,7 @@ impl Secret {
 			(false, true) => {
 				*self = Self::zero();
 				Ok(())
-			},
+			}
 			(false, false) => {
 				let mut key_secret = self.to_secp256k1_secret()?;
 				let other_secret = other.to_secp256k1_secret()?;
@@ -151,7 +159,7 @@ impl Secret {
 
 				*self = key_secret.into();
 				Ok(())
-			},
+			}
 		}
 	}
 
@@ -165,7 +173,7 @@ impl Secret {
 
 				*self = key_secret.into();
 				Ok(())
-			},
+			}
 		}
 	}
 
@@ -193,7 +201,7 @@ impl Secret {
 				for _ in 1..pow {
 					self.mul(&c)?;
 				}
-			},
+			}
 		}
 
 		Ok(())
@@ -208,13 +216,17 @@ impl Secret {
 impl FromStr for Secret {
 	type Err = Error;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		Ok(H256::from_str(s).map_err(|e| Error::Custom(format!("{:?}", e)))?.into())
+		Ok(H256::from_str(s)
+			.map_err(|e| Error::Custom(format!("{:?}", e)))?
+			.into())
 	}
 }
 
 impl From<[u8; 32]> for Secret {
 	fn from(k: [u8; 32]) -> Self {
-		Secret { inner: Memzero::from(H256(k)) }
+		Secret {
+			inner: Memzero::from(H256(k)),
+		}
 	}
 }
 
@@ -226,14 +238,18 @@ impl From<H256> for Secret {
 
 impl From<&'static str> for Secret {
 	fn from(s: &'static str) -> Self {
-		s.parse().expect(&format!("invalid string literal for {}: '{}'", stringify!(Self), s))
+		s.parse().expect(&format!(
+			"invalid string literal for {}: '{}'",
+			stringify!(Self),
+			s
+		))
 	}
 }
 
 impl From<key::SecretKey> for Secret {
 	fn from(key: key::SecretKey) -> Self {
 		let mut a = [0; SECP256K1_SECRET_KEY_SIZE];
-		a.copy_from_slice(&key[0 .. SECP256K1_SECRET_KEY_SIZE]);
+		a.copy_from_slice(&key[0..SECP256K1_SECRET_KEY_SIZE]);
 		a.into()
 	}
 }
@@ -248,9 +264,9 @@ impl Deref for Secret {
 
 #[cfg(test)]
 mod tests {
-	use std::str::FromStr;
-	use super::super::{Random, Generator};
+	use super::super::{Generator, Random};
 	use super::Secret;
+	use std::str::FromStr;
 
 	#[test]
 	fn multiplicating_secret_inversion_with_secret_gives_one() {
@@ -258,7 +274,11 @@ mod tests {
 		let mut inversion = secret.clone();
 		inversion.inv().unwrap();
 		inversion.mul(&secret).unwrap();
-		assert_eq!(inversion, Secret::from_str("0000000000000000000000000000000000000000000000000000000000000001").unwrap());
+		assert_eq!(
+			inversion,
+			Secret::from_str("0000000000000000000000000000000000000000000000000000000000000001")
+				.unwrap()
+		);
 	}
 
 	#[test]
@@ -276,7 +296,11 @@ mod tests {
 
 		let mut pow0 = secret.clone();
 		pow0.pow(0).unwrap();
-		assert_eq!(pow0, Secret::from_str("0000000000000000000000000000000000000000000000000000000000000001").unwrap());
+		assert_eq!(
+			pow0,
+			Secret::from_str("0000000000000000000000000000000000000000000000000000000000000001")
+				.unwrap()
+		);
 
 		let mut pow1 = secret.clone();
 		pow1.pow(1).unwrap();

@@ -17,11 +17,8 @@
 // #![warn(missing_docs)]
 
 extern crate byteorder;
-extern crate edit_distance;
-// extern crate ethcore_crypto;
 extern crate ethereum_types;
 extern crate mem;
-// extern crate parity_wordlist;
 #[macro_use]
 extern crate quick_error;
 #[cfg(any(test, feature = "test"))]
@@ -35,35 +32,20 @@ extern crate lazy_static;
 #[macro_use]
 extern crate log;
 
-// mod brain;
-// mod brain_prefix;
 mod error;
-mod keypair;
 mod keccak;
-// mod prefix;
+mod keypair;
 #[cfg(any(test, feature = "test"))]
 mod random;
-mod signature;
 mod secret;
-// mod extended;
-//
-// pub mod brain_recover;
-// pub mod crypto;
-// pub mod math;
-//
-// pub use self::parity_wordlist::Error as WordlistError;
-// pub use self::brain::Brain;
-// pub use self::brain_prefix::BrainPrefix;
+mod signature;
+
 pub use self::error::Error;
-pub use self::keypair::{KeyPair, public_to_address};
-// pub use self::math::public_is_valid;
-// pub use self::prefix::Prefix;
+pub use self::keypair::{public_to_address, KeyPair};
 #[cfg(any(test, feature = "test"))]
 pub use self::random::Random;
-pub use self::signature::{sign, verify_public, verify_address, recover, Signature};
-//pub use self::signature::{recover, Signature};
 pub use self::secret::Secret;
-// pub use self::extended::{ExtendedPublic, ExtendedSecret, ExtendedKeyPair, DerivationError, Derivation};
+pub use self::signature::{recover, sign, verify_address, verify_public, Signature};
 
 use ethereum_types::H256;
 

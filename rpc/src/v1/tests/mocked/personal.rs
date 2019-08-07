@@ -14,22 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use bytes::ToPretty;
-use ethereum_types::{U256, Address};
 use ethcore::account_provider::AccountProvider;
 use ethcore::client::TestBlockChainClient;
+use ethereum_types::{Address, U256};
 use jsonrpc_core::IoHandler;
 use parking_lot::Mutex;
 use transaction::{Action, Transaction};
 
-use v1::{PersonalClient, Personal, Metadata};
-use v1::helpers::nonce;
 use v1::helpers::dispatch::{eth_data_hash, FullDispatcher};
+use v1::helpers::nonce;
 use v1::tests::helpers::TestMinerService;
 use v1::types::H520;
+use v1::{Metadata, Personal, PersonalClient};
 
 struct PersonalTester {
 	accounts: Arc<AccountProvider>,
@@ -76,36 +76,47 @@ fn accounts() {
 	let tester = setup();
 	let address = tester.accounts.new_account("").unwrap();
 	let request = r#"{"jsonrpc": "2.0", "method": "personal_listAccounts", "params": [], "id": 1}"#;
-	let response = r#"{"jsonrpc":"2.0","result":[""#.to_owned() + &format!("0x{:x}", address) + r#""],"id":1}"#;
+	let response = r#"{"jsonrpc":"2.0","result":[""#.to_owned()
+		+ &format!("0x{:x}", address)
+		+ r#""],"id":1}"#;
 
-	assert_eq!(tester.io.handle_request_sync(request), Some(response.to_owned()));
+	assert_eq!(
+		tester.io.handle_request_sync(request),
+		Some(response.to_owned())
+	);
 }
 
 #[test]
 fn new_account() {
 	let tester = setup();
-	let request = r#"{"jsonrpc": "2.0", "method": "personal_newAccount", "params": ["pass"], "id": 1}"#;
+	let request =
+		r#"{"jsonrpc": "2.0", "method": "personal_newAccount", "params": ["pass"], "id": 1}"#;
 
 	let res = tester.io.handle_request_sync(request);
 
 	let accounts = tester.accounts.accounts().unwrap();
 	assert_eq!(accounts.len(), 1);
 	let address = accounts[0];
-	let response = r#"{"jsonrpc":"2.0","result":""#.to_owned() + format!("0x{:x}", address).as_ref() + r#"","id":1}"#;
+	let response = r#"{"jsonrpc":"2.0","result":""#.to_owned()
+		+ format!("0x{:x}", address).as_ref()
+		+ r#"","id":1}"#;
 
 	assert_eq!(res, Some(response));
 }
 
-fn invalid_password_test(method: &str)
-{
+fn invalid_password_test(method: &str) {
 	let tester = setup();
 	let address = tester.accounts.new_account("password123").unwrap();
 
 	let request = r#"{
 		"jsonrpc": "2.0",
-		"method": ""#.to_owned() + method + r#"",
+		"method": ""#
+		.to_owned()
+		+ method + r#"",
 		"params": [{
-			"from": ""# + format!("0x{:x}", address).as_ref() + r#"",
+			"from": ""#
+		+ format!("0x{:x}", address).as_ref()
+		+ r#"",
 			"to": "0xd46e8dd67c5d32be8058bb8eb970870f07244567",
 			"gas": "0x76c0",
 			"gasPrice": "0x9184e72a000",
@@ -116,7 +127,10 @@ fn invalid_password_test(method: &str)
 
 	let response = r#"{"jsonrpc":"2.0","error":{"code":-32021,"message":"Account password is invalid or account does not exist.","data":"SStore(InvalidPassword)"},"id":1}"#;
 
-	assert_eq!(tester.io.handle_request_sync(request.as_ref()), Some(response.into()));
+	assert_eq!(
+		tester.io.handle_request_sync(request.as_ref()),
+		Some(response.into())
+	);
 }
 
 #[test]
@@ -129,20 +143,33 @@ fn sign() {
 		"jsonrpc": "2.0",
 		"method": "personal_sign",
 		"params": [
-			""#.to_owned() + format!("0x{}", data.to_hex()).as_ref() + r#"",
-			""# + format!("0x{:x}", address).as_ref() + r#"",
+			""#
+	.to_owned()
+		+ format!("0x{}", data.to_hex()).as_ref()
+		+ r#"",
+			""# + format!("0x{:x}", address).as_ref()
+		+ r#"",
 			"password123"
 		],
 		"id": 1
 	}"#;
 
 	let hash = eth_data_hash(data);
-	let signature = H520(tester.accounts.sign(address, Some("password123".into()), hash).unwrap().into_electrum());
+	let signature = H520(
+		tester
+			.accounts
+			.sign(address, Some("password123".into()), hash)
+			.unwrap()
+			.into_electrum(),
+	);
 	let signature = format!("0x{:?}", signature);
 
 	let response = r#"{"jsonrpc":"2.0","result":""#.to_owned() + &signature + r#"","id":1}"#;
 
-	assert_eq!(tester.io.handle_request_sync(request.as_ref()), Some(response));
+	assert_eq!(
+		tester.io.handle_request_sync(request.as_ref()),
+		Some(response)
+	);
 }
 
 #[test]
@@ -155,7 +182,10 @@ fn sign_with_invalid_password() {
 		"method": "personal_sign",
 		"params": [
 			"0x0000000000000000000000000000000000000000000000000000000000000005",
-			""#.to_owned() + format!("0x{:x}", address).as_ref() + r#"",
+			""#
+	.to_owned()
+		+ format!("0x{:x}", address).as_ref()
+		+ r#"",
 			""
 		],
 		"id": 1
@@ -163,7 +193,10 @@ fn sign_with_invalid_password() {
 
 	let response = r#"{"jsonrpc":"2.0","error":{"code":-32021,"message":"Account password is invalid or account does not exist.","data":"SStore(InvalidPassword)"},"id":1}"#;
 
-	assert_eq!(tester.io.handle_request_sync(request.as_ref()), Some(response.into()));
+	assert_eq!(
+		tester.io.handle_request_sync(request.as_ref()),
+		Some(response.into())
+	);
 }
 
 #[test]
@@ -192,9 +225,13 @@ fn sign_and_send_test(method: &str) {
 
 	let request = r#"{
 		"jsonrpc": "2.0",
-		"method": ""#.to_owned() + method + r#"",
+		"method": ""#
+		.to_owned()
+		+ method + r#"",
 		"params": [{
-			"from": ""# + format!("0x{:x}", address).as_ref() + r#"",
+			"from": ""#
+		+ format!("0x{:x}", address).as_ref()
+		+ r#"",
 			"to": "0xd46e8dd67c5d32be8058bb8eb970870f07244567",
 			"gas": "0x76c0",
 			"gasPrice": "0x9184e72a000",
@@ -207,17 +244,27 @@ fn sign_and_send_test(method: &str) {
 		nonce: U256::zero(),
 		gas_price: U256::from(0x9184e72a000u64),
 		gas: U256::from(0x76c0),
-		action: Action::Call(Address::from_str("d46e8dd67c5d32be8058bb8eb970870f07244567").unwrap()),
+		action: Action::Call(
+			Address::from_str("d46e8dd67c5d32be8058bb8eb970870f07244567").unwrap(),
+		),
 		value: U256::from(0x9184e72au64),
-		data: vec![]
+		data: vec![],
 	};
-	tester.accounts.unlock_account_temporarily(address, "password123".into()).unwrap();
+	tester
+		.accounts
+		.unlock_account_temporarily(address, "password123".into())
+		.unwrap();
 	let signature = tester.accounts.sign(address, None, t.hash(None)).unwrap();
 	let t = t.with_signature(signature, None);
 
-	let response = r#"{"jsonrpc":"2.0","result":""#.to_owned() + format!("0x{:x}", t.hash()).as_ref() + r#"","id":1}"#;
+	let response = r#"{"jsonrpc":"2.0","result":""#.to_owned()
+		+ format!("0x{:x}", t.hash()).as_ref()
+		+ r#"","id":1}"#;
 
-	assert_eq!(tester.io.handle_request_sync(request.as_ref()), Some(response));
+	assert_eq!(
+		tester.io.handle_request_sync(request.as_ref()),
+		Some(response)
+	);
 
 	tester.miner.increment_nonce(&address);
 
@@ -225,17 +272,27 @@ fn sign_and_send_test(method: &str) {
 		nonce: U256::one(),
 		gas_price: U256::from(0x9184e72a000u64),
 		gas: U256::from(0x76c0),
-		action: Action::Call(Address::from_str("d46e8dd67c5d32be8058bb8eb970870f07244567").unwrap()),
+		action: Action::Call(
+			Address::from_str("d46e8dd67c5d32be8058bb8eb970870f07244567").unwrap(),
+		),
 		value: U256::from(0x9184e72au64),
-		data: vec![]
+		data: vec![],
 	};
-	tester.accounts.unlock_account_temporarily(address, "password123".into()).unwrap();
+	tester
+		.accounts
+		.unlock_account_temporarily(address, "password123".into())
+		.unwrap();
 	let signature = tester.accounts.sign(address, None, t.hash(None)).unwrap();
 	let t = t.with_signature(signature, None);
 
-	let response = r#"{"jsonrpc":"2.0","result":""#.to_owned() + format!("0x{:x}", t.hash()).as_ref() + r#"","id":1}"#;
+	let response = r#"{"jsonrpc":"2.0","result":""#.to_owned()
+		+ format!("0x{:x}", t.hash()).as_ref()
+		+ r#"","id":1}"#;
 
-	assert_eq!(tester.io.handle_request_sync(request.as_ref()), Some(response));
+	assert_eq!(
+		tester.io.handle_request_sync(request.as_ref()),
+		Some(response)
+	);
 }
 
 #[test]
@@ -245,15 +302,25 @@ fn ec_recover() {
 	let data = vec![5u8];
 
 	let hash = eth_data_hash(data.clone());
-	let signature = H520(tester.accounts.sign(address, Some("password123".into()), hash).unwrap().into_electrum());
+	let signature = H520(
+		tester
+			.accounts
+			.sign(address, Some("password123".into()), hash)
+			.unwrap()
+			.into_electrum(),
+	);
 	let signature = format!("0x{:?}", signature);
 
 	let request = r#"{
 		"jsonrpc": "2.0",
 		"method": "personal_ecRecover",
 		"params": [
-			""#.to_owned() + format!("0x{}", data.to_hex()).as_ref() + r#"",
-			""# + &signature + r#""
+			""#
+	.to_owned()
+		+ format!("0x{}", data.to_hex()).as_ref()
+		+ r#"",
+			""# + &signature
+		+ r#""
 		],
 		"id": 1
 	}"#;
@@ -261,7 +328,10 @@ fn ec_recover() {
 	let address = format!("0x{:x}", address);
 	let response = r#"{"jsonrpc":"2.0","result":""#.to_owned() + &address + r#"","id":1}"#;
 
-	assert_eq!(tester.io.handle_request_sync(request.as_ref()), Some(response.into()));
+	assert_eq!(
+		tester.io.handle_request_sync(request.as_ref()),
+		Some(response.into())
+	);
 }
 
 #[test]
@@ -281,7 +351,10 @@ fn ec_recover_invalid_signature() {
 
 	let response = r#"{"jsonrpc":"2.0","error":{"code":-32055,"message":"Encryption error.","data":"InvalidSignature"},"id":1}"#;
 
-	assert_eq!(tester.io.handle_request_sync(request.as_ref()), Some(response.into()));
+	assert_eq!(
+		tester.io.handle_request_sync(request.as_ref()),
+		Some(response.into())
+	);
 }
 
 #[test]
@@ -293,16 +366,28 @@ fn should_unlock_not_account_temporarily_if_allow_perm_is_disabled() {
 		"jsonrpc": "2.0",
 		"method": "personal_unlockAccount",
 		"params": [
-			""#.to_owned() + &format!("0x{:x}", address) + r#"",
+			""#
+	.to_owned()
+		+ &format!("0x{:x}", address)
+		+ r#"",
 			"password123",
 			"0x100"
 		],
 		"id": 1
 	}"#;
 	let response = r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"Time-unlocking is only supported in --geth compatibility mode.","data":"Restart your client with --geth flag or use personal_sendTransaction instead."},"id":1}"#;
-	assert_eq!(tester.io.handle_request_sync(&request), Some(response.into()));
+	assert_eq!(
+		tester.io.handle_request_sync(&request),
+		Some(response.into())
+	);
 
-	assert!(tester.accounts.sign(address, None, Default::default()).is_err(), "Should not unlock account.");
+	assert!(
+		tester
+			.accounts
+			.sign(address, None, Default::default())
+			.is_err(),
+		"Should not unlock account."
+	);
 }
 
 #[test]
@@ -314,13 +399,25 @@ fn should_unlock_account_permanently() {
 		"jsonrpc": "2.0",
 		"method": "personal_unlockAccount",
 		"params": [
-			""#.to_owned() + &format!("0x{:x}", address) + r#"",
+			""#
+	.to_owned()
+		+ &format!("0x{:x}", address)
+		+ r#"",
 			"password123",
 			null
 		],
 		"id": 1
 	}"#;
 	let response = r#"{"jsonrpc":"2.0","result":true,"id":1}"#;
-	assert_eq!(tester.io.handle_request_sync(&request), Some(response.into()));
-	assert!(tester.accounts.sign(address, None, Default::default()).is_ok(), "Should unlock account.");
+	assert_eq!(
+		tester.io.handle_request_sync(&request),
+		Some(response.into())
+	);
+	assert!(
+		tester
+			.accounts
+			.sign(address, None, Default::default())
+			.is_ok(),
+		"Should unlock account."
+	);
 }

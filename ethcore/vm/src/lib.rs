@@ -16,44 +16,43 @@
 
 //! Virtual machines support library
 
+extern crate blockchain_traits;
 #[macro_use]
 extern crate log;
-extern crate ethereum_types;
-extern crate ethcore_bytes as bytes;
+extern crate byteorder;
 extern crate common_types as types;
+extern crate ethcore_bytes as bytes;
+extern crate ethereum_types;
 extern crate ethjson;
-extern crate rlp;
 extern crate keccak_hash as hash;
 extern crate patricia_trie as trie;
-extern crate byteorder;
+extern crate rlp;
 extern crate serde;
 #[macro_use]
 extern crate serde_json;
-
-#[cfg(test)]
 extern crate elastic_array;
 
 mod action_params;
 mod call_type;
 mod env_info;
-mod schedule;
-mod ext;
-mod return_data;
 mod error;
+mod ext;
 mod oasis_contract;
 mod oasis_vm;
+mod return_data;
+mod schedule;
 
 pub mod tests;
 
 pub use action_params::{ActionParams, ActionValue, ParamsType};
 pub use call_type::CallType;
 pub use env_info::{EnvInfo, LastHashes};
-pub use schedule::{Schedule, CleanDustMode, WasmCosts};
-pub use ext::{Ext, MessageCallResult, ContractCreateResult, CreateContractAddress};
-pub use return_data::{ReturnData, GasLeft};
 pub use error::{Error, Result};
+pub use ext::{ContractCreateResult, CreateContractAddress, Ext, MessageCallResult};
 pub use oasis_contract::{OasisContract, OASIS_HEADER_PREFIX};
-pub use oasis_vm::{OasisVm, ConfidentialCtx};
+pub use oasis_vm::{AuthenticatedPayload, ConfidentialCtx, OasisVm};
+pub use return_data::{GasLeft, ReturnData};
+pub use schedule::{CleanDustMode, Schedule, WasmCosts};
 
 /// Virtual Machine interface
 pub trait Vm {
@@ -61,4 +60,11 @@ pub trait Vm {
 	/// It returns either an error, a known amount of gas left, or parameters to be used
 	/// to compute the final gas left.
 	fn exec(&mut self, params: ActionParams, ext: &mut Ext) -> Result<GasLeft>;
+
+	/// For wasmer-backed runtimes:
+	/// - Performs the code compilation and parses arguments, which speeds up exec() when it is later called.
+	/// - This function must be called before exec() and will panic if not coop
+	/// For wasmi-backed runtimes:
+	/// - This function is a no-op.
+	fn prepare(&mut self, params: &ActionParams, ext: &mut Ext) -> Result<()>;
 }

@@ -22,7 +22,7 @@ use uint::Uint;
 #[derive(Debug, PartialEq, Deserialize)]
 pub struct NullEngineParams {
 	/// Block reward.
-	#[serde(rename="blockReward")]
+	#[serde(rename = "blockReward")]
 	pub block_reward: Option<Uint>,
 }
 
@@ -35,10 +35,10 @@ pub struct NullEngine {
 
 #[cfg(test)]
 mod tests {
+	use super::*;
+	use ethereum_types::U256;
 	use serde_json;
 	use uint::Uint;
-	use ethereum_types::U256;
-	use super::*;
 
 	#[test]
 	fn null_engine_deserialization() {
@@ -49,6 +49,9 @@ mod tests {
 		}"#;
 
 		let deserialized: NullEngine = serde_json::from_str(s).unwrap();
-		assert_eq!(deserialized.params.block_reward, Some(Uint(U256::from(0x0d))));
+		assert_eq!(
+			deserialized.params.block_reward,
+			Some(Uint(U256::from(0x0d)))
+		);
 	}
 }

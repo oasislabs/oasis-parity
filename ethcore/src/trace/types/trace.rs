@@ -16,13 +16,13 @@
 
 //! Tracing datatypes.
 
-use ethereum_types::{U256, Address, Bloom, BloomInput};
 use bytes::Bytes;
-use rlp::{Rlp, RlpStream, Encodable, DecoderError, Decodable};
+use ethereum_types::{Address, Bloom, BloomInput, U256};
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 
-use vm::ActionParams;
-use evm::CallType;
 use super::error::Error;
+use evm::CallType;
+use vm::ActionParams;
 
 /// `Call` result.
 #[derive(Debug, Clone, PartialEq, Default, RlpEncodable, RlpDecodable)]
@@ -161,13 +161,15 @@ impl Encodable for RewardType {
 
 impl Decodable for RewardType {
 	fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-		rlp.as_val().and_then(|v| Ok(match v {
-			0u32 => RewardType::Block,
-			1 => RewardType::Uncle,
-			2 => RewardType::EmptyStep,
-			3 => RewardType::External,
-			_ => return Err(DecoderError::Custom("Invalid value of RewardType item")),
-		}))
+		rlp.as_val().and_then(|v| {
+			Ok(match v {
+				0u32 => RewardType::Block,
+				1 => RewardType::Uncle,
+				2 => RewardType::EmptyStep,
+				3 => RewardType::External,
+				_ => return Err(DecoderError::Custom("Invalid value of RewardType item")),
+			})
+		})
 	}
 }
 
@@ -251,20 +253,19 @@ impl Encodable for Action {
 			Action::Call(ref call) => {
 				s.append(&0u8);
 				s.append(call);
-			},
+			}
 			Action::Create(ref create) => {
 				s.append(&1u8);
 				s.append(create);
-			},
+			}
 			Action::Suicide(ref suicide) => {
 				s.append(&2u8);
 				s.append(suicide);
-			},
+			}
 			Action::Reward(ref reward) => {
 				s.append(&3u8);
 				s.append(reward);
 			}
-
 		}
 	}
 }
@@ -316,22 +317,22 @@ impl Encodable for Res {
 				s.begin_list(2);
 				s.append(&0u8);
 				s.append(call);
-			},
+			}
 			Res::Create(ref create) => {
 				s.begin_list(2);
 				s.append(&1u8);
 				s.append(create);
-			},
+			}
 			Res::FailedCall(ref err) => {
 				s.begin_list(2);
 				s.append(&2u8);
 				s.append(err);
-			},
+			}
 			Res::FailedCreate(ref err) => {
 				s.begin_list(2);
 				s.append(&3u8);
 				s.append(err);
-			},
+			}
 			Res::None => {
 				s.begin_list(1);
 				s.append(&4u8);
@@ -359,7 +360,9 @@ impl Res {
 	pub fn bloom(&self) -> Bloom {
 		match *self {
 			Res::Create(ref create) => create.bloom(),
-			Res::Call(_) | Res::FailedCall(_) | Res::FailedCreate(_) | Res::None => Default::default(),
+			Res::Call(_) | Res::FailedCall(_) | Res::FailedCreate(_) | Res::None => {
+				Default::default()
+			}
 		}
 	}
 

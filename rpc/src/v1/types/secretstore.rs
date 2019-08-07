@@ -30,8 +30,8 @@ pub struct EncryptedDocumentKey {
 
 #[cfg(test)]
 mod tests {
-	use serde_json;
 	use super::EncryptedDocumentKey;
+	use serde_json;
 
 	#[test]
 	fn test_serialize_encrypted_document_key() {

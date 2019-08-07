@@ -16,14 +16,14 @@
 
 //! General test deserialization.
 
-use std::io::Read;
-use std::collections::BTreeMap;
-use uint::Uint;
 use bytes::Bytes;
 use hash::{Address, H256};
-use state::{Env, AccountState, Transaction};
 use maybe::MaybeEmpty;
 use serde_json::{self, Error};
+use state::{AccountState, Env, Transaction};
+use std::collections::BTreeMap;
+use std::io::Read;
+use uint::Uint;
 
 /// State test deserializer.
 #[derive(Debug, PartialEq, Deserialize)]
@@ -40,7 +40,10 @@ impl IntoIterator for Test {
 
 impl Test {
 	/// Loads test from json.
-	pub fn load<R>(reader: R) -> Result<Self, Error> where R: Read {
+	pub fn load<R>(reader: R) -> Result<Self, Error>
+	where
+		R: Read,
+	{
 		serde_json::from_reader(reader)
 	}
 }
@@ -51,10 +54,10 @@ pub struct State {
 	/// Environment.
 	pub env: Env,
 	/// Pre state.
-	#[serde(rename="pre")]
+	#[serde(rename = "pre")]
 	pub pre_state: AccountState,
 	/// Post state.
-	#[serde(rename="post")]
+	#[serde(rename = "post")]
 	pub post_states: BTreeMap<ForkSpec, Vec<PostStateResult>>,
 	/// Transaction.
 	pub transaction: MultiTransaction,
@@ -66,15 +69,15 @@ pub struct MultiTransaction {
 	/// Transaction data set.
 	pub data: Vec<Bytes>,
 	/// Gas limit set.
-	#[serde(rename="gasLimit")]
+	#[serde(rename = "gasLimit")]
 	pub gas_limit: Vec<Uint>,
 	/// Gas price.
-	#[serde(rename="gasPrice")]
+	#[serde(rename = "gasPrice")]
 	pub gas_price: Uint,
 	/// Nonce.
 	pub nonce: Uint,
 	/// Secret key.
-	#[serde(rename="secretKey")]
+	#[serde(rename = "secretKey")]
 	pub secret: Option<H256>,
 	/// To.
 	pub to: MaybeEmpty<Address>,
@@ -134,8 +137,8 @@ pub struct PostStateResult {
 
 #[cfg(test)]
 mod tests {
-	use serde_json;
 	use super::{MultiTransaction, State};
+	use serde_json;
 
 	#[test]
 	fn multi_transaction_deserialization() {

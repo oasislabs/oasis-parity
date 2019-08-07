@@ -19,19 +19,23 @@
 //! Includes a pretty-printer for bytes, in the form of `ToPretty` and `PrettySlice`
 //! as
 
-use std::fmt;
 use std::cmp::min;
+use std::fmt;
 use std::ops::{Deref, DerefMut};
 
 /// Slice pretty print helper
-pub struct PrettySlice<'a> (&'a [u8]);
+pub struct PrettySlice<'a>(&'a [u8]);
 
 impl<'a> fmt::Debug for PrettySlice<'a> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		for i in 0..self.0.len() {
 			match i > 0 {
-				true => { write!(f, "·{:02x}", self.0[i])?; },
-				false => { write!(f, "{:02x}", self.0[i])?; },
+				true => {
+					write!(f, "·{:02x}", self.0[i])?;
+				}
+				false => {
+					write!(f, "{:02x}", self.0[i])?;
+				}
 			}
 		}
 		Ok(())
@@ -69,7 +73,7 @@ pub enum BytesRef<'a> {
 	/// This is a reference to a vector
 	Flexible(&'a mut Bytes),
 	/// This is a reference to a slice
-	Fixed(&'a mut [u8])
+	Fixed(&'a mut [u8]),
 }
 
 impl<'a> BytesRef<'a> {
@@ -80,20 +84,25 @@ impl<'a> BytesRef<'a> {
 		match *self {
 			BytesRef::Flexible(ref mut data) => {
 				let data_len = data.len();
-				let wrote = input.len() + if data_len > offset { 0 } else { offset - data_len };
+				let wrote = input.len()
+					+ if data_len > offset {
+						0
+					} else {
+						offset - data_len
+					};
 
 				data.resize(offset, 0);
 				data.extend_from_slice(input);
 				wrote
-			},
+			}
 			BytesRef::Fixed(ref mut data) if offset < data.len() => {
 				let max = min(data.len() - offset, input.len());
 				for i in 0..max {
 					data[offset + i] = input[i];
 				}
 				max
-			},
-			_ => 0
+			}
+			_ => 0,
 		}
 	}
 }
@@ -109,7 +118,7 @@ impl<'a> Deref for BytesRef<'a> {
 	}
 }
 
-impl <'a> DerefMut for BytesRef<'a> {
+impl<'a> DerefMut for BytesRef<'a> {
 	fn deref_mut(&mut self) -> &mut [u8] {
 		match *self {
 			BytesRef::Flexible(ref mut bytes) => bytes,

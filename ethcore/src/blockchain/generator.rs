@@ -16,8 +16,8 @@
 
 //! Blockchain generator for tests.
 
+use ethereum_types::{Bloom, H256, U256};
 use std::collections::VecDeque;
-use ethereum_types::{U256, H256, Bloom};
 
 use bytes::Bytes;
 use header::Header;
@@ -30,7 +30,7 @@ use views::BlockView;
 pub struct Block {
 	pub header: Header,
 	pub transactions: Vec<SignedTransaction>,
-	pub uncles: Vec<Header>
+	pub uncles: Vec<Header>,
 }
 
 impl Block {
@@ -87,9 +87,7 @@ impl BlockBuilder {
 		let mut blocks = VecDeque::with_capacity(1);
 		blocks.push_back(Block::default());
 
-		BlockBuilder {
-			blocks,
-		}
+		BlockBuilder { blocks }
 	}
 
 	#[inline]
@@ -103,12 +101,18 @@ impl BlockBuilder {
 	}
 
 	#[inline]
-	pub fn add_block_with<T>(&self, get_metadata: T) -> Self where T: Fn() -> BlockOptions {
+	pub fn add_block_with<T>(&self, get_metadata: T) -> Self
+	where
+		T: Fn() -> BlockOptions,
+	{
 		self.add_blocks_with(1, get_metadata)
 	}
 
 	#[inline]
-	pub fn add_block_with_difficulty<T>(&self, difficulty: T) -> Self where T: Into<U256> {
+	pub fn add_block_with_difficulty<T>(&self, difficulty: T) -> Self
+	where
+		T: Into<U256>,
+	{
 		let difficulty = difficulty.into();
 		self.add_blocks_with(1, move || BlockOptions {
 			difficulty,
@@ -118,7 +122,9 @@ impl BlockBuilder {
 
 	#[inline]
 	pub fn add_block_with_transactions<T>(&self, transactions: T) -> Self
-		where T: IntoIterator<Item = SignedTransaction> {
+	where
+		T: IntoIterator<Item = SignedTransaction>,
+	{
 		let transactions = transactions.into_iter().collect::<Vec<_>>();
 		self.add_blocks_with(1, || BlockOptions {
 			transactions: transactions.clone(),
@@ -134,7 +140,10 @@ impl BlockBuilder {
 		})
 	}
 
-	pub fn add_blocks_with<T>(&self, count: usize, get_metadata: T) -> Self where T: Fn() -> BlockOptions {
+	pub fn add_blocks_with<T>(&self, count: usize, get_metadata: T) -> Self
+	where
+		T: Fn() -> BlockOptions,
+	{
 		assert!(count > 0, "There must be at least 1 block");
 		let mut parent_hash = self.last().hash();
 		let mut parent_number = self.last().number();
@@ -155,14 +164,14 @@ impl BlockBuilder {
 			blocks.push_back(block);
 		}
 
-		BlockBuilder {
-			blocks,
-		}
+		BlockBuilder { blocks }
 	}
 
 	#[inline]
 	pub fn last(&self) -> &Block {
-		self.blocks.back().expect("There is always at least 1 block")
+		self.blocks
+			.back()
+			.expect("There is always at least 1 block")
 	}
 }
 
@@ -172,7 +181,10 @@ pub struct BlockGenerator {
 }
 
 impl BlockGenerator {
-	pub fn new<T>(builders: T) -> Self where T: IntoIterator<Item = BlockBuilder> {
+	pub fn new<T>(builders: T) -> Self
+	where
+		T: IntoIterator<Item = BlockBuilder>,
+	{
 		BlockGenerator {
 			builders: builders.into_iter().collect(),
 		}
@@ -189,18 +201,17 @@ impl Iterator for BlockGenerator {
 					if let Some(block) = builder.blocks.pop_front() {
 						return Some(block);
 					}
-				},
+				}
 				None => return None,
 			}
 			self.builders.pop_front();
 		}
-
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use super::{BlockBuilder, BlockOptions, BlockGenerator};
+	use super::{BlockBuilder, BlockGenerator, BlockOptions};
 
 	#[test]
 	fn test_block_builder() {

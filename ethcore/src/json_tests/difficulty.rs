@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+use ethereum_types::U256;
 use ethjson;
 use header::Header;
-use ethereum_types::U256;
 use spec::Spec;
 
 pub fn json_difficulty_test(json_data: &[u8], spec: Spec) -> Vec<String> {
@@ -53,7 +53,7 @@ mod difficulty_test_byzantium {
 		json_difficulty_test(json_data, ::ethereum::new_byzantium_test())
 	}
 
-	declare_test!{DifficultyTests_difficultyByzantium, "BasicTests/difficultyByzantium.json"}
+	declare_test! {DifficultyTests_difficultyByzantium, "BasicTests/difficultyByzantium.json"}
 }
 
 mod difficulty_test_foundation {
@@ -65,5 +65,5 @@ mod difficulty_test_foundation {
 		json_difficulty_test(json_data, ::ethereum::new_foundation(&tempdir.path()))
 	}
 
-	declare_test!{DifficultyTests_difficultyMainNetwork, "BasicTests/difficultyMainNetwork.json"}
+	declare_test! {DifficultyTests_difficultyMainNetwork, "BasicTests/difficultyMainNetwork.json"}
 }

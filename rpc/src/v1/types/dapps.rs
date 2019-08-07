@@ -29,17 +29,17 @@ pub struct LocalDapp {
 	/// Dapp author
 	pub author: String,
 	/// Dapp icon
-	#[serde(rename="iconUrl")]
+	#[serde(rename = "iconUrl")]
 	pub icon_url: String,
 	/// Local development Url
-	#[serde(rename="localUrl")]
+	#[serde(rename = "localUrl")]
 	pub local_url: Option<String>,
 }
 
 #[cfg(test)]
 mod tests {
-	use serde_json;
 	use super::LocalDapp;
+	use serde_json;
 
 	#[test]
 	fn dapp_serialization() {

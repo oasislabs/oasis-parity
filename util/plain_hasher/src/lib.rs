@@ -49,7 +49,7 @@ impl hash::Hasher for PlainHasher {
 
 		unroll! {
 			for _i in 0..8 {
-				unsafe { 
+				unsafe {
 					*prefix_ptr ^= (*bytes_ptr ^ *bytes_ptr.offset(8)) ^ (*bytes_ptr.offset(16) ^ *bytes_ptr.offset(24));
 					bytes_ptr = bytes_ptr.offset(1);
 					prefix_ptr = prefix_ptr.offset(1);
@@ -61,8 +61,8 @@ impl hash::Hasher for PlainHasher {
 
 #[cfg(test)]
 mod tests {
-	use std::hash::Hasher;
 	use super::PlainHasher;
+	use std::hash::Hasher;
 
 	#[test]
 	fn it_works() {

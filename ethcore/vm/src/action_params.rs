@@ -15,10 +15,10 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Evm input params.
-use ethereum_types::{U256, H256, Address};
 use bytes::Bytes;
-use hash::{keccak, KECCAK_EMPTY};
+use ethereum_types::{Address, H256, U256};
 use ethjson;
+use hash::{keccak, KECCAK_EMPTY};
 use oasis_contract::OasisContract;
 
 use call_type::CallType;
@@ -31,7 +31,7 @@ pub enum ActionValue {
 	/// Value that should be transfered
 	Transfer(U256),
 	/// Apparent value for transaction (not transfered)
-	Apparent(U256)
+	Apparent(U256),
 }
 
 /// Type of the way parameters encoded
@@ -47,7 +47,7 @@ impl ActionValue {
 	/// Returns action value as U256.
 	pub fn value(&self) -> U256 {
 		match *self {
-			ActionValue::Transfer(x) | ActionValue::Apparent(x) => x
+			ActionValue::Transfer(x) | ActionValue::Apparent(x) => x,
 		}
 	}
 
@@ -77,6 +77,8 @@ pub struct ActionParams {
 	pub sender: Address,
 	/// Transaction initiator.
 	pub origin: Address,
+	/// Nonce of the transaction for the transaction initiator.
+	pub origin_nonce: U256,
 	/// Gas paid up front for transaction execution
 	pub gas: U256,
 	/// Gas price.
@@ -94,6 +96,8 @@ pub struct ActionParams {
 	pub params_type: ParamsType,
 	/// The Oasis contract extracted from the code (if header is present).
 	pub oasis_contract: Option<OasisContract>,
+	/// The Authenticated Additional Data sent with a confidential transaction's data.
+	pub aad: Option<Bytes>,
 }
 
 impl Default for ActionParams {
@@ -105,6 +109,7 @@ impl Default for ActionParams {
 			address: Address::new(),
 			sender: Address::new(),
 			origin: Address::new(),
+			origin_nonce: U256::zero(),
 			gas: U256::zero(),
 			gas_price: U256::zero(),
 			value: ActionValue::Transfer(U256::zero()),
@@ -113,6 +118,7 @@ impl Default for ActionParams {
 			call_type: CallType::None,
 			params_type: ParamsType::Separate,
 			oasis_contract: None,
+			aad: None,
 		}
 	}
 }
@@ -126,14 +132,19 @@ impl From<ethjson::vm::Transaction> for ActionParams {
 			address: address,
 			sender: t.sender.into(),
 			origin: t.origin.into(),
+			origin_nonce: U256::zero(),
 			code: Some(Arc::new(t.code.into())),
 			data: Some(t.data.into()),
 			gas: t.gas.into(),
 			gas_price: t.gas_price.into(),
 			value: ActionValue::Transfer(t.value.into()),
-			call_type: match address.is_zero() { true => CallType::None, false => CallType::Call },	// TODO @debris is this correct?
+			call_type: match address.is_zero() {
+				true => CallType::None,
+				false => CallType::Call,
+			}, // TODO @debris is this correct?
 			params_type: ParamsType::Separate,
 			oasis_contract: None,
+			aad: None,
 		}
 	}
 }

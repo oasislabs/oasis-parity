@@ -47,13 +47,13 @@ pub struct AltBn128Pairing {
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 pub enum Pricing {
 	/// Linear pricing.
-	#[serde(rename="linear")]
+	#[serde(rename = "linear")]
 	Linear(Linear),
 	/// Pricing for modular exponentiation.
-	#[serde(rename="modexp")]
+	#[serde(rename = "modexp")]
 	Modexp(Modexp),
 	/// Pricing for alt_bn128_pairing exponentiation.
-	#[serde(rename="alt_bn128_pairing")]
+	#[serde(rename = "alt_bn128_pairing")]
 	AltBn128Pairing(AltBn128Pairing),
 }
 
@@ -71,7 +71,7 @@ pub struct Builtin {
 #[cfg(test)]
 mod tests {
 	use serde_json;
-	use spec::builtin::{Builtin, Pricing, Linear, Modexp};
+	use spec::builtin::{Builtin, Linear, Modexp, Pricing};
 	use uint::Uint;
 
 	#[test]
@@ -82,7 +82,13 @@ mod tests {
 		}"#;
 		let deserialized: Builtin = serde_json::from_str(s).unwrap();
 		assert_eq!(deserialized.name, "ecrecover");
-		assert_eq!(deserialized.pricing, Pricing::Linear(Linear { base: 3000, word: 0 }));
+		assert_eq!(
+			deserialized.pricing,
+			Pricing::Linear(Linear {
+				base: 3000,
+				word: 0
+			})
+		);
 		assert!(deserialized.activate_at.is_none());
 	}
 

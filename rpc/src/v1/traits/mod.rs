@@ -16,36 +16,28 @@
 
 //! Ethereum rpc interfaces.
 
-pub mod web3;
 pub mod eth;
 pub mod eth_pubsub;
 pub mod eth_signing;
 pub mod net;
-//pub mod parity;
-//pub mod parity_accounts;
-//pub mod parity_set;
 pub mod parity_signing;
 pub mod personal;
+pub mod private;
 pub mod pubsub;
-pub mod signer;
-//pub mod traces;
 pub mod rpc;
 pub mod secretstore;
-pub mod private;
+pub mod signer;
+pub mod web3;
 
-pub use self::web3::Web3;
 pub use self::eth::{Eth, EthFilter};
 pub use self::eth_pubsub::EthPubSub;
 pub use self::eth_signing::EthSigning;
 pub use self::net::Net;
-//pub use self::parity::Parity;
-//pub use self::parity_accounts::ParityAccounts;
-//pub use self::parity_set::ParitySet;
 pub use self::parity_signing::ParitySigning;
 pub use self::personal::Personal;
+pub use self::private::Private;
 pub use self::pubsub::PubSub;
-pub use self::signer::Signer;
-//pub use self::traces::Traces;
 pub use self::rpc::Rpc;
 pub use self::secretstore::SecretStore;
-pub use self::private::Private;
+pub use self::signer::Signer;
+pub use self::web3::Web3;

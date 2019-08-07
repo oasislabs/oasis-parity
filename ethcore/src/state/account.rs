@@ -16,25 +16,30 @@
 
 //! Single account in the system.
 
-use std::fmt;
-use std::sync::Arc;
-use std::collections::{HashMap, BTreeMap};
-use hash::{KECCAK_EMPTY, KECCAK_NULL_RLP, keccak};
-use ethereum_types::{H256, U256, Address};
+use basic_account::BasicAccount;
+use bytes::{Bytes, ToPretty};
 use error::Error;
+use ethereum_types::{Address, H256, U256};
+use hash::{keccak, KECCAK_EMPTY, KECCAK_NULL_RLP};
 use hashdb::HashDB;
 use kvdb::DBValue;
-use bytes::{Bytes, ToPretty};
-use trie;
-use trie::{SecTrieDB, Trie, TrieFactory, TrieError};
-use pod_account::*;
-use rlp::{RlpStream, encode};
 use lru_cache::LruCache;
-use basic_account::BasicAccount;
+use pod_account::*;
+use rlp::{encode, RlpStream};
+use std::collections::{BTreeMap, HashMap};
+use std::fmt;
+use std::sync::Arc;
+use trie;
+use trie::{SecTrieDB, Trie, TrieError, TrieFactory};
 
-use std::cell::{RefCell, Cell};
+use std::cell::{Cell, RefCell};
+
+use crate::mkvs::MKVS;
 
 const STORAGE_CACHE_ITEMS: usize = 8192;
+
+pub const MKVS_KEY_CODE: &'static [u8] = &[1u8];
+pub const MKVS_KEY_PREFIX_STORAGE: &'static [u8] = &[2u8];
 
 /// Boolean type for clean/dirty status.
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -96,7 +101,13 @@ impl From<BasicAccount> for Account {
 impl Account {
 	#[cfg(test)]
 	/// General constructor.
-	pub fn new(balance: U256, nonce: U256, storage: HashMap<H256, Vec<u8>>, code: Bytes, storage_expiry: u64) -> Account {
+	pub fn new(
+		balance: U256,
+		nonce: U256,
+		storage: HashMap<H256, Vec<u8>>,
+		code: Bytes,
+		storage_expiry: u64,
+	) -> Account {
 		Account {
 			balance: balance,
 			nonce: nonce,
@@ -128,7 +139,13 @@ impl Account {
 			code_hash: pod.code.as_ref().map_or(KECCAK_EMPTY, |c| keccak(c)),
 			code_filth: Filth::Dirty,
 			code_size: Some(pod.code.as_ref().map_or(0, |c| c.len())),
-			code_cache: Arc::new(pod.code.map_or_else(|| { warn!("POD account with unknown code is being created! Assuming no code."); vec![] }, |c| c)),
+			code_cache: Arc::new(pod.code.map_or_else(
+				|| {
+					warn!("POD account with unknown code is being created! Assuming no code.");
+					vec![]
+				},
+				|c| c,
+			)),
 			address_hash: Cell::new(None),
 		}
 	}
@@ -207,36 +224,44 @@ impl Account {
 	/// Get (and cache) the contents of the trie's storage at `key`.
 	/// Takes modified storage into account.
 	/// Returns None in the result if the key doesn't exist in storage.
-	pub fn storage_at(&self, db: &HashDB, key: &H256) -> trie::Result<Option<Vec<u8>>> {
+	pub fn storage_at(&self, mkvs: &MKVS, key: &H256) -> Option<Vec<u8>> {
 		if let Some(value) = self.cached_storage_at(key) {
-			return Ok(Some(value));
+			return Some(value);
 		}
-		let db = SecTrieDB::new(db, &self.storage_root)?;
-		let panicky_decoder = |bytes:&[u8]| ::rlp::decode(&bytes).expect("decoding db value failed");
-		let item: Option<Vec<u8>> = db.get_with(key, panicky_decoder)?;
-		Ok(item.map(|value| {
-			self.storage_cache.borrow_mut().insert(key.clone(), value.clone());
+		let panicky_decoder =
+			|bytes: &[u8]| ::rlp::decode(&bytes).expect("decoding db value failed");
+		let mut k = MKVS_KEY_PREFIX_STORAGE.to_vec();
+		k.extend_from_slice(key);
+		let item = mkvs.get(&k).map(|value| panicky_decoder(&value));
+		item.map(|value: Vec<u8>| {
+			self.storage_cache
+				.borrow_mut()
+				.insert(key.clone(), value.clone());
 			value
-		}))
+		})
 	}
 
 	/// Get cached storage value if any. Returns `None` if the
 	/// key is not in the cache.
 	pub fn cached_storage_at(&self, key: &H256) -> Option<Vec<u8>> {
 		if let Some(value) = self.storage_changes.get(key) {
-			return Some(value.clone())
+			return Some(value.clone());
 		}
 		if let Some(value) = self.storage_cache.borrow_mut().get_mut(key) {
-			return Some(value.clone())
+			return Some(value.clone());
 		}
 		None
 	}
 
 	/// return the balance associated with this account.
-	pub fn balance(&self) -> &U256 { &self.balance }
+	pub fn balance(&self) -> &U256 {
+		&self.balance
+	}
 
 	/// return the nonce associated with this account.
-	pub fn nonce(&self) -> &U256 { &self.nonce }
+	pub fn nonce(&self) -> &U256 {
+		&self.nonce
+	}
 
 	/// return the code hash associated with this account.
 	pub fn code_hash(&self) -> H256 {
@@ -283,53 +308,71 @@ impl Account {
 
 	/// Is `code_cache` valid; such that code is going to return Some?
 	pub fn is_cached(&self) -> bool {
-		!self.code_cache.is_empty() || (self.code_cache.is_empty() && self.code_hash == KECCAK_EMPTY)
+		!self.code_cache.is_empty()
+			|| (self.code_cache.is_empty() && self.code_hash == KECCAK_EMPTY)
 	}
 
 	/// Provide a database to get `code_hash`. Should not be called if it is a contract without code.
-	pub fn cache_code(&mut self, db: &HashDB) -> Option<Arc<Bytes>> {
+	pub fn cache_code(&mut self, mkvs: &MKVS) -> Option<Arc<Bytes>> {
 		// TODO: fill out self.code_cache;
-		trace!("Account::cache_code: ic={}; self.code_hash={:?}, self.code_cache={}", self.is_cached(), self.code_hash, self.code_cache.pretty());
+		trace!(
+			"Account::cache_code: ic={}; self.code_hash={:?}, self.code_cache={}",
+			self.is_cached(),
+			self.code_hash,
+			self.code_cache.pretty()
+		);
 
-		if self.is_cached() { return Some(self.code_cache.clone()) }
+		if self.is_cached() {
+			return Some(self.code_cache.clone());
+		}
 
-		match db.get(&self.code_hash) {
+		match mkvs.get(MKVS_KEY_CODE) {
 			Some(x) => {
 				self.code_size = Some(x.len());
-				self.code_cache = Arc::new(x.into_vec());
+				self.code_cache = Arc::new(x);
 				Some(self.code_cache.clone())
-			},
+			}
 			_ => {
 				warn!("Failed reverse get of {}", self.code_hash);
 				None
-			},
+			}
 		}
 	}
 
 	/// Provide code to cache. For correctness, should be the correct code for the
 	/// account.
 	pub fn cache_given_code(&mut self, code: Arc<Bytes>) {
-		trace!("Account::cache_given_code: ic={}; self.code_hash={:?}, self.code_cache={}", self.is_cached(), self.code_hash, self.code_cache.pretty());
+		trace!(
+			"Account::cache_given_code: ic={}; self.code_hash={:?}, self.code_cache={}",
+			self.is_cached(),
+			self.code_hash,
+			self.code_cache.pretty()
+		);
 
 		self.code_size = Some(code.len());
 		self.code_cache = code;
 	}
 
 	/// Provide a database to get `code_size`. Should not be called if it is a contract without code.
-	pub fn cache_code_size(&mut self, db: &HashDB) -> bool {
+	pub fn cache_code_size(&mut self, mkvs: &MKVS) -> bool {
 		// TODO: fill out self.code_cache;
-		trace!("Account::cache_code_size: ic={}; self.code_hash={:?}, self.code_cache={}", self.is_cached(), self.code_hash, self.code_cache.pretty());
-		self.code_size.is_some() ||
-			if self.code_hash != KECCAK_EMPTY {
-				match db.get(&self.code_hash) {
+		trace!(
+			"Account::cache_code_size: ic={}; self.code_hash={:?}, self.code_cache={}",
+			self.is_cached(),
+			self.code_hash,
+			self.code_cache.pretty()
+		);
+		self.code_size.is_some()
+			|| if self.code_hash != KECCAK_EMPTY {
+				match mkvs.get(MKVS_KEY_CODE) {
 					Some(x) => {
 						self.code_size = Some(x.len());
 						true
-					},
+					}
 					_ => {
 						warn!("Failed reverse get of {}", self.code_hash);
 						false
-					},
+					}
 				}
 			} else {
 				false
@@ -337,21 +380,24 @@ impl Account {
 	}
 
 	/// Determine whether there are any un-`commit()`-ed storage-setting operations.
-	pub fn storage_is_clean(&self) -> bool { self.storage_changes.is_empty() }
+	pub fn storage_is_clean(&self) -> bool {
+		self.storage_changes.is_empty()
+	}
 
 	/// Check if account has zero nonce, balance, no code and no storage.
 	///
 	/// NOTE: Will panic if `!self.storage_is_clean()`
 	pub fn is_empty(&self) -> bool {
-		assert!(self.storage_is_clean(), "Account::is_empty() may only legally be called when storage is clean.");
+		assert!(
+			self.storage_is_clean(),
+			"Account::is_empty() may only legally be called when storage is clean."
+		);
 		self.is_null() && self.storage_root == KECCAK_NULL_RLP
 	}
 
 	/// Check if account has zero nonce, balance, no code.
 	pub fn is_null(&self) -> bool {
-		self.balance.is_zero() &&
-		self.nonce.is_zero() &&
-		self.code_hash == KECCAK_EMPTY
+		self.balance.is_zero() && self.nonce.is_zero() && self.code_hash == KECCAK_EMPTY
 	}
 
 	/// Check if account is basic (Has no code).
@@ -360,14 +406,24 @@ impl Account {
 	}
 
 	/// Return the storage root associated with this account or None if it has been altered via the overlay.
-	pub fn storage_root(&self) -> Option<&H256> { if self.storage_is_clean() {Some(&self.storage_root)} else {None} }
+	pub fn storage_root(&self) -> Option<&H256> {
+		if self.storage_is_clean() {
+			Some(&self.storage_root)
+		} else {
+			None
+		}
+	}
 
 	/// Return the storage overlay.
-	pub fn storage_changes(&self) -> &HashMap<H256, Vec<u8>> { &self.storage_changes }
+	pub fn storage_changes(&self) -> &HashMap<H256, Vec<u8>> {
+		&self.storage_changes
+	}
 
 	/// Return the storage expiry timestamp associated with this account.
 	/// The value is a Unix timestamp.
-	pub fn storage_expiry(&self) -> u64 { self.storage_expiry }
+	pub fn storage_expiry(&self) -> u64 {
+		self.storage_expiry
+	}
 
 	/// Increment the nonce of the account by one.
 	pub fn inc_nonce(&mut self) {
@@ -386,40 +442,43 @@ impl Account {
 		self.balance = self.balance - *x;
 	}
 
-	/// Commit the `storage_changes` to the backing DB and update `storage_root`.
-	pub fn commit_storage(&mut self, trie_factory: &TrieFactory, db: &mut HashDB) -> trie::Result<()> {
-		let mut t = trie_factory.from_existing(db, &mut self.storage_root)?;
+	pub fn commit_storage(&mut self, account_mkvs: &mut MKVS) {
 		for (k, v) in self.storage_changes.drain() {
 			// cast key and value to trait type,
 			// so we can call overloaded `to_bytes` method
-            //
-            // Note: for confidential contracts we never remove from storage, even if the storage is
-            //       zeroed out. This is guaranteed since the length will always be > 32 when
-            //       encrypted.
+			//
+			// Note: for confidential contracts we never remove from storage, even if the storage is
+			//       zeroed out. This is guaranteed since the length will always be > 32 when
+			//       encrypted.
+			let mut key = MKVS_KEY_PREFIX_STORAGE.to_vec();
+			key.extend_from_slice(&k);
 			match v.len() == 32 && H256::from_slice(&v).is_zero() {
-				true => t.remove(&k)?,
-				false => t.insert(&k, &encode(&v))?,
+				true => account_mkvs.remove(&key),
+				false => account_mkvs.insert(&key, &encode(&v)),
 			};
 
 			self.storage_cache.borrow_mut().insert(k, v);
 		}
-		Ok(())
 	}
 
-	/// Commit any unsaved code. `code_hash` will always return the hash of the `code_cache` after this.
-	pub fn commit_code(&mut self, db: &mut HashDB) {
-		trace!("Commiting code of {:?} - {:?}, {:?}", self, self.code_filth == Filth::Dirty, self.code_cache.is_empty());
+	pub fn commit_code(&mut self, account_mkvs: &mut MKVS) {
+		trace!(
+			"Commiting code of {:?} - {:?}, {:?}",
+			self,
+			self.code_filth == Filth::Dirty,
+			self.code_cache.is_empty()
+		);
 		match (self.code_filth == Filth::Dirty, self.code_cache.is_empty()) {
 			(true, true) => {
 				self.code_size = Some(0);
 				self.code_filth = Filth::Clean;
-			},
+			}
 			(true, false) => {
-				db.emplace(self.code_hash.clone(), DBValue::from_slice(&*self.code_cache));
+				account_mkvs.insert(MKVS_KEY_CODE, self.code_cache.as_ref());
 				self.code_size = Some(self.code_cache.len());
 				self.code_filth = Filth::Clean;
-			},
-			(false, _) => {},
+			}
+			(false, _) => {}
 		}
 	}
 
@@ -486,36 +545,16 @@ impl Account {
 	}
 }
 
-// light client storage proof.
-impl Account {
-	/// Prove a storage key's existence or nonexistence in the account's storage
-	/// trie.
-	/// `storage_key` is the hash of the desired storage key, meaning
-	/// this will only work correctly under a secure trie.
-	pub fn prove_storage(&self, db: &HashDB, storage_key: H256) -> Result<(Vec<Bytes>, Vec<u8>), Box<TrieError>> {
-		use trie::{Trie, TrieDB};
-		use trie::recorder::Recorder;
-
-		let mut recorder = Recorder::new();
-
-		let trie = TrieDB::new(db, &self.storage_root)?;
-		let item: Vec<u8> = {
-			let panicky_decoder = |bytes:&[u8]| ::rlp::decode(bytes).expect("decoding db value failed");
-			let query = (&mut recorder, panicky_decoder);
-			trie.get_with(&storage_key, query)?.unwrap_or(H256::zero().to_vec())
-		};
-
-		Ok((recorder.drain().into_iter().map(|r| r.data).collect(), item.into()))
-	}
-}
-
 impl fmt::Debug for Account {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		f.debug_struct("Account")
 			.field("balance", &self.balance)
 			.field("nonce", &self.nonce)
 			.field("code", &self.code())
-			.field("storage", &self.storage_changes.iter().collect::<BTreeMap<_, _>>())
+			.field(
+				"storage",
+				&self.storage_changes.iter().collect::<BTreeMap<_, _>>(),
+			)
 			.field("storage_expiry", &self.storage_expiry)
 			.finish()
 	}
@@ -523,12 +562,13 @@ impl fmt::Debug for Account {
 
 #[cfg(test)]
 mod tests {
-	use rlp_compress::{compress, decompress, snapshot_swapper};
-	use ethereum_types::{H256, Address};
-	use memorydb::MemoryDB;
-	use bytes::Bytes;
 	use super::*;
+	use crate::mkvs::MemoryMKVS;
 	use account_db::*;
+	use bytes::Bytes;
+	use ethereum_types::{Address, H256};
+	use memorydb::MemoryDB;
+	use rlp_compress::{compress, decompress, snapshot_swapper};
 
 	#[test]
 	fn account_compress() {
@@ -537,41 +577,46 @@ mod tests {
 		assert!(raw.len() > compact_vec.len());
 		let again_raw = decompress(&compact_vec, snapshot_swapper());
 		assert_eq!(raw, again_raw.into_vec());
-    }
+	}
 
 	#[test]
 	fn storage_at() {
+		let mut mkvs = Box::new(MemoryMKVS::new());
 		let mut db = MemoryDB::new();
 		let mut db = AccountDBMut::new(&mut db, &Address::new());
 		let rlp = {
 			let mut a = Account::new_contract(69.into(), 0.into(), 0);
 			a.set_storage(0x00u64.into(), H256::from(0x1234u64).to_vec());
-			a.commit_storage(&Default::default(), &mut db).unwrap();
+			a.commit_storage(&mut mkvs);
 			a.init_code(vec![]);
-			a.commit_code(&mut db);
+			a.commit_code(&mut mkvs);
 			a.rlp()
 		};
 
 		let a = Account::from_rlp(&rlp).expect("decoding db value failed");
-		assert_eq!(*a.storage_root().unwrap(), "0x82a0fa8c476a310ccb2aab5ef344ac5941d26d43c99b3bd3e1cb677ce22aa073".into());
-		assert_eq!(a.storage_at(&db.immutable(), &0x00u64.into()).unwrap().unwrap(), H256::from(0x1234u64).to_vec());
-		assert_eq!(a.storage_at(&db.immutable(), &0x01u64.into()).unwrap(), None);
+		//assert_eq!(*a.storage_root().unwrap(), "0x82a0fa8c476a310ccb2aab5ef344ac5941d26d43c99b3bd3e1cb677ce22aa073".into());
+		assert_eq!(
+			a.storage_at(&mkvs, &0x00u64.into()).unwrap(),
+			H256::from(0x1234u64).to_vec()
+		);
+		assert_eq!(a.storage_at(&mkvs, &0x01u64.into()), None);
 	}
 
 	#[test]
 	fn note_code() {
 		let mut db = MemoryDB::new();
 		let mut db = AccountDBMut::new(&mut db, &Address::new());
+		let mut mkvs = Box::new(MemoryMKVS::new());
 
 		let rlp = {
 			let mut a = Account::new_contract(69.into(), 0.into(), 0);
 			a.init_code(vec![0x55, 0x44, 0xffu8]);
-			a.commit_code(&mut db);
+			a.commit_code(&mut mkvs);
 			a.rlp()
 		};
 
 		let mut a = Account::from_rlp(&rlp).expect("decoding db value failed");
-		assert!(a.cache_code(&db.immutable()).is_some());
+		assert!(a.cache_code(&mkvs).is_some());
 
 		let mut a = Account::from_rlp(&rlp).expect("decoding db value failed");
 		assert_eq!(a.note_code(vec![0x55, 0x44, 0xffu8]), Ok(()));
@@ -582,11 +627,12 @@ mod tests {
 		let mut a = Account::new_contract(69.into(), 0.into(), 0);
 		let mut db = MemoryDB::new();
 		let mut db = AccountDBMut::new(&mut db, &Address::new());
-        let value = H256::from(0x1234);
+		let mut mkvs = Box::new(MemoryMKVS::new());
+		let value = H256::from(0x1234);
 		a.set_storage(0.into(), value.to_vec());
 		assert_eq!(a.storage_root(), None);
-		a.commit_storage(&Default::default(), &mut db).unwrap();
-		assert_eq!(*a.storage_root().unwrap(), "0x82a0fa8c476a310ccb2aab5ef344ac5941d26d43c99b3bd3e1cb677ce22aa073".into());
+		a.commit_storage(&mut mkvs);
+		//assert_eq!(*a.storage_root().unwrap(), "0x82a0fa8c476a310ccb2aab5ef344ac5941d26d43c99b3bd3e1cb677ce22aa073".into());
 	}
 
 	#[test]
@@ -594,13 +640,14 @@ mod tests {
 		let mut a = Account::new_contract(69.into(), 0.into(), 0);
 		let mut db = MemoryDB::new();
 		let mut db = AccountDBMut::new(&mut db, &Address::new());
+		let mut mkvs = Box::new(MemoryMKVS::new());
 		a.set_storage(0.into(), H256::from(0x1234).to_vec());
-		a.commit_storage(&Default::default(), &mut db).unwrap();
+		a.commit_storage(&mut mkvs);
 		a.set_storage(1.into(), H256::from(0x1234).to_vec());
-		a.commit_storage(&Default::default(), &mut db).unwrap();
+		a.commit_storage(&mut mkvs);
 		a.set_storage(1.into(), H256::from(0).to_vec());
-		a.commit_storage(&Default::default(), &mut db).unwrap();
-		assert_eq!(*a.storage_root().unwrap(), "0x82a0fa8c476a310ccb2aab5ef344ac5941d26d43c99b3bd3e1cb677ce22aa073".into());
+		a.commit_storage(&mut mkvs);
+		//assert_eq!(*a.storage_root().unwrap(), "0x82a0fa8c476a310ccb2aab5ef344ac5941d26d43c99b3bd3e1cb677ce22aa073".into());
 	}
 
 	#[test]
@@ -608,11 +655,15 @@ mod tests {
 		let mut a = Account::new_contract(69.into(), 0.into(), 0);
 		let mut db = MemoryDB::new();
 		let mut db = AccountDBMut::new(&mut db, &Address::new());
+		let mut mkvs = Box::new(MemoryMKVS::new());
 		a.init_code(vec![0x55, 0x44, 0xffu8]);
 		assert_eq!(a.code_filth, Filth::Dirty);
 		assert_eq!(a.code_size(), Some(3));
-		a.commit_code(&mut db);
-		assert_eq!(a.code_hash(), "af231e631776a517ca23125370d542873eca1fb4d613ed9b5d5335a46ae5b7eb".into());
+		a.commit_code(&mut mkvs);
+		assert_eq!(
+			a.code_hash(),
+			"af231e631776a517ca23125370d542873eca1fb4d613ed9b5d5335a46ae5b7eb".into()
+		);
 	}
 
 	#[test]
@@ -620,15 +671,22 @@ mod tests {
 		let mut a = Account::new_contract(69.into(), 0.into(), 0);
 		let mut db = MemoryDB::new();
 		let mut db = AccountDBMut::new(&mut db, &Address::new());
+		let mut mkvs = Box::new(MemoryMKVS::new());
 		a.init_code(vec![0x55, 0x44, 0xffu8]);
 		assert_eq!(a.code_filth, Filth::Dirty);
-		a.commit_code(&mut db);
+		a.commit_code(&mut mkvs);
 		assert_eq!(a.code_filth, Filth::Clean);
-		assert_eq!(a.code_hash(), "af231e631776a517ca23125370d542873eca1fb4d613ed9b5d5335a46ae5b7eb".into());
+		assert_eq!(
+			a.code_hash(),
+			"af231e631776a517ca23125370d542873eca1fb4d613ed9b5d5335a46ae5b7eb".into()
+		);
 		a.reset_code(vec![0x55]);
 		assert_eq!(a.code_filth, Filth::Dirty);
-		a.commit_code(&mut db);
-		assert_eq!(a.code_hash(), "37bf2238b11b68cdc8382cece82651b59d3c3988873b6e0f33d79694aa45f1be".into());
+		a.commit_code(&mut mkvs);
+		assert_eq!(
+			a.code_hash(),
+			"37bf2238b11b68cdc8382cece82651b59d3c3988873b6e0f33d79694aa45f1be".into()
+		);
 	}
 
 	#[test]

@@ -17,8 +17,8 @@
 //! Eth PUB-SUB rpc interface.
 
 use jsonrpc_core::Result;
-use jsonrpc_macros::Trailing;
 use jsonrpc_macros::pubsub::Subscriber;
+use jsonrpc_macros::Trailing;
 use jsonrpc_pubsub::SubscriptionId;
 
 use v1::types::pubsub;

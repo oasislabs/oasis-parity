@@ -16,11 +16,11 @@
 
 //! Flat trace module
 
-use std::collections::VecDeque;
-use rlp::{Rlp, RlpStream, Decodable, Encodable, DecoderError};
-use heapsize::HeapSizeOf;
-use ethereum_types::Bloom;
 use super::trace::{Action, Res};
+use ethereum_types::Bloom;
+use heapsize::HeapSizeOf;
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use std::collections::VecDeque;
 
 /// Trace localized in vector of traces produced by a single transaction.
 ///
@@ -95,7 +95,9 @@ impl HeapSizeOf for FlatTransactionTraces {
 impl FlatTransactionTraces {
 	/// Returns bloom of all traces in the collection.
 	pub fn bloom(&self) -> Bloom {
-		self.0.iter().fold(Default::default(), | bloom, trace | bloom | trace.bloom())
+		self.0
+			.iter()
+			.fold(Default::default(), |bloom, trace| bloom | trace.bloom())
 	}
 }
 
@@ -124,7 +126,9 @@ impl From<Vec<FlatTransactionTraces>> for FlatBlockTraces {
 impl FlatBlockTraces {
 	/// Returns bloom of all traces in the block.
 	pub fn bloom(&self) -> Bloom {
-		self.0.iter().fold(Default::default(), | bloom, tx_traces | bloom | tx_traces.bloom())
+		self.0.iter().fold(Default::default(), |bloom, tx_traces| {
+			bloom | tx_traces.bloom()
+		})
 	}
 }
 
@@ -136,10 +140,10 @@ impl Into<Vec<FlatTransactionTraces>> for FlatBlockTraces {
 
 #[cfg(test)]
 mod tests {
-	use rlp::*;
-	use super::{FlatBlockTraces, FlatTransactionTraces, FlatTrace};
-	use trace::trace::{Action, Res, CallResult, Call, Suicide, Reward};
+	use super::{FlatBlockTraces, FlatTrace, FlatTransactionTraces};
 	use evm::CallType;
+	use rlp::*;
+	use trace::trace::{Action, Call, CallResult, Res, Reward, Suicide};
 	use trace::RewardType;
 
 	#[test]
@@ -240,7 +244,7 @@ mod tests {
 		let block_traces = FlatBlockTraces(vec![
 			FlatTransactionTraces(vec![flat_trace]),
 			FlatTransactionTraces(vec![flat_trace1, flat_trace2]),
-			FlatTransactionTraces(vec![flat_trace3, flat_trace4])
+			FlatTransactionTraces(vec![flat_trace3, flat_trace4]),
 		]);
 
 		let encoded = ::rlp::encode(&block_traces);

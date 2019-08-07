@@ -23,7 +23,7 @@ use super::ViewRlp;
 
 /// View onto transaction rlp.
 pub struct TransactionView<'a> {
-	rlp: ViewRlp<'a>
+	rlp: ViewRlp<'a>,
 }
 
 impl<'a> TransactionView<'a> {
@@ -35,18 +35,16 @@ impl<'a> TransactionView<'a> {
 	/// ```
 	/// #[macro_use]
 	/// extern crate ethcore;
-	/// 
+	///
 	/// use ethcore::views::{TransactionView};
-	/// 
+	///
 	/// fn main() {
 	/// let bytes : &[u8] = &[];
 	/// let tx_view = view!(TransactionView, bytes);
 	/// }
 	/// ```
 	pub fn new(rlp: ViewRlp<'a>) -> TransactionView<'a> {
-		TransactionView {
-			rlp: rlp
-		}
+		TransactionView { rlp: rlp }
 	}
 
 	/// Return reference to underlaying rlp.
@@ -60,34 +58,51 @@ impl<'a> TransactionView<'a> {
 	}
 
 	/// Get the nonce field of the transaction.
-	pub fn nonce(&self) -> U256 { self.rlp.val_at(0) }
+	pub fn nonce(&self) -> U256 {
+		self.rlp.val_at(0)
+	}
 
 	/// Get the gas_price field of the transaction.
-	pub fn gas_price(&self) -> U256 { self.rlp.val_at(1) }
+	pub fn gas_price(&self) -> U256 {
+		self.rlp.val_at(1)
+	}
 
 	/// Get the gas field of the transaction.
-	pub fn gas(&self) -> U256 { self.rlp.val_at(2) }
+	pub fn gas(&self) -> U256 {
+		self.rlp.val_at(2)
+	}
 
 	/// Get the value field of the transaction.
-	pub fn value(&self) -> U256 { self.rlp.val_at(4) }
+	pub fn value(&self) -> U256 {
+		self.rlp.val_at(4)
+	}
 
 	/// Get the data field of the transaction.
-	pub fn data(&self) -> Bytes { self.rlp.val_at(5) }
+	pub fn data(&self) -> Bytes {
+		self.rlp.val_at(5)
+	}
 
 	/// Get the v field of the transaction.
-	pub fn v(&self) -> u8 { let r: u16 = self.rlp.val_at(6); r as u8 }
+	pub fn v(&self) -> u8 {
+		let r: u16 = self.rlp.val_at(6);
+		r as u8
+	}
 
 	/// Get the r field of the transaction.
-	pub fn r(&self) -> U256 { self.rlp.val_at(7) }
+	pub fn r(&self) -> U256 {
+		self.rlp.val_at(7)
+	}
 
 	/// Get the s field of the transaction.
-	pub fn s(&self) -> U256 { self.rlp.val_at(8) }
+	pub fn s(&self) -> U256 {
+		self.rlp.val_at(8)
+	}
 }
 
 #[cfg(test)]
 mod tests {
-	use rustc_hex::FromHex;
 	use super::TransactionView;
+	use rustc_hex::FromHex;
 
 	#[test]
 	fn test_transaction_view() {
@@ -98,9 +113,20 @@ mod tests {
 		assert_eq!(view.gas_price(), 1.into());
 		assert_eq!(view.gas(), 0x61a8.into());
 		assert_eq!(view.value(), 0xa.into());
-		assert_eq!(view.data(), "0000000000000000000000000000000000000000000000000000000000".from_hex().unwrap());
-		assert_eq!(view.r(), "48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353".into());
-		assert_eq!(view.s(), "efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804".into());
+		assert_eq!(
+			view.data(),
+			"0000000000000000000000000000000000000000000000000000000000"
+				.from_hex()
+				.unwrap()
+		);
+		assert_eq!(
+			view.r(),
+			"48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353".into()
+		);
+		assert_eq!(
+			view.s(),
+			"efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804".into()
+		);
 		assert_eq!(view.v(), 0x1b);
 	}
 }

@@ -27,14 +27,14 @@ extern crate futures;
 extern crate hyper;
 extern crate hyper_tls;
 
+extern crate bytes;
 extern crate tokio_core;
 extern crate tokio_timer;
 extern crate url;
-extern crate bytes;
 
 /// Fetch client implementation.
 pub mod client;
 
-pub use url::Url;
-pub use self::client::{Client, Fetch, Error, Response, Request, Abort, BodyReader};
+pub use self::client::{Abort, BodyReader, Client, Error, Fetch, Request, Response};
 pub use hyper::Method;
+pub use url::Url;

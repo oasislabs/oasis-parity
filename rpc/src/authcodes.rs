@@ -16,13 +16,13 @@
 
 use std::io::{self, Read, Write};
 use std::path::Path;
-use std::{fs, time, mem};
+use std::{fs, mem, time};
 
-use itertools::Itertools;
-use rand::Rng;
-use rand::os::OsRng;
-use hash::keccak;
 use ethereum_types::H256;
+use hash::keccak;
+use itertools::Itertools;
+use rand::os::OsRng;
+use rand::Rng;
 
 /// Providing current time in seconds
 pub trait TimeProvider {
@@ -30,7 +30,7 @@ pub trait TimeProvider {
 	fn now(&self) -> u64;
 }
 
-impl<F : Fn() -> u64> TimeProvider for F {
+impl<F: Fn() -> u64> TimeProvider for F {
 	fn now(&self) -> u64 {
 		self()
 	}
@@ -42,7 +42,10 @@ pub struct DefaultTimeProvider;
 
 impl TimeProvider for DefaultTimeProvider {
 	fn now(&self) -> u64 {
-		time::UNIX_EPOCH.elapsed().expect("Valid time has to be set in your system.").as_secs()
+		time::UNIX_EPOCH
+			.elapsed()
+			.expect("Valid time has to be set in your system.")
+			.as_secs()
 	}
 }
 
@@ -81,7 +84,6 @@ pub struct AuthCodes<T: TimeProvider = DefaultTimeProvider> {
 }
 
 impl AuthCodes<DefaultTimeProvider> {
-
 	/// Reads `AuthCodes` from file and creates new instance using `DefaultTimeProvider`.
 	pub fn from_file(file: &Path) -> io::Result<AuthCodes> {
 		let content = {
@@ -95,7 +97,8 @@ impl AuthCodes<DefaultTimeProvider> {
 		};
 		let time_provider = DefaultTimeProvider::default();
 
-		let codes = content.lines()
+		let codes = content
+			.lines()
 			.filter_map(|line| {
 				let mut parts = line.split(SEPARATOR);
 				let token = parts.next();
@@ -105,14 +108,13 @@ impl AuthCodes<DefaultTimeProvider> {
 				match token {
 					None => None,
 					Some(token) if token.len() < TOKEN_LENGTH => None,
-					Some(token) => {
-						Some(Code {
-							code: token.into(),
-							last_used_at: used.and_then(decode_time),
-							created_at: created.and_then(decode_time)
-											.unwrap_or_else(|| time::Duration::from_secs(time_provider.now())),
-						})
-					}
+					Some(token) => Some(Code {
+						code: token.into(),
+						last_used_at: used.and_then(decode_time),
+						created_at: created
+							.and_then(decode_time)
+							.unwrap_or_else(|| time::Duration::from_secs(time_provider.now())),
+					}),
 				}
 			})
 			.collect();
@@ -121,32 +123,37 @@ impl AuthCodes<DefaultTimeProvider> {
 			now: time_provider,
 		})
 	}
-
 }
 
 impl<T: TimeProvider> AuthCodes<T> {
-
 	/// Writes all `AuthCodes` to a disk.
 	pub fn to_file(&self, file: &Path) -> io::Result<()> {
 		let mut file = fs::File::create(file)?;
-		let content = self.codes.iter().map(|code| {
-			let mut data = vec![code.code.clone(), encode_time(code.created_at.clone())];
-			if let Some(used_at) = code.last_used_at {
-				data.push(encode_time(used_at));
-			}
-			data.join(SEPARATOR)
-		}).join("\n");
+		let content = self
+			.codes
+			.iter()
+			.map(|code| {
+				let mut data = vec![code.code.clone(), encode_time(code.created_at.clone())];
+				if let Some(used_at) = code.last_used_at {
+					data.push(encode_time(used_at));
+				}
+				data.join(SEPARATOR)
+			})
+			.join("\n");
 		file.write_all(content.as_bytes())
 	}
 
 	/// Creates a new `AuthCodes` store with given `TimeProvider`.
 	pub fn new(codes: Vec<String>, now: T) -> Self {
 		AuthCodes {
-			codes: codes.into_iter().map(|code| Code {
-				code: code,
-				created_at: time::Duration::from_secs(now.now()),
-				last_used_at: None,
-			}).collect(),
+			codes: codes
+				.into_iter()
+				.map(|code| Code {
+					code: code,
+					created_at: time::Duration::from_secs(now.now()),
+					last_used_at: None,
+				})
+				.collect(),
 			now: now,
 		}
 	}
@@ -188,7 +195,8 @@ impl<T: TimeProvider> AuthCodes<T> {
 	pub fn generate_new(&mut self) -> io::Result<String> {
 		let mut rng = OsRng::new()?;
 		let code = rng.gen_ascii_chars().take(TOKEN_LENGTH).collect::<String>();
-		let readable_code = code.as_bytes()
+		let readable_code = code
+			.as_bytes()
 			.chunks(4)
 			.filter_map(|f| String::from_utf8(f.to_vec()).ok())
 			.collect::<Vec<String>>()
@@ -225,14 +233,14 @@ impl<T: TimeProvider> AuthCodes<T> {
 
 #[cfg(test)]
 mod tests {
-	use std::io::{Read, Write};
-	use std::{time, fs};
-	use std::cell::Cell;
-	use tempdir::TempDir;
 	use hash::keccak;
+	use std::cell::Cell;
+	use std::io::{Read, Write};
+	use std::{fs, time};
+	use tempdir::TempDir;
 
-	use ethereum_types::H256;
 	use super::*;
+	use ethereum_types::H256;
 
 	fn generate_hash(val: &str, time: u64) -> H256 {
 		keccak(format!("{}:{}", val, time))
@@ -315,7 +323,10 @@ mod tests {
 		let time = time::UNIX_EPOCH.elapsed().unwrap().as_secs();
 
 		// then
-		assert!(authcodes.is_valid(&generate_hash(code, time), time), "Code should be read from file");
+		assert!(
+			authcodes.is_valid(&generate_hash(code, time), time),
+			"Code should be read from file"
+		);
 	}
 
 	#[test]
@@ -328,7 +339,9 @@ mod tests {
 		let code3 = "33333333asdfasdf333";
 
 		let time = Cell::new(100);
-		let mut codes = AuthCodes::new(vec![code1.into(), code2.into(), code3.into()], || time.get());
+		let mut codes = AuthCodes::new(vec![code1.into(), code2.into(), code3.into()], || {
+			time.get()
+		});
 		// `code2` should not be removed (we never remove tokens that were used)
 		codes.is_valid(&generate_hash(code2, time.get()), time.get());
 
@@ -346,7 +359,13 @@ mod tests {
 		let mut file = fs::File::open(&file_path).unwrap();
 		file.read_to_string(&mut content).unwrap();
 
-		assert_eq!(content, format!("{};100;10000100\n{};100;100\n{};10000100", code1, code2, new_code));
+		assert_eq!(
+			content,
+			format!(
+				"{};100;10000100\n{};100;100\n{};10000100",
+				code1, code2, new_code
+			)
+		);
 	}
 
 }

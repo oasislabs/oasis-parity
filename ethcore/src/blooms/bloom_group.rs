@@ -35,7 +35,7 @@ impl BloomGroup {
 impl From<bc::BloomGroup> for BloomGroup {
 	fn from(group: bc::BloomGroup) -> Self {
 		BloomGroup {
-			blooms: group.blooms
+			blooms: group.blooms,
 		}
 	}
 }
@@ -43,7 +43,7 @@ impl From<bc::BloomGroup> for BloomGroup {
 impl Into<bc::BloomGroup> for BloomGroup {
 	fn into(self) -> bc::BloomGroup {
 		bc::BloomGroup {
-			blooms: self.blooms
+			blooms: self.blooms,
 		}
 	}
 }

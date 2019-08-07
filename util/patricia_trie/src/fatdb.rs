@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+use super::{Query, Trie, TrieDB, TrieDBIterator, TrieItem, TrieIterator};
 use ethereum_types::H256;
-use keccak::keccak;
 use hashdb::HashDB;
-use super::{TrieDB, Trie, TrieDBIterator, TrieItem, TrieIterator, Query};
+use keccak::keccak;
 
 /// A `Trie` implementation which hashes keys and uses a generic `HashDB` backing database.
 /// Additionaly it stores inserted hash-key mappings for later retrieval.
@@ -33,7 +33,7 @@ impl<'db> FatDB<'db> {
 	/// This guarantees the trie is built correctly.
 	pub fn new(db: &'db HashDB, root: &'db H256) -> super::Result<Self> {
 		let fatdb = FatDB {
-			raw: TrieDB::new(db, root)?
+			raw: TrieDB::new(db, root)?,
 		};
 
 		Ok(fatdb)
@@ -58,8 +58,13 @@ impl<'db> Trie for FatDB<'db> {
 		self.raw.contains(&keccak(key))
 	}
 
-	fn get_with<'a, 'key, Q: Query>(&'a self, key: &'key [u8], query: Q) -> super::Result<Option<Q::Item>>
-		where 'a: 'key
+	fn get_with<'a, 'key, Q: Query>(
+		&'a self,
+		key: &'key [u8],
+		query: Q,
+	) -> super::Result<Option<Q::Item>>
+	where
+		'a: 'key,
 	{
 		self.raw.get_with(&keccak(key), query)
 	}
@@ -91,22 +96,28 @@ impl<'db> Iterator for FatDBIterator<'db> {
 	type Item = TrieItem<'db>;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		self.trie_iterator.next()
-			.map(|res|
-				res.map(|(hash, value)| {
-					let aux_hash = keccak(hash);
-					(self.trie.db().get(&aux_hash).expect("Missing fatdb hash").into_vec(), value)
-				})
-			)
+		self.trie_iterator.next().map(|res| {
+			res.map(|(hash, value)| {
+				let aux_hash = keccak(hash);
+				(
+					self.trie
+						.db()
+						.get(&aux_hash)
+						.expect("Missing fatdb hash")
+						.into_vec(),
+					value,
+				)
+			})
+		})
 	}
 }
 
 #[test]
 fn fatdb_to_trie() {
-	use memorydb::MemoryDB;
-	use hashdb::DBValue;
 	use super::fatdbmut::FatDBMut;
 	use super::TrieMut;
+	use hashdb::DBValue;
+	use memorydb::MemoryDB;
 
 	let mut memdb = MemoryDB::new();
 	let mut root = H256::default();
@@ -115,6 +126,15 @@ fn fatdb_to_trie() {
 		t.insert(&[0x01u8, 0x23], &[0x01u8, 0x23]).unwrap();
 	}
 	let t = FatDB::new(&memdb, &root).unwrap();
-	assert_eq!(t.get(&[0x01u8, 0x23]).unwrap().unwrap(), DBValue::from_slice(&[0x01u8, 0x23]));
-	assert_eq!(t.iter().unwrap().map(Result::unwrap).collect::<Vec<_>>(), vec![(vec![0x01u8, 0x23], DBValue::from_slice(&[0x01u8, 0x23] as &[u8]))]);
+	assert_eq!(
+		t.get(&[0x01u8, 0x23]).unwrap().unwrap(),
+		DBValue::from_slice(&[0x01u8, 0x23])
+	);
+	assert_eq!(
+		t.iter().unwrap().map(Result::unwrap).collect::<Vec<_>>(),
+		vec![(
+			vec![0x01u8, 0x23],
+			DBValue::from_slice(&[0x01u8, 0x23] as &[u8])
+		)]
+	);
 }

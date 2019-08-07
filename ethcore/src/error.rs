@@ -16,14 +16,14 @@
 
 //! General error types for use in ethcore.
 
-use std::{fmt, error};
-use std::time::SystemTime;
+use ethereum_types::{Address, Bloom, H256, U256};
 use kvdb;
-use ethereum_types::{H256, U256, Address, Bloom};
+use std::time::SystemTime;
+use std::{error, fmt};
 use util_error::{self, UtilError};
 // use snappy::InvalidInput;
-use unexpected::{Mismatch, OutOfBounds};
 use trie::TrieError;
+use unexpected::{Mismatch, OutOfBounds};
 // use io::*;
 use header::BlockNumber;
 // use client::Error as ClientError;
@@ -33,7 +33,7 @@ use ethkey::Error as EthkeyError;
 // use account_provider::SignError as AccountsError;
 use transaction::Error as TransactionError;
 
-pub use executed::{ExecutionError, CallError};
+pub use executed::{CallError, ExecutionError};
 
 #[derive(Debug, PartialEq, Clone, Copy, Eq)]
 /// Errors concerning block processing.
@@ -115,31 +115,39 @@ impl fmt::Display for BlockError {
 			UncleIsBrother(ref oob) => format!("Uncle from same generation as block. {}", oob),
 			UncleInChain(ref hash) => format!("Uncle {} already in chain", hash),
 			DuplicateUncle(ref hash) => format!("Uncle {} already in the header", hash),
-			UncleParentNotInChain(ref hash) => format!("Uncle {} has a parent not in the chain", hash),
+			UncleParentNotInChain(ref hash) => {
+				format!("Uncle {} has a parent not in the chain", hash)
+			}
 			InvalidStateRoot(ref mis) => format!("Invalid state root in header: {}", mis),
 			InvalidGasUsed(ref mis) => format!("Invalid gas used in header: {}", mis),
-			InvalidTransactionsRoot(ref mis) => format!("Invalid transactions root in header: {}", mis),
+			InvalidTransactionsRoot(ref mis) => {
+				format!("Invalid transactions root in header: {}", mis)
+			}
 			DifficultyOutOfBounds(ref oob) => format!("Invalid block difficulty: {}", oob),
 			InvalidDifficulty(ref mis) => format!("Invalid block difficulty: {}", mis),
 			MismatchedH256SealElement(ref mis) => format!("Seal element out of bounds: {}", mis),
 			InvalidProofOfWork(ref oob) => format!("Block has invalid PoW: {}", oob),
 			InvalidSeal => "Block has invalid seal.".into(),
 			InvalidGasLimit(ref oob) => format!("Invalid gas limit: {}", oob),
-			InvalidReceiptsRoot(ref mis) => format!("Invalid receipts trie root in header: {}", mis),
+			InvalidReceiptsRoot(ref mis) => {
+				format!("Invalid receipts trie root in header: {}", mis)
+			}
 			InvalidTimestamp(ref oob) => {
 				let oob = oob.map(|st| st.elapsed().unwrap_or_default().as_secs());
 				format!("Invalid timestamp in header: {}", oob)
-			},
+			}
 			TemporarilyInvalid(ref oob) => {
 				let oob = oob.map(|st| st.elapsed().unwrap_or_default().as_secs());
 				format!("Future timestamp in header: {}", oob)
-			},
+			}
 			InvalidLogBloom(ref oob) => format!("Invalid log bloom in header: {}", oob),
 			InvalidNumber(ref mis) => format!("Invalid number in header: {}", mis),
 			RidiculousNumber(ref oob) => format!("Implausible block number. {}", oob),
 			UnknownParent(ref hash) => format!("Unknown parent: {}", hash),
 			UnknownUncleParent(ref hash) => format!("Unknown uncle parent: {}", hash),
-			UnknownEpochTransition(ref num) => format!("Unknown transition to epoch number: {}", num),
+			UnknownEpochTransition(ref num) => {
+				format!("Unknown transition to epoch number: {}", num)
+			}
 			TooManyTransactions(ref address) => format!("Too many transactions from: {}", address),
 		};
 
@@ -205,9 +213,15 @@ error_chain! {
 impl From<Error> for BlockImportError {
 	fn from(e: Error) -> Self {
 		match e {
-			Error(ErrorKind::Block(block_error), _) => BlockImportErrorKind::Block(block_error).into(),
-			Error(ErrorKind::Import(import_error), _) => BlockImportErrorKind::Import(import_error.into()).into(),
-			Error(ErrorKind::Util(util_error::ErrorKind::Decoder(decoder_err)), _) => BlockImportErrorKind::Decoder(decoder_err).into(),
+			Error(ErrorKind::Block(block_error), _) => {
+				BlockImportErrorKind::Block(block_error).into()
+			}
+			Error(ErrorKind::Import(import_error), _) => {
+				BlockImportErrorKind::Import(import_error.into()).into()
+			}
+			Error(ErrorKind::Util(util_error::ErrorKind::Decoder(decoder_err)), _) => {
+				BlockImportErrorKind::Decoder(decoder_err).into()
+			}
 			_ => BlockImportErrorKind::Other(format!("other block import error: {:?}", e)).into(),
 		}
 	}
@@ -225,7 +239,9 @@ pub enum TransactionImportError {
 impl From<Error> for TransactionImportError {
 	fn from(e: Error) -> Self {
 		match e {
-			Error(ErrorKind::Transaction(transaction_error), _) => TransactionImportError::Transaction(transaction_error),
+			Error(ErrorKind::Transaction(transaction_error), _) => {
+				TransactionImportError::Transaction(transaction_error)
+			}
 			_ => TransactionImportError::Other(format!("other block import error: {:?}", e)),
 		}
 	}
@@ -241,7 +257,7 @@ error_chain! {
 		Util(UtilError, util_error::ErrorKind) #[doc = "Error concerning a utility"];
 		Import(ImportError, ImportErrorKind) #[doc = "Error concerning block import." ];
 	}
-		
+
 	foreign_links {
 		// Io(IoError) #[doc = "Io create error"];
 		// StdIo(::std::io::Error) #[doc = "Error concerning the Rust standard library's IO subsystem."];
@@ -271,14 +287,14 @@ error_chain! {
 		// AccountProvider(err: AccountsError) {
 		// 	description("Accounts Provider error")
 		// 	display("Accounts Provider error {}", err)
-		// } 
+		// }
 
 		#[doc = "PoW hash is invalid or out of date."]
 		PowHashInvalid {
 			description("PoW hash is invalid or out of date.")
 			display("PoW hash is invalid or out of date.")
 		}
-	
+
 		#[doc = "The value of the nonce or mishash is invalid."]
 		PowInvalid {
 			description("The value of the nonce or mishash is invalid.")
@@ -311,10 +327,10 @@ pub type ImportResult = EthcoreResult<H256>;
 // 	}
 // }
 
-// impl From<AccountsError> for Error { 
-// 	fn from(err: AccountsError) -> Error { 
+// impl From<AccountsError> for Error {
+// 	fn from(err: AccountsError) -> Error {
 // 		ErrorKind::AccountProvider(err).into()
-// 	} 
+// 	}
 // }
 
 impl From<::rlp::DecoderError> for Error {
@@ -345,7 +361,10 @@ impl From<BlockImportError> for Error {
 // 	}
 // }
 
-impl<E> From<Box<E>> for Error where Error: From<E> {
+impl<E> From<Box<E>> for Error
+where
+	Error: From<E>,
+{
 	fn from(err: Box<E>) -> Error {
 		Error::from(*err)
 	}

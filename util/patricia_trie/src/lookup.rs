@@ -16,12 +16,12 @@
 
 //! Trie lookup via HashDB.
 
+use ethereum_types::H256;
 use hashdb::HashDB;
 use nibbleslice::NibbleSlice;
-use ethereum_types::H256;
 
-use super::{TrieError, Query};
 use super::node::Node;
+use super::{Query, TrieError};
 
 /// Trie lookup helper object.
 pub struct Lookup<'a, Q: Query> {
@@ -43,10 +43,12 @@ impl<'a, Q: Query> Lookup<'a, Q> {
 		for depth in 0.. {
 			let node_data = match self.db.get(&hash) {
 				Some(value) => value,
-				None => return Err(Box::new(match depth {
-					0 => TrieError::InvalidStateRoot(hash),
-					_ => TrieError::IncompleteDatabase(hash),
-				})),
+				None => {
+					return Err(Box::new(match depth {
+						0 => TrieError::InvalidStateRoot(hash),
+						_ => TrieError::IncompleteDatabase(hash),
+					}))
+				}
 			};
 
 			self.query.record(&hash, &node_data, depth);
@@ -67,7 +69,7 @@ impl<'a, Q: Query> Lookup<'a, Q> {
 							node_data = item;
 							key = key.mid(slice.len());
 						} else {
-							return Ok(None)
+							return Ok(None);
 						}
 					}
 					Node::Branch(children, value) => match key.is_empty() {
@@ -83,7 +85,7 @@ impl<'a, Q: Query> Lookup<'a, Q> {
 				// check if new node data is inline or hash.
 				if let Some(h) = Node::try_decode_hash(&node_data) {
 					hash = h;
-					break
+					break;
 				}
 			}
 		}

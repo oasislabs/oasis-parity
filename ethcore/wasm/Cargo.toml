@@ -2,20 +2,31 @@
 name = "wasm"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
 
 [dependencies]
+base64 = "0.10"
+bcfs = { git = "https://github.com/oasislabs/oasis-rs" }
+blockchain-traits = { git = "https://github.com/oasislabs/oasis-rs" }
 byteorder = "1.0"
+common-types = { path = "../types" }
 ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
-log = "0.3"
-parity-wasm = "0.31"
-# libc = "0.2"
-pwasm-utils = "0.2"
-vm = { path = "../vm" }
-# ethcore-logger = { path = "../../logger" }
-wasmi = "0.4"
+hmac-drbg = "=0.1.2"
 keccak-hash = { path = "../../util/hash" }
+log = "0.3"
+oasis-types = { git = "https://github.com/oasislabs/oasis-rs" }
+parity-wasm = "0.31"
+pwasm-utils = "0.2"
+sha2 = "0.6"
+vm = { path = "../vm" }
+wasi-types = "0.1"
+wasm-macros = { path = "macros" }
+wasmi = { git = "https://github.com/oasislabs/wasmi" }
 
 [dev-dependencies]
 ethcore-logger = { path = "../../logger" }
 serde = {version = "1.0", features = ["derive"]}
 serde_cbor = "0.9.0"
+
+[features]
+wasi-debug-stdio = []

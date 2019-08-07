@@ -16,33 +16,33 @@
 
 //! Additional test structures deserialization.
 
-use std::collections::BTreeMap;
-use std::io::Read;
+use hash::H256;
 use serde_json;
 use serde_json::Error;
-use hash::H256;
+use std::collections::BTreeMap;
+use std::io::Read;
 use uint::Uint;
 
 /// Blockchain test header deserializer.
 #[derive(Debug, PartialEq, Deserialize)]
 pub struct DifficultyTestCase {
 	/// Parent timestamp.
-	#[serde(rename="parentTimestamp")]
+	#[serde(rename = "parentTimestamp")]
 	pub parent_timestamp: Uint,
 	/// Parent difficulty.
-	#[serde(rename="parentDifficulty")]
+	#[serde(rename = "parentDifficulty")]
 	pub parent_difficulty: Uint,
 	/// Parent uncle hash.
-	#[serde(rename="parentUncles")]
+	#[serde(rename = "parentUncles")]
 	pub parent_uncles: H256,
 	/// Current timestamp.
-	#[serde(rename="currentTimestamp")]
+	#[serde(rename = "currentTimestamp")]
 	pub current_timestamp: Uint,
 	/// Current difficulty.
-	#[serde(rename="currentDifficulty")]
+	#[serde(rename = "currentDifficulty")]
 	pub current_difficulty: Uint,
 	/// Current block number.
-	#[serde(rename="currentBlockNumber")]
+	#[serde(rename = "currentBlockNumber")]
 	pub current_block_number: Uint,
 }
 /// Blockchain test deserializer.
@@ -60,7 +60,10 @@ impl IntoIterator for DifficultyTest {
 
 impl DifficultyTest {
 	/// Loads test from json.
-	pub fn load<R>(reader: R) -> Result<Self, Error> where R: Read {
+	pub fn load<R>(reader: R) -> Result<Self, Error>
+	where
+		R: Read,
+	{
 		serde_json::from_reader(reader)
 	}
 }

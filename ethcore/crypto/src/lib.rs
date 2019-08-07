@@ -16,21 +16,15 @@
 
 //! Crypto utils used ethstore and network.
 
-// extern crate crypto as rcrypto;
-extern crate ripemd160;
 extern crate ethereum_types;
+extern crate ripemd160;
 #[macro_use]
 extern crate quick_error;
 extern crate ring;
 extern crate tiny_keccak;
 
-// pub mod aes;
-// pub mod aes_gcm;
-pub mod error;
-// pub mod scrypt;
 pub mod digest;
-// pub mod hmac;
-// pub mod pbkdf2;
+pub mod error;
 
 pub use error::Error;
 
@@ -44,10 +38,15 @@ pub const KEY_LENGTH_AES: usize = KEY_LENGTH / 2;
 pub const DEFAULT_MAC: [u8; 2] = [0, 0];
 
 pub trait Keccak256<T> {
-	fn keccak256(&self) -> T where T: Sized;
+	fn keccak256(&self) -> T
+	where
+		T: Sized;
 }
 
-impl<T> Keccak256<[u8; 32]> for T where T: AsRef<[u8]> {
+impl<T> Keccak256<[u8; 32]> for T
+where
+	T: AsRef<[u8]>,
+{
 	fn keccak256(&self) -> [u8; 32] {
 		let mut keccak = Keccak::new_keccak256();
 		let mut result = [0u8; 32];
@@ -56,14 +55,6 @@ impl<T> Keccak256<[u8; 32]> for T where T: AsRef<[u8]> {
 		result
 	}
 }
-
-// pub fn derive_key_iterations(password: &str, salt: &[u8; 32], c: u32) -> (Vec<u8>, Vec<u8>) {
-// 	let mut derived_key = [0u8; KEY_LENGTH];
-// 	pbkdf2::sha256(c, pbkdf2::Salt(salt), pbkdf2::Secret(password.as_bytes()), &mut derived_key);
-// 	let derived_right_bits = &derived_key[0..KEY_LENGTH_AES];
-// 	let derived_left_bits = &derived_key[KEY_LENGTH_AES..KEY_LENGTH];
-// 	(derived_right_bits.to_vec(), derived_left_bits.to_vec())
-// }
 
 pub fn derive_mac(derived_left_bits: &[u8], cipher_text: &[u8]) -> Vec<u8> {
 	let mut mac = vec![0u8; KEY_LENGTH_AES + cipher_text.len()];

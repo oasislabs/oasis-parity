@@ -14,13 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use trie::TrieFactory;
-use account_db::Factory as AccountFactory;
-use evm::{Factory as EvmFactory, VMType};
-use vm::{Vm, ConfidentialCtx, OasisVm, ActionParams, Schedule};
-use wasm::WasmInterpreter;
 use bytes::Bytes;
+use evm::{Factory as EvmFactory, VMType};
 use std::{cell::RefCell, rc::Rc};
+use vm::{ActionParams, ConfidentialCtx, OasisVm, Schedule, Vm};
+
+use wasm::WasmInterpreter;
+
+#[cfg(feature = "use-wasmer-runtime")]
+use wasmer::WasmRuntime;
 
 const WASM_MAGIC_NUMBER: &'static [u8; 4] = b"\0asm";
 
@@ -31,9 +33,18 @@ pub struct VmFactory {
 }
 
 impl VmFactory {
-	pub fn create(&self, ctx: Option<Rc<RefCell<Box<ConfidentialCtx>>>>, params: &ActionParams, schedule: &Schedule) -> Box<Vm> {
+	#[cfg(not(feature = "use-wasmer-runtime"))]
+	pub fn create(
+		&self,
+		ctx: Option<Rc<RefCell<Box<ConfidentialCtx>>>>,
+		params: &ActionParams,
+		schedule: &Schedule,
+	) -> Box<Vm> {
 		let vm = {
-			if schedule.wasm.is_some() && params.code.as_ref().map_or(false, |code| code.len() > 4 && &code[0..4] == WASM_MAGIC_NUMBER) {
+			if schedule.wasm.is_some()
+				&& params.code.as_ref().map_or(false, |code| {
+					code.len() > 4 && &code[0..4] == WASM_MAGIC_NUMBER
+				}) {
 				Box::new(WasmInterpreter)
 			} else {
 				self.evm.create(&params.gas)
@@ -42,8 +53,30 @@ impl VmFactory {
 		Box::new(OasisVm::new(ctx, vm))
 	}
 
+	#[cfg(feature = "use-wasmer-runtime")]
+	pub fn create(
+		&self,
+		ctx: Option<Rc<RefCell<Box<ConfidentialCtx>>>>,
+		params: &ActionParams,
+		schedule: &Schedule,
+	) -> Box<Vm> {
+		let vm = {
+			if schedule.wasm.is_some()
+				&& params.code.as_ref().map_or(false, |code| {
+					code.len() > 4 && &code[0..4] == WASM_MAGIC_NUMBER
+				}) {
+				Box::new(WasmRuntime::default())
+			} else {
+				self.evm.create(&params.gas)
+			}
+		};
+		Box::new(OasisVm::new(ctx, vm))
+	}
+
 	pub fn new(evm: VMType, cache_size: usize) -> Self {
-		VmFactory { evm: EvmFactory::new(evm, cache_size) }
+		VmFactory {
+			evm: EvmFactory::new(evm, cache_size),
+		}
 	}
 }
 
@@ -58,8 +91,4 @@ impl From<EvmFactory> for VmFactory {
 pub struct Factories {
 	/// factory for evm.
 	pub vm: VmFactory,
-	/// factory for tries.
-	pub trie: TrieFactory,
-	/// factory for account databases.
-	pub accountdb: AccountFactory,
 }

@@ -14,20 +14,23 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
+pub use ethereum_types::{Address, H256, U256};
 use std::collections::HashSet;
-use std::io::Read;
-use std::fs::{File, read_dir};
-use std::path::Path;
 use std::ffi::OsString;
-pub use ethereum_types::{H256, U256, Address};
+use std::fs::{read_dir, File};
+use std::io::Read;
+use std::path::Path;
 
-pub fn run_test_path(p: &Path, skip: &[&'static str], runner: fn (json_data: &[u8]) -> Vec<String>) {
+pub fn run_test_path(p: &Path, skip: &[&'static str], runner: fn(json_data: &[u8]) -> Vec<String>) {
 	let path = Path::new(p);
-	let s: HashSet<OsString> = skip.iter().map(|s| {
-		let mut os: OsString = s.into();
-		os.push(".json");
-		os
-	}).collect();
+	let s: HashSet<OsString> = skip
+		.iter()
+		.map(|s| {
+			let mut os: OsString = s.into();
+			os.push(".json");
+			os
+		})
+		.collect();
 	if path.is_dir() {
 		for p in read_dir(path).unwrap().filter_map(|e| {
 			let e = e.unwrap();
@@ -35,7 +38,8 @@ pub fn run_test_path(p: &Path, skip: &[&'static str], runner: fn (json_data: &[u
 				None
 			} else {
 				Some(e.path())
-			}}) {
+			}
+		}) {
 			run_test_path(&p, skip, runner)
 		}
 	} else {
@@ -45,10 +49,11 @@ pub fn run_test_path(p: &Path, skip: &[&'static str], runner: fn (json_data: &[u
 	}
 }
 
-pub fn run_test_file(path: &Path, runner: fn (json_data: &[u8]) -> Vec<String>) {
+pub fn run_test_file(path: &Path, runner: fn(json_data: &[u8]) -> Vec<String>) {
 	let mut data = Vec::new();
 	let mut file = File::open(&path).expect("Error opening test file");
-	file.read_to_end(&mut data).expect("Error reading test file");
+	file.read_to_end(&mut data)
+		.expect("Error reading test file");
 	let results = runner(&data);
 	let empty: [String; 0] = [];
 	assert_eq!(results, empty);
@@ -56,8 +61,12 @@ pub fn run_test_file(path: &Path, runner: fn (json_data: &[u8]) -> Vec<String>) 
 
 macro_rules! test {
 	($name: expr, $skip: expr) => {
-		::json_tests::test_common::run_test_path(::std::path::Path::new(concat!("res/ethereum/tests/", $name)), &$skip, do_json_test);
-	}
+		::json_tests::test_common::run_test_path(
+			::std::path::Path::new(concat!("res/ethereum/tests/", $name)),
+			&$skip,
+			do_json_test,
+			);
+	};
 }
 
 #[macro_export]
@@ -91,5 +100,5 @@ macro_rules! declare_test {
 		fn $id() {
 			test!($name, []);
 		}
-	}
+	};
 }
