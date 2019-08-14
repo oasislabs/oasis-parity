@@ -134,7 +134,7 @@ impl<'a> PendingTransaction for Runtime<'a> {
 			trace!("CALL failed adjusted charge {:?}", err);
 		}
 
-		let gas_left = match self.gas_left() {
+		let pre_gas_left = match self.gas_left() {
 			Ok(gas_left) => gas_left,
 			Err(_) => {
 				receipt.outcome = TransactionOutcome::InsufficientGas;
@@ -144,7 +144,7 @@ impl<'a> PendingTransaction for Runtime<'a> {
 
 		let callee = maddr2eaddr(&callee);
 		let call_result = self.ext.call(
-			&gas_left.into(),
+			&pre_gas_left.into(),
 			&self.context.address, /* sender */
 			callee,                /* receiver */
 			if value > 0 { Some(value.into()) } else { None },
@@ -161,10 +161,16 @@ impl<'a> PendingTransaction for Runtime<'a> {
 		}
 
 		match call_result {
-			MessageCallResult::Success(gas_left, return_data)
-			| MessageCallResult::Reverted(gas_left, return_data) => {
-				receipt.gas_used = gas_left.low_u64() - self.gas_counter;
-				self.gas_counter = gas_left.low_u64();
+			MessageCallResult::Success(post_gas_left, return_data)
+			| MessageCallResult::Reverted(post_gas_left, return_data) => {
+				receipt.gas_used = pre_gas_left - post_gas_left.low_u64();
+				// ^ by definition pre_gas_left > post_gas_left so this cannot overflow
+				if !self.charge_gas(receipt.gas_used) {
+					// ^ cost for xcc is not be "adjusted" because functions called
+					// during its scope are already individually adjusted.
+					receipt.outcome = TransactionOutcome::InsufficientGas;
+					return receipt;
+				}
 				receipt.output = return_data;
 			}
 			MessageCallResult::Failed => {
