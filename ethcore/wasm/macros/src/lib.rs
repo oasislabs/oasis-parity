@@ -235,6 +235,8 @@ fn wasm_type_for_type(ty: &syn::Type) -> WasmType {
 				|| path.is_ident("FileSize")
 				|| path.is_ident("Inode")
 				|| path.is_ident("Rights")
+				|| path.is_ident("i64")
+				|| path.is_ident("u64")
 			{
 				WasmType::I64
 			} else {

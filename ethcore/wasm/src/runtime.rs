@@ -163,21 +163,9 @@ impl<'a> PendingTransaction for Runtime<'a> {
 		match call_result {
 			MessageCallResult::Success(gas_left, return_data)
 			| MessageCallResult::Reverted(gas_left, return_data) => {
-				// cannot overflow, before making call gas_counter was incremented with gas, and gas_left < gas
-				let gas_used = gas_left.low_u64() * self.ext.schedule().wasm().opcodes_div as u64
-					/ self.ext.schedule().wasm().opcodes_mul as u64;
-				let gas_left = match self.gas_counter.checked_sub(gas_used) {
-					Some(gas_left) => gas_left,
-					None => {
-						receipt.outcome = TransactionOutcome::InsufficientGas;
-						receipt.gas_used = self.gas_limit;
-						return receipt;
-					}
-				};
-				self.gas_counter -= gas_left;
-				receipt.gas_used = gas_used;
+				receipt.gas_used = gas_left.low_u64() - self.gas_counter;
+				self.gas_counter = gas_left.low_u64();
 				receipt.output = return_data;
-				receipt.outcome = TransactionOutcome::Success;
 			}
 			MessageCallResult::Failed => {
 				receipt.gas_used = self.gas_limit;
