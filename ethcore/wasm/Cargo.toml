@@ -6,15 +6,15 @@ edition = "2018"
 
 [dependencies]
 base64 = "0.10"
-bcfs = { git = "https://github.com/oasislabs/oasis-rs" }
-blockchain-traits = { git = "https://github.com/oasislabs/oasis-rs" }
+bcfs = { git = "https://github.com/oasislabs/oasis-rs", branch="xcc" }
+blockchain-traits = { git = "https://github.com/oasislabs/oasis-rs", branch="xcc" }
 byteorder = "1.0"
 common-types = { path = "../types" }
 ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
 hmac-drbg = "=0.1.2"
 keccak-hash = { path = "../../util/hash" }
 log = "0.3"
-oasis-types = { git = "https://github.com/oasislabs/oasis-rs" }
+oasis-types = { git = "https://github.com/oasislabs/oasis-rs", branch="xcc" }
 parity-wasm = "0.31"
 pwasm-utils = "0.2"
 sha2 = "0.6"
