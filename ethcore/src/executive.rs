@@ -2689,32 +2689,51 @@ mod tests {
 		assert_eq!(trace, expected_ext_trace);
 	}
 
-	evm_test! {test_wasm_direct_deploy: test_wasm_direct_deploy_int}
-	fn test_wasm_direct_deploy(factory: Factory) {
-		let code = include_bytes!("../res/wasi-tests/target/service/create_ctor.wasm").to_vec();
+	macro_rules! create_wasm_executive {
+		($factory:ident -> ($state:ident, $exec:ident)) => {
+			let mut info = EnvInfo::default();
+			info.number = 100; // wasm activated at block 10
+			info.last_hashes = Arc::new(vec![H256::zero()]);
 
-		let sender = Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681").unwrap();
-		let address = contract_address(
+			let machine = ::ethereum::new_kovan_wasm_test_machine();
+			let mut $state = get_temp_state_with_factory($factory);
+			let mut $exec = Executive::new(&mut $state, &info, &machine);
+		};
+	}
+
+	thread_local!(static NONCE: std::cell::Cell<u64> = std::cell::Cell::new(0));
+
+	fn code_addr(code: &[u8]) -> Address {
+		contract_address(
 			CreateContractAddress::FromSenderAndNonce,
-			&sender,
+			&NONCE
+				.with(|n| {
+					let nonce = n.get();
+					n.set(nonce + 1);
+					nonce
+				})
+				.into(),
 			&U256::zero(),
 			&[],
 		)
-		.0;
+		.0
+	}
+
+	fn deploy_wasm<'a>(
+		exec: &mut Executive<'a, ::state_db::StateDB>,
+		sender: Address,
+		code: &[u8],
+	) -> Address {
+		let address = code_addr(code);
 		let mut params = ActionParams::default();
 		params.address = address.clone();
 		params.sender = sender.clone();
-		params.gas = U256::from(1_000_000);
+		params.gas = U256::from(10_000_000u64);
 		params.code = Some(Arc::new(code.to_vec()));
-		let mut state = get_temp_state_with_factory(factory);
-		let mut info = EnvInfo::default();
-		info.number = 100; // wasm activated at block 10
-		info.last_hashes = Arc::new(vec![H256::zero()]);
-		let machine = ::ethereum::new_kovan_wasm_test_machine();
+
 		let mut substate = Substate::new();
 
-		let mut ex = Executive::new(&mut state, &info, &machine);
-		ex.create(
+		exec.create(
 			params,
 			&mut substate,
 			&mut None,
@@ -2723,6 +2742,18 @@ mod tests {
 			&mut NoopExtTracer,
 		)
 		.unwrap();
+
+		address
+	}
+
+	evm_test! {test_wasm_direct_deploy: test_wasm_direct_deploy_int}
+	fn test_wasm_direct_deploy(factory: Factory) {
+		let code = include_bytes!("../res/wasi-tests/target/service/create_ctor.wasm").to_vec();
+		let sender = Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681").unwrap();
+
+		create_wasm_executive!(factory -> (state, exec));
+
+		let address = deploy_wasm(&mut exec, sender, &code);
 
 		let new_acct_code_hash = state.code_hash(&address);
 		assert_eq!(new_acct_code_hash, Ok(keccak(code)));
@@ -2734,6 +2765,88 @@ mod tests {
 		assert_eq!(
 			new_acct_data.as_ref().map(|v| v.as_slice()),
 			Ok(b"hello".as_ref())
+		);
+	}
+
+	evm_test! {test_wasm_xcc: test_wasm_xcc_int}
+	fn test_wasm_xcc(factory: Factory) {
+		let code_xcc =
+			Arc::new(include_bytes!("../res/wasi-tests/target/service/xcc_a.wasm").to_vec());
+		let code_io = include_bytes!("../res/wasi-tests/target/service/io.wasm");
+		let code_envs = include_bytes!("../res/wasi-tests/target/service/envs.wasm");
+
+		let sender = Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681").unwrap();
+
+		create_wasm_executive!(factory -> (state, exec));
+
+		exec.state
+			.add_balance(&sender, &U256::from(0x10000), CleanupMode::NoEmpty)
+			.unwrap();
+
+		let addr_io = deploy_wasm(&mut exec, sender, code_io);
+		let addr_envs = deploy_wasm(&mut exec, sender, code_envs);
+
+		let value = 42;
+
+		let mut call_xcc = |dest_addr: Address| {
+			let addr_xcc = code_addr(&code_xcc);
+			let mut params = ActionParams::default();
+			params.sender = sender;
+			params.address = addr_xcc;
+			params.data = Some(dest_addr.to_vec());
+			params.gas = U256::from(1_000_000);
+			params.code = Some(Arc::clone(&code_xcc));
+			params.code_address = addr_xcc;
+			params.value = ActionValue::transfer(value);
+
+			let res = {
+				exec.call(
+					params,
+					&mut Substate::new(),
+					BytesRef::Fixed(&mut []),
+					&mut NoopTracer,
+					&mut NoopVMTracer,
+					&mut NoopExtTracer,
+				)
+				.unwrap()
+			};
+
+			(addr_xcc, res)
+		};
+
+		let io_res = call_xcc(addr_io).1;
+		assert!(io_res.apply_state);
+		assert_eq!(
+			std::str::from_utf8(&io_res.return_data).unwrap(),
+			"the input was: hello, other service!\n"
+		);
+		// ^ xcc_a calls io with "hello", `io` adds the preamble, and `xcc_a` returns that
+
+		let (addr_xcc, envs_res) = call_xcc(addr_envs);
+		assert!(envs_res.apply_state);
+
+		// This function is borrowed from `slice_to_key` from externalities.rs.
+		// It's an implementation detail without which this test would be less effective.
+		// Don't look at it too closely.
+		let mut get_storage = |addr: &Address, s: &str| {
+			let mut hash = [0u8; 32];
+			hash[..s.len()].copy_from_slice(s.as_bytes());
+			exec.state
+				.storage_bytes_at(addr, &H256::from(hash))
+				.unwrap()
+		};
+
+		assert_eq!(
+			std::str::from_utf8(&get_storage(&addr_envs, "address")).unwrap(),
+			format!("{:x}", addr_envs)
+		);
+		assert_eq!(
+			std::str::from_utf8(&get_storage(&addr_envs, "sender")).unwrap(),
+			format!("{:x}", addr_xcc)
+		);
+		assert_eq!(
+			std::str::from_utf8(&get_storage(&addr_envs, "value")).unwrap(),
+			format!("{}", value)
 		);
 	}
 }

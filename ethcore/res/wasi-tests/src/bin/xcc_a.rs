@@ -1,4 +1,7 @@
-use std::io::Read as _;
+#![feature(wasi_ext)]
+
+use std::io::{Read as _, Write as _};
+use std::os::wasi::prelude::FromRawFd;
 
 #[link(wasm_import_module = "wasi_unstable")]
 extern "C" {
@@ -33,4 +36,8 @@ fn main() {
 		},
 		libc::__WASI_ESUCCESS
 	);
+	let mut f_out = unsafe { std::fs::File::from_raw_fd(fd) };
+	let mut output = Vec::new();
+	f_out.read_to_end(&mut output).unwrap();
+	std::io::stdout().write_all(&output).unwrap();
 }
