@@ -287,12 +287,13 @@ fn code_balance() {
 #[test]
 fn xcc() {
 	let code = load_sample!("xcc_a");
-	let address: Address = "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6".parse().unwrap();
+	let caller_address: Address = "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6".parse().unwrap();
+	let callee_address: Address = Address::from([1u8; std::mem::size_of::<Address>()]);
 	let value = 42u64;
 
 	let mut params = ActionParams::default();
-	params.data = Some(vec![1u8; Address::len()]);
-	params.address = address.clone();
+	params.data = Some(callee_address.to_vec());
+	params.address = caller_address.clone();
 	params.gas = U256::from(1_000_000);
 	params.code = Some(Arc::new(code));
 	params.value = ActionValue::transfer(value);
@@ -310,11 +311,11 @@ fn xcc() {
 		vm::tests::FakeCall {
 			call_type: vm::tests::FakeCallType::Call,
 			gas: call.gas.clone(), // this is flaky and will change if gas accounting changes
-			sender_address: Some(address),
-			receive_address: Some(Address::from([1u8; 20])),
+			sender_address: Some(caller_address),
+			receive_address: Some(callee_address),
 			value: Some(value.into()),
 			data: b"hello, other service!".to_vec(),
-			code_address: Some(Address::from([1u8; 20]))
+			code_address: Some(callee_address)
 		}
 	);
 }

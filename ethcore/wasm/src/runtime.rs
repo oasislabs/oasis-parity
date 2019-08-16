@@ -169,6 +169,7 @@ impl<'a> PendingTransaction for Runtime<'a> {
 					// ^ cost for xcc is not be "adjusted" because functions called
 					// during its scope are already individually adjusted.
 					receipt.outcome = TransactionOutcome::InsufficientGas;
+					receipt.gas_used = self.gas_limit;
 					return receipt;
 				}
 				receipt.output = return_data;

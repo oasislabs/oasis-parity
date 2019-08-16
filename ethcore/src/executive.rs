@@ -2828,11 +2828,12 @@ mod tests {
 		// This function is borrowed from `slice_to_key` from externalities.rs.
 		// It's an implementation detail without which this test would be less effective.
 		// Don't look at it too closely.
-		let mut get_storage = |addr: &Address, s: &str| {
-			let mut hash = [0u8; 32];
-			hash[..s.len()].copy_from_slice(s.as_bytes());
+		let mut get_storage = |addr: &Address, key: &str| {
+			let mut key_h256 = [0u8; 32];
+			assert!(key.len() <= key_h256.len());
+			key_h256[..key.len()].copy_from_slice(key.as_bytes());
 			exec.state
-				.storage_bytes_at(addr, &H256::from(hash))
+				.storage_bytes_at(addr, &H256::from(key_h256))
 				.unwrap()
 		};
 
