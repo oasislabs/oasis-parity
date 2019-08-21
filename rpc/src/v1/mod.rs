@@ -42,8 +42,5 @@ pub mod traits;
 
 pub use self::extractors::{RpcExtractor, WsDispatcher, WsExtractor, WsStats};
 pub use self::metadata::Metadata;
-pub use self::traits::{
-	Eth, EthFilter, EthPubSub, EthSigning, Net, ParitySigning, Personal, Private, PubSub, Rpc,
-	SecretStore, Signer, Web3,
-};
+pub use self::traits::{Eth, EthFilter, EthPubSub, EthSigning, Net, PubSub, Rpc, Web3};
 pub use self::types::Origin;
