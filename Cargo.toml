@@ -18,7 +18,6 @@ parity-reactor = { path = "util/reactor" }
 parity-rpc = { path = "rpc" }
 parity-version = { path = "util/version" }
 path = { path = "util/path" }
-dir = { path = "util/dir" }
 panic_hook = { path = "util/panic_hook" }
 keccak-hash = { path = "util/hash" }
 kvdb = { path = "util/kvdb" }

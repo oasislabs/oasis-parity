@@ -1,9 +1,0 @@
-[package]
-name = "dir"
-version = "0.1.0"
-authors = ["Parity Technologies <admin@parity.io>"]
-
-[dependencies]
-ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
-journaldb = { path = "../journaldb" }
-app_dirs = { git = "https://github.com/paritytech/app-dirs-rs" }
