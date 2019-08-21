@@ -47,7 +47,6 @@ extern crate ethcore;
 extern crate ethcore_bytes as bytes;
 extern crate ethcore_crypto as crypto;
 extern crate ethcore_devtools as devtools;
-extern crate ethcore_io as io;
 extern crate ethcore_logger;
 extern crate ethcore_transaction as transaction;
 extern crate ethereum_types;

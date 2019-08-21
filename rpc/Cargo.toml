@@ -39,7 +39,6 @@ ethcore = { path = "../ethcore" }
 ethcore-bytes = { path = "../util/bytes" }
 ethcore-crypto = { path = "../ethcore/crypto" }
 ethcore-devtools = { path = "../devtools" }
-ethcore-io = { path = "../util/io" }
 ethcore-logger = { path = "../logger" }
 ethcore-transaction = { path = "../ethcore/transaction" }
 ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
