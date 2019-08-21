@@ -17,20 +17,14 @@
 #[macro_use]
 pub mod errors;
 
-pub mod dapps;
 pub mod fake_sign;
-pub mod ipfs;
-pub mod nonce;
-pub mod oneshot;
 
-mod network_settings;
 mod poll_filter;
 mod poll_manager;
 mod requests;
 mod subscribers;
 mod subscription_manager;
 
-pub use self::network_settings::NetworkSettings;
 pub use self::poll_filter::{limit_logs, PollFilter};
 pub use self::poll_manager::PollManager;
 pub use self::requests::{

@@ -108,7 +108,7 @@ pub use jsonrpc_pubsub::Session as PubSubSession;
 pub use authcodes::{AuthCodes, TimeProvider};
 pub use http_common::HttpMetaExtractor;
 pub use v1::extractors::{RpcExtractor, WsDispatcher, WsExtractor, WsStats};
-pub use v1::{dapps, informant, Metadata, NetworkSettings, Origin};
+pub use v1::{informant, Metadata, Origin};
 
 use http::tokio_core;
 use std::net::SocketAddr;
