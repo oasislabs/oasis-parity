@@ -9,7 +9,6 @@ authors = ["Parity Technologies <admin@parity.io>", "Oasis Labs Inc. <feedback@o
 [dependencies]
 ethcore = { path = "ethcore" }
 ethcore-bytes = { path = "util/bytes" }
-ethcore-io = { path = "util/io" }
 ethcore-logger = { path = "logger" }
 ethcore-transaction = { path = "ethcore/transaction" }
 ethkey = { path = "ethkey" }
@@ -17,9 +16,6 @@ rlp = { path = "util/rlp" }
 parity-reactor = { path = "util/reactor" }
 parity-rpc = { path = "rpc" }
 parity-version = { path = "util/version" }
-path = { path = "util/path" }
-dir = { path = "util/dir" }
-panic_hook = { path = "util/panic_hook" }
 keccak-hash = { path = "util/hash" }
 kvdb = { path = "util/kvdb" }
 journaldb = { path = "util/journaldb" }
@@ -27,9 +23,6 @@ mem = { path = "util/mem" }
 
 [build-dependencies]
 rustc_version = "0.2"
-
-[dev-dependencies]
-fake-fetch = { path = "util/fake-fetch" }
 
 [features]
 default = []
@@ -57,7 +50,6 @@ panic = "abort"
 [workspace]
 members = [
 	"ethcore/wasm/macros",
-	"ethcore/wasm/run",
 	"ethcore/types",
 ]
 

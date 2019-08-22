@@ -31,7 +31,7 @@ jobs:
       # Build other gateway dependencies
       - run:
           name: Build other gateway dependencies
-          command: cargo build --package mem --package parity-reactor --package parity-rpc --package path
+          command: cargo build --package mem --package parity-reactor --package parity-rpc
 
       # Run cargo tests
       - run:

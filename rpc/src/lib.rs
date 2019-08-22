@@ -47,7 +47,6 @@ extern crate ethcore;
 extern crate ethcore_bytes as bytes;
 extern crate ethcore_crypto as crypto;
 extern crate ethcore_devtools as devtools;
-extern crate ethcore_io as io;
 extern crate ethcore_logger;
 extern crate ethcore_transaction as transaction;
 extern crate ethereum_types;
@@ -83,9 +82,6 @@ extern crate macros;
 #[cfg(test)]
 extern crate kvdb_memorydb;
 
-#[cfg(test)]
-extern crate fake_fetch;
-
 extern crate tempdir;
 
 pub extern crate jsonrpc_ws_server as ws;
@@ -108,7 +104,7 @@ pub use jsonrpc_pubsub::Session as PubSubSession;
 pub use authcodes::{AuthCodes, TimeProvider};
 pub use http_common::HttpMetaExtractor;
 pub use v1::extractors::{RpcExtractor, WsDispatcher, WsExtractor, WsStats};
-pub use v1::{dapps, informant, Metadata, NetworkSettings, Origin};
+pub use v1::{informant, Metadata, Origin};
 
 use http::tokio_core;
 use std::net::SocketAddr;
