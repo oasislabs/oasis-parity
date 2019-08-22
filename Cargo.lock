@@ -1719,7 +1719,6 @@ dependencies = [
  "parity-reactor 0.1.0",
  "parity-rpc 1.12.0",
  "parity-version 1.12.0",
- "path 0.1.0",
  "rlp 0.2.1",
  "rustc_version 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -1868,10 +1867,6 @@ dependencies = [
  "smallvec 0.6.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "winapi 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
-
-[[package]]
-name = "path"
-version = "0.1.0"
 
 [[package]]
 name = "patricia-trie"
