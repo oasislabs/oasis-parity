@@ -82,9 +82,6 @@ extern crate macros;
 #[cfg(test)]
 extern crate kvdb_memorydb;
 
-#[cfg(test)]
-extern crate fake_fetch;
-
 extern crate tempdir;
 
 pub extern crate jsonrpc_ws_server as ws;

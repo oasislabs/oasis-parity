@@ -24,9 +24,6 @@ mem = { path = "util/mem" }
 [build-dependencies]
 rustc_version = "0.2"
 
-[dev-dependencies]
-fake-fetch = { path = "util/fake-fetch" }
-
 [features]
 default = []
 json-tests = ["ethcore/json-tests"]
