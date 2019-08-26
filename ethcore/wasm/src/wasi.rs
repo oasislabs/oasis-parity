@@ -1,5 +1,7 @@
 use std::convert::TryInto;
+use std::io::{IoSlice, IoSliceMut};
 
+use blockchain_traits::PendingTransaction as _;
 use wasi_types::*;
 use wasmi::P;
 
@@ -10,11 +12,11 @@ const ADDR_LEN_BYTES: usize = std::mem::size_of::<oasis_types::Address>();
 const ADDR_CHARS: usize = ADDR_LEN_BYTES * 2; // two hex digits per byte
 
 macro_rules! bcfs {
-	( $self:ident . bcfs . $fn:ident ( $($args:expr),+ )  ) => {
+	( $self:ident . bcfs . $fn:ident ( $($args:expr),* )  ) => {
 		// Unsafety is required because BCFS is mutably borrowed with `self`
 		// but also takes a `PendingTransaction` which also happens to be `self.
 		// This is okay because BCFS doesn't modify itself through `PendingTransaction`.
-		match unsafe { &mut *$self.bcfs.get() }.$fn($self, $( $args ),+ ) {
+		match unsafe { &mut *$self.bcfs.get() }.$fn($self, $( $args ),* ) {
 			Ok(result) => result,
 			Err(errno) => return Ok(errno)
 		}
@@ -469,6 +471,38 @@ impl<'a> crate::Runtime<'a> {
 	pub fn sched_yield(&mut self) -> crate::Result<ErrNo> {
 		Ok(ErrNo::Success) // unimplemented(dontneed): there's only one thread
 	}
+
+	pub fn blockchain_transact(
+		&mut self,
+		p_callee_addr: P<u8>,
+		value: u64,
+		p_input: P<u8>,
+		input_len: u64,
+		p_fd: P<Fd>,
+	) -> crate::Result<ErrNo> {
+		let callee_addr: oasis_types::Address = self.memory.get_value(p_callee_addr)?;
+
+		let input_len = input_len as usize;
+		let input_ptr = self.memory.get::<_, u8>(p_input, input_len)?.as_ptr();
+		std::mem::forget(input_ptr);
+		let input = unsafe { std::slice::from_raw_parts(input_ptr, input_len) };
+		// ^ Mutable borrow needed for `self.transact`, but transact doesn't touch linear memory.
+
+		let receipt = self.transact(callee_addr, value, input);
+		let fd = bcfs!(self.bcfs.tempfile());
+		bcfs!(self.bcfs.pwrite_vectored(
+			fd,
+			&[IoSlice::new(receipt.output())],
+			0 /* offset */
+		));
+		self.memory.set_value(p_fd, fd)?;
+
+		Ok(if receipt.reverted() {
+			ErrNo::ConnAborted
+		} else {
+			ErrNo::Success
+		})
+	}
 }
 
 impl<'a> crate::Runtime<'a> {
@@ -489,7 +523,7 @@ impl<'a> crate::Runtime<'a> {
 				std::mem::forget(mem_slice);
 				// Launder the slice to get around borrow of `self` by `iovs` so that
 				// it can be used by `bcfs` via `PendingTransaction`.
-				Ok(std::io::IoSliceMut::new(unsafe {
+				Ok(IoSliceMut::new(unsafe {
 					std::slice::from_raw_parts_mut(p, iov.len as usize)
 				}))
 			})
@@ -547,7 +581,7 @@ impl<'a> crate::Runtime<'a> {
 				std::mem::forget(mem_slice);
 				// Launder the slice to get around borrow of `self` by `iovs` so that
 				// it can be used by `bcfs` via `PendingTransaction`.
-				Ok(std::io::IoSlice::new(unsafe {
+				Ok(IoSlice::new(unsafe {
 					std::slice::from_raw_parts(p, iov.len as usize)
 				}))
 			})

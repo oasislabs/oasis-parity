@@ -5,6 +5,7 @@ authors = ["Oasis Labs <feedback@oasislabs.com>"]
 edition = "2018"
 
 [dependencies]
+libc = "0.2"
 
 [workspace]
 

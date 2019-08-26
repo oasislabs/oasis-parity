@@ -134,7 +134,7 @@ impl<'a> PendingTransaction for Runtime<'a> {
 			trace!("CALL failed adjusted charge {:?}", err);
 		}
 
-		let gas_left = match self.gas_left() {
+		let pre_gas_left = match self.gas_left() {
 			Ok(gas_left) => gas_left,
 			Err(_) => {
 				receipt.outcome = TransactionOutcome::InsufficientGas;
@@ -144,7 +144,7 @@ impl<'a> PendingTransaction for Runtime<'a> {
 
 		let callee = maddr2eaddr(&callee);
 		let call_result = self.ext.call(
-			&gas_left.into(),
+			&pre_gas_left.into(),
 			&self.context.address, /* sender */
 			callee,                /* receiver */
 			if value > 0 { Some(value.into()) } else { None },
@@ -161,23 +161,18 @@ impl<'a> PendingTransaction for Runtime<'a> {
 		}
 
 		match call_result {
-			MessageCallResult::Success(gas_left, return_data)
-			| MessageCallResult::Reverted(gas_left, return_data) => {
-				// cannot overflow, before making call gas_counter was incremented with gas, and gas_left < gas
-				let gas_used = gas_left.low_u64() * self.ext.schedule().wasm().opcodes_div as u64
-					/ self.ext.schedule().wasm().opcodes_mul as u64;
-				let gas_left = match self.gas_counter.checked_sub(gas_used) {
-					Some(gas_left) => gas_left,
-					None => {
-						receipt.outcome = TransactionOutcome::InsufficientGas;
-						receipt.gas_used = self.gas_limit;
-						return receipt;
-					}
-				};
-				self.gas_counter -= gas_left;
-				receipt.gas_used = gas_used;
+			MessageCallResult::Success(post_gas_left, return_data)
+			| MessageCallResult::Reverted(post_gas_left, return_data) => {
+				receipt.gas_used = pre_gas_left - post_gas_left.low_u64();
+				// ^ by definition pre_gas_left > post_gas_left so this cannot overflow
+				if !self.charge_gas(receipt.gas_used) {
+					// ^ cost for xcc is not be "adjusted" because functions called
+					// during its scope are already individually adjusted.
+					receipt.outcome = TransactionOutcome::InsufficientGas;
+					receipt.gas_used = self.gas_limit;
+					return receipt;
+				}
 				receipt.output = return_data;
-				receipt.outcome = TransactionOutcome::Success;
 			}
 			MessageCallResult::Failed => {
 				receipt.gas_used = self.gas_limit;

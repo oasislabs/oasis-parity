@@ -141,8 +141,7 @@ fn io() {
 	params.code = Some(Arc::new(code));
 	let mut ext = FakeExt::new().with_wasm();
 	let mut interpreter = wasm_interpreter();
-	let (_apply, return_data, _gas_left) =
-		test_finalize(interpreter.exec(params, &mut ext)).unwrap();
+	let (_, return_data, _) = test_finalize(interpreter.exec(params, &mut ext)).unwrap();
 
 	let output = std::str::from_utf8(&*return_data).unwrap();
 	assert_eq!(output, "the input was: hello, world!\n");
@@ -249,8 +248,7 @@ fn read_delete() {
 	ext.store.insert(key.clone(), val_str.as_bytes().to_vec());
 
 	let mut interpreter = wasm_interpreter();
-	let (_apply, return_data, _gas_left) =
-		test_finalize(interpreter.exec(params, &mut ext)).unwrap();
+	let (_, return_data, _) = test_finalize(interpreter.exec(params, &mut ext)).unwrap();
 
 	let output = std::str::from_utf8(&*return_data).unwrap();
 	assert_eq!(output, val_str);
@@ -287,6 +285,42 @@ fn code_balance() {
 }
 
 #[test]
+fn xcc() {
+	let code = load_sample!("xcc_a");
+	let caller_address: Address = "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6".parse().unwrap();
+	let callee_address: Address = Address::from([1u8; std::mem::size_of::<Address>()]);
+	let value = 42u64;
+
+	let mut params = ActionParams::default();
+	params.data = Some(callee_address.to_vec());
+	params.address = caller_address.clone();
+	params.gas = U256::from(1_000_000);
+	params.code = Some(Arc::new(code));
+	params.value = ActionValue::transfer(value);
+	let mut ext = FakeExt::new().with_wasm();
+
+	let mut interpreter = wasm_interpreter();
+	test_finalize(interpreter.exec(params, &mut ext)).unwrap();
+
+	let mut calls_iter = ext.calls.iter();
+	let call = calls_iter.next().unwrap();
+	assert!(calls_iter.next().is_none());
+
+	assert_eq!(
+		*call,
+		vm::tests::FakeCall {
+			call_type: vm::tests::FakeCallType::Call,
+			gas: call.gas.clone(), // this is flaky and will change if gas accounting changes
+			sender_address: Some(caller_address),
+			receive_address: Some(callee_address),
+			value: Some(value.into()),
+			data: b"hello, other service!".to_vec(),
+			code_address: Some(callee_address)
+		}
+	);
+}
+
+#[test]
 fn math_factorial() {
 	let code = load_sample!("factorial");
 	let mut params = ActionParams::default();
@@ -296,8 +330,7 @@ fn math_factorial() {
 	let mut ext = FakeExt::new().with_wasm();
 
 	let mut interpreter = wasm_interpreter();
-	let (_apply, return_data, _gas_left) =
-		test_finalize(interpreter.exec(params, &mut ext)).unwrap();
+	let (_, return_data, _) = test_finalize(interpreter.exec(params, &mut ext)).unwrap();
 
 	let output = std::str::from_utf8(&*return_data).unwrap();
 	assert_eq!(output, "the output is: 120\n");
@@ -313,8 +346,7 @@ fn math_fib() {
 	let mut ext = FakeExt::new().with_wasm();
 
 	let mut interpreter = wasm_interpreter();
-	let (_apply, return_data, _gas_left) =
-		test_finalize(interpreter.exec(params, &mut ext)).unwrap();
+	let (_, return_data, _) = test_finalize(interpreter.exec(params, &mut ext)).unwrap();
 
 	let output = std::str::from_utf8(&*return_data).unwrap();
 	assert_eq!(output, "the output is: 89\n");
