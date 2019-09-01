@@ -20,6 +20,7 @@ use std::{
 
 use bcfs::BCFS;
 use blockchain_traits::{KVStore, KVStoreMut, PendingTransaction, TransactionOutcome};
+use common_types::{u128_from_u256, u256_from_u128};
 use ethereum_types::{Address, H256, U256};
 use oasis_types::AccountMeta;
 use vm::{self, CallType, MessageCallResult, ReturnData};
@@ -52,7 +53,7 @@ pub struct Runtime<'a> {
 	pub output: Vec<u8>,
 	pub err_output: Vec<u8>,
 	// unsafety is needed because runtime contains BCFS but is used by bcfs as PendingTransaction
-	pub bcfs: UnsafeCell<BCFS<oasis_types::Address, AccountMeta>>,
+	pub bcfs: UnsafeCell<BCFS>,
 	pub should_revert: bool,
 	// Needed for wasmer since only generic CallError is returned on panic/exit
 	pub should_persist: bool,
@@ -68,13 +69,11 @@ pub struct Receipt {
 }
 
 impl blockchain_traits::Receipt for Receipt {
-	type Address = oasis_types::Address;
-
-	fn caller(&self) -> &Self::Address {
+	fn caller(&self) -> &oasis_types::Address {
 		&self.caller
 	}
 
-	fn callee(&self) -> &Self::Address {
+	fn callee(&self) -> &oasis_types::Address {
 		&self.callee
 	}
 
@@ -82,7 +81,7 @@ impl blockchain_traits::Receipt for Receipt {
 		self.gas_used
 	}
 
-	fn events(&self) -> Vec<&dyn blockchain_traits::Event<Address = Self::Address>> {
+	fn events(&self) -> Vec<&oasis_types::Event> {
 		unimplemented!()
 	}
 
@@ -98,19 +97,16 @@ impl blockchain_traits::Receipt for Receipt {
 }
 
 impl<'a> PendingTransaction for Runtime<'a> {
-	type Address = oasis_types::Address;
-	type AccountMeta = oasis_types::AccountMeta;
-
-	fn address(&self) -> &Self::Address {
+	fn address(&self) -> &oasis_types::Address {
 		eaddr2maddr(&self.context.address)
 	}
 
-	fn sender(&self) -> &Self::Address {
+	fn sender(&self) -> &oasis_types::Address {
 		eaddr2maddr(&self.context.sender)
 	}
 
-	fn value(&self) -> u64 {
-		self.context.value.low_u64()
+	fn value(&self) -> u128 {
+		u128_from_u256(self.context.value)
 	}
 
 	fn input(&self) -> &[u8] {
@@ -122,10 +118,10 @@ impl<'a> PendingTransaction for Runtime<'a> {
 	/// transaction. The current account will be set as the sender.
 	fn transact(
 		&mut self,
-		callee: Self::Address,
-		value: u64,
+		callee: oasis_types::Address,
+		value: u128,
 		input: &[u8],
-	) -> Box<dyn blockchain_traits::Receipt<Address = Self::Address>> {
+	) -> Box<dyn blockchain_traits::Receipt> {
 		trace!(target: "wasm", "runtime: CALL(callee: {:?}, value: {:?}), input {:?}", callee, value, input);
 
 		let mut receipt = Box::new(Receipt {
@@ -153,7 +149,11 @@ impl<'a> PendingTransaction for Runtime<'a> {
 			&gas_left.into(),
 			&self.context.address, /* sender */
 			callee,                /* receiver */
-			if value > 0 { Some(value.into()) } else { None },
+			if value > 0 {
+				Some(u256_from_u128(value))
+			} else {
+				None
+			},
 			input,
 			callee, /* code addr */
 			&mut [],
@@ -228,7 +228,7 @@ impl<'a> PendingTransaction for Runtime<'a> {
 	}
 
 	/// Returns the bytecode stored at `addr` or `None` if the account does not exist.
-	fn code_at(&self, addr: &Self::Address) -> Option<&[u8]> {
+	fn code_at(&self, addr: &oasis_types::Address) -> Option<&[u8]> {
 		match self.ext.extcode(maddr2eaddr(addr)) {
 			Ok(code_bytes) => {
 				let bytes_ptr = &*code_bytes as *const Vec<u8>;
@@ -242,10 +242,10 @@ impl<'a> PendingTransaction for Runtime<'a> {
 
 	/// Returns the metadata of the account stored at `addr`, or
 	/// `None` if the account does not exist.
-	fn account_meta_at(&self, addr: &Self::Address) -> Option<Self::AccountMeta> {
-		Some(Self::AccountMeta {
+	fn account_meta_at(&self, addr: &oasis_types::Address) -> Option<oasis_types::AccountMeta> {
+		Some(oasis_types::AccountMeta {
 			balance: match self.ext.balance(maddr2eaddr(addr)) {
-				Ok(bal) if bal.bits() <= 64 => bal.low_u64(),
+				Ok(bal) if bal.bits() <= 128 => u128_from_u256(bal),
 				_ => return None,
 			},
 			expiry: self
@@ -925,5 +925,4 @@ pub mod imports {
 		let runtime: &mut Runtime = unsafe { &mut *(ctx.data as *mut Runtime) };
 		runtime.sched_yield()
 	}
-
 }

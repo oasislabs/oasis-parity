@@ -52,3 +52,19 @@ pub mod verification_queue_info;
 
 /// Type for block number.
 pub type BlockNumber = u64;
+
+// The following two methods are required because we're pinned to ethereum-types v0.3,
+// which existed before 128-bit integers in Rust. Newer versions have `to_low_u128`.
+// ref: https://github.com/paritytech/parity-common/blob/6283d8e/uint/src/uint.rs
+
+pub fn u128_from_u256(val: ethereum_types::U256) -> u128 {
+	let mut buf = [0; 16];
+	for i in 0..buf.len() {
+		buf[i] = val.byte(i);
+	}
+	u128::from_le_bytes(buf)
+}
+
+pub fn u256_from_u128(val: u128) -> ethereum_types::U256 {
+	ethereum_types::U256::from_little_endian(&val.to_le_bytes())
+}

@@ -6,15 +6,15 @@ edition = "2018"
 
 [dependencies]
 base64 = "0.10"
-bcfs = { git = "https://github.com/oasislabs/oasis-rs" }
-blockchain-traits = { git = "https://github.com/oasislabs/oasis-rs" }
+bcfs = { git = "https://github.com/oasislabs/oasis-rs", branch = "big-value" }
+blockchain-traits = { git = "https://github.com/oasislabs/oasis-rs", branch = "big-value" }
 byteorder = "1.0"
 common-types = { path = "../types" }
 ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
 hmac-drbg = "=0.1.2"
 keccak-hash = { path = "../../util/hash" }
 log = "0.3"
-oasis-types = { git = "https://github.com/oasislabs/oasis-rs" }
+oasis-types = { git = "https://github.com/oasislabs/oasis-rs", branch = "big-value" }
 parity-wasm = "0.31"
 pwasm-utils = "0.2"
 sha2 = "0.6"
@@ -26,7 +26,7 @@ wasmi = { git = "https://github.com/oasislabs/wasmi" }
 [dev-dependencies]
 ethcore-logger = { path = "../../logger" }
 serde = {version = "1.0", features = ["derive"]}
-serde_cbor = "0.9.0"
+serde_cbor = "0.10"
 
 [features]
 wasi-debug-stdio = []
