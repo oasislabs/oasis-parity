@@ -12,10 +12,6 @@ jobs:
           name: Checkstyle
           command: cargo fmt -p ethcore -p ethcore-transaction -p ethkey -p vm -p wasm -p wasmer -- --check
 
-      - run:
-          name: Check out git submodules (wasm-tests, in particular)
-          command: git submodule update --init
-
       # Build ethcore for runtime (SGX)
       - run:
           name: Build ethcore for runtime (SGX)
