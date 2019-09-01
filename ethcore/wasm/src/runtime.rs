@@ -22,7 +22,6 @@ use bcfs::BCFS;
 use blockchain_traits::{KVStore, KVStoreMut, PendingTransaction, TransactionOutcome};
 use common_types::{u128_from_u256, u256_from_u128};
 use ethereum_types::{Address, H256, U256};
-use oasis_types::AccountMeta;
 use vm::{self, CallType, MessageCallResult, ReturnData};
 use wasmi::{self, Error as InterpreterError, MemoryRef, Trap, TrapKind};
 
