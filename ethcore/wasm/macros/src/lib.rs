@@ -3,22 +3,15 @@ extern crate proc_macro;
 #[macro_use]
 extern crate syn;
 #[macro_use]
-extern crate proc_quote;
+extern crate quote;
 
-macro_rules! format_ident {
-    ($fmt_str:literal, $($fmt_arg:expr),+) => {
-        syn::Ident::new(&format!($fmt_str, $($fmt_arg),+), proc_macro2::Span::call_site())
-    }
-}
-
-fn export_fn_args(args: &syn::FnDecl) -> impl Iterator<Item = &syn::Type> {
-	args.inputs
-		.iter()
-		.skip(1 /* &self */)
-		.filter_map(|inp| match inp {
-			syn::FnArg::Captured(syn::ArgCaptured { ty, .. }) => Some(ty),
-			_ => None,
-		})
+fn export_fn_args<'a>(
+	args: impl Iterator<Item = &'a syn::FnArg>,
+) -> impl Iterator<Item = &'a syn::Type> {
+	args.skip(1 /* &self */).filter_map(|inp| match inp {
+		syn::FnArg::Typed(syn::PatType { ty, .. }) => Some(&**ty),
+		_ => None,
+	})
 }
 
 /// Generates boilerplate required by wasmi for adding exports.
@@ -71,7 +64,7 @@ pub fn wasm_exports(
 		.zip(wsig_idents.iter())
 		.map(|(sig, wsig_ident)| {
 			let wasm_args =
-				export_fn_args(&sig.decl).map(|arg_ty| match wasm_type_for_type(arg_ty) {
+				export_fn_args(sig.inputs.iter()).map(|arg_ty| match wasm_type_for_type(arg_ty) {
 					WasmType::I32 => quote!(I32),
 					WasmType::I64 => quote!(I64),
 				});
@@ -96,7 +89,7 @@ pub fn wasm_exports(
 			// here we generate these
 			// https://github.com/paritytech/parity-ethereum/blob/master/ethcore/wasm/src/runtime.rs#L764
 			let f_ident = &f.ident;
-			let args = (0..(f.decl.inputs.len() - 1/* &self */)).map(|i| {
+			let args = (0..(f.inputs.len() - 1/* &self */)).map(|i| {
 				quote! { args.nth_checked(#i)? }
 			});
 			// special cased for the same reason as described above

@@ -475,7 +475,7 @@ impl<'a> crate::Runtime<'a> {
 	pub fn blockchain_transact(
 		&mut self,
 		p_callee_addr: P<u8>,
-		value: u64,
+		p_value: P<u128>,
 		p_input: P<u8>,
 		input_len: u64,
 		p_fd: P<Fd>,
@@ -488,6 +488,7 @@ impl<'a> crate::Runtime<'a> {
 		let input = unsafe { std::slice::from_raw_parts(input_ptr, input_len) };
 		// ^ Mutable borrow needed for `self.transact`, but transact doesn't touch linear memory.
 
+		let value = self.memory.get_value(p_value)?;
 		let receipt = self.transact(callee_addr, value, input);
 		let fd = bcfs!(self.bcfs.tempfile());
 		bcfs!(self.bcfs.pwrite_vectored(

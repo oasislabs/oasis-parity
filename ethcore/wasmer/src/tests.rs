@@ -260,7 +260,7 @@ fn read_delete() {
 fn code_balance() {
 	let address: Address = "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6".parse().unwrap();
 	let code = Arc::new(load_sample!("self_code_balance"));
-	let balance = 99991u64;
+	let balance = 99991u128;
 	let mut params = ActionParams::default();
 	params.gas = U256::from(1_000_000);
 	params.value = ActionValue::Transfer(0.into());
@@ -269,7 +269,8 @@ fn code_balance() {
 
 	let mut ext = FakeExt::new().with_wasm();
 	ext.codes.insert(address.clone(), Arc::clone(&code));
-	ext.balances.insert(address.clone(), U256::from(balance));
+	ext.balances
+		.insert(address.clone(), common_types::u256_from_u128(balance));
 
 	let mut runtime = wasm_runtime();
 	runtime.prepare(&params, &mut ext).unwrap();
