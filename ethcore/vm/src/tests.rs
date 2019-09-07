@@ -80,7 +80,18 @@ impl FakeExt {
 	/// New fake externalities
 	pub fn new() -> Self {
 		let mut this = FakeExt::default();
-		this.info.last_hashes = Arc::new(vec![H256::zero()]);
+		let time = std::time::SystemTime::now()
+			.duration_since(std::time::SystemTime::UNIX_EPOCH)
+			.unwrap()
+			.as_secs();
+		let genesis_blockhash = time
+			.to_le_bytes()
+			.iter()
+			.cycle()
+			.copied()
+			.take(32)
+			.collect::<Vec<_>>();
+		this.info.last_hashes = Arc::new(vec![H256::from_slice(&genesis_blockhash)]);
 		this
 	}
 
