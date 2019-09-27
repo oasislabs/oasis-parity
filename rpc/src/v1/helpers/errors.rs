@@ -26,7 +26,7 @@ use transaction::Error as TransactionError;
 //use ethcore_private_tx::Error as PrivateTransactionError;
 use vm::Error as VMError;
 
-mod codes {
+pub mod codes {
 	// NOTE [ToDr] Codes from [-32099, -32000]
 	pub const UNSUPPORTED_REQUEST: i64 = -32000;
 	pub const NO_WORK: i64 = -32001;
