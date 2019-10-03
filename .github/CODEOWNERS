@@ -1,2 +1,3 @@
 # The codeowners are the only ones who can edit the .github directory
-.github/ @oasislabs/admin @peterjgilbert @armaniferrante 
+.github/ @oasislabs/admin @peterjgilbert @nhynes
+*        @oasislabs/admin @peterjgilbert @nhynes
