@@ -1,4 +1,6 @@
 version: 2
+
+
 jobs:
   build:
     docker:
@@ -33,3 +35,20 @@ jobs:
       - run:
           name: Run cargo tests
           command: cargo test --package ethcore --package ethcore-transaction --package ethkey --package vm --package wasm --package wasmer --features "ethkey-test"
+
+  coverage:
+    machine: true
+    steps:
+      - checkout
+      - run:
+          name: Tarpaulin code coverage
+          command: docker run --security-opt seccomp=unconfined -v "${PWD}:/volume" xd009642/tarpaulin cargo tarpaulin --ciserver circle-ci --coveralls $COVERALLS_REPO_TOKEN --ignore-tests -p ethcore -p ethcore-transaction -p ethkey -p vm -p wasm --features "ethkey-test"
+
+
+workflows:
+  version: 2
+
+  main:
+    jobs:
+      - build
+      - coverage

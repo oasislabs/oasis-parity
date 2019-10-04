@@ -1,6 +1,7 @@
 # Parity
 
 [![CircleCI](https://circleci.com/gh/oasislabs/oasis-parity.svg?style=svg)](https://circleci.com/gh/oasislabs/oasis-parity)
+[![Coverage Status](https://coveralls.io/repos/github/oasislabs/oasis-parity/badge.svg)](https://coveralls.io/github/oasislabs/oasis-parity)
 
 Forked from https://github.com/paritytech/parity-ethereum/.
 
