@@ -32,7 +32,8 @@ use trace_ext::{
 };
 use transaction::{Action, SignedTransaction};
 use vm::{
-	self, ActionParams, ActionValue, CleanDustMode, CreateContractAddress, EnvInfo, Ext, ReturnData, Schedule,
+	self, ActionParams, ActionValue, CleanDustMode, CreateContractAddress, EnvInfo, Ext,
+	ReturnData, Schedule,
 };
 
 #[cfg(debug_assertions)]

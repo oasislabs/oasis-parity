@@ -307,11 +307,11 @@ where
 		};
 
 		if !self.static_flag && (!self.schedule.eip86 || params.sender != UNSIGNED_SENDER) {
-	if let Err(e) = self.state.inc_nonce(&self.origin_info.address) {
-		debug!(target: "ext", "Database corruption encountered: {:?}", e);
-		return ContractCreateResult::Failed;
-	}
-}
+			if let Err(e) = self.state.inc_nonce(&self.origin_info.address) {
+				debug!(target: "ext", "Database corruption encountered: {:?}", e);
+				return ContractCreateResult::Failed;
+			}
+		}
 		let mut ex = Executive::from_parent(
 			self.state,
 			self.env_info,

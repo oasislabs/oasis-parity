@@ -27,7 +27,7 @@ use std::fmt;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use error::{Error};
+use error::Error;
 use executed::{Executed, ExecutionError};
 use executive::{Executive, TransactOptions};
 use factory::Factories;
@@ -48,8 +48,7 @@ use vm::{ConfidentialCtx, EnvInfo, OasisContract};
 use bytes::Bytes;
 use ethereum_types::{Address, H256, U256};
 
-use hashdb::{HashDB};
-
+use hashdb::HashDB;
 
 use trie;
 

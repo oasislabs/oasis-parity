@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use ethereum_types::{U256};
+use ethereum_types::U256;
 use vm::{tests::FakeExt, ActionParams, GasLeft, Vm as _};
 use wasm::WasmInterpreter;
 

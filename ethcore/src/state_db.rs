@@ -171,7 +171,8 @@ impl StateDB {
 			LittleEndian::write_u64(&mut key, i as u64);
 			bloom_parts[i] = db
 				.get(COL_ACCOUNT_BLOOM, &key)
-				.expect("low-level database error").map(|val| LittleEndian::read_u64(&val[..]))
+				.expect("low-level database error")
+				.map(|val| LittleEndian::read_u64(&val[..]))
 				.unwrap_or(0u64);
 		}
 

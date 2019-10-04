@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-
 use evm::{Factory as EvmFactory, VMType};
 use std::{cell::RefCell, rc::Rc};
 use vm::{ActionParams, ConfidentialCtx, OasisVm, Schedule, Vm};

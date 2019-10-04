@@ -24,7 +24,7 @@ use std::sync::{Arc, RwLock};
 use bytes::Bytes;
 use ethereum_types::{Address, Bloom, H256, U256};
 use ethjson;
-use hash::{keccak};
+use hash::keccak;
 use memorydb::MemoryDB;
 // use parking_lot::RwLock;
 use rlp::{Rlp, RlpStream};
@@ -479,7 +479,8 @@ fn load_from(spec_params: SpecParams, s: ethjson::spec::Spec) -> Result<Spec, Er
 				chts: s
 					.hardcoded_sync
 					.as_ref()
-					.map(|s| s.chts.iter().map(|c| c.clone().into()).collect()).unwrap_or_default(),
+					.map(|s| s.chts.iter().map(|c| c.clone().into()).collect())
+					.unwrap_or_default(),
 			})
 		} else {
 			None

@@ -67,7 +67,11 @@ impl Factory {
 	}
 
 	/// Create a new mutable hashdb.
-	pub fn create<'db>(&self, db: &'db mut dyn HashDB, address_hash: H256) -> Box<dyn HashDB + 'db> {
+	pub fn create<'db>(
+		&self,
+		db: &'db mut dyn HashDB,
+		address_hash: H256,
+	) -> Box<dyn HashDB + 'db> {
 		match *self {
 			Factory::Mangled => Box::new(AccountDBMut::from_hash(db, address_hash)),
 			Factory::Plain => Box::new(WrappingMut(db)),
@@ -92,10 +96,7 @@ impl<'db> AccountDB<'db> {
 
 	/// Create a new AcountDB from an address' hash.
 	pub fn from_hash(db: &'db dyn HashDB, address_hash: H256) -> Self {
-		AccountDB {
-			db,
-			address_hash,
-		}
+		AccountDB { db, address_hash }
 	}
 }
 
@@ -146,10 +147,7 @@ impl<'db> AccountDBMut<'db> {
 
 	/// Create a new AcountDB from an address' hash.
 	pub fn from_hash(db: &'db mut dyn HashDB, address_hash: H256) -> Self {
-		AccountDBMut {
-			db,
-			address_hash,
-		}
+		AccountDBMut { db, address_hash }
 	}
 
 	#[cfg(test)]

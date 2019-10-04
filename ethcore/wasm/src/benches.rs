@@ -4,13 +4,12 @@ extern crate test;
 use self::test::Bencher;
 use super::*;
 
-
 use ethereum_types::{Address, U256};
 
 use std::sync::Arc;
 
 use super::WasmInterpreter;
-use vm::tests::{FakeExt};
+use vm::tests::FakeExt;
 use vm::{self, ActionParams, ActionValue, Vm};
 
 macro_rules! load_sample {
@@ -33,9 +32,7 @@ fn wasm_interpreter() -> WasmInterpreter {
 fn prepare_module(params: ActionParams, ext: &mut dyn vm::Ext) -> (Runtime, wasmi::ModuleRef) {
 	let is_create = ext.is_create();
 
-	let parser::ParsedModule {
-		module, data, ..
-	} = parser::payload(
+	let parser::ParsedModule { module, data, .. } = parser::payload(
 		&params,
 		ext.schedule().wasm(),
 		if is_create {

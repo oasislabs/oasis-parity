@@ -25,10 +25,8 @@
 // the viewpoint of conflict set analysis, and would also reduce the size of the conflict sets
 // at the cost of decreased analysis precision and therefore reduced parallelism.
 
-
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
-
 
 use ethereum_types::{Address, H256};
 

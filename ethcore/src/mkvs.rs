@@ -152,10 +152,7 @@ impl MKVS for MemoryMKVS {
 	}
 
 	fn insert(&mut self, key: &[u8], value: &[u8]) -> Option<Vec<u8>> {
-		self.0
-			.lock()
-			.unwrap()
-			.insert(key.to_vec(), value.to_vec())
+		self.0.lock().unwrap().insert(key.to_vec(), value.to_vec())
 	}
 
 	fn remove(&mut self, key: &[u8]) -> Option<Vec<u8>> {

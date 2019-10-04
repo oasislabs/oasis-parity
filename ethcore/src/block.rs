@@ -41,7 +41,6 @@ use trace::{FlatTrace, Tracing, VMTrace};
 use transaction::{Error as TransactionError, SignedTransaction, UnverifiedTransaction};
 // use verification::PreverifiedBlock;
 
-
 use crate::mkvs::MKVS;
 
 type StateDB = WrappedBackend;
@@ -637,10 +636,7 @@ impl ClosedBlock {
 		block.state = self.unclosed_state;
 		block.metadata = self.unclosed_metadata;
 		block.is_finalized = self.unclosed_finalization_state;
-		OpenBlock {
-			block,
-			engine,
-		}
+		OpenBlock { block, engine }
 	}
 }
 
