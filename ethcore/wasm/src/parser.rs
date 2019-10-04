@@ -68,7 +68,7 @@ pub fn payload<'a>(
 		}
 	};
 
-	let (mut cursor, data_position) = match &params.params_type {
+	let (mut cursor, data_position) = match params.params_type {
 		vm::ParamsType::Embedded => {
 			let module_size = peek_size(&*code);
 			(::std::io::Cursor::new(&code[..module_size]), module_size)
