@@ -450,7 +450,9 @@ impl<'a> Runtime<'a> {
 
 	/// Destroy the runtime, returning currently recorded result of the execution
 	pub fn into_result(mut self) -> std::result::Result<Vec<u8>, Vec<u8>> {
-		unsafe { &mut *self.bcfs.get() }.sync(&mut self);
+		let bcfs = unsafe { &mut *self.bcfs.get() };
+		bcfs.flush(&mut self, 1u32.into()).ok(); // flush stdout
+		bcfs.flush(&mut self, 2u32.into()).ok(); // flush stderr
 		if self.should_revert {
 			Err(self.err_output)
 		} else {
