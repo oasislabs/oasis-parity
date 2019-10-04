@@ -114,12 +114,12 @@ dependencies = [
 
 [[package]]
 name = "bcfs"
-version = "0.2.3"
-source = "git+https://github.com/oasislabs/oasis-rs#e95e11feb8e9e09e265f9f9eba3abca41ea32d8d"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "blockchain-traits 0.2.2 (git+https://github.com/oasislabs/oasis-rs)",
+ "blockchain-traits 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "nom 5.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "oasis-types 0.2.1 (git+https://github.com/oasislabs/oasis-rs)",
+ "oasis-types 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasi-types 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -228,9 +228,9 @@ dependencies = [
 [[package]]
 name = "blockchain-traits"
 version = "0.2.2"
-source = "git+https://github.com/oasislabs/oasis-rs#e95e11feb8e9e09e265f9f9eba3abca41ea32d8d"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "oasis-types 0.2.1 (git+https://github.com/oasislabs/oasis-rs)",
+ "oasis-types 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -651,7 +651,7 @@ dependencies = [
 name = "ethcore"
 version = "1.12.0"
 dependencies = [
- "blockchain-traits 0.2.2 (git+https://github.com/oasislabs/oasis-rs)",
+ "blockchain-traits 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "bloomchain 0.2.0",
  "bn 0.4.4 (git+https://github.com/paritytech/bn)",
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1000,6 +1000,11 @@ dependencies = [
 [[package]]
 name = "hex"
 version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "hex"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
@@ -1553,11 +1558,11 @@ dependencies = [
 
 [[package]]
 name = "oasis-types"
-version = "0.2.1"
-source = "git+https://github.com/oasislabs/oasis-rs#e95e11feb8e9e09e265f9f9eba3abca41ea32d8d"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "derive_more 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hex 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.99 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -2978,7 +2983,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "vm"
 version = "0.1.0"
 dependencies = [
- "blockchain-traits 0.2.2 (git+https://github.com/oasislabs/oasis-rs)",
+ "blockchain-traits 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "common-types 0.1.0",
  "elastic-array 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2987,7 +2992,7 @@ dependencies = [
  "ethjson 0.1.0",
  "keccak-hash 0.1.2",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "oasis-types 0.2.1 (git+https://github.com/oasislabs/oasis-rs)",
+ "oasis-types 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "patricia-trie 0.1.0",
  "rlp 0.2.1",
  "serde 1.0.99 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3023,8 +3028,8 @@ name = "wasm"
 version = "0.1.0"
 dependencies = [
  "base64 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "bcfs 0.2.3 (git+https://github.com/oasislabs/oasis-rs)",
- "blockchain-traits 0.2.2 (git+https://github.com/oasislabs/oasis-rs)",
+ "bcfs 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "blockchain-traits 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "common-types 0.1.0",
  "ethcore-logger 1.12.0",
@@ -3032,7 +3037,7 @@ dependencies = [
  "hmac-drbg 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "keccak-hash 0.1.2",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "oasis-types 0.2.1 (git+https://github.com/oasislabs/oasis-rs)",
+ "oasis-types 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-wasm 0.31.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "pwasm-utils 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.99 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3057,15 +3062,15 @@ dependencies = [
 name = "wasmer"
 version = "0.1.0"
 dependencies = [
- "bcfs 0.2.3 (git+https://github.com/oasislabs/oasis-rs)",
- "blockchain-traits 0.2.2 (git+https://github.com/oasislabs/oasis-rs)",
+ "bcfs 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "blockchain-traits 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "common-types 0.1.0",
  "ethcore-logger 1.12.0",
  "ethereum-types 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "keccak-hash 0.1.2",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "oasis-types 0.2.1 (git+https://github.com/oasislabs/oasis-rs)",
+ "oasis-types 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-wasm 0.31.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "pwasm-utils 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rayon 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3312,7 +3317,7 @@ dependencies = [
 "checksum base-x 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)" = "76f4eae81729e69bb1819a26c6caac956cc429238388091f98cb6cd858f16443"
 "checksum base64 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)" = "0b25d992356d2eb0ed82172f5248873db5560c4721f564b13cb5193bda5e668e"
 "checksum base64 0.9.3 (registry+https://github.com/rust-lang/crates.io-index)" = "489d6c0ed21b11d038c31b6ceccca973e65d73ba3bd8ecb9a2babf5546164643"
-"checksum bcfs 0.2.3 (git+https://github.com/oasislabs/oasis-rs)" = "<none>"
+"checksum bcfs 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)" = "29f748b0463d9ad9a6e6c00ab67ba729e48b6cc2d796bc93d9289646c4e40203"
 "checksum bincode 1.1.4 (registry+https://github.com/rust-lang/crates.io-index)" = "9f04a5e50dc80b3d5d35320889053637d15011aed5e66b66b37ae798c65da6f7"
 "checksum bindgen 0.46.0 (registry+https://github.com/rust-lang/crates.io-index)" = "8f7f7f0701772b17de73e4f5cbcb1dd6926f4706cba4c1ab62c5367f8bdc94e1"
 "checksum bit-set 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d9bf6104718e80d7b26a68fdbacff3481cfc05df670821affc7e9cbc1884400c"
@@ -3324,7 +3329,7 @@ dependencies = [
 "checksum block-buffer 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)" = "a076c298b9ecdb530ed9d967e74a6027d6a7478924520acddcddc24c1c8ab3ab"
 "checksum block-buffer 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)" = "c0940dc441f31689269e10ac70eb1002a3a1d3ad1390e030043662eb7fe4688b"
 "checksum block-padding 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)" = "6d4dc3af3ee2e12f3e5d224e5e1e3d73668abbeb69e566d361f7d5563a4fdf09"
-"checksum blockchain-traits 0.2.2 (git+https://github.com/oasislabs/oasis-rs)" = "<none>"
+"checksum blockchain-traits 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "eae7ec4d0280003585c6418bb05a4552eaead692832f58067f3d05b09c4cef1b"
 "checksum bn 0.4.4 (git+https://github.com/paritytech/bn)" = "<none>"
 "checksum byte-tools 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "560c32574a12a89ecd91f5e742165893f86e3ab98d21f8ea548658eb9eef5f40"
 "checksum byte-tools 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "e3b5ca7a04898ad4bcd41c90c5285445ff5b791899bb1b0abdd2a2aa791211d7"
@@ -3395,6 +3400,7 @@ dependencies = [
 "checksum heapsize 0.4.2 (git+https://github.com/oasislabs/heapsize?branch=sgx-target)" = "<none>"
 "checksum heck 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "20564e78d53d2bb135c343b3f47714a56af2061f1c928fdb541dc7b9fdd94205"
 "checksum hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "805026a5d0141ffc30abb3be3173848ad46a1b1664fe632428479619a3644d77"
+"checksum hex 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "023b39be39e3a2da62a94feb433e91e8bcd37676fbc8bea371daf52b7a769a3e"
 "checksum hmac 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7a13f4163aa0c5ca1be584aace0e2212b2e41be5478218d4f657f5f778b2ae2a"
 "checksum hmac-drbg 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "4fe727d41d2eec0a6574d887914347e5ff96a3b87177817e2a9820c5c87fecc2"
 "checksum httparse 1.3.4 (registry+https://github.com/rust-lang/crates.io-index)" = "cd179ae861f0c2e53da70d892f5f3029f9594be0c41dc5269cd371691b1dc2f9"
@@ -3448,7 +3454,7 @@ dependencies = [
 "checksum num-traits 0.1.43 (registry+https://github.com/rust-lang/crates.io-index)" = "92e5113e9fd4cc14ded8e499429f396a20f98c772a47cc8622a736e1ec843c31"
 "checksum num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)" = "6ba9a427cfca2be13aa6f6403b0b7e7368fe982bfa16fccc450ce74c46cd9b32"
 "checksum num_cpus 1.10.1 (registry+https://github.com/rust-lang/crates.io-index)" = "bcef43580c035376c0705c42792c294b66974abbfd2789b511784023f71f3273"
-"checksum oasis-types 0.2.1 (git+https://github.com/oasislabs/oasis-rs)" = "<none>"
+"checksum oasis-types 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "751b6eebe5f32bb7fbd26224bdfc071c9a06047fe1469fe85503c11e12002555"
 "checksum odds 0.2.26 (registry+https://github.com/rust-lang/crates.io-index)" = "4eae0151b9dacf24fcc170d9995e511669a082856a91f958a2fe380bfab3fb22"
 "checksum opaque-debug 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)" = "2839e79665f131bdb5782e51f2c6c9599c133c6098982a54c794358bf432529c"
 "checksum order-stat 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)" = "efa535d5117d3661134dbf1719b6f0ffe06f2375843b13935db186cd094105eb"
