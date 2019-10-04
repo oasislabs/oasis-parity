@@ -36,15 +36,15 @@ use util_error::UtilError;
 /// Value used to initialize bloom bitmap size.
 ///
 /// Bitmap size is the size in bytes (not bits) that will be allocated in memory.
-pub const ACCOUNT_BLOOM_SPACE: usize = 1048576;
+pub const ACCOUNT_BLOOM_SPACE: usize = 1_048_576;
 
 /// Value used to initialize bloom items count.
 ///
 /// Items count is an estimation of the maximum number of items to store.
-pub const DEFAULT_ACCOUNT_PRESET: usize = 1000000;
+pub const DEFAULT_ACCOUNT_PRESET: usize = 1_000_000;
 
 /// Key for a value storing amount of hashes
-pub const ACCOUNT_BLOOM_HASHCOUNT_KEY: &'static [u8] = b"account_hash_count";
+pub const ACCOUNT_BLOOM_HASHCOUNT_KEY: &[u8] = b"account_hash_count";
 
 const STATE_CACHE_BLOCKS: usize = 12;
 
@@ -104,7 +104,7 @@ struct BlockChanges {
 /// `StateDB` is propagated into the global cache.
 pub struct StateDB {
 	/// Backing database.
-	db: Box<JournalDB>,
+	db: Box<dyn JournalDB>,
 	/// Shared canonical state cache.
 	account_cache: Arc<Mutex<AccountCache>>,
 	/// DB Code cache. Maps code hashes to shared bytes.
@@ -128,14 +128,14 @@ impl StateDB {
 	/// of the LRU cache in bytes. Actual used memory may (read: will) be higher due to bookkeeping.
 	// TODO: make the cache size actually accurate by moving the account storage cache
 	// into the `AccountCache` structure as its own `LruCache<(Address, H256), H256>`.
-	pub fn new(db: Box<JournalDB>, cache_size: usize) -> StateDB {
+	pub fn new(db: Box<dyn JournalDB>, cache_size: usize) -> StateDB {
 		let bloom = Self::load_bloom(&**db.backing());
 		let acc_cache_size = cache_size * ACCOUNT_CACHE_RATIO / 100;
 		let code_cache_size = cache_size - acc_cache_size;
 		let cache_items = acc_cache_size / ::std::mem::size_of::<Option<Account>>();
 
 		StateDB {
-			db: db,
+			db,
 			account_cache: Arc::new(Mutex::new(AccountCache {
 				accounts: LruCache::new(cache_items),
 				modifications: VecDeque::new(),
@@ -143,7 +143,7 @@ impl StateDB {
 			code_cache: Arc::new(Mutex::new(MemoryLruCache::new(code_cache_size))),
 			local_cache: Vec::new(),
 			account_bloom: Arc::new(Mutex::new(bloom)),
-			cache_size: cache_size,
+			cache_size,
 			parent_hash: None,
 			commit_hash: None,
 			commit_number: None,
@@ -152,7 +152,7 @@ impl StateDB {
 
 	/// Loads accounts bloom from the database
 	/// This bloom is used to handle request for the non-existant account fast
-	pub fn load_bloom(db: &KeyValueDB) -> Bloom {
+	pub fn load_bloom(db: &dyn KeyValueDB) -> Bloom {
 		let hash_count_entry = db
 			.get(COL_ACCOUNT_BLOOM, ACCOUNT_BLOOM_HASHCOUNT_KEY)
 			.expect("Low-level database error");
@@ -171,12 +171,11 @@ impl StateDB {
 			LittleEndian::write_u64(&mut key, i as u64);
 			bloom_parts[i] = db
 				.get(COL_ACCOUNT_BLOOM, &key)
-				.expect("low-level database error")
-				.and_then(|val| Some(LittleEndian::read_u64(&val[..])))
+				.expect("low-level database error").map(|val| LittleEndian::read_u64(&val[..]))
 				.unwrap_or(0u64);
 		}
 
-		let bloom = Bloom::from_parts(&bloom_parts, hash_count as u32);
+		let bloom = Bloom::from_parts(&bloom_parts, u32::from(hash_count));
 		trace!(target: "account_bloom", "Bloom is {:?} full, hash functions count = {:?}", bloom.saturation(), hash_count);
 		bloom
 	}
@@ -344,12 +343,12 @@ impl StateDB {
 	}
 
 	/// Conversion method to interpret self as `HashDB` reference
-	pub fn as_hashdb(&self) -> &HashDB {
+	pub fn as_hashdb(&self) -> &dyn HashDB {
 		self.db.as_hashdb()
 	}
 
 	/// Conversion method to interpret self as mutable `HashDB` reference
-	pub fn as_hashdb_mut(&mut self) -> &mut HashDB {
+	pub fn as_hashdb_mut(&mut self) -> &mut dyn HashDB {
 		self.db.as_hashdb_mut()
 	}
 
@@ -399,7 +398,7 @@ impl StateDB {
 	// }
 
 	/// Returns underlying `JournalDB`.
-	pub fn journal_db(&self) -> &JournalDB {
+	pub fn journal_db(&self) -> &dyn JournalDB {
 		&*self.db
 	}
 
@@ -454,11 +453,11 @@ impl StateDB {
 }
 
 impl state::Backend for StateDB {
-	fn as_hashdb(&self) -> &HashDB {
+	fn as_hashdb(&self) -> &dyn HashDB {
 		self.db.as_hashdb()
 	}
 
-	fn as_hashdb_mut(&mut self) -> &mut HashDB {
+	fn as_hashdb_mut(&mut self) -> &mut dyn HashDB {
 		self.db.as_hashdb_mut()
 	}
 
@@ -466,7 +465,7 @@ impl state::Backend for StateDB {
 		self.local_cache.push(CacheQueueItem {
 			address: addr,
 			account: SyncAccount(data),
-			modified: modified,
+			modified,
 		})
 	}
 
@@ -501,7 +500,7 @@ impl state::Backend for StateDB {
 	fn get_cached_code(&self, hash: &H256) -> Option<Arc<Vec<u8>>> {
 		let mut cache = self.code_cache.lock().unwrap();
 
-		cache.get_mut(hash).map(|code| code.clone())
+		cache.get_mut(hash).cloned()
 	}
 
 	fn note_non_null_account(&self, address: &Address) {

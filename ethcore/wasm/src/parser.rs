@@ -81,13 +81,11 @@ pub fn payload<'a>(
 
 	if deserialized_module
 		.memory_section()
-		.map_or(false, |ms| ms.entries().len() > 0)
+		.map_or(false, |ms| !ms.entries().is_empty())
 	{
 		// According to WebAssembly spec, internal memory is hidden from embedder and should not
 		// be interacted with. So we disable this kind of modules at decoding level.
-		return Err(vm::Error::Wasm(format!(
-			"Malformed wasm module: internal memory"
-		)));
+		return Err(vm::Error::Wasm("Malformed wasm module: internal memory".to_string()));
 	}
 
 	if let Some(module_doctor) = module_doctor {
@@ -96,11 +94,11 @@ pub fn payload<'a>(
 
 	let contract_module =
 		wasm_utils::inject_gas_counter(deserialized_module, &gas_rules(wasm_costs))
-			.map_err(|_| vm::Error::Wasm(format!("Wasm contract error: bytecode invalid")))?;
+			.map_err(|_| vm::Error::Wasm("Wasm contract error: bytecode invalid".to_string()))?;
 
 	let contract_module =
 		wasm_utils::stack_height::inject_limiter(contract_module, wasm_costs.max_stack_height)
-			.map_err(|_| vm::Error::Wasm(format!("Wasm contract error: stack limiter failure")))?;
+			.map_err(|_| vm::Error::Wasm("Wasm contract error: stack limiter failure".to_string()))?;
 
 	let (code, data): (&[u8], &[u8]) = match params.params_type {
 		vm::ParamsType::Embedded => {

@@ -76,7 +76,7 @@ impl From<::ethjson::spec::EthashParams> for EthashExtensions {
 }
 
 /// Special rules to be applied to the schedule.
-pub type ScheduleCreationRules = Fn(&mut Schedule, BlockNumber) + Sync + Send;
+pub type ScheduleCreationRules = dyn Fn(&mut Schedule, BlockNumber) + Sync + Send;
 
 /// An ethereum-like state machine.
 pub struct EthereumMachine {
@@ -92,7 +92,7 @@ impl EthereumMachine {
 	pub fn regular(params: CommonParams, builtins: BTreeMap<Address, Builtin>) -> EthereumMachine {
 		// let tx_filter = TransactionFilter::from_params(&params).map(Arc::new);
 		EthereumMachine {
-			params: params,
+			params,
 			builtins: Arc::new(builtins),
 			// tx_filter: tx_filter,
 			ethash_extensions: None,
@@ -160,7 +160,7 @@ impl EthereumMachine {
 			sender: SYSTEM_ADDRESS.clone(),
 			origin: SYSTEM_ADDRESS.clone(),
 			origin_nonce: U256::zero(),
-			gas: gas,
+			gas,
 			gas_price: 0.into(),
 			value: ActionValue::Transfer(0.into()),
 			// Code stripped of contract header, if present.
@@ -168,10 +168,10 @@ impl EthereumMachine {
 				.as_ref()
 				.map_or(code, |c| Some(c.code.clone())),
 			code_hash: Some(state.code_hash(&contract_address)?),
-			data: data,
+			data,
 			call_type: CallType::Call,
 			params_type: ParamsType::Separate,
-			oasis_contract: oasis_contract,
+			oasis_contract,
 			aad: None,
 		};
 		let mut ex = Executive::new(&mut state, &env_info, self);
@@ -461,7 +461,7 @@ pub struct AuxiliaryData<'a> {
 
 /// Type alias for a function we can make calls through synchronously.
 /// Returns the call result and state proof for each call.
-pub type Call<'a> = Fn(Address, Vec<u8>) -> Result<(Vec<u8>, Vec<Vec<u8>>), String> + 'a;
+pub type Call<'a> = dyn Fn(Address, Vec<u8>) -> Result<(Vec<u8>, Vec<Vec<u8>>), String> + 'a;
 
 /// Request for auxiliary data of a block.
 #[derive(Debug, Clone, Copy, PartialEq)]

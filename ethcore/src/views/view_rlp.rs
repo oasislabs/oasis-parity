@@ -54,10 +54,7 @@ where
 	}
 
 	fn expect_valid_rlp<T>(&self, r: Result<T, DecoderError>) -> T {
-		r.expect(&format!(
-			"View rlp is trusted and should be valid. Constructed in {} on line {}",
-			self.file, self.line
-		))
+		r.unwrap_or_else(|_| panic!("View rlp is trusted and should be valid. Constructed in {} on line {}", self.file, self.line))
 	}
 
 	/// Returns rlp at the given index, panics if no rlp at that index

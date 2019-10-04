@@ -18,7 +18,7 @@
 
 use blooms::{BloomGroup, GroupPosition};
 use db::Key;
-use std::io::Write;
+
 use std::ops;
 // use engines::epoch::{Transition as EpochTransition};
 use header::BlockNumber;
@@ -141,7 +141,7 @@ pub const EPOCH_KEY_LEN: usize = DB_PREFIX_LEN + 16;
 
 /// epoch key prefix.
 /// used to iterate over all epoch transitions in order from genesis.
-pub const EPOCH_KEY_PREFIX: &'static [u8; DB_PREFIX_LEN] = &[
+pub const EPOCH_KEY_PREFIX: &[u8; DB_PREFIX_LEN] = &[
 	ExtrasIndex::EpochTransitions as u8,
 	0,
 	0,
@@ -275,7 +275,7 @@ pub struct BlockReceipts {
 
 impl BlockReceipts {
 	pub fn new(receipts: Vec<Receipt>) -> Self {
-		BlockReceipts { receipts: receipts }
+		BlockReceipts { receipts }
 	}
 }
 

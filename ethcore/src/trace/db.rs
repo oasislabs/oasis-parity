@@ -33,7 +33,7 @@ use trace::{
 	Config, Database as TraceDatabase, DatabaseExtras, Filter, ImportRequest, LocalizedTrace,
 };
 
-const TRACE_DB_VER: &'static [u8] = b"1.0";
+const TRACE_DB_VER: &[u8] = b"1.0";
 
 #[derive(Debug, Copy, Clone)]
 enum TraceDBIndex {
@@ -118,7 +118,7 @@ where
 	blooms: RwLock<HashMap<TraceGroupPosition, blooms::BloomGroup>>,
 	cache_manager: RwLock<CacheManager<CacheId>>,
 	// db
-	tracesdb: Arc<KeyValueDB>,
+	tracesdb: Arc<dyn KeyValueDB>,
 	// config,
 	bloom_config: BloomConfig,
 	// tracing enabled
@@ -147,7 +147,7 @@ where
 	T: DatabaseExtras,
 {
 	/// Creates new instance of `TraceDB`.
-	pub fn new(config: Config, tracesdb: Arc<KeyValueDB>, extras: Arc<T>) -> Self {
+	pub fn new(config: Config, tracesdb: Arc<dyn KeyValueDB>, extras: Arc<T>) -> Self {
 		let mut batch = DBTransaction::new();
 		let genesis = extras
 			.block_hash(0)
@@ -164,10 +164,10 @@ where
 				config.max_cache_size,
 				10 * 1024,
 			)),
-			tracesdb: tracesdb,
+			tracesdb,
 			bloom_config: config.blooms,
 			enabled: config.enabled,
-			extras: extras,
+			extras,
 		}
 	}
 
@@ -268,8 +268,8 @@ where
 					trace_address: trace.trace_address.into_iter().collect(),
 					transaction_number: trace_tx_number,
 					transaction_hash: trace_tx_hash,
-					block_number: block_number,
-					block_hash: block_hash,
+					block_number,
+					block_hash,
 				}),
 				false => None,
 			})
@@ -392,8 +392,8 @@ where
 						trace_address: trace.trace_address.into_iter().collect(),
 						transaction_number: Some(tx_position),
 						transaction_hash: Some(tx_hash),
-						block_number: block_number,
-						block_hash: block_hash,
+						block_number,
+						block_hash,
 					}
 				})
 		})
@@ -425,8 +425,8 @@ where
 							trace_address: trace.trace_address.into_iter().collect(),
 							transaction_number: Some(tx_position),
 							transaction_hash: Some(tx_hash.clone()),
-							block_number: block_number,
-							block_hash: block_hash,
+							block_number,
+							block_hash,
 						})
 						.collect()
 				})
@@ -457,8 +457,8 @@ where
 								trace_address: trace.trace_address.into_iter().collect(),
 								transaction_number: trace_tx_number,
 								transaction_hash: trace_tx_hash,
-								block_number: block_number,
-								block_hash: block_hash,
+								block_number,
+								block_hash,
 							})
 							.collect::<Vec<LocalizedTrace>>()
 					})
@@ -596,7 +596,7 @@ mod tests {
 				result: Res::FailedCall(TraceError::OutOfGas),
 			}])]),
 			block_hash: block_hash.clone(),
-			block_number: block_number,
+			block_number,
 			enacted: vec![block_hash],
 			retracted: 0,
 		}
@@ -621,7 +621,7 @@ mod tests {
 				result: Res::FailedCall(TraceError::OutOfGas),
 			}])]),
 			block_hash: block_hash.clone(),
-			block_number: block_number,
+			block_number,
 			enacted: vec![],
 			retracted: 0,
 		}
@@ -646,8 +646,8 @@ mod tests {
 			subtraces: 0,
 			transaction_number: Some(0),
 			transaction_hash: Some(tx_hash),
-			block_number: block_number,
-			block_hash: block_hash,
+			block_number,
+			block_hash,
 		}
 	}
 

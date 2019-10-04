@@ -111,18 +111,18 @@ where
 		static_flag: bool,
 	) -> Self {
 		Externalities {
-			state: state,
-			env_info: env_info,
-			machine: machine,
-			depth: depth,
-			origin_info: origin_info,
-			substate: substate,
+			state,
+			env_info,
+			machine,
+			depth,
+			origin_info,
+			substate,
 			schedule: machine.schedule(env_info.number),
-			output: output,
-			tracer: tracer,
-			vm_tracer: vm_tracer,
-			ext_tracer: ext_tracer,
-			static_flag: static_flag,
+			output,
+			tracer,
+			vm_tracer,
+			ext_tracer,
+			static_flag,
 		}
 	}
 }
@@ -191,7 +191,7 @@ where
 	}
 
 	fn is_static(&self) -> bool {
-		return self.static_flag;
+		self.static_flag
 	}
 
 	fn is_create(&self) -> bool {
@@ -298,22 +298,20 @@ where
 					.as_ref()
 					.map_or(Arc::new(code.to_vec()), |c| c.code.clone()),
 			),
-			code_hash: code_hash,
+			code_hash,
 			data: None,
 			call_type: CallType::None,
 			params_type: vm::ParamsType::Embedded,
-			oasis_contract: oasis_contract,
+			oasis_contract,
 			aad: None,
 		};
 
-		if !self.static_flag {
-			if !self.schedule.eip86 || params.sender != UNSIGNED_SENDER {
-				if let Err(e) = self.state.inc_nonce(&self.origin_info.address) {
-					debug!(target: "ext", "Database corruption encountered: {:?}", e);
-					return ContractCreateResult::Failed;
-				}
-			}
-		}
+		if !self.static_flag && (!self.schedule.eip86 || params.sender != UNSIGNED_SENDER) {
+	if let Err(e) = self.state.inc_nonce(&self.origin_info.address) {
+		debug!(target: "ext", "Database corruption encountered: {:?}", e);
+		return ContractCreateResult::Failed;
+	}
+}
 		let mut ex = Executive::from_parent(
 			self.state,
 			self.env_info,
@@ -396,9 +394,9 @@ where
 				.map_or(code, |c| Some(c.code.clone())),
 			code_hash: Some(code_hash),
 			data: Some(data.to_vec()),
-			call_type: call_type,
+			call_type,
 			params_type: vm::ParamsType::Separate,
-			oasis_contract: oasis_contract,
+			oasis_contract,
 			aad: None, // will be populated by ConfidentialVM if in c10l context
 		};
 
@@ -498,8 +496,8 @@ where
 		let address = self.origin_info.address.clone();
 
 		self.substate.logs.push(LogEntry {
-			address: address,
-			topics: topics,
+			address,
+			topics,
 			data: data.to_vec(),
 		});
 
@@ -583,7 +581,7 @@ where
 	fn is_confidential_contract(&self, contract: &Address) -> vm::Result<bool> {
 		self.state
 			.is_confidential_contract(contract)
-			.map_err(|err| vm::Error::Confidential(err))
+			.map_err(vm::Error::Confidential)
 	}
 
 	fn as_kvstore(&self) -> &dyn blockchain_traits::KVStore {

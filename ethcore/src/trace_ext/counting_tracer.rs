@@ -25,12 +25,12 @@
 // the viewpoint of conflict set analysis, and would also reduce the size of the conflict sets
 // at the cost of decreased analysis precision and therefore reduced parallelism.
 
-use std::convert::Into;
+
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
-use std::vec;
 
-use ethereum_types::{Address, H256, U256};
+
+use ethereum_types::{Address, H256};
 
 use trace_ext::bloomfilter::BloomFilter;
 use trace_ext::ext_tracer::ExtTracer;
@@ -155,14 +155,14 @@ impl ExtTracer for CountingTracer {
 	}
 
 	/// Transaction (indirectly) performs an exists query.
-	fn trace_exists(&self, address: &Address) {}
+	fn trace_exists(&self, _address: &Address) {}
 
 	/// Transactions (indirectly) performs an exists_and_not_null query.
-	fn trace_exists_and_not_null(&self, address: &Address) {}
+	fn trace_exists_and_not_null(&self, _address: &Address) {}
 
 	/// Transaction performs an origin_balance or balance query.  Unlike Ext, we do not know
 	/// origin address, so it must be provided by Ext implementations.
-	fn trace_balance(&self, origin_address: &Address) {}
+	fn trace_balance(&self, _origin_address: &Address) {}
 
 	/// subtracer returns an Ext tracer for use for the context of the sub-transaction call.
 	fn subtracer(&mut self, code_address: &Address) -> Self {

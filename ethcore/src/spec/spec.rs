@@ -24,7 +24,7 @@ use std::sync::{Arc, RwLock};
 use bytes::Bytes;
 use ethereum_types::{Address, Bloom, H256, U256};
 use ethjson;
-use hash::{keccak, KECCAK_NULL_RLP};
+use hash::{keccak};
 use memorydb::MemoryDB;
 // use parking_lot::RwLock;
 use rlp::{Rlp, RlpStream};
@@ -56,7 +56,7 @@ const MAX_TRANSACTION_SIZE: usize = 4096 * 1024;
 
 /// Default EIP-210 contract code.
 /// As defined in https://github.com/ethereum/EIPs/pull/210
-pub const DEFAULT_BLOCKHASH_CONTRACT: &'static str = "73fffffffffffffffffffffffffffffffffffffffe33141561006a5760014303600035610100820755610100810715156100455760003561010061010083050761010001555b6201000081071515610064576000356101006201000083050761020001555b5061013e565b4360003512151561008457600060405260206040f361013d565b61010060003543031315156100a857610100600035075460605260206060f361013c565b6101006000350715156100c55762010000600035430313156100c8565b60005b156100ea576101006101006000350507610100015460805260206080f361013b565b620100006000350715156101095763010000006000354303131561010c565b60005b1561012f57610100620100006000350507610200015460a052602060a0f361013a565b600060c052602060c0f35b5b5b5b5b";
+pub const DEFAULT_BLOCKHASH_CONTRACT: &str = "73fffffffffffffffffffffffffffffffffffffffe33141561006a5760014303600035610100820755610100810715156100455760003561010061010083050761010001555b6201000081071515610064576000356101006201000083050761020001555b5061013e565b4360003512151561008457600060405260206040f361013d565b61010060003543031315156100a857610100600035075460605260206060f361013c565b6101006000350715156100c55762010000600035430313156100c8565b60005b156100ea576101006101006000350507610100015460805260206080f361013b565b620100006000350715156101095763010000006000354303131561010c565b60005b1561012f57610100620100006000350507610200015460a052602060a0f361013a565b600060c052602060c0f35b5b5b5b5b";
 
 // helper for formatting errors.
 fn fmt_err<F: ::std::fmt::Display>(f: F) -> String {
@@ -257,7 +257,7 @@ impl From<ethjson::spec::Params> for CommonParams {
 				},
 				Into::into,
 			),
-			eip210_contract_gas: p.eip210_contract_gas.map_or(1000000.into(), Into::into),
+			eip210_contract_gas: p.eip210_contract_gas.map_or(1_000_000.into(), Into::into),
 			eip211_transition: p
 				.eip211_transition
 				.map_or_else(BlockNumber::max_value, Into::into),
@@ -341,7 +341,7 @@ pub struct Spec {
 	/// User friendly spec name
 	pub name: String,
 	/// What engine are we using for this?
-	pub engine: Arc<EthEngine>,
+	pub engine: Arc<dyn EthEngine>,
 	/// Name of the subdir inside the main data dir to use for chain data and settings.
 	pub data_dir: String,
 
@@ -479,8 +479,7 @@ fn load_from(spec_params: SpecParams, s: ethjson::spec::Spec) -> Result<Spec, Er
 				chts: s
 					.hardcoded_sync
 					.as_ref()
-					.map(|s| s.chts.iter().map(|c| c.clone().into()).collect())
-					.unwrap_or(Vec::new()),
+					.map(|s| s.chts.iter().map(|c| c.clone().into()).collect()).unwrap_or_default(),
 			})
 		} else {
 			None
@@ -490,9 +489,9 @@ fn load_from(spec_params: SpecParams, s: ethjson::spec::Spec) -> Result<Spec, Er
 	};
 
 	let mut s = Spec {
-		name: s.name.clone().into(),
+		name: s.name.clone(),
 		engine: Spec::engine(spec_params, s.engine, params, builtins),
-		data_dir: s.data_dir.unwrap_or(s.name).into(),
+		data_dir: s.data_dir.unwrap_or(s.name),
 		nodes: s.nodes.unwrap_or_else(Vec::new),
 		parent_hash: g.parent_hash,
 		transactions_root: g.transactions_root,
@@ -503,8 +502,8 @@ fn load_from(spec_params: SpecParams, s: ethjson::spec::Spec) -> Result<Spec, Er
 		gas_used: g.gas_used,
 		timestamp: g.timestamp,
 		extra_data: g.extra_data,
-		seal_rlp: seal_rlp,
-		hardcoded_sync: hardcoded_sync,
+		seal_rlp,
+		hardcoded_sync,
 		constructors: s
 			.accounts
 			.constructors()
@@ -566,11 +565,11 @@ impl Spec {
 	/// Convert engine spec into a arc'd Engine of the right underlying type.
 	/// TODO avoid this hard-coded nastiness - use dynamic-linked plugin framework instead.
 	fn engine(
-		spec_params: SpecParams,
+		_spec_params: SpecParams,
 		engine_spec: ethjson::spec::Engine,
 		params: CommonParams,
 		builtins: BTreeMap<Address, Builtin>,
-	) -> Arc<EthEngine> {
+	) -> Arc<dyn EthEngine> {
 		let machine = Self::machine(&engine_spec, params, builtins);
 
 		match engine_spec {
@@ -593,9 +592,9 @@ impl Spec {
 	fn run_constructors<T: Backend>(
 		&self,
 		factories: &Factories,
-		mut mkvs: Box<MKVS>,
-		mut db: T,
-	) -> Result<(T, Box<MKVS>), Error> {
+		mut mkvs: Box<dyn MKVS>,
+		db: T,
+	) -> Result<(T, Box<dyn MKVS>), Error> {
 		// basic accounts in spec.
 		{
 			for (address, account) in self.genesis_state.get().iter() {
@@ -782,11 +781,11 @@ impl Spec {
 	// /// Ensure that the given state DB has the trie nodes in for the genesis state.
 	pub fn ensure_db_good<T: Backend>(
 		&self,
-		mkvs: Box<MKVS>,
+		mkvs: Box<dyn MKVS>,
 		db: T,
 		factories: &Factories,
 	) -> Result<T, Error> {
-		const GENESIS_INITIALIZED: &'static [u8] = b"genesis_initialized";
+		const GENESIS_INITIALIZED: &[u8] = b"genesis_initialized";
 		if mkvs.get(GENESIS_INITIALIZED).is_some() {
 			return Ok(db);
 		}

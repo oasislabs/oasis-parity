@@ -31,7 +31,7 @@ use engines::EthEngine;
 use error::{BlockError, Error};
 use factory::Factories;
 use header::{ExtendedHeader, Header};
-use journaldb::overlaydb::OverlayDB;
+
 use receipt::{Receipt, TransactionOutcome};
 use state::backend::Wrapped as WrappedBackend;
 use state::{ApplyResult, State};
@@ -40,7 +40,7 @@ use vm::{ConfidentialCtx, EnvInfo, LastHashes};
 use trace::{FlatTrace, Tracing, VMTrace};
 use transaction::{Error as TransactionError, SignedTransaction, UnverifiedTransaction};
 // use verification::PreverifiedBlock;
-use views::BlockView;
+
 
 use crate::mkvs::MKVS;
 
@@ -113,13 +113,13 @@ impl ExecutedBlock {
 			uncles: Default::default(),
 			receipts: Default::default(),
 			transactions_set: Default::default(),
-			state: state,
+			state,
 			traces: if tracing {
 				Tracing::enabled()
 			} else {
 				Tracing::Disabled
 			},
-			last_hashes: last_hashes,
+			last_hashes,
 			is_finalized: false,
 			metadata: None,
 		}
@@ -263,7 +263,7 @@ impl ::parity_machine::WithMetadata for ExecutedBlock {
 /// maintain the system `state()`. We also archive execution receipts in preparation for later block creation.
 pub struct OpenBlock<'x> {
 	block: ExecutedBlock,
-	engine: &'x EthEngine,
+	engine: &'x dyn EthEngine,
 }
 
 /// Just like `OpenBlock`, except that we've applied `Engine::on_close_block`, finished up the non-seal header fields,
@@ -299,10 +299,10 @@ pub struct SealedBlock {
 impl<'x> OpenBlock<'x> {
 	/// Create a new `OpenBlock` ready for transaction pushing.
 	pub fn new<'a>(
-		engine: &'x EthEngine,
+		engine: &'x dyn EthEngine,
 		factories: Factories,
 		tracing: bool,
-		mkvs: Box<MKVS>,
+		mkvs: Box<dyn MKVS>,
 		db: StateDB,
 		parent: &Header,
 		last_hashes: Arc<LastHashes>,
@@ -310,8 +310,8 @@ impl<'x> OpenBlock<'x> {
 		gas_limit: U256,
 		extra_data: Bytes,
 		is_epoch_begin: bool,
-		ancestry: &mut Iterator<Item = ExtendedHeader>,
-		confidential_ctx: Option<Box<ConfidentialCtx>>,
+		ancestry: &mut dyn Iterator<Item = ExtendedHeader>,
+		confidential_ctx: Option<Box<dyn ConfidentialCtx>>,
 	) -> Result<Self, Error> {
 		let number = parent.number() + 1;
 		let state = State::from_existing(
@@ -323,7 +323,7 @@ impl<'x> OpenBlock<'x> {
 		)?;
 		let mut r = OpenBlock {
 			block: ExecutedBlock::new(state, last_hashes, tracing),
-			engine: engine,
+			engine,
 		};
 
 		r.block.header.set_parent_hash(parent.hash());
@@ -410,7 +410,7 @@ impl<'x> OpenBlock<'x> {
 		self.block
 			.transactions_set
 			.insert(h.unwrap_or_else(|| t.hash()));
-		self.block.transactions.push(t.into());
+		self.block.transactions.push(t);
 		if let Tracing::Enabled(ref mut traces) = self.block.traces {
 			traces.push(outcome.trace.clone().into());
 		}
@@ -631,15 +631,15 @@ impl ClosedBlock {
 	}
 
 	// /// Given an engine reference, reopen the `ClosedBlock` into an `OpenBlock`.
-	pub fn reopen(self, engine: &EthEngine) -> OpenBlock {
+	pub fn reopen(self, engine: &dyn EthEngine) -> OpenBlock {
 		// revert rewards (i.e. set state back at last transaction's state).
 		let mut block = self.block;
 		block.state = self.unclosed_state;
 		block.metadata = self.unclosed_metadata;
 		block.is_finalized = self.unclosed_finalization_state;
 		OpenBlock {
-			block: block,
-			engine: engine,
+			block,
+			engine,
 		}
 	}
 }
@@ -670,7 +670,7 @@ impl LockedBlock {
 	/// Provide a valid seal in order to turn this into a `SealedBlock`.
 	///
 	/// NOTE: This does not check the validity of `seal` with the engine.
-	pub fn seal(self, engine: &EthEngine, seal: Vec<Bytes>) -> Result<SealedBlock, BlockError> {
+	pub fn seal(self, engine: &dyn EthEngine, seal: Vec<Bytes>) -> Result<SealedBlock, BlockError> {
 		let expected_seal_fields = engine.seal_fields(self.header());
 		let mut s = self;
 		if seal.len() != expected_seal_fields {
@@ -692,7 +692,7 @@ impl LockedBlock {
 	/// Returns the `ClosedBlock` back again if the seal is no good.
 	pub fn try_seal(
 		self,
-		engine: &EthEngine,
+		engine: &dyn EthEngine,
 		seal: Vec<Bytes>,
 	) -> Result<SealedBlock, (Error, LockedBlock)> {
 		let mut s = self;

@@ -47,7 +47,7 @@ impl<'a> BlockView<'a> {
 	/// }
 	/// ```
 	pub fn new(rlp: ViewRlp<'a>) -> BlockView<'a> {
-		BlockView { rlp: rlp }
+		BlockView { rlp }
 	}
 
 	/// Block header hash.
@@ -91,7 +91,7 @@ impl<'a> BlockView<'a> {
 			.map(|(i, t)| LocalizedTransaction {
 				signed: t,
 				block_hash: block_hash.clone(),
-				block_number: block_number,
+				block_number,
 				transaction_index: i,
 				cached_sender: None,
 			})
@@ -139,8 +139,8 @@ impl<'a> BlockView<'a> {
 		let block_number = header.number();
 		self.transaction_at(index).map(|t| LocalizedTransaction {
 			signed: t,
-			block_hash: block_hash,
-			block_number: block_number,
+			block_hash,
+			block_number,
 			transaction_index: index,
 			cached_sender: None,
 		})

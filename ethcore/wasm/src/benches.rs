@@ -4,14 +4,14 @@ extern crate test;
 use self::test::Bencher;
 use super::*;
 
-use byteorder::{ByteOrder, LittleEndian};
-use ethereum_types::{Address, H256, U256};
-use std::collections::HashMap;
+
+use ethereum_types::{Address, U256};
+
 use std::sync::Arc;
 
 use super::WasmInterpreter;
-use vm::tests::{FakeCall, FakeCallType, FakeExt};
-use vm::{self, ActionParams, ActionValue, GasLeft, Vm};
+use vm::tests::{FakeExt};
+use vm::{self, ActionParams, ActionValue, Vm};
 
 macro_rules! load_sample {
 	($name: expr) => {{
@@ -30,11 +30,11 @@ fn wasm_interpreter() -> WasmInterpreter {
 }
 
 /// Do everything but the contract call itself, used for testing microbenchmarks
-fn prepare_module(params: ActionParams, ext: &mut vm::Ext) -> (Runtime, wasmi::ModuleRef) {
+fn prepare_module(params: ActionParams, ext: &mut dyn vm::Ext) -> (Runtime, wasmi::ModuleRef) {
 	let is_create = ext.is_create();
 
 	let parser::ParsedModule {
-		mut module, data, ..
+		module, data, ..
 	} = parser::payload(
 		&params,
 		ext.schedule().wasm(),
@@ -64,7 +64,7 @@ fn prepare_module(params: ActionParams, ext: &mut vm::Ext) -> (Runtime, wasmi::M
 	let adjusted_gas = params.gas * U256::from(ext.schedule().wasm().opcodes_div)
 		/ U256::from(ext.schedule().wasm().opcodes_mul);
 
-	let initial_memory = instantiation_resolver
+	let _initial_memory = instantiation_resolver
 		.memory_size()
 		.map_err(Error::Interpreter)
 		.unwrap();

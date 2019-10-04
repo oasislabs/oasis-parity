@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use bytes::Bytes;
+
 use evm::{Factory as EvmFactory, VMType};
 use std::{cell::RefCell, rc::Rc};
 use vm::{ActionParams, ConfidentialCtx, OasisVm, Schedule, Vm};
@@ -24,7 +24,7 @@ use wasm::WasmInterpreter;
 #[cfg(feature = "use-wasmer-runtime")]
 use wasmer::WasmRuntime;
 
-const WASM_MAGIC_NUMBER: &'static [u8; 4] = b"\0asm";
+const WASM_MAGIC_NUMBER: &[u8; 4] = b"\0asm";
 
 /// Virtual machine factory
 #[derive(Default, Clone)]
@@ -36,10 +36,10 @@ impl VmFactory {
 	#[cfg(not(feature = "use-wasmer-runtime"))]
 	pub fn create(
 		&self,
-		ctx: Option<Rc<RefCell<Box<ConfidentialCtx>>>>,
+		ctx: Option<Rc<RefCell<Box<dyn ConfidentialCtx>>>>,
 		params: &ActionParams,
 		schedule: &Schedule,
-	) -> Box<Vm> {
+	) -> Box<dyn Vm> {
 		let vm = {
 			if schedule.wasm.is_some()
 				&& params.code.as_ref().map_or(false, |code| {
@@ -82,7 +82,7 @@ impl VmFactory {
 
 impl From<EvmFactory> for VmFactory {
 	fn from(evm: EvmFactory) -> Self {
-		VmFactory { evm: evm }
+		VmFactory { evm }
 	}
 }
 

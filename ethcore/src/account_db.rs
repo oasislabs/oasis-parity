@@ -59,7 +59,7 @@ impl Default for Factory {
 impl Factory {
 	/// Create a read-only accountdb.
 	/// This will panic when write operations are called.
-	pub fn readonly<'db>(&self, db: &'db HashDB, address_hash: H256) -> Box<HashDB + 'db> {
+	pub fn readonly<'db>(&self, db: &'db dyn HashDB, address_hash: H256) -> Box<dyn HashDB + 'db> {
 		match *self {
 			Factory::Mangled => Box::new(AccountDB::from_hash(db, address_hash)),
 			Factory::Plain => Box::new(Wrapping(db)),
@@ -67,7 +67,7 @@ impl Factory {
 	}
 
 	/// Create a new mutable hashdb.
-	pub fn create<'db>(&self, db: &'db mut HashDB, address_hash: H256) -> Box<HashDB + 'db> {
+	pub fn create<'db>(&self, db: &'db mut dyn HashDB, address_hash: H256) -> Box<dyn HashDB + 'db> {
 		match *self {
 			Factory::Mangled => Box::new(AccountDBMut::from_hash(db, address_hash)),
 			Factory::Plain => Box::new(WrappingMut(db)),
@@ -79,7 +79,7 @@ impl Factory {
 /// DB backend wrapper for Account trie
 /// Transforms trie node keys for the database
 pub struct AccountDB<'db> {
-	db: &'db HashDB,
+	db: &'db dyn HashDB,
 	address_hash: H256,
 }
 
@@ -91,10 +91,10 @@ impl<'db> AccountDB<'db> {
 	}
 
 	/// Create a new AcountDB from an address' hash.
-	pub fn from_hash(db: &'db HashDB, address_hash: H256) -> Self {
+	pub fn from_hash(db: &'db dyn HashDB, address_hash: H256) -> Self {
 		AccountDB {
-			db: db,
-			address_hash: address_hash,
+			db,
+			address_hash,
 		}
 	}
 }
@@ -133,7 +133,7 @@ impl<'db> HashDB for AccountDB<'db> {
 
 /// DB backend wrapper for Account trie
 pub struct AccountDBMut<'db> {
-	db: &'db mut HashDB,
+	db: &'db mut dyn HashDB,
 	address_hash: H256,
 }
 
@@ -145,10 +145,10 @@ impl<'db> AccountDBMut<'db> {
 	}
 
 	/// Create a new AcountDB from an address' hash.
-	pub fn from_hash(db: &'db mut HashDB, address_hash: H256) -> Self {
+	pub fn from_hash(db: &'db mut dyn HashDB, address_hash: H256) -> Self {
 		AccountDBMut {
-			db: db,
-			address_hash: address_hash,
+			db,
+			address_hash,
 		}
 	}
 
@@ -181,7 +181,7 @@ impl<'db> HashDB for AccountDBMut<'db> {
 	}
 
 	fn insert(&mut self, value: &[u8]) -> H256 {
-		if value == &NULL_RLP {
+		if value == NULL_RLP {
 			return KECCAK_NULL_RLP.clone();
 		}
 		let k = keccak(value);
@@ -207,7 +207,7 @@ impl<'db> HashDB for AccountDBMut<'db> {
 	}
 }
 
-struct Wrapping<'db>(&'db HashDB);
+struct Wrapping<'db>(&'db dyn HashDB);
 
 impl<'db> HashDB for Wrapping<'db> {
 	fn keys(&self) -> HashMap<H256, i32> {
@@ -241,7 +241,7 @@ impl<'db> HashDB for Wrapping<'db> {
 	}
 }
 
-struct WrappingMut<'db>(&'db mut HashDB);
+struct WrappingMut<'db>(&'db mut dyn HashDB);
 
 impl<'db> HashDB for WrappingMut<'db> {
 	fn keys(&self) -> HashMap<H256, i32> {
@@ -263,7 +263,7 @@ impl<'db> HashDB for WrappingMut<'db> {
 	}
 
 	fn insert(&mut self, value: &[u8]) -> H256 {
-		if value == &NULL_RLP {
+		if value == NULL_RLP {
 			return KECCAK_NULL_RLP.clone();
 		}
 		self.0.insert(value)

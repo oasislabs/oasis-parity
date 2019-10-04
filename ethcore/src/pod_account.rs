@@ -24,7 +24,7 @@ use rlp::{self, RlpStream};
 use state::{Account, MKVS_KEY_CODE, MKVS_KEY_PREFIX_STORAGE};
 use std::collections::BTreeMap;
 use std::fmt;
-use trie::TrieFactory;
+
 use triehash::sec_trie_root;
 use types::account_diff::*;
 
@@ -80,7 +80,7 @@ impl PodAccount {
 		stream.out()
 	}
 
-	pub fn insert_additional(&self, mkvs: &mut MKVS) {
+	pub fn insert_additional(&self, mkvs: &mut dyn MKVS) {
 		match self.code {
 			Some(ref c) if !c.is_empty() => {
 				mkvs.insert(MKVS_KEY_CODE, c);
@@ -145,7 +145,7 @@ impl fmt::Display for PodAccount {
 			self.balance,
 			self.nonce,
 			self.code.as_ref().map_or(0, |c| c.len()),
-			self.code.as_ref().map_or_else(H256::new, |c| keccak(c)),
+			self.code.as_ref().map_or_else(H256::new, keccak),
 			self.storage.len(),
 			self.storage_expiry,
 		)

@@ -40,6 +40,6 @@ impl ExtTracer for NoopExtTracer {
 	/// subtracer returns an Ext tracer for use for the context of the sub-transaction
 	/// call.
 	fn subtracer(&mut self, _code_address: &Address) -> Self {
-		return NoopExtTracer {};
+		NoopExtTracer {}
 	}
 }

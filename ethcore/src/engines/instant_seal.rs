@@ -26,7 +26,7 @@ pub struct InstantSeal<M> {
 impl<M> InstantSeal<M> {
 	/// Returns new instance of InstantSeal over the given state machine.
 	pub fn new(machine: M) -> Self {
-		InstantSeal { machine: machine }
+		InstantSeal { machine }
 	}
 }
 

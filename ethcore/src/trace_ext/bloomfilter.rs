@@ -120,8 +120,8 @@ impl BloomFilter {
 		let k_num = BloomFilter::optimal_k_num(bitmap_bits, items_count);
 		Self {
 			bitmap: Bitmap::new(bitmap_bits as usize),
-			bitmap_bits: bitmap_bits,
-			k_num: k_num,
+			bitmap_bits,
+			k_num,
 		}
 	}
 
@@ -201,7 +201,7 @@ impl BloomFilter {
 		// where n* is the estimated number of entries, m is the length of the filter,
 		// k is the number of hash functions, and X is the number of bits set to one.
 		let f_m = self.number_of_bits() as f64;
-		let fest = -f_m / (self.number_of_hash_functions() as f64)
+		let fest = -f_m / f64::from(self.number_of_hash_functions())
 			* f64::ln(1.0f64 - (self.pop_count() as f64) / f_m);
 		fest.ceil() as u64
 	}
@@ -242,7 +242,7 @@ impl BloomFilter {
 	// bitmap size, so we can re-use it -- after modular reduction by a (hopefully)
 	// different modulus.
 	fn bloom_hash(base_hash: u64, k_i: u32) -> u64 {
-		base_hash.wrapping_add((k_i as u64).wrapping_mul(base_hash) % 0xffffffffffffffc5)
+		base_hash.wrapping_add(u64::from(k_i).wrapping_mul(base_hash) % 0xffff_ffff_ffff_ffc5)
 	}
 
 	pub fn intersect(&self, other: &Self) -> Result<Self, Error> {

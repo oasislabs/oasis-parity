@@ -19,7 +19,7 @@
 //! Unconfirmed sub-states are managed with `checkpoint`s which may be canonicalized
 //! or rolled back.
 
-use hash::{keccak, KECCAK_EMPTY, KECCAK_NULL_RLP};
+use hash::{keccak, KECCAK_EMPTY};
 use std::cell::{RefCell, RefMut};
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -27,12 +27,12 @@ use std::fmt;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use error::{Error, ErrorKind};
+use error::{Error};
 use executed::{Executed, ExecutionError};
 use executive::{Executive, TransactOptions};
 use factory::Factories;
 use factory::VmFactory;
-use journaldb::overlaydb::OverlayDB;
+
 use machine::EthereumMachine as Machine;
 use pod_account::*;
 use pod_state::{self, PodState};
@@ -41,19 +41,19 @@ use state_db::StateDB;
 use trace::{self, FlatTrace, VMTrace};
 use trace_ext::ExtTracer;
 use transaction::{self, SignedTransaction};
-use types::basic_account::BasicAccount;
+
 use types::state_diff::StateDiff;
 use vm::{ConfidentialCtx, EnvInfo, OasisContract};
 
 use bytes::Bytes;
 use ethereum_types::{Address, H256, U256};
-use failure::Fallible;
-use hashdb::{AsHashDB, HashDB};
-use kvdb::DBValue;
+
+use hashdb::{HashDB};
+
 
 use trie;
-use trie::recorder::Recorder;
-use trie::{Trie, TrieDB, TrieError};
+
+use trie::{Trie, TrieError};
 
 use crate::mkvs::{PrefixedMKVS, ReadOnlyPrefixedMKVS, MKVS};
 
@@ -157,7 +157,7 @@ impl AccountEntry {
 	fn new_dirty(account: Option<Account>) -> AccountEntry {
 		AccountEntry {
 			old_balance: account.as_ref().map(|a| a.balance().clone()),
-			account: account,
+			account,
 			state: AccountState::Dirty,
 		}
 	}
@@ -166,7 +166,7 @@ impl AccountEntry {
 	fn new_clean(account: Option<Account>) -> AccountEntry {
 		AccountEntry {
 			old_balance: account.as_ref().map(|a| a.balance().clone()),
-			account: account,
+			account,
 			state: AccountState::CleanFresh,
 		}
 	}
@@ -175,7 +175,7 @@ impl AccountEntry {
 	fn new_clean_cached(account: Option<Account>) -> AccountEntry {
 		AccountEntry {
 			old_balance: account.as_ref().map(|a| a.balance().clone()),
-			account: account,
+			account,
 			state: AccountState::CleanCached,
 		}
 	}
@@ -312,7 +312,7 @@ impl AccountEntry {
 /// backed-up values are moved into a parent checkpoint (if any).
 ///
 pub struct State<B: Backend> {
-	mkvs: Box<MKVS>,
+	mkvs: Box<dyn MKVS>,
 	db: B,
 	cache: RefCell<HashMap<Address, AccountEntry>>,
 	// The original account is preserved in
@@ -329,7 +329,7 @@ pub struct State<B: Backend> {
 	// One alternative to the Rc<RefCell<>> would be to only allow `State` to own the ConfidentialCtx,
 	// and `OasisVm` routes all control updates to the ConfidentialCtx owned by `State` through
 	// Externalities.
-	pub confidential_ctx: Option<Rc<RefCell<Box<ConfidentialCtx>>>>,
+	pub confidential_ctx: Option<Rc<RefCell<Box<dyn ConfidentialCtx>>>>,
 }
 
 #[derive(Copy, Clone)]
@@ -392,44 +392,44 @@ impl<B: Backend> StateInfo for State<B> {
 	}
 }
 
-const SEC_TRIE_DB_UNWRAP_STR: &'static str = "A state can only be created with valid root. Creating a SecTrieDB with a valid root will not fail. \
+const SEC_TRIE_DB_UNWRAP_STR: &str = "A state can only be created with valid root. Creating a SecTrieDB with a valid root will not fail. \
 			 Therefore creating a SecTrieDB with this state's root will not fail.";
 
 impl<B: Backend> State<B> {
 	/// Creates new state with empty state root
 	/// Used for tests.
 	pub fn new(
-		mkvs: Box<MKVS>,
-		mut db: B,
+		mkvs: Box<dyn MKVS>,
+		db: B,
 		account_start_nonce: U256,
 		factories: Factories,
 	) -> State<B> {
 		State {
-			mkvs: mkvs,
-			db: db,
+			mkvs,
+			db,
 			cache: RefCell::new(HashMap::new()),
 			checkpoints: RefCell::new(Vec::new()),
-			account_start_nonce: account_start_nonce,
-			factories: factories,
+			account_start_nonce,
+			factories,
 			confidential_ctx: None,
 		}
 	}
 
 	/// Creates new state with existing state root
 	pub fn from_existing(
-		mkvs: Box<MKVS>,
+		mkvs: Box<dyn MKVS>,
 		db: B,
 		account_start_nonce: U256,
 		factories: Factories,
-		confidential_ctx: Option<Box<ConfidentialCtx>>,
+		confidential_ctx: Option<Box<dyn ConfidentialCtx>>,
 	) -> Result<State<B>, TrieError> {
 		let state = State {
-			mkvs: mkvs,
-			db: db,
+			mkvs,
+			db,
 			cache: RefCell::new(HashMap::new()),
 			checkpoints: RefCell::new(Vec::new()),
-			account_start_nonce: account_start_nonce,
-			factories: factories,
+			account_start_nonce,
+			factories,
 			confidential_ctx: confidential_ctx.map(|ctx| Rc::new(RefCell::new(ctx))),
 		};
 
@@ -519,7 +519,7 @@ impl<B: Backend> State<B> {
 	}
 
 	/// Destroy the current object and return root and database.
-	pub fn drop(mut self) -> (B, Box<MKVS>) {
+	pub fn drop(mut self) -> (B, Box<dyn MKVS>) {
 		self.propagate_to_global_cache();
 		(self.db, self.mkvs)
 	}
@@ -701,7 +701,7 @@ impl<B: Backend> State<B> {
 	/// Get accounts' code.
 	pub fn code(&self, a: &Address) -> trie::Result<Option<Arc<Bytes>>> {
 		self.ensure_cached(a, RequireCache::Code, true, |a| {
-			a.as_ref().map_or(None, |a| a.code().clone())
+			a.as_ref().and_then(|a| a.code().clone())
 		})
 	}
 
@@ -871,7 +871,7 @@ impl<B: Backend> State<B> {
 		benchmarking: bool,
 		should_return_value: bool,
 	) -> TransactOptions<T, V, X> {
-		let mut options = match benchmarking {
+		let options = match benchmarking {
 			true => TransactOptions::new(tracer, vm_tracer, ext_tracer).dont_check_nonce(),
 			false => TransactOptions::new(tracer, vm_tracer, ext_tracer),
 		};
@@ -882,7 +882,7 @@ impl<B: Backend> State<B> {
 			options
 		};
 
-		return options;
+		options
 	}
 
 	/// Execute a given transaction with given tracer and VM tracer producing a receipt and an optional trace.
@@ -1177,7 +1177,7 @@ impl<B: Backend> State<B> {
 		require: RequireCache,
 		account: &mut Account,
 		state_db: &B,
-		mkvs: &MKVS,
+		mkvs: &dyn MKVS,
 	) {
 		if let RequireCache::None = require {
 			return;
@@ -1326,13 +1326,11 @@ impl<B: Backend> State<B> {
 	/// Replace account code and storage. Creates account if it does not exist.
 	pub fn patch_account(
 		&self,
-		a: &Address,
-		code: Arc<Bytes>,
-		storage: HashMap<H256, Vec<u8>>,
+		_a: &Address,
+		_code: Arc<Bytes>,
+		_storage: HashMap<H256, Vec<u8>>,
 	) -> trie::Result<()> {
-		Ok(self
-			.require(a, false)?
-			.reset_code_and_storage(code, storage))
+		Ok(())
 	}
 
 	/// Returns the Oasis contract associated with this transaction's code (or None, if header not present).
@@ -1375,7 +1373,7 @@ impl<B: Backend> State<B> {
 		Ok(Some(match transaction.action {
 			transaction::Action::Create => transaction.data.clone(),
 			transaction::Action::Call(to_addr) => {
-				let mut code = self
+				let code = self
 					.code(&to_addr)
 					.map_err(|_| format!("Failed to get code at address {:?}", to_addr))?;
 				if code.is_none() {

@@ -44,7 +44,7 @@ impl<'a> TransactionView<'a> {
 	/// }
 	/// ```
 	pub fn new(rlp: ViewRlp<'a>) -> TransactionView<'a> {
-		TransactionView { rlp: rlp }
+		TransactionView { rlp }
 	}
 
 	/// Return reference to underlaying rlp.

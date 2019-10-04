@@ -32,8 +32,7 @@ use trace_ext::{
 };
 use transaction::{Action, SignedTransaction};
 use vm::{
-	self, ActionParams, ActionValue, CleanDustMode, CreateContractAddress, EnvInfo, Ext, GasLeft,
-	OasisContract, ReturnData, Schedule,
+	self, ActionParams, ActionValue, CleanDustMode, CreateContractAddress, EnvInfo, Ext, ReturnData, Schedule,
 };
 
 #[cfg(debug_assertions)]
@@ -71,14 +70,14 @@ pub fn contract_address(
 		CreateContractAddress::FromCodeHash => {
 			let code_hash = keccak(code);
 			let mut buffer = [0xffu8; 20 + 32];
-			&mut buffer[20..].copy_from_slice(&code_hash[..]);
+			buffer[20..].copy_from_slice(&code_hash[..]);
 			(From::from(keccak(&buffer[..])), Some(code_hash))
 		}
 		CreateContractAddress::FromSenderAndCodeHash => {
 			let code_hash = keccak(code);
 			let mut buffer = [0u8; 20 + 32];
-			&mut buffer[..20].copy_from_slice(&sender[..]);
-			&mut buffer[20..].copy_from_slice(&code_hash[..]);
+			buffer[..20].copy_from_slice(&sender[..]);
+			buffer[20..].copy_from_slice(&code_hash[..]);
 			(From::from(keccak(&buffer[..])), Some(code_hash))
 		}
 	}
@@ -204,9 +203,9 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 	/// Basic constructor.
 	pub fn new(state: &'a mut State<B>, info: &'a EnvInfo, machine: &'a Machine) -> Self {
 		Executive {
-			state: state,
-			info: info,
-			machine: machine,
+			state,
+			info,
+			machine,
 			depth: 0,
 			static_flag: false,
 		}
@@ -221,11 +220,11 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		static_flag: bool,
 	) -> Self {
 		Executive {
-			state: state,
-			info: info,
-			machine: machine,
+			state,
+			info,
+			machine,
 			depth: parent_depth + 1,
-			static_flag: static_flag,
+			static_flag,
 		}
 	}
 
@@ -329,7 +328,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		let oasis_contract = self
 			.state
 			.oasis_contract(t)
-			.map_err(|e| ExecutionError::TransactionMalformed(e))?;
+			.map_err(ExecutionError::TransactionMalformed)?;
 
 		let schedule = self.machine.schedule(self.info.number);
 		let confidential = oasis_contract.as_ref().map_or(false, |c| c.confidential);
@@ -405,7 +404,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 				);
 				let params = ActionParams {
 					code_address: new_address.clone(),
-					code_hash: code_hash,
+					code_hash,
 					address: new_address,
 					sender: sender.clone(),
 					origin: sender.clone(),
@@ -422,7 +421,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					data: None,
 					call_type: CallType::None,
 					params_type: vm::ParamsType::Embedded,
-					oasis_contract: oasis_contract,
+					oasis_contract,
 					aad: None,
 				};
 				let mut out = if output_from_create {
@@ -460,7 +459,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					data: Some(t.data.clone()),
 					call_type: CallType::Call,
 					params_type: vm::ParamsType::Separate,
-					oasis_contract: oasis_contract,
+					oasis_contract,
 					aad: None, // will be populated by ConfidentialVM if in a c10l context
 				};
 				let mut out = vec![];
@@ -505,7 +504,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		X: ExtTracer,
 	{
 		let local_stack_size = ::std::usize::MAX;
-		let depth_threshold =
+		let _depth_threshold =
 			local_stack_size.saturating_sub(STACK_SIZE_ENTRY_OVERHEAD) / STACK_SIZE_PER_DEPTH;
 		let static_call = params.call_type == CallType::StaticCall;
 
@@ -928,9 +927,9 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					cumulative_gas_used: self.info.gas_used + t.gas,
 					logs: vec![],
 					contracts_created: vec![],
-					output: output,
-					trace: trace,
-					vm_trace: vm_trace,
+					output,
+					trace,
+					vm_trace,
 					state_diff: None,
 				})
 			}
@@ -941,14 +940,14 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 					Some(vm::Error::Reverted)
 				},
 				gas: t.gas,
-				gas_used: gas_used,
-				refunded: refunded,
+				gas_used,
+				refunded,
 				cumulative_gas_used: self.info.gas_used + gas_used,
 				logs: substate.logs,
 				contracts_created: substate.contracts_created,
-				output: output,
-				trace: trace,
-				vm_trace: vm_trace,
+				output,
+				trace,
+				vm_trace,
 				state_diff: None,
 			}),
 		}

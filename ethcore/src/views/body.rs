@@ -47,7 +47,7 @@ impl<'a> BodyView<'a> {
 	/// }
 	/// ```
 	pub fn new(rlp: ViewRlp<'a>) -> BodyView<'a> {
-		BodyView { rlp: rlp }
+		BodyView { rlp }
 	}
 
 	/// Return reference to underlaying rlp.
@@ -72,7 +72,7 @@ impl<'a> BodyView<'a> {
 			.map(|(i, t)| LocalizedTransaction {
 				signed: t,
 				block_hash: block_hash.clone(),
-				block_number: block_number,
+				block_number,
 				transaction_index: i,
 				cached_sender: None,
 			})
@@ -122,7 +122,7 @@ impl<'a> BodyView<'a> {
 		self.transaction_at(index).map(|t| LocalizedTransaction {
 			signed: t,
 			block_hash: block_hash.clone(),
-			block_number: block_number,
+			block_number,
 			transaction_index: index,
 			cached_sender: None,
 		})

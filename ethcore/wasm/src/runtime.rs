@@ -177,7 +177,7 @@ impl<'a> PendingTransaction for Runtime<'a> {
 				receipt.gas_used = self.gas_limit;
 			}
 		}
-		return receipt;
+		receipt
 	}
 
 	/// Returns data to the calling transaction.
@@ -432,12 +432,12 @@ impl<'a> Runtime<'a> {
 		let amount = match f(self.ext.schedule()) {
 			Some(amount) => amount,
 			None => {
-				return Err(Error::GasLimit.into());
+				return Err(Error::GasLimit);
 			}
 		};
 
 		if !self.charge_gas(amount as u64) {
-			Err(Error::GasLimit.into())
+			Err(Error::GasLimit)
 		} else {
 			Ok(())
 		}
@@ -450,8 +450,8 @@ impl<'a> Runtime<'a> {
 	{
 		self.charge(|schedule| {
 			f(schedule)
-				.and_then(|x| x.checked_mul(schedule.wasm().opcodes_div as u64))
-				.map(|x| x / schedule.wasm().opcodes_mul as u64)
+				.and_then(|x| x.checked_mul(u64::from(schedule.wasm().opcodes_div)))
+				.map(|x| x / u64::from(schedule.wasm().opcodes_mul))
 		})
 	}
 

@@ -23,11 +23,11 @@ pub use self::instant_seal::InstantSeal;
 pub use self::null_engine::NullEngine;
 
 use std::collections::{BTreeMap, HashMap};
-use std::sync::{Arc, Weak};
+
 use std::{error, fmt};
 
 use builtin::Builtin;
-use error::Error;
+
 use header::{BlockNumber, Header};
 use spec::CommonParams;
 use transaction::{self, SignedTransaction, UnverifiedTransaction};
@@ -42,7 +42,7 @@ use unexpected::{Mismatch, OutOfBounds};
 
 /// Default EIP-210 contract code.
 /// As defined in https://github.com/ethereum/EIPs/pull/210
-pub const DEFAULT_BLOCKHASH_CONTRACT: &'static str = "73fffffffffffffffffffffffffffffffffffffffe33141561006a5760014303600035610100820755610100810715156100455760003561010061010083050761010001555b6201000081071515610064576000356101006201000083050761020001555b5061013e565b4360003512151561008457600060405260206040f361013d565b61010060003543031315156100a857610100600035075460605260206060f361013c565b6101006000350715156100c55762010000600035430313156100c8565b60005b156100ea576101006101006000350507610100015460805260206080f361013b565b620100006000350715156101095763010000006000354303131561010c565b60005b1561012f57610100620100006000350507610200015460a052602060a0f361013a565b600060c052602060c0f35b5b5b5b5b";
+pub const DEFAULT_BLOCKHASH_CONTRACT: &str = "73fffffffffffffffffffffffffffffffffffffffe33141561006a5760014303600035610100820755610100810715156100455760003561010061010083050761010001555b6201000081071515610064576000356101006201000083050761020001555b5061013e565b4360003512151561008457600060405260206040f361013d565b61010060003543031315156100a857610100600035075460605260206060f361013c565b6101006000350715156100c55762010000600035430313156100c8565b60005b156100ea576101006101006000350507610100015460805260206080f361013b565b620100006000350715156101095763010000006000354303131561010c565b60005b1561012f57610100620100006000350507610200015460a052602060a0f361013a565b600060c052602060c0f35b5b5b5b5b";
 
 /// Fork choice.
 #[derive(Debug, PartialEq, Eq)]
@@ -88,7 +88,7 @@ impl fmt::Display for EngineError {
 			InsufficientProof(ref msg) => format!("Insufficient validation proof: {}", msg),
 			FailedSystemCall(ref msg) => format!("Failed to make system call: {}", msg),
 			MalformedMessage(ref msg) => format!("Received malformed consensus message: {}", msg),
-			RequiresClient => format!("Call requires client but none registered"),
+			RequiresClient => "Call requires client but none registered".to_string(),
 		};
 
 		f.write_fmt(format_args!("Engine error ({})", msg))
@@ -113,10 +113,10 @@ pub enum Seal {
 }
 
 /// A system-calling closure. Enacts calls on a block's state from the system address.
-pub type SystemCall<'a> = FnMut(Address, Vec<u8>) -> Result<Vec<u8>, String> + 'a;
+pub type SystemCall<'a> = dyn FnMut(Address, Vec<u8>) -> Result<Vec<u8>, String> + 'a;
 
 /// Type alias for a function we can get headers by hash through.
-pub type Headers<'a, H> = Fn(H256) -> Option<H> + 'a;
+pub type Headers<'a, H> = dyn Fn(H256) -> Option<H> + 'a;
 
 /// Type alias for a function we can query pending transitions by block hash through.
 // pub type PendingTransitionStore<'a> = Fn(H256) -> Option<PendingTransition> + 'a;
@@ -208,7 +208,7 @@ pub trait Engine<M: Machine>: Sync + Send {
 		&self,
 		_block: &mut M::LiveBlock,
 		_epoch_begin: bool,
-		_ancestry: &mut Iterator<Item = M::ExtendedHeader>,
+		_ancestry: &mut dyn Iterator<Item = M::ExtendedHeader>,
 	) -> Result<(), M::Error> {
 		Ok(())
 	}
@@ -386,7 +386,7 @@ pub trait Engine<M: Machine>: Sync + Send {
 	fn ancestry_actions(
 		&self,
 		_block: &M::LiveBlock,
-		_ancestry: &mut Iterator<Item = M::ExtendedHeader>,
+		_ancestry: &mut dyn Iterator<Item = M::ExtendedHeader>,
 	) -> Vec<AncestryAction> {
 		Vec::new()
 	}

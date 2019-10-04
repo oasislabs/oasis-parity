@@ -140,7 +140,7 @@ impl Tracer for ExecutiveTracer {
 				call.expect("self.prepare_trace_call().is_some(): so we must be tracing: qed"),
 			),
 			result: Res::Call(CallResult {
-				gas_used: gas_used,
+				gas_used,
 				output: output
 					.expect("self.prepare_trace_output().is_some(): so we must be tracing: qed"),
 			}),
@@ -164,10 +164,10 @@ impl Tracer for ExecutiveTracer {
 				create.expect("self.prepare_trace_create().is_some(): so we must be tracing: qed"),
 			),
 			result: Res::Create(CreateResult {
-				gas_used: gas_used,
+				gas_used,
 				code: code
 					.expect("self.prepare_trace_output.is_some(): so we must be tracing: qed"),
-				address: address,
+				address,
 			}),
 			trace_address: Default::default(),
 		};
@@ -276,9 +276,9 @@ impl VMTracer for ExecutiveVMTracer {
 
 	fn trace_prepare_execute(&mut self, pc: usize, instruction: u8, gas_cost: U256) {
 		self.data.operations.push(VMOperation {
-			pc: pc,
-			instruction: instruction,
-			gas_cost: gas_cost,
+			pc,
+			instruction,
+			gas_cost,
 			executed: None,
 		});
 	}
@@ -291,11 +291,11 @@ impl VMTracer for ExecutiveVMTracer {
 		store_diff: Option<(U256, U256)>,
 	) {
 		let ex = VMExecutedOperation {
-			gas_used: gas_used,
-			stack_push: stack_push.iter().cloned().collect(),
+			gas_used,
+			stack_push: stack_push.to_vec(),
 			mem_diff: mem_diff.map(|(s, r)| MemoryDiff {
 				offset: s,
-				data: r.iter().cloned().collect(),
+				data: r.to_vec(),
 			}),
 			store_diff: store_diff.map(|(l, v)| StorageDiff {
 				location: l,

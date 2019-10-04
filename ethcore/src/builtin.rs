@@ -140,7 +140,7 @@ impl ModexpPricer {
 		let bit_index = if exp_low.is_zero() {
 			0
 		} else {
-			(255 - exp_low.leading_zeros()) as u64
+			u64::from(255 - exp_low.leading_zeros())
 		};
 		if len <= 32 {
 			bit_index
@@ -153,7 +153,7 @@ impl ModexpPricer {
 		match x {
 			x if x <= 64 => x * x,
 			x if x <= 1024 => (x * x) / 4 + 96 * x - 3072,
-			x => (x * x) / 16 + 480 * x - 199680,
+			x => (x * x) / 16 + 480 * x - 199_680,
 		}
 	}
 }
@@ -165,8 +165,8 @@ impl ModexpPricer {
 ///
 /// Unless `is_active` is true,
 pub struct Builtin {
-	pricer: Box<Pricer>,
-	native: Box<Impl>,
+	pricer: Box<dyn Pricer>,
+	native: Box<dyn Impl>,
 	activate_at: u64,
 }
 
@@ -189,7 +189,7 @@ impl Builtin {
 
 impl From<ethjson::spec::Builtin> for Builtin {
 	fn from(b: ethjson::spec::Builtin) -> Self {
-		let pricer: Box<Pricer> = match b.pricing {
+		let pricer: Box<dyn Pricer> = match b.pricing {
 			ethjson::spec::Pricing::Linear(linear) => Box::new(Linear {
 				base: linear.base,
 				word: linear.word,
@@ -209,7 +209,7 @@ impl From<ethjson::spec::Builtin> for Builtin {
 		};
 
 		Builtin {
-			pricer: pricer,
+			pricer,
 			native: ethereum_builtin(&b.name),
 			activate_at: b.activate_at.map(Into::into).unwrap_or(0),
 		}
@@ -217,16 +217,16 @@ impl From<ethjson::spec::Builtin> for Builtin {
 }
 
 // Ethereum builtin creator.
-fn ethereum_builtin(name: &str) -> Box<Impl> {
+fn ethereum_builtin(name: &str) -> Box<dyn Impl> {
 	match name {
-		"identity" => Box::new(Identity) as Box<Impl>,
-		"ecrecover" => Box::new(EcRecover) as Box<Impl>,
-		"sha256" => Box::new(Sha256) as Box<Impl>,
-		"ripemd160" => Box::new(Ripemd160) as Box<Impl>,
-		"modexp" => Box::new(ModexpImpl) as Box<Impl>,
-		"alt_bn128_add" => Box::new(Bn128AddImpl) as Box<Impl>,
-		"alt_bn128_mul" => Box::new(Bn128MulImpl) as Box<Impl>,
-		"alt_bn128_pairing" => Box::new(Bn128PairingImpl) as Box<Impl>,
+		"identity" => Box::new(Identity) as Box<dyn Impl>,
+		"ecrecover" => Box::new(EcRecover) as Box<dyn Impl>,
+		"sha256" => Box::new(Sha256) as Box<dyn Impl>,
+		"ripemd160" => Box::new(Ripemd160) as Box<dyn Impl>,
+		"modexp" => Box::new(ModexpImpl) as Box<dyn Impl>,
+		"alt_bn128_add" => Box::new(Bn128AddImpl) as Box<dyn Impl>,
+		"alt_bn128_mul" => Box::new(Bn128MulImpl) as Box<dyn Impl>,
+		"alt_bn128_pairing" => Box::new(Bn128PairingImpl) as Box<dyn Impl>,
 		_ => panic!("invalid builtin name: {}", name),
 	}
 }
@@ -339,7 +339,7 @@ fn modexp(mut base: BigUint, mut exp: BigUint, modulus: BigUint) -> BigUint {
 	}
 
 	let mut result = BigUint::one();
-	base = base % &modulus;
+	base %= &modulus;
 
 	// fast path for base divisible by modulus.
 	if base.is_zero() {
@@ -350,7 +350,7 @@ fn modexp(mut base: BigUint, mut exp: BigUint, modulus: BigUint) -> BigUint {
 			result = (result * &base) % &modulus;
 		}
 
-		exp = exp >> 1;
+		exp >>= 1;
 		base = (base.clone() * base) % &modulus;
 	}
 	result
@@ -512,7 +512,7 @@ impl Bn128PairingImpl {
 		use bn::{pairing, AffineG1, AffineG2, Fq, Fq2, Group, Gt, G1, G2};
 
 		let elements = input.len() / 192; // (a, b_a, b_b - each 64-byte affine coordinates)
-		let ret_val = if input.len() == 0 {
+		let ret_val = if input.is_empty() {
 			U256::one()
 		} else {
 			let mut vals = Vec::new();

@@ -33,10 +33,10 @@ use memorydb::MemoryDB;
 /// State backend. See module docs for more details.
 pub trait Backend: Send {
 	/// Treat the backend as a read-only hashdb.
-	fn as_hashdb(&self) -> &HashDB;
+	fn as_hashdb(&self) -> &dyn HashDB;
 
 	/// Treat the backend as a writeable hashdb.
-	fn as_hashdb_mut(&mut self) -> &mut HashDB;
+	fn as_hashdb_mut(&mut self) -> &mut dyn HashDB;
 
 	/// Add an account entry to the cache.
 	fn add_to_account_cache(&mut self, addr: Address, data: Option<Account>, modified: bool);
@@ -113,10 +113,10 @@ impl HashDB for ProofCheck {
 }
 
 impl Backend for ProofCheck {
-	fn as_hashdb(&self) -> &HashDB {
+	fn as_hashdb(&self) -> &dyn HashDB {
 		self
 	}
-	fn as_hashdb_mut(&mut self) -> &mut HashDB {
+	fn as_hashdb_mut(&mut self) -> &mut dyn HashDB {
 		self
 	}
 	fn add_to_account_cache(&mut self, _addr: Address, _data: Option<Account>, _modified: bool) {}
@@ -188,11 +188,11 @@ impl<H: AsHashDB + Send + Sync> HashDB for Proving<H> {
 }
 
 impl<H: AsHashDB + Send + Sync> Backend for Proving<H> {
-	fn as_hashdb(&self) -> &HashDB {
+	fn as_hashdb(&self) -> &dyn HashDB {
 		self
 	}
 
-	fn as_hashdb_mut(&mut self) -> &mut HashDB {
+	fn as_hashdb_mut(&mut self) -> &mut dyn HashDB {
 		self
 	}
 
@@ -225,7 +225,7 @@ impl<H: AsHashDB> Proving<H> {
 	/// This will store all values ever fetched from that base.
 	pub fn new(base: H) -> Self {
 		Proving {
-			base: base,
+			base,
 			changed: MemoryDB::new(),
 			proof: Mutex::new(HashSet::new()),
 		}
@@ -254,11 +254,11 @@ impl<H: AsHashDB + Clone> Clone for Proving<H> {
 pub struct Basic<H>(pub H);
 
 impl<H: AsHashDB + Send + Sync> Backend for Basic<H> {
-	fn as_hashdb(&self) -> &HashDB {
+	fn as_hashdb(&self) -> &dyn HashDB {
 		self.0.as_hashdb()
 	}
 
-	fn as_hashdb_mut(&mut self) -> &mut HashDB {
+	fn as_hashdb_mut(&mut self) -> &mut dyn HashDB {
 		self.0.as_hashdb_mut()
 	}
 
@@ -287,19 +287,19 @@ impl<H: AsHashDB + Send + Sync> Backend for Basic<H> {
 }
 
 pub trait CloneWrapped: AsHashDB + Send + Sync {
-	fn clone_box(&self) -> Box<CloneWrapped>;
+	fn clone_box(&self) -> Box<dyn CloneWrapped>;
 }
 
 impl<T> CloneWrapped for T
 where
 	T: AsHashDB + Send + Sync + Clone + 'static,
 {
-	fn clone_box(&self) -> Box<CloneWrapped> {
+	fn clone_box(&self) -> Box<dyn CloneWrapped> {
 		Box::new(self.clone())
 	}
 }
 
-pub struct Wrapped(pub Box<CloneWrapped>);
+pub struct Wrapped(pub Box<dyn CloneWrapped>);
 
 impl Clone for Wrapped {
 	fn clone(&self) -> Wrapped {
@@ -308,11 +308,11 @@ impl Clone for Wrapped {
 }
 
 impl Backend for Wrapped {
-	fn as_hashdb(&self) -> &HashDB {
+	fn as_hashdb(&self) -> &dyn HashDB {
 		self.0.as_hashdb()
 	}
 
-	fn as_hashdb_mut(&mut self) -> &mut HashDB {
+	fn as_hashdb_mut(&mut self) -> &mut dyn HashDB {
 		self.0.as_hashdb_mut()
 	}
 

@@ -46,8 +46,8 @@ impl<M> NullEngine<M> {
 	/// Returns new instance of NullEngine with default VM Factory
 	pub fn new(params: NullEngineParams, machine: M) -> Self {
 		NullEngine {
-			params: params,
-			machine: machine,
+			params,
+			machine,
 		}
 	}
 }
@@ -72,10 +72,10 @@ where
 	}
 
 	fn on_close_block(&self, block: &mut M::LiveBlock) -> Result<(), M::Error> {
-		use std::ops::Shr;
+		
 
-		let author = *LiveBlock::header(&*block).author();
-		let number = LiveBlock::header(&*block).number();
+		let _author = *LiveBlock::header(&*block).author();
+		let _number = LiveBlock::header(&*block).number();
 
 		let reward = self.params.block_reward;
 		if reward == U256::zero() {

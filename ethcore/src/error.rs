@@ -217,7 +217,7 @@ impl From<Error> for BlockImportError {
 				BlockImportErrorKind::Block(block_error).into()
 			}
 			Error(ErrorKind::Import(import_error), _) => {
-				BlockImportErrorKind::Import(import_error.into()).into()
+				BlockImportErrorKind::Import(import_error).into()
 			}
 			Error(ErrorKind::Util(util_error::ErrorKind::Decoder(decoder_err)), _) => {
 				BlockImportErrorKind::Decoder(decoder_err).into()

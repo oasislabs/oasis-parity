@@ -27,10 +27,10 @@ macro_rules! bcfs {
 impl<'a> crate::Runtime<'a> {
 	// not part of wasi, but required by parity
 	pub fn gas(&mut self, amount: u32) -> crate::Result<()> {
-		if self.charge_gas(amount as u64) {
+		if self.charge_gas(u64::from(amount)) {
 			Ok(())
 		} else {
-			Err(crate::runtime::Error::GasLimit.into())
+			Err(crate::runtime::Error::GasLimit)
 		}
 	}
 

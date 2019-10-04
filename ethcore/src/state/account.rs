@@ -22,14 +22,14 @@ use error::Error;
 use ethereum_types::{Address, H256, U256};
 use hash::{keccak, KECCAK_EMPTY, KECCAK_NULL_RLP};
 use hashdb::HashDB;
-use kvdb::DBValue;
+
 use lru_cache::LruCache;
 use pod_account::*;
 use rlp::{encode, RlpStream};
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::sync::Arc;
-use trie;
+
 use trie::{SecTrieDB, Trie, TrieError, TrieFactory};
 
 use std::cell::{Cell, RefCell};
@@ -38,8 +38,8 @@ use crate::mkvs::MKVS;
 
 const STORAGE_CACHE_ITEMS: usize = 8192;
 
-pub const MKVS_KEY_CODE: &'static [u8] = &[1u8];
-pub const MKVS_KEY_PREFIX_STORAGE: &'static [u8] = &[2u8];
+pub const MKVS_KEY_CODE: &[u8] = &[1u8];
+pub const MKVS_KEY_PREFIX_STORAGE: &[u8] = &[2u8];
 
 /// Boolean type for clean/dirty status.
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -109,10 +109,10 @@ impl Account {
 		storage_expiry: u64,
 	) -> Account {
 		Account {
-			balance: balance,
-			nonce: nonce,
+			balance,
+			nonce,
 			storage_root: KECCAK_NULL_RLP,
-			storage_expiry: storage_expiry,
+			storage_expiry,
 			storage_cache: Self::empty_storage_cache(),
 			storage_changes: storage,
 			code_hash: keccak(&code),
@@ -136,7 +136,7 @@ impl Account {
 			storage_expiry: pod.storage_expiry,
 			storage_cache: Self::empty_storage_cache(),
 			storage_changes: pod.storage.into_iter().collect(),
-			code_hash: pod.code.as_ref().map_or(KECCAK_EMPTY, |c| keccak(c)),
+			code_hash: pod.code.as_ref().map_or(KECCAK_EMPTY, keccak),
 			code_filth: Filth::Dirty,
 			code_size: Some(pod.code.as_ref().map_or(0, |c| c.len())),
 			code_cache: Arc::new(pod.code.map_or_else(
@@ -153,8 +153,8 @@ impl Account {
 	/// Create a new account with the given balance.
 	pub fn new_basic(balance: U256, nonce: U256) -> Account {
 		Account {
-			balance: balance,
-			nonce: nonce,
+			balance,
+			nonce,
 			storage_root: KECCAK_NULL_RLP,
 			storage_expiry: 0,
 			storage_cache: Self::empty_storage_cache(),
@@ -178,10 +178,10 @@ impl Account {
 	/// NOTE: make sure you use `init_code` on this before `commit`ing.
 	pub fn new_contract(balance: U256, nonce: U256, storage_expiry: u64) -> Account {
 		Account {
-			balance: balance,
-			nonce: nonce,
+			balance,
+			nonce,
 			storage_root: KECCAK_NULL_RLP,
-			storage_expiry: storage_expiry,
+			storage_expiry,
 			storage_cache: Self::empty_storage_cache(),
 			storage_changes: HashMap::new(),
 			code_hash: KECCAK_EMPTY,
@@ -224,7 +224,7 @@ impl Account {
 	/// Get (and cache) the contents of the trie's storage at `key`.
 	/// Takes modified storage into account.
 	/// Returns None in the result if the key doesn't exist in storage.
-	pub fn storage_at(&self, mkvs: &MKVS, key: &H256) -> Option<Vec<u8>> {
+	pub fn storage_at(&self, mkvs: &dyn MKVS, key: &H256) -> Option<Vec<u8>> {
 		if let Some(value) = self.cached_storage_at(key) {
 			return Some(value);
 		}
@@ -313,7 +313,7 @@ impl Account {
 	}
 
 	/// Provide a database to get `code_hash`. Should not be called if it is a contract without code.
-	pub fn cache_code(&mut self, mkvs: &MKVS) -> Option<Arc<Bytes>> {
+	pub fn cache_code(&mut self, mkvs: &dyn MKVS) -> Option<Arc<Bytes>> {
 		// TODO: fill out self.code_cache;
 		trace!(
 			"Account::cache_code: ic={}; self.code_hash={:?}, self.code_cache={}",
@@ -354,7 +354,7 @@ impl Account {
 	}
 
 	/// Provide a database to get `code_size`. Should not be called if it is a contract without code.
-	pub fn cache_code_size(&mut self, mkvs: &MKVS) -> bool {
+	pub fn cache_code_size(&mut self, mkvs: &dyn MKVS) -> bool {
 		// TODO: fill out self.code_cache;
 		trace!(
 			"Account::cache_code_size: ic={}; self.code_hash={:?}, self.code_cache={}",
@@ -442,7 +442,7 @@ impl Account {
 		self.balance = self.balance - *x;
 	}
 
-	pub fn commit_storage(&mut self, account_mkvs: &mut MKVS) {
+	pub fn commit_storage(&mut self, account_mkvs: &mut dyn MKVS) {
 		for (k, v) in self.storage_changes.drain() {
 			// cast key and value to trait type,
 			// so we can call overloaded `to_bytes` method
@@ -461,7 +461,7 @@ impl Account {
 		}
 	}
 
-	pub fn commit_code(&mut self, account_mkvs: &mut MKVS) {
+	pub fn commit_code(&mut self, account_mkvs: &mut dyn MKVS) {
 		trace!(
 			"Commiting code of {:?} - {:?}, {:?}",
 			self,

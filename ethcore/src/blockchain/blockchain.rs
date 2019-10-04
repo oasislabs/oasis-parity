@@ -18,7 +18,7 @@
 
 use bloomchain as bc;
 use ethereum_types::{Bloom, H256, U256};
-use heapsize::HeapSizeOf;
+
 use itertools::Itertools;
 use std::collections::{hash_map, HashMap, HashSet};
 use std::mem;
@@ -26,9 +26,9 @@ use std::sync::Arc;
 // use parking_lot::{Mutex, RwLock};
 use blockchain::best_block::{BestAncientBlock, BestBlock};
 use blockchain::block_info::{BlockInfo, BlockLocation, BranchBecomingCanonChainData};
-use blockchain::extras::{BlockDetails, BlockReceipts, TransactionAddress, EPOCH_KEY_PREFIX};
+use blockchain::extras::{BlockDetails, BlockReceipts, TransactionAddress};
 use blockchain::update::{ExtrasInsert, ExtrasUpdate};
-use blockchain::{CacheSize, Config, ImportRoute};
+use blockchain::{Config, ImportRoute};
 use blooms::{BloomGroup, GroupPosition};
 use bytes::Bytes;
 use cache_manager::CacheManager;
@@ -231,7 +231,7 @@ pub struct BlockChain {
 	blocks_blooms: RwLock<HashMap<GroupPosition, BloomGroup>>,
 	block_receipts: RwLock<HashMap<H256, BlockReceipts>>,
 
-	db: Arc<KeyValueDB>,
+	db: Arc<dyn KeyValueDB>,
 
 	cache_man: Mutex<CacheManager<CacheId>>,
 
@@ -433,7 +433,7 @@ impl BlockProvider for BlockChain {
 		let mut logs = blocks
 			.chunks(128)
 			.flat_map(move |blocks_chunk| {
-				blocks_chunk.into_iter()
+				blocks_chunk.iter()
 					.filter_map(|hash| self.block_number(&hash).map(|r| (r, hash)))
 					.filter_map(|(number, hash)| self.block_receipts(&hash).map(|r| (number, hash, r.receipts)))
 					.filter_map(|(number, hash, receipts)| self.block_body(&hash).map(|ref b| (number, hash, receipts, b.transaction_hashes())))
@@ -529,7 +529,7 @@ impl<'a> Iterator for AncestryWithMetadataIter<'a> {
 						is_finalized: details.is_finalized,
 						metadata: details.metadata,
 
-						header: header,
+						header,
 					})
 				}
 				_ => {
@@ -585,11 +585,11 @@ impl<'a> Iterator for AncestryWithMetadataIter<'a> {
 
 impl BlockChain {
 	/// Create new instance of blockchain from given Genesis.
-	pub fn new(config: Config, genesis: &[u8], db: Arc<KeyValueDB>) -> BlockChain {
+	pub fn new(config: Config, genesis: &[u8], db: Arc<dyn KeyValueDB>) -> BlockChain {
 		// 400 is the average size of the key
 		let cache_man = CacheManager::new(config.pref_cache_size, config.max_cache_size, 400);
 
-		let mut bc = BlockChain {
+		let bc = BlockChain {
 			blooms_config: bc::Config {
 				levels: LOG_BLOOMS_LEVELS,
 				elements_per_index: LOG_BLOOMS_ELEMENTS_PER_INDEX,
@@ -828,8 +828,8 @@ impl BlockChain {
 		Some(TreeRoute {
 			blocks: from_branch,
 			ancestor: current_from,
-			index: index,
-			is_from_route_finalized: is_from_route_finalized,
+			index,
+			is_from_route_finalized,
 		})
 	}
 
@@ -873,7 +873,7 @@ impl BlockChain {
 		if let Some(parent_details) = maybe_parent {
 			// parent known to be in chain.
 			let info = BlockInfo {
-				hash: hash,
+				hash,
 				number: header.number(),
 				total_difficulty: parent_details.total_difficulty + header.difficulty(),
 				location: BlockLocation::CanonChain,
@@ -887,7 +887,7 @@ impl BlockChain {
 					block_receipts: self.prepare_block_receipts_update(receipts, &info),
 					blocks_blooms: self.prepare_block_blooms_update(bytes, &info),
 					transactions_addresses: self.prepare_transaction_addresses_update(bytes, &info),
-					info: info,
+					info,
 					block: bytes,
 				},
 				is_best,
@@ -902,7 +902,7 @@ impl BlockChain {
 				} else if header.number() > ancient_number {
 					batch.put(db::COL_EXTRA, b"ancient", &hash);
 					*best_ancient_block = Some(BestAncientBlock {
-						hash: hash,
+						hash,
 						number: header.number(),
 					});
 				}
@@ -915,7 +915,7 @@ impl BlockChain {
 				.expect("parent total difficulty always supplied for first block in chunk. only first block can have missing parent; qed");
 
 			let info = BlockInfo {
-				hash: hash,
+				hash,
 				number: header.number(),
 				total_difficulty: d + header.difficulty(),
 				location: BlockLocation::CanonChain,
@@ -942,7 +942,7 @@ impl BlockChain {
 					block_receipts: self.prepare_block_receipts_update(receipts, &info),
 					blocks_blooms: self.prepare_block_blooms_update(bytes, &info),
 					transactions_addresses: self.prepare_transaction_addresses_update(bytes, &info),
-					info: info,
+					info,
 					block: bytes,
 				},
 				is_best,
@@ -1161,8 +1161,8 @@ impl BlockChain {
 			.unwrap_or_else(|| panic!("Invalid parent hash: {:?}", parent_hash));
 
 		BlockInfo {
-			hash: hash,
-			number: number,
+			hash,
+			number,
 			total_difficulty: parent_details.total_difficulty + header.difficulty(),
 			location: match extras.fork_choice {
 				ForkChoice::New => {
@@ -1187,8 +1187,8 @@ impl BlockChain {
 								.collect::<Vec<_>>();
 							BlockLocation::BranchBecomingCanonChain(BranchBecomingCanonChainData {
 								ancestor: route.ancestor,
-								enacted: enacted,
-								retracted: retracted,
+								enacted,
+								retracted,
 							})
 						}
 					}
@@ -1486,8 +1486,8 @@ impl BlockChain {
 			total_difficulty: info.total_difficulty,
 			parent: parent_hash,
 			children: vec![],
-			is_finalized: is_finalized,
-			metadata: metadata,
+			is_finalized,
+			metadata,
 		};
 
 		// write to batch
@@ -1749,7 +1749,7 @@ impl BlockChain {
 			best_block_number: best_block.header.number(),
 			best_block_timestamp: best_block.header.timestamp(),
 			first_block_hash: self.first_block(),
-			first_block_number: From::from(self.first_block_number()),
+			first_block_number: self.first_block_number(),
 			ancient_block_hash: best_ancient_block.as_ref().map(|b| b.hash),
 			ancient_block_number: best_ancient_block.as_ref().map(|b| b.number),
 		}
@@ -1837,7 +1837,7 @@ mod tests {
 			bytes,
 			receipts,
 			ExtrasInsert {
-				fork_choice: fork_choice,
+				fork_choice,
 				is_finalized: false,
 				metadata: None,
 			},
