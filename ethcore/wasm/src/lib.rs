@@ -104,7 +104,7 @@ impl vm::Vm for WasmInterpreter {
 		let is_create = ext.is_create();
 
 		let mut did_subst_main = false;
-		let mut module_doctor: &mut dyn FnMut(&mut parity_wasm::elements::Module) = &mut |m| {
+		let module_doctor: &mut dyn FnMut(&mut parity_wasm::elements::Module) = &mut |m| {
 			did_subst_main = subst_main_call(m);
 		};
 		let parser::ParsedModule { module, code, data } = parser::payload(

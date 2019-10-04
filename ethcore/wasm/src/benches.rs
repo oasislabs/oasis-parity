@@ -33,6 +33,10 @@ fn wasm_interpreter() -> WasmInterpreter {
 fn prepare_module(params: ActionParams, ext: &mut vm::Ext) -> (Runtime, wasmi::ModuleRef) {
 	let is_create = ext.is_create();
 
+	let mut did_subst_main = false;
+	let module_doctor: &mut dyn FnMut(&mut parity_wasm::elements::Module) = &mut |m| {
+		did_subst_main = subst_main_call(m);
+	};
 	let parser::ParsedModule {
 		mut module, data, ..
 	} = parser::payload(
@@ -45,6 +49,15 @@ fn prepare_module(params: ActionParams, ext: &mut vm::Ext) -> (Runtime, wasmi::M
 		},
 	)
 	.unwrap();
+
+	// Early return when it's a deploy but there's no constructor function.
+	if is_create && !did_subst_main {
+		return Ok(GasLeft::NeedsReturn {
+			gas_left: params.gas,
+			apply_state: true,
+			data: ReturnData::new(code.to_vec(), 0 /* offset */, code.len()),
+		});
+	}
 
 	let loaded_module = wasmi::Module::from_parity_wasm_module(module)
 		.map_err(Error::Interpreter)
