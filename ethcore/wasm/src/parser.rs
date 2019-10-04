@@ -59,7 +59,7 @@ pub struct ParsedModule<'a> {
 pub fn payload<'a>(
 	params: &'a vm::ActionParams,
 	wasm_costs: &vm::WasmCosts,
-	module_doctor: Option<impl Fn(&mut elements::Module)>,
+	module_doctor: Option<&mut dyn FnMut(&mut elements::Module)>,
 ) -> Result<ParsedModule<'a>, vm::Error> {
 	let code = match params.code {
 		Some(ref code) => &code[..],
@@ -68,7 +68,7 @@ pub fn payload<'a>(
 		}
 	};
 
-	let (mut cursor, data_position) = match params.params_type {
+	let (mut cursor, data_position) = match &params.params_type {
 		vm::ParamsType::Embedded => {
 			let module_size = peek_size(&*code);
 			(::std::io::Cursor::new(&code[..module_size]), module_size)
@@ -90,7 +90,7 @@ pub fn payload<'a>(
 		)));
 	}
 
-	if let Some(module_doctor) = module_doctor {
+	if let Some(mut module_doctor) = module_doctor {
 		module_doctor(&mut deserialized_module);
 	}
 

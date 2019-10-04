@@ -103,15 +103,24 @@ impl vm::Vm for WasmInterpreter {
 	fn exec(&mut self, params: ActionParams, ext: &mut dyn vm::Ext) -> vm::Result<GasLeft> {
 		let is_create = ext.is_create();
 
+		let mut did_subst_main = false;
+		let mut module_doctor: &mut dyn FnMut(&mut parity_wasm::elements::Module) = &mut |m| {
+			did_subst_main = subst_main_call(m);
+		};
 		let parser::ParsedModule { module, code, data } = parser::payload(
 			&params,
 			ext.schedule().wasm(),
-			if is_create {
-				Some(subst_main_call)
-			} else {
-				None
-			},
+			if is_create { Some(module_doctor) } else { None },
 		)?;
+
+		// Early return when it's a deploy but there's no constructor function.
+		if is_create && !did_subst_main {
+			return Ok(GasLeft::NeedsReturn {
+				gas_left: params.gas,
+				apply_state: true,
+				data: ReturnData::new(code.to_vec(), 0 /* offset */, code.len()),
+			});
+		}
 
 		let loaded_module =
 			wasmi::Module::from_parity_wasm_module(module).map_err(Error::Interpreter)?;
@@ -230,24 +239,24 @@ impl vm::Vm for WasmInterpreter {
 		Ok(GasLeft::NeedsReturn {
 			gas_left,
 			apply_state,
-			data: ReturnData::new(output, 0, output_len),
+			data: ReturnData::new(output, 0 /* offset */, output_len),
 		})
 	}
 }
 
-/// Replaces the call to `main` in `_start` with one to `_oasis_deploy`.
-fn subst_main_call(module: &mut elements::Module) {
+/// Returns whether the call to `main` in `_start` was replaced with a call to `_oasis_deploy`.
+fn subst_main_call(module: &mut elements::Module) -> bool {
 	let start_fn_idx = match func_index(module, "_start") {
 		Some(idx) => idx,
-		None => return,
+		None => return false,
 	};
 	let deploy_fn_idx = match func_index(module, "_oasis_deploy") {
 		Some(idx) => idx,
-		None => return,
+		None => return false,
 	};
 	let main_fn_idx = match func_index(module, "main") {
 		Some(idx) => idx,
-		None => return,
+		None => return false,
 	};
 
 	let import_section_len: usize = module
@@ -269,7 +278,7 @@ fn subst_main_call(module: &mut elements::Module) {
 		.map(|s| &mut s.bodies_mut()[start_fn_idx as usize - import_section_len])
 	{
 		Some(f) => f,
-		None => return,
+		None => return false,
 	};
 
 	for instr in start_fn.code_mut().elements_mut() {
@@ -279,6 +288,8 @@ fn subst_main_call(module: &mut elements::Module) {
 			}
 		}
 	}
+
+	return true;
 }
 
 /// Returns the function index of an export by name.
