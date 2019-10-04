@@ -103,24 +103,25 @@ impl vm::Vm for WasmInterpreter {
 	fn exec(&mut self, params: ActionParams, ext: &mut dyn vm::Ext) -> vm::Result<GasLeft> {
 		let is_create = ext.is_create();
 
-		let mut did_subst_main = false;
-		let module_doctor: &mut dyn FnMut(&mut parity_wasm::elements::Module) = &mut |m| {
-			did_subst_main = subst_main_call(m);
-		};
-		let parser::ParsedModule { module, code, data } = parser::payload(
-			&params,
-			ext.schedule().wasm(),
-			if is_create { Some(module_doctor) } else { None },
-		)?;
+		let parser::ParsedModule {
+			mut module,
+			code,
+			data,
+		} = parser::payload(&params)?;
 
-		// Early return when it's a deploy but there's no constructor function.
-		if is_create && !did_subst_main {
-			return Ok(GasLeft::NeedsReturn {
-				gas_left: params.gas,
-				apply_state: true,
-				data: ReturnData::new(code.to_vec(), 0 /* offset */, code.len()),
-			});
-		}
+		if is_create {
+			let did_subst_main = subst_main_call(&mut module);
+			if !did_subst_main {
+				// Early return when it's a deploy but there's no constructor function.
+				return Ok(GasLeft::NeedsReturn {
+					gas_left: params.gas,
+					apply_state: true,
+					data: ReturnData::new(code.to_vec(), 0 /* offset */, code.len()),
+				});
+			}
+		};
+
+		let module = parser::inject_gas_counter_and_stack_limiter(module, ext.schedule().wasm())?;
 
 		let loaded_module =
 			wasmi::Module::from_parity_wasm_module(module).map_err(Error::Interpreter)?;
@@ -289,7 +290,7 @@ fn subst_main_call(module: &mut elements::Module) -> bool {
 		}
 	}
 
-	return true;
+	true
 }
 
 /// Returns the function index of an export by name.

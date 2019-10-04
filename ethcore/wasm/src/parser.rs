@@ -56,11 +56,7 @@ pub struct ParsedModule<'a> {
 /// Splits payload to code and data according to params.params_type, also
 /// loads the module instance from payload and injects gas counter according
 /// to schedule.
-pub fn payload<'a>(
-	params: &'a vm::ActionParams,
-	wasm_costs: &vm::WasmCosts,
-	module_doctor: Option<&mut dyn FnMut(&mut elements::Module)>,
-) -> Result<ParsedModule<'a>, vm::Error> {
+pub fn payload<'a>(params: &'a vm::ActionParams) -> Result<ParsedModule<'a>, vm::Error> {
 	let code = match params.code {
 		Some(ref code) => &code[..],
 		None => {
@@ -90,18 +86,6 @@ pub fn payload<'a>(
 		)));
 	}
 
-	if let Some(mut module_doctor) = module_doctor {
-		module_doctor(&mut deserialized_module);
-	}
-
-	let contract_module =
-		wasm_utils::inject_gas_counter(deserialized_module, &gas_rules(wasm_costs))
-			.map_err(|_| vm::Error::Wasm(format!("Wasm contract error: bytecode invalid")))?;
-
-	let contract_module =
-		wasm_utils::stack_height::inject_limiter(contract_module, wasm_costs.max_stack_height)
-			.map_err(|_| vm::Error::Wasm(format!("Wasm contract error: stack limiter failure")))?;
-
 	let (code, data): (&[u8], &[u8]) = match params.params_type {
 		vm::ParamsType::Embedded => {
 			if data_position < code.len() {
@@ -120,8 +104,19 @@ pub fn payload<'a>(
 	};
 
 	Ok(ParsedModule {
-		module: contract_module,
+		module: deserialized_module,
 		code,
 		data,
 	})
+}
+
+pub fn inject_gas_counter_and_stack_limiter<'a>(
+	module: elements::Module,
+	wasm_costs: &vm::WasmCosts,
+) -> Result<elements::Module, vm::Error> {
+	let module = wasm_utils::inject_gas_counter(module, &gas_rules(wasm_costs))
+		.map_err(|_| vm::Error::Wasm(format!("Wasm contract error: bytecode invalid")))?;
+	let module = wasm_utils::stack_height::inject_limiter(module, wasm_costs.max_stack_height)
+		.map_err(|_| vm::Error::Wasm(format!("Wasm contract error: stack limiter failure")))?;
+	Ok(module)
 }

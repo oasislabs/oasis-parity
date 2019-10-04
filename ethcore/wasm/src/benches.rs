@@ -31,9 +31,9 @@ fn wasm_interpreter() -> WasmInterpreter {
 
 /// Do everything but the contract call itself, used for testing microbenchmarks
 fn prepare_module(params: ActionParams, ext: &mut vm::Ext) -> (Runtime, wasmi::ModuleRef) {
-	let parser::ParsedModule {
-		mut module, data, ..
-	} = parser::payload(&params, ext.schedule().wasm(), None).unwrap();
+	let parser::ParsedModule { module, data, .. } = parser::payload(&params).unwrap();
+	let module =
+		parser::inject_gas_counter_and_stack_limiter(module, ext.schedule().wasm()).unwrap();
 
 	let loaded_module = wasmi::Module::from_parity_wasm_module(module)
 		.map_err(Error::Interpreter)
