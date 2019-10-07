@@ -24,6 +24,7 @@ use {
 	MessageCallResult, Result, ReturnData, Schedule,
 };
 
+#[derive(Debug)]
 pub struct FakeLogEntry {
 	pub topics: Vec<H256>,
 	pub data: Bytes,
