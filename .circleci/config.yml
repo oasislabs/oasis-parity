@@ -42,7 +42,7 @@ jobs:
       - checkout
       - run:
           name: Tarpaulin code coverage
-          command: docker run --security-opt seccomp=unconfined -v "${PWD}:/volume" xd009642/tarpaulin cargo tarpaulin --ciserver circle-ci --coveralls $COVERALLS_REPO_TOKEN --ignore-tests -p ethcore -p ethcore-transaction -p ethkey -p vm -p wasm --features "ethkey-test"
+          command: docker run --security-opt seccomp=unconfined -v "${PWD}:/volume" -e "RAYON_NUM_THREADS=1" xd009642/tarpaulin cargo tarpaulin --ciserver circle-ci --coveralls $COVERALLS_REPO_TOKEN --ignore-tests -p ethcore -p ethcore-transaction -p ethkey -p vm -p wasm --features "ethkey-test"
 
 
 workflows:
