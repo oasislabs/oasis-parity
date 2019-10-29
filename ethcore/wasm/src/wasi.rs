@@ -1,5 +1,6 @@
 use std::convert::TryInto;
 use std::io::{IoSlice, IoSliceMut};
+use std::path::Path;
 
 use blockchain_traits::PendingTransaction as _;
 use wasi_types::*;
@@ -21,6 +22,21 @@ macro_rules! bcfs {
 			Err(errno) => return Ok(errno)
 		}
 	}
+}
+
+macro_rules! read_path {
+	($self:ident, $path_ptr:expr, $path_len: expr) => {{
+		let path = std::path::Path::new(
+			// NB: immutable borrow of `self`
+			match std::str::from_utf8($self.memory.get($path_ptr, $path_len as usize)?) {
+				Ok(path_str) => path_str,
+				Err(_) => return Ok(ErrNo::Inval),
+			},
+			);
+		let path_ptr = path as *const std::path::Path;
+		std::mem::forget(path);
+		unsafe { &*path_ptr } // aliasing is safe as BCFS doesn't disturb linear memory
+		}};
 }
 
 #[wasm_macros::wasm_exports]
@@ -311,13 +327,19 @@ impl<'a> crate::Runtime<'a> {
 
 	pub fn path_filestat_get(
 		&mut self,
-		_fd: Fd,
+		dir_fd: Fd,
 		_lookup_flags: LookupFlags,
-		_path: P<u8>,
-		_path_len: u32,
-		_filestat_buf: P<FileStat>,
+		path: P<u8>,
+		path_len: u32,
+		buf: P<FileStat>,
 	) -> crate::Result<ErrNo> {
-		Ok(ErrNo::NoSys) // unimplemented(todo): vfs only allows statting open files
+		let path = read_path!(self, path, path_len);
+		let fd = bcfs!(self
+			.bcfs
+			.open(dir_fd, path, OpenFlags::default(), FdFlags::APPEND));
+		self.memory.set_value(buf, bcfs!(self.bcfs.filestat(fd)))?;
+		bcfs!(self.bcfs.close(fd));
+		Ok(ErrNo::Success)
 	}
 
 	pub fn path_filestat_set_times(
@@ -358,16 +380,7 @@ impl<'a> crate::Runtime<'a> {
 		fd_flags: FdFlags,
 		p_fd: P<Fd>,
 	) -> crate::Result<ErrNo> {
-		let path = std::path::Path::new(
-			// NB: immutable borrow of `self`
-			match std::str::from_utf8(self.memory.get(path, path_len as usize)?) {
-				Ok(path_str) => path_str,
-				Err(_) => return Ok(ErrNo::Inval),
-			},
-		);
-		let path_ptr = path as *const std::path::Path;
-		std::mem::forget(path);
-		let path = unsafe { &*path_ptr }; // aliasing is safe as BCFS doesn't disturb linear memory
+		let path = read_path!(self, path, path_len);
 		let fd = bcfs!(self // NB: mutable borrow of `self as PendingTransaction``
 			.bcfs
 			.open(dir_fd, path, open_flags, fd_flags));
@@ -425,16 +438,7 @@ impl<'a> crate::Runtime<'a> {
 		path: P<u8>,
 		path_len: u32,
 	) -> crate::Result<ErrNo> {
-		let path = std::path::Path::new(
-			// NB: immutable borrow of `self`
-			match std::str::from_utf8(self.memory.get(path, path_len as usize)?) {
-				Ok(path_str) => path_str,
-				Err(_) => return Ok(ErrNo::Inval),
-			},
-		);
-		let path_ptr = path as *const std::path::Path;
-		std::mem::forget(path);
-		let path = unsafe { &*path_ptr }; // aliasing is safe as BCFS doesn't disturb linear memory
+		let path = read_path!(self, path, path_len);
 		let prev_len = bcfs!(self.bcfs.unlink(dir_fd, path));
 		self.ext
 			.inc_sstore_clears(prev_len as u64)
