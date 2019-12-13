@@ -10,7 +10,7 @@ blockchain-traits = "0.2"
 common-types = { path = "../types" }
 ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
 log = "0.3"
-oasis-types = "0.2"
+oasis-types = "0.3"
 parity-wasm = "0.31"
 # libc = "0.2"
 pwasm-utils = "0.2"
