@@ -376,13 +376,13 @@ pub trait ConfidentialCtx {
 	/// Encrypts the given data to be placed into contract storage under the context.
 	/// The runtime allows *only a given contract* to encrypt/decrypt this data, as
 	/// opposed to the `encrypt` method, which allows a user's client to decrypt.
-	fn encrypt_storage_value(&mut self, data: Vec<u8>) -> Result<Vec<u8>>;
+	fn encrypt_storage_value(&mut self, storage_key: &[u8], data: Vec<u8>) -> Result<Vec<u8>>;
 
 	/// Encrypts the given data as a contract storage key.
 	fn encrypt_storage_key(&self, data: Vec<u8>) -> Result<Vec<u8>>;
 
 	/// Analog to `encrypt_storage_value` for decrypting storage values.
-	fn decrypt_storage_value(&self, data: Vec<u8>) -> Result<Vec<u8>>;
+	fn decrypt_storage_value(&self, storage_key: &[u8], data: Vec<u8>) -> Result<Vec<u8>>;
 }
 
 pub struct AuthenticatedPayload {
