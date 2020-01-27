@@ -636,7 +636,7 @@ impl<B: Backend> State<B> {
 	pub fn storage_bytes_at(&self, address: &Address, key: &H256) -> trie::Result<Vec<u8>> {
 		let key = self.to_storage_key(key);
 		let value = self._storage_at(address, &key)?;
-		Ok(self.from_storage_value(key.as_ref(), value))
+		Ok(self.from_storage_value(key.to_vec(), value))
 	}
 
 	/// Mutate storage of account `address` so that it is `value` for `key`.
@@ -790,7 +790,7 @@ impl<B: Backend> State<B> {
 	) -> trie::Result<()> {
 		trace!(target: "state", "set_storage({}:{:x} to {:?})", a, key, value);
 		let key = self.to_storage_key(&key);
-		let value = self.to_storage_value(&key, value);
+		let value = self.to_storage_value(key.to_vec(), value);
 		self._set_storage(a, key, value)
 	}
 
@@ -1407,7 +1407,7 @@ impl<B: Backend> State<B> {
 	/// Returns the given value in a format that is suitable for storage.
 	/// If a confidential context is open, then encrypts the value. Otherwise
 	/// returns the given value as a Vec.
-	fn to_storage_value(&self, storage_key: &[u8], value: Vec<u8>) -> Vec<u8> {
+	fn to_storage_value(&self, storage_key: Vec<u8>, value: Vec<u8>) -> Vec<u8> {
 		if self.is_encrypting() {
 			self.confidential_ctx
 				.as_ref()
@@ -1423,7 +1423,7 @@ impl<B: Backend> State<B> {
 	/// Transforms the given value--from storage--into its plaintext representation.
 	/// If a confidential context is open, then decrypts the value, otherwise returns
 	/// the value as given.
-	fn from_storage_value(&self, storage_key: &[u8], value: Option<Vec<u8>>) -> Vec<u8> {
+	fn from_storage_value(&self, storage_key: Vec<u8>, value: Option<Vec<u8>>) -> Vec<u8> {
 		if value.is_none() {
 			return vec![];
 		}
