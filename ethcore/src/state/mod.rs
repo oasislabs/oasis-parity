@@ -1407,13 +1407,13 @@ impl<B: Backend> State<B> {
 	/// Returns the given value in a format that is suitable for storage.
 	/// If a confidential context is open, then encrypts the value. Otherwise
 	/// returns the given value as a Vec.
-	fn to_storage_value(&self, key: &[u8], value: Vec<u8>) -> Vec<u8> {
+	fn to_storage_value(&self, storage_key: &[u8], value: Vec<u8>) -> Vec<u8> {
 		if self.is_encrypting() {
 			self.confidential_ctx
 				.as_ref()
 				.expect("Cannot encrypt without a confidential context")
 				.borrow_mut()
-				.encrypt_storage_value(key, value)
+				.encrypt_storage_value(storage_key, value)
 				.expect("Should be able to encrypt storage")
 		} else {
 			value
@@ -1423,7 +1423,7 @@ impl<B: Backend> State<B> {
 	/// Transforms the given value--from storage--into its plaintext representation.
 	/// If a confidential context is open, then decrypts the value, otherwise returns
 	/// the value as given.
-	fn from_storage_value(&self, key: &[u8], value: Option<Vec<u8>>) -> Vec<u8> {
+	fn from_storage_value(&self, storage_key: &[u8], value: Option<Vec<u8>>) -> Vec<u8> {
 		if value.is_none() {
 			return vec![];
 		}
@@ -1433,7 +1433,7 @@ impl<B: Backend> State<B> {
 				.as_ref()
 				.expect("Cannot decrypt without a confidential context")
 				.borrow()
-				.decrypt_storage_value(key, value)
+				.decrypt_storage_value(storage_key, value)
 				.expect("Corrupted state")
 		} else {
 			value
