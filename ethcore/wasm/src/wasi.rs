@@ -106,7 +106,7 @@ impl<'a> crate::Runtime<'a> {
 			format!("SENDER={:x}\0", self.context.sender).as_bytes(),
 		)?;
 		environs[2] = environ_buf;
-		self.memory.set(
+		environ_buf = self.memory.set(
 			environ_buf,
 			format!("AAD={}\0", self.context.aad_str).as_bytes(),
 		)?;
