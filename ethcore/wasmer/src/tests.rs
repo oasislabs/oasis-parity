@@ -123,6 +123,7 @@ fn io() {
 	let code = load_sample!("io");
 	let mut params = ActionParams::default();
 	params.data = Some(b"hello, world!".to_vec());
+	params.aad = Some(b"hello, gateway!".to_vec());
 	params.gas = U256::from(1_000_000);
 	params.code = Some(Arc::new(code));
 	let mut ext = FakeExt::new().with_wasm();
@@ -133,7 +134,10 @@ fn io() {
 	let (_apply, return_data, _gas_left) = test_finalize(runtime.exec(params, &mut ext)).unwrap();
 
 	let output = std::str::from_utf8(&*return_data).unwrap();
-	assert_eq!(output, "the input was: hello, world!\n");
+	assert_eq!(
+		output,
+		"the input was: hello, world!\nthe aad was: hello, gateway!\n"
+	);
 }
 
 #[test]
