@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 
 [dependencies]
+base64 = "0.10"
 bcfs = "0.3"
 byteorder = "1.0"
 blockchain-traits = "0.3"

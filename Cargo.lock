@@ -3143,6 +3143,7 @@ dependencies = [
 name = "wasmer"
 version = "0.1.0"
 dependencies = [
+ "base64 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "bcfs 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "blockchain-traits 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",

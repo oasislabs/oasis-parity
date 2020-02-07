@@ -95,7 +95,7 @@ impl<'a> crate::Runtime<'a> {
 		mut environ_buf: WasmPtr<u8>,
 	) -> crate::Result<u16> {
 		let environs = self
-			.memory_get_mut::<WasmPtr<u8>>(ctx, environ.offset(), 3)
+			.memory_get_mut::<WasmPtr<u8>>(ctx, environ.offset(), 4)
 			.unwrap();
 
 		environs[0] = environ_buf;
@@ -115,6 +115,14 @@ impl<'a> crate::Runtime<'a> {
 			)
 			.unwrap();
 		environs[2] = environ_buf;
+		environ_buf = self
+			.memory_set(
+				ctx,
+				environ_buf.offset(),
+				format!("AAD={}\0", self.context.aad_str).as_bytes(),
+			)
+			.unwrap();
+		environs[3] = environ_buf;
 		self.memory_set(
 			ctx,
 			environ_buf.offset(),
@@ -134,10 +142,11 @@ impl<'a> crate::Runtime<'a> {
 		self.memory_set_value(
 			ctx,
 			environ_buf_size.offset(),
-			("SENDER=".len()
-				+ ADDR_CHARS + "\0ADDRESS=".len()
-				+ ADDR_CHARS + "\0VALUE=".len()
-				+ self.context.value_str.len()) as u32,
+			#[rustfmt::skip]
+			("SENDER=".len() + ADDR_CHARS +
+             "\0ADDRESS=".len() + ADDR_CHARS +
+             "\0VALUE=".len() + self.context.aad_str.len() +
+             "\0AAD=".len() + self.context.value_str.len()) as u32,
 		)
 		.unwrap();
 		Ok(ErrNo::Success as u16)
