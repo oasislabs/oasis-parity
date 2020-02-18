@@ -372,11 +372,12 @@ impl EthereumMachine {
 
 	/// Returns new contract address generation scheme at given block number.
 	pub fn create_address_scheme(&self, number: BlockNumber) -> CreateContractAddress {
-		if number >= self.params().eip86_transition {
-			CreateContractAddress::FromCodeHash
-		} else {
-			CreateContractAddress::FromSenderAndNonce
+		let mut salt = ethereum_types::H256::new();
+		#[cfg(not(test))]
+		{
+			rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, salt.as_mut());
 		}
+		CreateContractAddress::FromSenderSaltAndCodeHash(salt)
 	}
 
 	/// Verify a particular transaction is valid, regardless of order.
