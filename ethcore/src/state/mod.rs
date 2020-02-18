@@ -1569,7 +1569,7 @@ mod tests {
 			}),
 			result: trace::Res::Create(trace::CreateResult {
 				gas_used: U256::from(40),
-				address: Address::from_str("8988167e088c87cd314df6d3c2b83da5acb93ace").unwrap(),
+				address: Address::from_str("1cac9669e3248c02ee6c0cb76c8737c421d3c455").unwrap(),
 				code: vec![96, 0, 53, 84, 21, 96, 9, 87, 0, 91, 96, 32, 53, 96, 0, 53],
 			}),
 		}];
