@@ -37,7 +37,7 @@ num-bigint = { version = "0.1", default-features = false }
 num-integer = { version = "0.1", default-features = false }
 num-traits = { version = "0.1", default-features = false }
 parity-machine = { path = "../machine" }
-rand = "0.6.5"
+rand = "0.7"
 rlp = { path = "../util/rlp" }
 rlp_compress = { path = "../util/rlp_compress" }
 rlp_derive = { path = "../util/rlp_derive" }
@@ -60,7 +60,7 @@ serde_json = "1.0"
 [dev-dependencies]
 tempdir = "0.3"
 trie-standardmap = { path = "../util/trie-standardmap" }
-rand = "0.6.5"
+rand = "0.7"
 
 [features]
 default = ["enable-confidential"]

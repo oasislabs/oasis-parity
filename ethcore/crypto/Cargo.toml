@@ -7,7 +7,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 ethereum-types = { version = "0.3", default-features = false, features = ["std", "serialize"] }
 quick-error = "1.2"
 # TODO: Remove when merged upstream (briansmith/ring#738).
-ring = { git = "https://github.com/akash-fortanix/ring", branch = "sgx-target" }
+ring = { git = "https://github.com/oasislabs/ring-sgx", branch = "sgx-target" }
 ripemd160 = "0.8.0"
 tiny-keccak = "1.4"
 
