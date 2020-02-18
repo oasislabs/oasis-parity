@@ -104,8 +104,6 @@ pub struct CommonParams {
 	pub validate_receipts_transition: BlockNumber,
 	/// Validate transaction chain id.
 	pub validate_chain_id_transition: BlockNumber,
-	/// Number of first block where EIP-86 (Metropolis) rules begin.
-	pub eip86_transition: BlockNumber,
 	/// Number of first block where EIP-140 (Metropolis: REVERT opcode) rules begin.
 	pub eip140_transition: BlockNumber,
 	/// Number of first block where EIP-210 (Metropolis: BLOCKHASH changes) rules begin.
@@ -179,7 +177,7 @@ impl CommonParams {
 
 	/// Apply common spec config parameters to the schedule.
 	pub fn update_schedule(&self, block_number: u64, schedule: &mut ::vm::Schedule) {
-		schedule.have_create2 = block_number >= self.eip86_transition;
+		schedule.have_create2 = true;
 		schedule.have_revert = block_number >= self.eip140_transition;
 		schedule.have_static_call = block_number >= self.eip214_transition;
 		schedule.have_return_data = block_number >= self.eip211_transition;
@@ -200,16 +198,7 @@ impl CommonParams {
 
 	/// Whether these params contain any bug-fix hard forks.
 	pub fn contains_bugfix_hard_fork(&self) -> bool {
-		self.eip98_transition != 0
-			&& self.eip155_transition != 0
-			&& self.validate_receipts_transition != 0
-			&& self.eip86_transition != 0
-			&& self.eip140_transition != 0
-			&& self.eip210_transition != 0
-			&& self.eip211_transition != 0
-			&& self.eip214_transition != 0
-			&& self.validate_chain_id_transition != 0
-			&& self.dust_protection_transition != 0
+		true
 	}
 }
 
@@ -239,9 +228,6 @@ impl From<ethjson::spec::Params> for CommonParams {
 			eip155_transition: p.eip155_transition.map_or(0, Into::into),
 			validate_receipts_transition: p.validate_receipts_transition.map_or(0, Into::into),
 			validate_chain_id_transition: p.validate_chain_id_transition.map_or(0, Into::into),
-			eip86_transition: p
-				.eip86_transition
-				.map_or_else(BlockNumber::max_value, Into::into),
 			eip140_transition: p
 				.eip140_transition
 				.map_or_else(BlockNumber::max_value, Into::into),

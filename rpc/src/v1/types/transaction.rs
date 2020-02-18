@@ -162,8 +162,8 @@ pub struct RichRawTransaction {
 
 impl RichRawTransaction {
 	/// Creates new `RichRawTransaction` from `SignedTransaction`.
-	pub fn from_signed(tx: SignedTransaction, block_number: u64, eip86_transition: u64) -> Self {
-		let tx = Transaction::from_signed(tx, block_number, eip86_transition);
+	pub fn from_signed(tx: SignedTransaction, block_number: u64) -> Self {
+		let tx = Transaction::from_signed(tx, block_number);
 		RichRawTransaction {
 			raw: tx.raw.clone(),
 			transaction: tx,
@@ -173,13 +173,9 @@ impl RichRawTransaction {
 
 impl Transaction {
 	/// Convert `LocalizedTransaction` into RPC Transaction.
-	pub fn from_localized(mut t: LocalizedTransaction, eip86_transition: u64) -> Transaction {
+	pub fn from_localized(mut t: LocalizedTransaction) -> Transaction {
 		let signature = t.signature();
-		let scheme = if t.block_number >= eip86_transition {
-			CreateContractAddress::FromCodeHash
-		} else {
-			CreateContractAddress::FromSenderAndNonce
-		};
+		let scheme = CreateContractAddress::FromSenderAndNonce;
 		Transaction {
 			hash: t.hash().into(),
 			nonce: t.nonce.into(),
@@ -215,17 +211,9 @@ impl Transaction {
 	}
 
 	/// Convert `SignedTransaction` into RPC Transaction.
-	pub fn from_signed(
-		t: SignedTransaction,
-		block_number: u64,
-		eip86_transition: u64,
-	) -> Transaction {
+	pub fn from_signed(t: SignedTransaction, block_number: u64) -> Transaction {
 		let signature = t.signature();
-		let scheme = if block_number >= eip86_transition {
-			CreateContractAddress::FromCodeHash
-		} else {
-			CreateContractAddress::FromSenderAndNonce
-		};
+		let scheme = CreateContractAddress::FromSenderAndNonce;
 		Transaction {
 			hash: t.hash().into(),
 			nonce: t.nonce.into(),
@@ -261,12 +249,8 @@ impl Transaction {
 	}
 
 	/// Convert `PendingTransaction` into RPC Transaction.
-	pub fn from_pending(
-		t: PendingTransaction,
-		block_number: u64,
-		eip86_transition: u64,
-	) -> Transaction {
-		let mut r = Transaction::from_signed(t.transaction, block_number, eip86_transition);
+	pub fn from_pending(t: PendingTransaction, block_number: u64) -> Transaction {
+		let mut r = Transaction::from_signed(t.transaction, block_number);
 		r.condition = t.condition.map(|b| b.into());
 		r
 	}
@@ -304,7 +288,10 @@ mod tests {
 	fn test_transaction_serialize() {
 		let t = Transaction::default();
 		let serialized = serde_json::to_string(&t).unwrap();
-		assert_eq!(serialized, r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"blockNumber":null,"transactionIndex":null,"from":"0x0000000000000000000000000000000000000000","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","input":"0x","creates":null,"raw":"0x","publicKey":null,"chainId":null,"standardV":"0x0","v":"0x0","r":"0x0","s":"0x0","condition":null}"#);
+		assert_eq!(
+			serialized,
+			r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"blockNumber":null,"transactionIndex":null,"from":"0x0000000000000000000000000000000000000000","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","input":"0x","creates":null,"raw":"0x","publicKey":null,"chainId":null,"standardV":"0x0","v":"0x0","r":"0x0","s":"0x0","condition":null}"#
+		);
 	}
 
 	#[test]
@@ -347,9 +334,9 @@ mod tests {
 		);
 		assert_eq!(
 			serde_json::to_string(&status7).unwrap(),
-			r#"{"status":"replaced","transaction":"#.to_owned() +
-			&format!("{}", tx_ser) +
-			r#","hash":"0x000000000000000000000000000000000000000000000000000000000000000a","gasPrice":"0x5"}"#
+			r#"{"status":"replaced","transaction":"#.to_owned()
+				+ &format!("{}", tx_ser)
+				+ r#","hash":"0x000000000000000000000000000000000000000000000000000000000000000a","gasPrice":"0x5"}"#
 		);
 	}
 }

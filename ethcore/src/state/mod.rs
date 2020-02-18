@@ -1537,6 +1537,10 @@ mod tests {
 		let mut state = get_temp_state();
 
 		let mut info = EnvInfo::default();
+		info.last_hashes = Arc::new(vec![H256::from_str(
+			"9f1897f227a8a843c0961a5227709fa962dc6860a2129750fdb450f48d7459bb",
+		)
+		.unwrap()]);
 		info.gas_limit = 1_000_000.into();
 		let machine = make_frontier_machine(5);
 
@@ -1569,7 +1573,7 @@ mod tests {
 			}),
 			result: trace::Res::Create(trace::CreateResult {
 				gas_used: U256::from(40),
-				address: Address::from_str("1cac9669e3248c02ee6c0cb76c8737c421d3c455").unwrap(),
+				address: Address::from_str("f55820d083087a5e3dfc39a36273bcc3eb2f23fe").unwrap(),
 				code: vec![96, 0, 53, 84, 21, 96, 9, 87, 0, 91, 96, 32, 53, 96, 0, 53],
 			}),
 		}];
@@ -1602,6 +1606,10 @@ mod tests {
 		let mut state = get_temp_state();
 
 		let mut info = EnvInfo::default();
+		info.last_hashes = Arc::new(vec![H256::from_str(
+			"9f1897f227a8a843c0961a5227709fa962dc6860a2129750fdb450f48d7459bb",
+		)
+		.unwrap()]);
 		info.gas_limit = 1_000_000.into();
 		let machine = make_frontier_machine(5);
 
