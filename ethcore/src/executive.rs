@@ -400,7 +400,10 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		let (result, output) = match t.action {
 			Action::Create => {
 				let (new_address, code_hash) = contract_address(
-					self.machine.create_address_scheme(self.info.number),
+					self.machine.create_address_scheme(
+						self.info.number,
+						*self.info.last_hashes.first().unwrap(),
+					),
 					&sender,
 					&nonce,
 					&t.data,

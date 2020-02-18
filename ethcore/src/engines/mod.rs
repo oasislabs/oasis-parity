@@ -450,7 +450,7 @@ pub trait EthEngine: Engine<::machine::EthereumMachine> {
 
 	/// Returns new contract address generation scheme at given block number.
 	fn create_address_scheme(&self, number: BlockNumber) -> CreateContractAddress {
-		self.machine().create_address_scheme(number)
+		self.machine().create_address_scheme(number, H256::zero())
 	}
 
 	/// Verify a particular transaction is valid.
