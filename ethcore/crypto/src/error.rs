@@ -54,7 +54,6 @@ quick_error! {
 		// }
 		Ring(e: ring::error::Unspecified) {
 			display("symmetric crypto error")
-			cause(e)
 			from()
 		}
 		Offset(x: usize) {
