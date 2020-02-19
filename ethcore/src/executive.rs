@@ -334,7 +334,9 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 			.map_err(|e| ExecutionError::TransactionMalformed(e))?;
 
 		let schedule = self.machine.schedule(self.info.number);
-		let confidential = oasis_contract.as_ref().map_or(false, |c| c.confidential);
+		let confidential = oasis_contract
+			.as_ref()
+			.map_or(false, |c| c.is_confidential());
 		let base_gas_required = U256::from(t.gas_required(&schedule, confidential));
 
 		if t.gas < base_gas_required {

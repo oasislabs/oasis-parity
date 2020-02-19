@@ -100,7 +100,7 @@ impl ConfidentialVm {
 			Ok(params
 				.oasis_contract
 				.as_ref()
-				.map_or(false, |c| c.confidential))
+				.map_or(false, |c| c.salt_if_confidential.is_some()))
 		}
 		// If we haven't executed a confidential contract in this transaction yet, check
 		// if the target contract is confidential. Don't check the given oasis_contract

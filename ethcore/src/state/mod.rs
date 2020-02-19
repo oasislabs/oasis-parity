@@ -1355,7 +1355,7 @@ impl<B: Backend> State<B> {
 			}
 		};
 
-		Ok(contract.as_ref().map_or(false, |c| c.confidential))
+		Ok(contract.as_ref().map_or(false, |c| c.is_confidential()))
 	}
 
 	pub fn is_encrypting(&self) -> bool {

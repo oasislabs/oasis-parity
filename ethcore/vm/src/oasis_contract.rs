@@ -12,7 +12,7 @@ pub struct OasisContract {
 	/// Header version.
 	pub header_version: usize,
 	/// Flag indicating whether contract is confidential.
-	pub confidential: bool,
+	pub salt_if_confidential: Option<Salt>,
 	/// Expiration timestamp for contract's storage (None if unspecified).
 	pub expiry: Option<u64>,
 	/// Header, to be prepended to stored bytecode.
@@ -24,9 +24,16 @@ pub struct OasisContract {
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Header {
-	confidential: Option<bool>,
+	salt_if_confidential: Option<Salt>,
 	expiry: Option<u64>,
 }
+
+/// Given that the contract state subtrie is not currently checked against the root hash,
+/// the salt exists to prevent a malicious worker from substituting the contract code for
+/// another that writes confidential state to the (public) io trie).
+/// In this way, the address specified by the sender becomes a MAC, and hence closes the
+/// aforementioned side channel.
+type Salt = [u8; 32];
 
 impl OasisContract {
 	pub fn from_code(raw_code: &[u8]) -> Result<Option<Self>, String> {
@@ -74,12 +81,13 @@ impl OasisContract {
 
 		Ok(Some(Self {
 			header_version,
-			confidential: h.confidential.unwrap_or(false),
+			salt_if_confidential: h.salt_if_confidential,
 			expiry: h.expiry,
 			header: raw_header,
 			code: Arc::new(code),
 		}))
 	}
+
 	pub fn make_header(version: usize, json_str: String) -> Vec<u8> {
 		// start with header prefix
 		let mut data = ElasticArray128::from_slice(&OASIS_HEADER_PREFIX[..]);
@@ -101,6 +109,10 @@ impl OasisContract {
 		data.append_slice(&contents);
 
 		data.into_vec()
+	}
+
+	pub fn is_confidential(&self) -> bool {
+		self.salt_if_confidential.is_some()
 	}
 }
 
@@ -129,7 +141,7 @@ mod tests {
 		let data = make_data_payload(
 			1,
 			json!({
-				"confidential": true,
+				"salt_if_confidential": &[1u8; std::mem::size_of::<Salt>()],
 				"expiry": 1577836800,
 			})
 			.to_string(),
@@ -137,7 +149,7 @@ mod tests {
 
 		let contract = OasisContract::from_code(&data).unwrap().unwrap();
 
-		assert_eq!(contract.confidential, true);
+		assert_eq!(contract.salt_if_confidential, Some([1u8; 32]));
 		assert_eq!(contract.expiry, Some(1577836800));
 		assert_eq!(contract.code, Arc::new("contract code".as_bytes().to_vec()));
 	}
@@ -147,14 +159,14 @@ mod tests {
 		let data = make_data_payload(
 			1,
 			json!({
-				"confidential": true,
+				"salt_if_confidential": &[2u8; std::mem::size_of::<Salt>()],
 			})
 			.to_string(),
 		);
 
 		let contract = OasisContract::from_code(&data).unwrap().unwrap();
 
-		assert_eq!(contract.confidential, true);
+		assert_eq!(contract.is_confidential(), true);
 		assert_eq!(contract.expiry, None);
 	}
 
@@ -170,7 +182,7 @@ mod tests {
 
 		let contract = OasisContract::from_code(&data).unwrap().unwrap();
 
-		assert_eq!(contract.confidential, false);
+		assert!(!contract.is_confidential());
 		assert_eq!(contract.expiry, Some(1577836800));
 	}
 
@@ -179,7 +191,7 @@ mod tests {
 		let data = make_data_payload(
 			2,
 			json!({
-				"confidential": true,
+				"salt_if_confidential": null,
 				"expiry": 1577836800,
 			})
 			.to_string(),
@@ -194,9 +206,7 @@ mod tests {
 		let data = make_data_payload(
 			1,
 			json!({
-				"expiry": 1577836800,
-				"unknown": "something",
-				"blah": "blah",
+				"confidential": true,
 			})
 			.to_string(),
 		);
@@ -206,10 +216,30 @@ mod tests {
 	}
 
 	#[test]
+	fn test_stringified_salt() {
+		let mut salt = [0u8; std::mem::size_of::<Salt>()];
+		for i in 0..salt.len() {
+			salt[i] = i as u8;
+		}
+		let salt_str = format!(
+			"[{}]",
+			salt.iter()
+				.map(|i| i.to_string())
+				.collect::<Vec<_>>()
+				.join(",")
+		);
+		let data = make_data_payload(1, format!("{{\"salt_if_confidential\":{}}}", salt_str));
+
+		let contract = OasisContract::from_code(&data).unwrap().unwrap();
+		assert_eq!(contract.salt_if_confidential, Some(salt));
+	}
+
+	#[test]
 	fn test_duplicate_key() {
 		let data = make_data_payload(
 			1,
-			"{\"expiry\":1577836800,\"confidential\":true,\"expiry\":1577836801}".to_string(),
+			"{\"expiry\":1577836800,\"salt_if_confidential\":null,\"expiry\":1577836801}"
+				.to_string(),
 		);
 
 		let result = OasisContract::from_code(&data);
@@ -256,7 +286,7 @@ mod tests {
 		let invalid_confidential = make_data_payload(
 			1,
 			json!({
-				"confidential": "true",
+				"salt_if_confidential": "0123456789abcdef",
 				"expiry": 1577836800,
 			})
 			.to_string(),
@@ -269,7 +299,7 @@ mod tests {
 		let invalid_expiry = make_data_payload(
 			1,
 			json!({
-				"confidential": true,
+				"salt_if_confidential": &[3u8; std::mem::size_of::<Salt>()],
 				"expiry": "1577836800",
 			})
 			.to_string(),
