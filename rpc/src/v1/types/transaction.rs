@@ -256,29 +256,6 @@ impl Transaction {
 	}
 }
 
-/*impl LocalTransactionStatus {
-	/// Convert `LocalTransactionStatus` into RPC `LocalTransactionStatus`.
-	pub fn from(s: miner::pool::local_transactions::Status, block_number: u64, eip86_transition: u64) -> Self {
-		let convert = |tx: Arc<miner::pool::VerifiedTransaction>| {
-			Transaction::from_signed(tx.signed().clone(), block_number, eip86_transition)
-		};
-		use miner::pool::local_transactions::Status::*;
-		match s {
-			Pending(_) => LocalTransactionStatus::Pending,
-			Mined(tx) => LocalTransactionStatus::Mined(convert(tx)),
-			Dropped(tx) => LocalTransactionStatus::Dropped(convert(tx)),
-			Rejected(tx, reason) => LocalTransactionStatus::Rejected(convert(tx), reason),
-			Invalid(tx) => LocalTransactionStatus::Invalid(convert(tx)),
-			Canceled(tx) => LocalTransactionStatus::Canceled(convert(tx)),
-			Replaced { old, new } => LocalTransactionStatus::Replaced(
-				convert(old),
-				new.signed().gas_price.into(),
-				new.signed().hash().into(),
-			),
-		}
-	}
-}*/
-
 #[cfg(test)]
 mod tests {
 	use super::{LocalTransactionStatus, Transaction};
