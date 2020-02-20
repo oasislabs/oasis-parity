@@ -34,7 +34,7 @@ use transaction::{self, SignedTransaction, UnverifiedTransaction, SYSTEM_ADDRESS
 // use tx_filter::TransactionFilter;
 
 use bytes::BytesRef;
-use ethereum_types::{Address, H256, U256};
+use ethereum_types::{Address, U256};
 use rlp::Rlp;
 use vm::{ActionParams, ActionValue, CallType, OasisContract, ParamsType};
 use vm::{CreateContractAddress, EnvInfo, Schedule};
