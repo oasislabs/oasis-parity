@@ -2814,7 +2814,7 @@ mod tests {
 		let salt = [1u8; 32];
 		let mut code = crate::vm::OasisContract::make_header(
 			1,
-			serde_json::json!({ "salt_if_confidential": &salt }).to_string(),
+			serde_json::json!({ "saltIfConfidential": &salt }).to_string(),
 		);
 		code.append(&mut initcode);
 

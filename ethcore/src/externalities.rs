@@ -261,7 +261,7 @@ where
 				};
 				let mut header_code = OasisContract::make_header(
 					1,
-					json!({ "salt_if_confidential": salt }).to_string(),
+					json!({ "saltIfConfidential": salt }).to_string(),
 				);
 				header_code.append(&mut code.to_vec());
 				header_code
