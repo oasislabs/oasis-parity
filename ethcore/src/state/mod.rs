@@ -1602,10 +1602,6 @@ mod tests {
 		let mut state = get_temp_state();
 
 		let mut info = EnvInfo::default();
-		info.last_hashes = Arc::new(vec![H256::from_str(
-			"9f1897f227a8a843c0961a5227709fa962dc6860a2129750fdb450f48d7459bb",
-		)
-		.unwrap()]);
 		info.gas_limit = 1_000_000.into();
 		let machine = make_frontier_machine(5);
 
