@@ -22,7 +22,7 @@ pub struct OasisContract {
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct Header {
 	salt_if_confidential: Option<Salt>,
 	expiry: Option<u64>,
@@ -141,7 +141,7 @@ mod tests {
 		let data = make_data_payload(
 			1,
 			json!({
-				"salt_if_confidential": &[1u8; std::mem::size_of::<Salt>()],
+				"saltIfConfidential": &[1u8; std::mem::size_of::<Salt>()],
 				"expiry": 1577836800,
 			})
 			.to_string(),
@@ -159,7 +159,7 @@ mod tests {
 		let data = make_data_payload(
 			1,
 			json!({
-				"salt_if_confidential": &[2u8; std::mem::size_of::<Salt>()],
+				"saltIfConfidential": &[2u8; std::mem::size_of::<Salt>()],
 			})
 			.to_string(),
 		);
@@ -191,7 +191,7 @@ mod tests {
 		let data = make_data_payload(
 			2,
 			json!({
-				"salt_if_confidential": null,
+				"saltIfConfidential": null,
 				"expiry": 1577836800,
 			})
 			.to_string(),
@@ -228,7 +228,7 @@ mod tests {
 				.collect::<Vec<_>>()
 				.join(",")
 		);
-		let data = make_data_payload(1, format!("{{\"salt_if_confidential\":{}}}", salt_str));
+		let data = make_data_payload(1, format!("{{\"saltIfConfidential\":{}}}", salt_str));
 
 		let contract = OasisContract::from_code(&data).unwrap().unwrap();
 		assert_eq!(contract.salt_if_confidential, Some(salt));
@@ -238,8 +238,7 @@ mod tests {
 	fn test_duplicate_key() {
 		let data = make_data_payload(
 			1,
-			"{\"expiry\":1577836800,\"salt_if_confidential\":null,\"expiry\":1577836801}"
-				.to_string(),
+			"{\"expiry\":1577836800,\"saltIfConfidential\":null,\"expiry\":1577836801}".to_string(),
 		);
 
 		let result = OasisContract::from_code(&data);
@@ -286,7 +285,7 @@ mod tests {
 		let invalid_confidential = make_data_payload(
 			1,
 			json!({
-				"salt_if_confidential": "0123456789abcdef",
+				"saltIfConfidential": "0123456789abcdef",
 				"expiry": 1577836800,
 			})
 			.to_string(),
@@ -299,7 +298,7 @@ mod tests {
 		let invalid_expiry = make_data_payload(
 			1,
 			json!({
-				"salt_if_confidential": &[3u8; std::mem::size_of::<Salt>()],
+				"saltIfConfidential": &[3u8; std::mem::size_of::<Salt>()],
 				"expiry": "1577836800",
 			})
 			.to_string(),
