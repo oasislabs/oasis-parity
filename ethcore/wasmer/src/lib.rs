@@ -209,20 +209,23 @@ impl vm::Vm for WasmRuntime {
 
 /// Replaces the call to `main` in `_start` with one to `_oasis_deploy`.
 fn subst_main_call(module: &mut Module) {
-	let module_info = module.info();
+	// let module_info = module.info();
+	//
+	// let start_fn_idx = match func_index(module_info, "_start") {
+	// 	Some(idx) => idx,
+	// 	None => return,
+	// };
+	// let deploy_fn_idx = match func_index(module_info, "_oasis_deploy") {
+	// 	Some(idx) => idx,
+	// 	None => return,
+	// };
+	// let main_fn_idx =
+	// 	match func_index(module, "__original_main").or_else(|| func_index(module, "main")) {
+	// 		Some(idx) => idx,
+	// 		None => return,
+	// 	};
 
-	let start_fn_idx = match func_index(module_info, "_start") {
-		Some(idx) => idx,
-		None => return,
-	};
-	let deploy_fn_idx = match func_index(module_info, "_oasis_deploy") {
-		Some(idx) => idx,
-		None => return,
-	};
-	let mut main_fn_idx = match func_index(module_info, "main") {
-		Some(idx) => idx,
-		None => return,
-	};
+	unimplemented!()
 
 	// TODO: Unimplemented
 	// Need to get mutable access to the exports and replace function index, same as in wasmi

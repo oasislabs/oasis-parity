@@ -68,17 +68,26 @@ pub fn contract_address(
 			stream.append(nonce);
 			(From::from(keccak(stream.as_raw())), None)
 		}
-		CreateContractAddress::FromCodeHash => {
+		CreateContractAddress::FromSenderSaltAndCodeHash(salt) => {
 			let code_hash = keccak(code);
-			let mut buffer = [0xffu8; 20 + 32];
-			&mut buffer[20..].copy_from_slice(&code_hash[..]);
+			let mut buffer = [0u8; 20 + 32 + 32];
+			buffer[0..20].copy_from_slice(&sender[..]);
+			buffer[20..(20 + 32)].copy_from_slice(&salt[..]);
+			buffer[(20 + 32)..].copy_from_slice(&code_hash[..]);
+			(From::from(keccak(&buffer[..])), Some(code_hash))
+		}
+		CreateContractAddress::FromSaltAndCodeHash(salt) => {
+			let code_hash = keccak(code);
+			let mut buffer = [0u8; 32 + 32];
+			buffer[0..32].copy_from_slice(&salt[..]);
+			buffer[32..].copy_from_slice(&code_hash[..]);
 			(From::from(keccak(&buffer[..])), Some(code_hash))
 		}
 		CreateContractAddress::FromSenderAndCodeHash => {
 			let code_hash = keccak(code);
 			let mut buffer = [0u8; 20 + 32];
-			&mut buffer[..20].copy_from_slice(&sender[..]);
-			&mut buffer[20..].copy_from_slice(&code_hash[..]);
+			buffer[..20].copy_from_slice(&sender[..]);
+			buffer[20..].copy_from_slice(&code_hash[..]);
 			(From::from(keccak(&buffer[..])), Some(code_hash))
 		}
 	}
@@ -332,7 +341,9 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 			.map_err(|e| ExecutionError::TransactionMalformed(e))?;
 
 		let schedule = self.machine.schedule(self.info.number);
-		let confidential = oasis_contract.as_ref().map_or(false, |c| c.confidential);
+		let confidential = oasis_contract
+			.as_ref()
+			.map_or(false, |c| c.is_confidential());
 		let base_gas_required = U256::from(t.gas_required(&schedule, confidential));
 
 		if t.gas < base_gas_required {
@@ -386,7 +397,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 		let mut substate = Substate::new();
 
 		// NOTE: there can be no invalid transactions from this point.
-		if !schedule.eip86 || !t.is_unsigned() {
+		if !t.is_unsigned() {
 			self.state.inc_nonce(&sender)?;
 		}
 		self.state.sub_balance(
@@ -397,12 +408,18 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 
 		let (result, output) = match t.action {
 			Action::Create => {
-				let (new_address, code_hash) = contract_address(
-					self.machine.create_address_scheme(self.info.number),
-					&sender,
-					&nonce,
-					&t.data,
-				);
+				let address_scheme = oasis_contract
+					.as_ref()
+					.and_then(|oasis_contract| {
+						oasis_contract
+							.salt_if_confidential
+							.map(|salt| CreateContractAddress::FromSaltAndCodeHash(salt.into()))
+					})
+					.unwrap_or_else(|| self.machine.create_address_scheme(self.info.number));
+
+				let (new_address, code_hash) =
+					contract_address(address_scheme, &sender, &nonce, &t.data);
+
 				let params = ActionParams {
 					code_address: new_address.clone(),
 					code_hash: code_hash,
@@ -443,6 +460,23 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 				)
 			}
 			Action::Call(ref address) => {
+				if let Some(OasisContract {
+					salt_if_confidential: Some(salt),
+					code,
+					..
+				}) = &oasis_contract
+				{
+					let expected_address = contract_address(
+						CreateContractAddress::FromSaltAndCodeHash((*salt).into()),
+						&Default::default(), /* unused */
+						&Default::default(), /* unused */
+						&code,
+					)
+					.0;
+					if *address != expected_address {
+						return Err(ExecutionError::InvalidCode);
+					}
+				}
 				let params = ActionParams {
 					code_address: address.clone(),
 					address: address.clone(),
@@ -2691,12 +2725,17 @@ mod tests {
 
 	macro_rules! create_wasm_executive {
 		($factory:ident -> ($state:ident, $exec:ident)) => {
+			create_wasm_executive!($factory -> ($state, $exec), |state| {});
+        };
+		($factory:ident -> ($state:ident, $exec:ident), |state| $state_init:block) => {
 			let mut info = EnvInfo::default();
 			info.number = 100; // wasm activated at block 10
 			info.last_hashes = Arc::new(vec![H256::zero()]);
+			info.gas_limit = U256::from(0xffffffffffffffffu64);
 
 			let machine = ::ethereum::new_kovan_wasm_test_machine();
 			let mut $state = get_temp_state_with_factory($factory);
+			$state_init
 			let mut $exec = Executive::new(&mut $state, &info, &machine);
 		};
 	}
@@ -2766,6 +2805,49 @@ mod tests {
 			new_acct_data.as_ref().map(|v| v.as_slice()),
 			Ok(b"hello".as_ref())
 		);
+	}
+
+	evm_test! {test_wasm_c10l_transact: test_wasm_c10l_transact_int}
+	fn test_wasm_c10l_transact(factory: Factory) {
+		let mut initcode =
+			include_bytes!("../res/wasi-tests/target/service/create_ctor.wasm").to_vec();
+		let salt = [1u8; 32];
+		let mut code = crate::vm::OasisContract::make_header(
+			1,
+			serde_json::json!({ "salt_if_confidential": &salt }).to_string(),
+		);
+		code.append(&mut initcode);
+
+		let (expected_addr, expected_code_hash) = contract_address(
+			CreateContractAddress::FromSaltAndCodeHash(salt.into()),
+			&Default::default(),
+			&Default::default(),
+			&code,
+		);
+		let expected_code_hash = expected_code_hash.unwrap();
+
+		let keypair = Random.generate().unwrap();
+		let t = Transaction {
+			action: Action::Create,
+			value: U256::from(1),
+			data: code,
+			gas: U256::from(0xffffffffu64),
+			gas_price: U256::zero(),
+			nonce: U256::zero(),
+		}
+		.sign(keypair.secret(), None);
+
+		create_wasm_executive!(factory -> (state, exec), |state| {
+			state
+				.add_balance(&t.sender(), &U256::from(2), CleanupMode::NoEmpty)
+				.unwrap();
+		});
+
+		let executed = exec
+			.transact(&t, TransactOptions::with_no_tracing())
+			.unwrap();
+
+		assert_eq!(state.code_hash(&expected_addr), Ok(expected_code_hash));
 	}
 
 	evm_test! {test_wasm_xcc: test_wasm_xcc_int}

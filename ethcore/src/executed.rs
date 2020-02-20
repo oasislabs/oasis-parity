@@ -117,6 +117,8 @@ pub enum ExecutionError {
 	TransactionMalformed(String),
 	/// Returned when a non-confidential transaction execution is requested in confidential mode.
 	NotConfidential,
+	/// For confidential transactions, the code at address was not what was expected.
+	InvalidCode,
 }
 
 impl From<Box<trie::TrieError>> for ExecutionError {
@@ -169,6 +171,7 @@ impl fmt::Display for ExecutionError {
 			SenderMustExist => write!(f, "Transacting from an empty account"),
 			Internal(ref msg) => write!(f, "{}", msg),
 			TransactionMalformed(ref err) => write!(f, "Malformed transaction: {}", err),
+			InvalidCode => write!(f, "Invalid code found in state"),
 			NotConfidential => write!(
 				f,
 				"Tried executing a non-confidential transaction in confidential mode"

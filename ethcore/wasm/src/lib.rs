@@ -255,10 +255,11 @@ fn subst_main_call(module: &mut elements::Module) -> bool {
 		Some(idx) => idx,
 		None => return false,
 	};
-	let main_fn_idx = match func_index(module, "main") {
-		Some(idx) => idx,
-		None => return false,
-	};
+	let main_fn_idx =
+		match func_index(module, "__original_main").or_else(|| func_index(module, "main")) {
+			Some(idx) => idx,
+			None => return false,
+		};
 
 	let import_section_len: usize = module
 		.import_section()
