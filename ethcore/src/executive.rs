@@ -71,16 +71,23 @@ pub fn contract_address(
 		CreateContractAddress::FromSenderSaltAndCodeHash(salt) => {
 			let code_hash = keccak(code);
 			let mut buffer = [0u8; 20 + 32 + 32];
-			&mut buffer[0..20].copy_from_slice(&sender[..]);
-			&mut buffer[20..(20 + 32)].copy_from_slice(&salt[..]);
-			&mut buffer[(20 + 32)..].copy_from_slice(&code_hash[..]);
+			buffer[0..20].copy_from_slice(&sender[..]);
+			buffer[20..(20 + 32)].copy_from_slice(&salt[..]);
+			buffer[(20 + 32)..].copy_from_slice(&code_hash[..]);
+			(From::from(keccak(&buffer[..])), Some(code_hash))
+		}
+		CreateContractAddress::FromSaltAndCodeHash(salt) => {
+			let code_hash = keccak(code);
+			let mut buffer = [0u8; 32 + 32];
+			buffer[0..32].copy_from_slice(&salt[..]);
+			buffer[32..].copy_from_slice(&code_hash[..]);
 			(From::from(keccak(&buffer[..])), Some(code_hash))
 		}
 		CreateContractAddress::FromSenderAndCodeHash => {
 			let code_hash = keccak(code);
 			let mut buffer = [0u8; 20 + 32];
-			&mut buffer[..20].copy_from_slice(&sender[..]);
-			&mut buffer[20..].copy_from_slice(&code_hash[..]);
+			buffer[..20].copy_from_slice(&sender[..]);
+			buffer[20..].copy_from_slice(&code_hash[..]);
 			(From::from(keccak(&buffer[..])), Some(code_hash))
 		}
 	}
@@ -401,15 +408,18 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 
 		let (result, output) = match t.action {
 			Action::Create => {
-				let (new_address, code_hash) = contract_address(
-					self.machine.create_address_scheme(
-						self.info.number,
-						*self.info.last_hashes.first().unwrap(),
-					),
-					&sender,
-					&nonce,
-					&t.data,
-				);
+				let address_scheme = oasis_contract
+					.as_ref()
+					.and_then(|oasis_contract| {
+						oasis_contract
+							.salt_if_confidential
+							.map(|salt| CreateContractAddress::FromSaltAndCodeHash(salt.into()))
+					})
+					.unwrap_or_else(|| self.machine.create_address_scheme(self.info.number));
+
+				let (new_address, code_hash) =
+					contract_address(address_scheme, &sender, &nonce, &t.data);
+
 				let params = ActionParams {
 					code_address: new_address.clone(),
 					code_hash: code_hash,
@@ -450,6 +460,23 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 				)
 			}
 			Action::Call(ref address) => {
+				if let Some(OasisContract {
+					salt_if_confidential: Some(salt),
+					code,
+					..
+				}) = &oasis_contract
+				{
+					let expected_address = contract_address(
+						CreateContractAddress::FromSaltAndCodeHash((*salt).into()),
+						&Default::default(), /* unused */
+						&Default::default(), /* unused */
+						&code,
+					)
+					.0;
+					if *address != expected_address {
+						return Err(ExecutionError::InvalidCode);
+					}
+				}
 				let params = ActionParams {
 					code_address: address.clone(),
 					address: address.clone(),

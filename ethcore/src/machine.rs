@@ -371,8 +371,8 @@ impl EthereumMachine {
 	}
 
 	/// Returns new contract address generation scheme at given block number.
-	pub fn create_address_scheme(&self, number: BlockNumber, salt: H256) -> CreateContractAddress {
-		CreateContractAddress::FromSenderSaltAndCodeHash(salt)
+	pub fn create_address_scheme(&self, number: BlockNumber) -> CreateContractAddress {
+		CreateContractAddress::FromSenderAndNonce
 	}
 
 	/// Verify a particular transaction is valid, regardless of order.

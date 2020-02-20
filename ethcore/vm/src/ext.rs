@@ -57,6 +57,9 @@ pub enum CreateContractAddress {
 	FromSenderAndNonce,
 	/// Address is calculated from sender, salt and code hash. EIP-86 CREATE2 scheme.
 	FromSenderSaltAndCodeHash(H256),
+	/// Address is calculated from salt and code hash. Similar to EIP-86 CREATE2 scheme
+	/// except that the Addreess MAC can be verified without knowing the creator.
+	FromSaltAndCodeHash(H256),
 	/// Address is calculated from code hash and sender. Used by pwasm create ext.
 	FromSenderAndCodeHash,
 }

@@ -253,12 +253,15 @@ where
 					.borrow()
 					.activated()
 			{
+				let salt = match address_scheme {
+					CreateContractAddress::FromSaltAndCodeHash(salt) => salt,
+					_ => unreachable!(
+						"confidential `create` must have address derived from salt and code hash"
+					),
+				};
 				let mut header_code = OasisContract::make_header(
 					1,
-					json!({
-						"confidential": true
-					})
-					.to_string(),
+					json!({ "salt_if_confidential": salt }).to_string(),
 				);
 				header_code.append(&mut code.to_vec());
 				header_code
