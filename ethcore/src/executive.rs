@@ -2725,12 +2725,17 @@ mod tests {
 
 	macro_rules! create_wasm_executive {
 		($factory:ident -> ($state:ident, $exec:ident)) => {
+			create_wasm_executive!($factory -> ($state, $exec), |state| {});
+        };
+		($factory:ident -> ($state:ident, $exec:ident), |state| $state_init:block) => {
 			let mut info = EnvInfo::default();
 			info.number = 100; // wasm activated at block 10
 			info.last_hashes = Arc::new(vec![H256::zero()]);
+			info.gas_limit = U256::from(0xffffffffffffffffu64);
 
 			let machine = ::ethereum::new_kovan_wasm_test_machine();
 			let mut $state = get_temp_state_with_factory($factory);
+			$state_init
 			let mut $exec = Executive::new(&mut $state, &info, &machine);
 		};
 	}
@@ -2800,6 +2805,49 @@ mod tests {
 			new_acct_data.as_ref().map(|v| v.as_slice()),
 			Ok(b"hello".as_ref())
 		);
+	}
+
+	evm_test! {test_wasm_c10l_transact: test_wasm_c10l_transact_int}
+	fn test_wasm_c10l_transact(factory: Factory) {
+		let mut initcode =
+			include_bytes!("../res/wasi-tests/target/service/create_ctor.wasm").to_vec();
+		let salt = [1u8; 32];
+		let mut code = crate::vm::OasisContract::make_header(
+			1,
+			serde_json::json!({ "salt_if_confidential": &salt }).to_string(),
+		);
+		code.append(&mut initcode);
+
+		let (expected_addr, expected_code_hash) = contract_address(
+			CreateContractAddress::FromSaltAndCodeHash(salt.into()),
+			&Default::default(),
+			&Default::default(),
+			&code,
+		);
+		let expected_code_hash = expected_code_hash.unwrap();
+
+		let keypair = Random.generate().unwrap();
+		let t = Transaction {
+			action: Action::Create,
+			value: U256::from(1),
+			data: code,
+			gas: U256::from(0xffffffffu64),
+			gas_price: U256::zero(),
+			nonce: U256::zero(),
+		}
+		.sign(keypair.secret(), None);
+
+		create_wasm_executive!(factory -> (state, exec), |state| {
+			state
+				.add_balance(&t.sender(), &U256::from(2), CleanupMode::NoEmpty)
+				.unwrap();
+		});
+
+		let executed = exec
+			.transact(&t, TransactOptions::with_no_tracing())
+			.unwrap();
+
+		assert_eq!(state.code_hash(&expected_addr), Ok(expected_code_hash));
 	}
 
 	evm_test! {test_wasm_xcc: test_wasm_xcc_int}
