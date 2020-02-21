@@ -3155,6 +3155,7 @@ dependencies = [
  "oasis-types 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "patricia-trie 0.1.0",
  "rlp 0.2.1",
+ "rustc-hex 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.48 (registry+https://github.com/rust-lang/crates.io-index)",
 ]

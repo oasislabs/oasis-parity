@@ -462,7 +462,6 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 			Action::Call(ref address) => {
 				if let Some(OasisContract {
 					salt_if_confidential: Some(salt),
-					code,
 					..
 				}) = &oasis_contract
 				{
@@ -470,7 +469,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
 						CreateContractAddress::FromSaltAndCodeHash((*salt).into()),
 						&Default::default(), /* unused */
 						&Default::default(), /* unused */
-						&code,
+						&self.state.code(address)?.unwrap_or_default(),
 					)
 					.0;
 					if *address != expected_address {
@@ -1030,7 +1029,7 @@ mod tests {
 	use ethkey::{Generator, Random};
 	use evm::{Factory, VMType};
 	use machine::EthereumMachine;
-	use rustc_hex::FromHex;
+	use rustc_hex::{FromHex, ToHex};
 	use state::{CleanupMode, Substate};
 	use std::str::FromStr;
 	use std::sync::Arc;
@@ -2814,7 +2813,7 @@ mod tests {
 		let salt = [1u8; 32];
 		let mut code = crate::vm::OasisContract::make_header(
 			1,
-			serde_json::json!({ "saltIfConfidential": &salt }).to_string(),
+			serde_json::json!({ "saltIfConfidential": salt.to_hex() }).to_string(),
 		);
 		code.append(&mut initcode);
 

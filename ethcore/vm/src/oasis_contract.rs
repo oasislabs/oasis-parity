@@ -1,5 +1,6 @@
 use byteorder::{BigEndian, ByteOrder};
 use elastic_array::ElasticArray128;
+use rustc_hex::FromHex as _;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
@@ -21,10 +22,10 @@ pub struct OasisContract {
 	pub code: Arc<Vec<u8>>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct Header {
-	salt_if_confidential: Option<Salt>,
+	salt_if_confidential: Option<String>,
 	expiry: Option<u64>,
 }
 
@@ -74,6 +75,20 @@ impl OasisContract {
 			Err(e) => return Err("Malformed header".to_string()),
 		};
 
+		let salt_if_confidential = h
+			.salt_if_confidential
+			.map(|salt_str| {
+				let mut salt = [0u8; std::mem::size_of::<Salt>()];
+				match &salt_str.from_hex() {
+					Ok(salt_bytes) if salt_bytes.len() == salt.len() => {
+						salt.copy_from_slice(salt_bytes);
+						Ok(salt)
+					}
+					_ => Err("Malformed salt".to_string()),
+				}
+			})
+			.transpose()?;
+
 		// split the raw code into header and bytecode
 		let header_len = OASIS_HEADER_PREFIX.len() + 4 + length;
 		let raw_header = raw_code[0..header_len].to_vec();
@@ -81,7 +96,7 @@ impl OasisContract {
 
 		Ok(Some(Self {
 			header_version,
-			salt_if_confidential: h.salt_if_confidential,
+			salt_if_confidential,
 			expiry: h.expiry,
 			header: raw_header,
 			code: Arc::new(code),
@@ -128,6 +143,7 @@ fn has_header_prefix(data: &[u8]) -> bool {
 mod tests {
 	use super::*;
 	use elastic_array::ElasticArray128;
+	use rustc_hex::ToHex as _;
 
 	fn make_data_payload(version: usize, json_str: String) -> Vec<u8> {
 		let mut data = OasisContract::make_header(version, json_str);
@@ -141,7 +157,7 @@ mod tests {
 		let data = make_data_payload(
 			1,
 			json!({
-				"saltIfConfidential": &[1u8; std::mem::size_of::<Salt>()],
+				"saltIfConfidential": &[1u8; std::mem::size_of::<Salt>()].to_hex(),
 				"expiry": 1577836800,
 			})
 			.to_string(),
@@ -159,7 +175,7 @@ mod tests {
 		let data = make_data_payload(
 			1,
 			json!({
-				"saltIfConfidential": &[2u8; std::mem::size_of::<Salt>()],
+				"saltIfConfidential": &[2u8; std::mem::size_of::<Salt>()].to_hex(),
 			})
 			.to_string(),
 		);
@@ -221,14 +237,10 @@ mod tests {
 		for i in 0..salt.len() {
 			salt[i] = i as u8;
 		}
-		let salt_str = format!(
-			"[{}]",
-			salt.iter()
-				.map(|i| i.to_string())
-				.collect::<Vec<_>>()
-				.join(",")
+		let data = make_data_payload(
+			1,
+			format!("{{\"saltIfConfidential\":\"{}\"}}", salt.to_hex()),
 		);
-		let data = make_data_payload(1, format!("{{\"saltIfConfidential\":{}}}", salt_str));
 
 		let contract = OasisContract::from_code(&data).unwrap().unwrap();
 		assert_eq!(contract.salt_if_confidential, Some(salt));
@@ -298,7 +310,7 @@ mod tests {
 		let invalid_expiry = make_data_payload(
 			1,
 			json!({
-				"saltIfConfidential": &[3u8; std::mem::size_of::<Salt>()],
+				"saltIfConfidential": &[3u8; std::mem::size_of::<Salt>()].to_hex(),
 				"expiry": "1577836800",
 			})
 			.to_string(),
