@@ -120,10 +120,10 @@ dependencies = [
 
 [[package]]
 name = "bcfs"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "blockchain-traits 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "blockchain-traits 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "nom 5.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "oasis-types 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasi-types 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -232,7 +232,7 @@ dependencies = [
 
 [[package]]
 name = "blockchain-traits"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "oasis-types 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -662,7 +662,7 @@ dependencies = [
 name = "ethcore"
 version = "1.12.0"
 dependencies = [
- "blockchain-traits 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "blockchain-traits 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "bloomchain 0.2.0",
  "bn 0.4.4 (git+https://github.com/paritytech/bn)",
  "byteorder 1.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3143,7 +3143,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "vm"
 version = "0.1.0"
 dependencies = [
- "blockchain-traits 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "blockchain-traits 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "common-types 0.1.0",
  "elastic-array 0.10.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3193,8 +3193,8 @@ name = "wasm"
 version = "0.1.0"
 dependencies = [
  "base64 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "bcfs 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "blockchain-traits 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bcfs 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "blockchain-traits 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "common-types 0.1.0",
  "ethcore-logger 1.12.0",
@@ -3292,8 +3292,8 @@ name = "wasmer"
 version = "0.1.0"
 dependencies = [
  "base64 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "bcfs 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "blockchain-traits 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bcfs 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "blockchain-traits 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "common-types 0.1.0",
  "ethcore-logger 1.12.0",
@@ -3548,7 +3548,7 @@ dependencies = [
 "checksum base-x 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)" = "1b20b618342cf9891c292c4f5ac2cde7287cc5c87e87e9c769d617793607dec1"
 "checksum base64 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)" = "0b25d992356d2eb0ed82172f5248873db5560c4721f564b13cb5193bda5e668e"
 "checksum base64 0.9.3 (registry+https://github.com/rust-lang/crates.io-index)" = "489d6c0ed21b11d038c31b6ceccca973e65d73ba3bd8ecb9a2babf5546164643"
-"checksum bcfs 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e0d19b77d1c664adacadb5d9500b2d93f68e3e391601a9ac7870327a811c3b6c"
+"checksum bcfs 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "82e92e079aa6c85865ab857b119a5ac01ca4aaec96ab8c7b5f50095cb28c6053"
 "checksum bincode 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "5753e2a71534719bf3f4e57006c3a4f0d2c672a4b676eec84161f763eca87dbf"
 "checksum bindgen 0.46.0 (registry+https://github.com/rust-lang/crates.io-index)" = "8f7f7f0701772b17de73e4f5cbcb1dd6926f4706cba4c1ab62c5367f8bdc94e1"
 "checksum bit-set 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d9bf6104718e80d7b26a68fdbacff3481cfc05df670821affc7e9cbc1884400c"
@@ -3560,7 +3560,7 @@ dependencies = [
 "checksum block-buffer 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)" = "a076c298b9ecdb530ed9d967e74a6027d6a7478924520acddcddc24c1c8ab3ab"
 "checksum block-buffer 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)" = "c0940dc441f31689269e10ac70eb1002a3a1d3ad1390e030043662eb7fe4688b"
 "checksum block-padding 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "fa79dedbb091f449f1f39e53edf88d5dbe95f895dae6135a8d7b881fb5af73f5"
-"checksum blockchain-traits 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "404b5282ee3ef9513b884d67e763eff697b5c7a62d4804d3c6ac3a32aa1e500c"
+"checksum blockchain-traits 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ed24a85db12475368a2780d6d72fbcc0dc1cfeb78005e9eb5b0824ac6bda25ac"
 "checksum bn 0.4.4 (git+https://github.com/paritytech/bn)" = "<none>"
 "checksum bumpalo 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "1f359dc14ff8911330a51ef78022d376f25ed00248912803b58f00cb1c27f742"
 "checksum byte-tools 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "560c32574a12a89ecd91f5e742165893f86e3ab98d21f8ea548658eb9eef5f40"
