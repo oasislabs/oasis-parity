@@ -4,6 +4,7 @@ use std::io::{Read as _, Write as _};
 use std::os::wasi::prelude::FromRawFd;
 
 #[link(wasm_import_module = "wasi_unstable")]
+#[allow(improper_ctypes)]
 extern "C" {
 	#[link_name = "blockchain_transact"]
 	fn __wasi_blockchain_transact(

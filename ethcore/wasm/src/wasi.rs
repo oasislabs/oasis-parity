@@ -39,6 +39,16 @@ macro_rules! read_path {
 		}};
 }
 
+macro_rules! fetch_bytes {
+	($self:ident, $p_input:ident, $input_len:ident) => {{
+		let input_len = $input_len as usize;
+		let input_ptr = $self.memory.get::<_, u8>($p_input, input_len)?.as_ptr();
+		std::mem::forget(input_ptr);
+		unsafe { std::slice::from_raw_parts(input_ptr, input_len) }
+		// ^ Mutable borrow needed for `self.transact`, but transact doesn't touch linear memory.
+		}};
+}
+
 #[wasm_macros::wasm_exports]
 impl<'a> crate::Runtime<'a> {
 	// not part of wasi, but required by parity
@@ -465,7 +475,7 @@ impl<'a> crate::Runtime<'a> {
 		let rng_buf_len = rng_buf_blocks * RNG_HASH_BYTES;
 		let mut rng_buf = Vec::with_capacity(rng_buf_len);
 		unsafe { rng_buf.set_len(rng_buf_len) };
-		self.rng.generate_to_slice(&mut rng_buf, None);
+		self.rng.generate_to_slice(&mut rng_buf, None /* aad */);
 		self.memory
 			.get_mut(buf, buf_len)?
 			.copy_from_slice(&rng_buf[..buf_len]);
@@ -474,6 +484,33 @@ impl<'a> crate::Runtime<'a> {
 
 	pub fn sched_yield(&mut self) -> crate::Result<ErrNo> {
 		Ok(ErrNo::Success) // unimplemented(dontneed): there's only one thread
+	}
+
+	pub fn blockchain_create(
+		&mut self,
+		p_value: P<u128>,
+		p_code: P<u8>,
+		code_len: u64,
+		p_fd: P<Fd>,
+	) -> crate::Result<ErrNo> {
+		let code = fetch_bytes!(self, p_code, code_len);
+		let value = self.memory.get_value(p_value)?;
+
+		let receipt = self.create(value, code);
+
+		let fd = bcfs!(self.bcfs.tempfile());
+		bcfs!(self.bcfs.pwrite_vectored(
+			fd,
+			&[IoSlice::new(receipt.callee().as_ref())],
+			0 /* offset */
+		));
+		self.memory.set_value(p_fd, fd)?;
+
+		Ok(if receipt.reverted() {
+			ErrNo::ConnAborted
+		} else {
+			ErrNo::Success
+		})
 	}
 
 	pub fn blockchain_transact(
@@ -485,15 +522,11 @@ impl<'a> crate::Runtime<'a> {
 		p_fd: P<Fd>,
 	) -> crate::Result<ErrNo> {
 		let callee_addr: oasis_types::Address = self.memory.get_value(p_callee_addr)?;
-
-		let input_len = input_len as usize;
-		let input_ptr = self.memory.get::<_, u8>(p_input, input_len)?.as_ptr();
-		std::mem::forget(input_ptr);
-		let input = unsafe { std::slice::from_raw_parts(input_ptr, input_len) };
-		// ^ Mutable borrow needed for `self.transact`, but transact doesn't touch linear memory.
-
+		let input = fetch_bytes!(self, p_input, input_len);
 		let value = self.memory.get_value(p_value)?;
+
 		let receipt = self.transact(callee_addr, value, input);
+
 		let fd = bcfs!(self.bcfs.tempfile());
 		bcfs!(self.bcfs.pwrite_vectored(
 			fd,
