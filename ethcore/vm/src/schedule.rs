@@ -24,7 +24,7 @@ pub struct Schedule {
 	pub exceptional_failed_code_deposit: bool,
 	/// Does it have a delegate cal
 	pub have_delegate_call: bool,
-	/// Does it have a CREATE_P2SH instruction
+	/// Does it have a CREATE2 instruction
 	pub have_create2: bool,
 	/// Does it have a REVERT instruction
 	pub have_revert: bool,
@@ -115,8 +115,6 @@ pub struct Schedule {
 	pub have_bitwise_shifting: bool,
 	/// Kill basic accounts below this balance if touched.
 	pub kill_dust: CleanDustMode,
-	/// Enable EIP-86 rules
-	pub eip86: bool,
 	/// Wasm extra schedule settings, if wasm activated
 	pub wasm: Option<WasmCosts>,
 	/// Default storage duration (in seconds)
@@ -262,7 +260,6 @@ impl Schedule {
 			blockhash_gas: 20,
 			have_static_call: false,
 			kill_dust: CleanDustMode::Off,
-			eip86: false,
 			wasm: None,
 			default_storage_duration: 3155695200, // 100 years
 		}
@@ -334,7 +331,6 @@ impl Schedule {
 			blockhash_gas: 20,
 			have_static_call: false,
 			kill_dust: CleanDustMode::Off,
-			eip86: false,
 			wasm: None,
 			default_storage_duration: 3155695200, // 100 years
 		}

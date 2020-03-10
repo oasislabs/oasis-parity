@@ -303,7 +303,7 @@ lazy_static! {
 		arr[DELEGATECALL as usize] =	InstructionInfo::new("DELEGATECALL",	6, 1, GasPriceTier::Special);
 		arr[STATICCALL as usize] =		InstructionInfo::new("STATICCALL",		6, 1, GasPriceTier::Special);
 		arr[SUICIDE as usize] = 		InstructionInfo::new("SUICIDE",			1, 0, GasPriceTier::Special);
-		arr[CREATE2 as usize] = 		InstructionInfo::new("CREATE2",			3, 1, GasPriceTier::Special);
+		arr[CREATE2 as usize] =         InstructionInfo::new("CREATE2",         4, 1, GasPriceTier::Special);
 		arr[REVERT as usize] =			InstructionInfo::new("REVERT",			2, 0, GasPriceTier::Zero);
 		arr
 	};

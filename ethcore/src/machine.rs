@@ -34,7 +34,7 @@ use transaction::{self, SignedTransaction, UnverifiedTransaction, SYSTEM_ADDRESS
 // use tx_filter::TransactionFilter;
 
 use bytes::BytesRef;
-use ethereum_types::{Address, U256};
+use ethereum_types::{Address, H256, U256};
 use rlp::Rlp;
 use vm::{ActionParams, ActionValue, CallType, OasisContract, ParamsType};
 use vm::{CreateContractAddress, EnvInfo, Schedule};
@@ -371,12 +371,8 @@ impl EthereumMachine {
 	}
 
 	/// Returns new contract address generation scheme at given block number.
-	pub fn create_address_scheme(&self, number: BlockNumber) -> CreateContractAddress {
-		if number >= self.params().eip86_transition {
-			CreateContractAddress::FromCodeHash
-		} else {
-			CreateContractAddress::FromSenderAndNonce
-		}
+	pub fn create_address_scheme(&self, _number: BlockNumber) -> CreateContractAddress {
+		CreateContractAddress::FromSenderAndNonce
 	}
 
 	/// Verify a particular transaction is valid, regardless of order.
