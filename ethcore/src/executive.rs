@@ -2770,6 +2770,62 @@ mod tests {
 		);
 	}
 
+	evm_test! {test_wasm_create: test_wasm_create_int}
+	fn test_wasm_create(factory: Factory) {
+		let code = include_bytes!("../res/wasi-tests/target/service/creator.wasm").to_vec();
+		let sender = Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681").unwrap();
+
+		create_wasm_executive!(factory -> (state, exec));
+
+		exec.state
+			.add_balance(&sender, &U256::from(0xfffff), CleanupMode::NoEmpty)
+			.unwrap();
+
+		let creator_address = deploy_wasm(&mut exec, sender, &code);
+
+		let created_init_balance = 42;
+
+		let created_address = {
+			let mut params = ActionParams::default();
+			params.sender = sender;
+			params.address = creator_address;
+			params.gas = U256::from(1_000_000);
+			params.code = Some(Arc::new(code));
+			params.code_address = creator_address;
+			params.value = ActionValue::transfer(created_init_balance);
+
+			Address::from(
+				&*exec
+					.call(
+						params,
+						&mut Substate::new(),
+						BytesRef::Fixed(&mut []),
+						&mut NoopTracer,
+						&mut NoopVMTracer,
+						&mut NoopExtTracer,
+					)
+					.unwrap()
+					.return_data,
+			)
+		};
+
+		assert_eq!(state.balance(&creator_address).unwrap(), U256::zero());
+		assert_eq!(
+			state.balance(&created_address).unwrap(),
+			U256::from(created_init_balance)
+		);
+
+		// the following data is set by the constructor of `create_ctor.wasm`
+		let k = b"message";
+		let mut hk = [0u8; 32];
+		hk[..k.len()].copy_from_slice(k.as_ref());
+		let new_acct_data = state.storage_bytes_at(&created_address, &H256::from(hk));
+		assert_eq!(
+			new_acct_data.as_ref().map(|v| v.as_slice()),
+			Ok(b"hello".as_ref())
+		);
+	}
+
 	evm_test! {test_wasm_xcc: test_wasm_xcc_int}
 	fn test_wasm_xcc(factory: Factory) {
 		let code_xcc =

@@ -22,7 +22,9 @@ use bcfs::BCFS;
 use blockchain_traits::{KVStore, KVStoreMut, PendingTransaction, TransactionOutcome};
 use common_types::{u128_from_u256, u256_from_u128};
 use ethereum_types::{Address, H256, U256};
-use vm::{self, CallType, MessageCallResult, ReturnData};
+use vm::{
+	self, CallType, ContractCreateResult, CreateContractAddress, MessageCallResult, ReturnData,
+};
 use wasmi::{self, Error as InterpreterError, MemoryRef, Trap, TrapKind};
 
 pub struct RuntimeContext {
@@ -106,6 +108,71 @@ impl<'a> PendingTransaction for Runtime<'a> {
 		&self.args
 	}
 
+	fn create(&mut self, value: u128, code: &[u8]) -> Box<dyn blockchain_traits::Receipt> {
+		trace!(target: "wasm", "runtime: CREATE(value: {:?}), code {:?}", value, code);
+
+		let mut receipt = Box::new(Receipt {
+			caller: *eaddr2maddr(&self.context.address),
+			callee: oasis_types::Address::default(),
+			gas_used: 0,
+			outcome: TransactionOutcome::Fatal,
+			output: ReturnData::empty(),
+		});
+
+		if let Err(err) = self.adjusted_charge(|schedule| Some(schedule.create_gas as u64)) {
+			trace!("CREATE failed adjusted charge {:?}", err);
+			receipt.outcome = TransactionOutcome::InsufficientGas;
+			return receipt;
+		}
+
+		let pre_gas_left = match self.gas_left() {
+			Ok(gas_left) => gas_left,
+			Err(_) => {
+				receipt.outcome = TransactionOutcome::InsufficientGas;
+				return receipt;
+			}
+		};
+
+		let mut salt = H256::new();
+		self.rng.generate_to_slice(salt.as_mut(), None /* aad */);
+
+		let create_result = self.ext.create(
+			&pre_gas_left.into(),
+			&u256_from_u128(value),
+			code,
+			CreateContractAddress::FromSenderSaltAndCodeHash(salt),
+		);
+
+		match create_result {
+			ContractCreateResult::Created(new_contract_addr, post_gas_left) => {
+				receipt.outcome = TransactionOutcome::Success;
+				receipt.callee = *eaddr2maddr(&new_contract_addr);
+				receipt.gas_used = pre_gas_left - post_gas_left.low_u64();
+				// ^ by definition pre_gas_left > post_gas_left so this cannot overflow
+				if !self.charge_gas(receipt.gas_used) {
+					receipt.outcome = TransactionOutcome::InsufficientGas;
+					receipt.gas_used = self.gas_limit;
+					return receipt;
+				}
+			}
+			ContractCreateResult::Failed => {
+				receipt.outcome = TransactionOutcome::Fatal;
+				receipt.gas_used = self.gas_limit;
+			}
+			ContractCreateResult::Reverted(post_gas_left, return_data) => {
+				if !self.charge_gas(receipt.gas_used) {
+					receipt.outcome = TransactionOutcome::InsufficientGas;
+					receipt.gas_used = self.gas_limit;
+					return receipt;
+				}
+				receipt.outcome = TransactionOutcome::Aborted;
+				receipt.gas_used = pre_gas_left - post_gas_left.low_u64();
+				receipt.output = return_data;
+			}
+		}
+		return receipt;
+	}
+
 	/// Executes a balance-transferring RPC to `callee` with provided input and value.
 	/// The new transaction will inherit the gas parameters and gas payer of the top level
 	/// transaction. The current account will be set as the sender.
@@ -127,6 +194,8 @@ impl<'a> PendingTransaction for Runtime<'a> {
 
 		if let Err(err) = self.adjusted_charge(|schedule| Some(schedule.call_gas as u64)) {
 			trace!("CALL failed adjusted charge {:?}", err);
+			receipt.outcome = TransactionOutcome::InsufficientGas;
+			return receipt;
 		}
 
 		let pre_gas_left = match self.gas_left() {

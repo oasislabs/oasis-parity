@@ -12,7 +12,7 @@ jobs:
 
       - run:
           name: Checkstyle
-          command: cargo fmt -p ethcore -p ethcore-transaction -p ethkey -p vm -p wasm -p wasmer -- --check
+          command: cargo fmt -p ethcore -p ethcore-transaction -p ethkey -p vm -p wasm -- --check
 
       # Build ethcore for runtime (SGX)
       - run:
@@ -34,7 +34,7 @@ jobs:
       # Run cargo tests
       - run:
           name: Run cargo tests
-          command: cargo test --package ethcore --package ethcore-transaction --package ethkey --package vm --package wasm --package wasmer --features "ethkey-test"
+          command: cargo test --package ethcore --package ethcore-transaction --package ethkey --package vm --package wasm --features "ethkey-test"
 
   coverage:
     machine: true
