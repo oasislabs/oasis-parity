@@ -129,7 +129,7 @@ checksum = "573c00b7e0a3c27f2c9e85368ae5fde2ec3930a9dfb405d4b6e1b8b71ef36bf2"
 dependencies = [
  "blockchain-traits",
  "nom",
- "oasis-types 0.4.0",
+ "oasis-types",
  "wasi-types",
 ]
 
@@ -229,7 +229,7 @@ version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5271e84966f9e38d1505c89b9879c995853e25a382a3adf4e139f49a07f6f7b0"
 dependencies = [
- "oasis-types 0.4.0",
+ "oasis-types",
 ]
 
 [[package]]
@@ -1608,18 +1608,6 @@ dependencies = [
  "proc-macro2 1.0.10",
  "quote 1.0.3",
  "syn 1.0.17",
-]
-
-[[package]]
-name = "oasis-types"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92720b291a0a3f3046c33005693163dfead0ba74b3db0dd23cb8a4553af5ee71"
-dependencies = [
- "anyhow",
- "derive_more",
- "hex",
- "thiserror",
 ]
 
 [[package]]
@@ -3157,7 +3145,7 @@ dependencies = [
  "ethjson",
  "keccak-hash",
  "log 0.3.9",
- "oasis-types 0.4.0",
+ "oasis-types",
  "patricia-trie",
  "rlp",
  "serde",
@@ -3205,7 +3193,7 @@ dependencies = [
  "hmac-drbg",
  "keccak-hash",
  "log 0.3.9",
- "oasis-types 0.4.0",
+ "oasis-types",
  "parity-wasm",
  "pwasm-utils",
  "serde",
