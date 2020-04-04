@@ -48,7 +48,6 @@ macros = { path = "../util/macros" }
 rustc-hex = "1.0"
 vm = { path = "vm" }
 wasm = { path = "wasm" }
-wasmer = { path = "wasmer", optional = true }
 keccak-hash = { path = "../util/hash" }
 triehash = { path = "../util/triehash" }
 unexpected = { path = "../util/unexpected" }
@@ -87,7 +86,5 @@ enable-confidential = []
 disable-non-confidential = []
 # Enable ethkey features needed for tests (i.e., rand)
 ethkey-test = ["ethkey/test"]
-# Distinguish using wasmi or wasmer as the runtime backend
-use-wasmer-runtime = ["wasmer"]
 # Print wasi stdout/stderr.
 wasi-debug-stdio = ["wasm/wasi-debug-stdio"]

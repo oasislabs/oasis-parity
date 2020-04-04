@@ -61,7 +61,7 @@ pub trait Vm {
 	/// to compute the final gas left.
 	fn exec(&mut self, params: ActionParams, ext: &mut Ext) -> Result<GasLeft>;
 
-	/// For wasmer-backed runtimes:
+	/// For alternative wasm runtimes runtimes:
 	/// - Performs the code compilation and parses arguments, which speeds up exec() when it is later called.
 	/// - This function must be called before exec() and will panic if not coop
 	/// For wasmi-backed runtimes:
