@@ -209,14 +209,20 @@ impl<T: ActivityNotifier> Middleware<T> {
 }
 
 impl<M: rpc::Metadata, T: ActivityNotifier> rpc::Middleware<M> for Middleware<T> {
+	// type Future = pool::CpuFuture<Option<rpc::Response>, ()>;
 	type Future = rpc::futures::future::Either<
 		pool::CpuFuture<Option<rpc::Response>, ()>,
 		rpc::FutureResponse,
 	>;
 
-	fn on_request<F, X>(&self, request: rpc::Request, meta: M, process: F) -> Self::Future
+	fn on_request<F, X>(
+		&self,
+		request: rpc::Request,
+		meta: M,
+		process: F,
+	) -> rpc::futures::future::Either<Self::Future, X>
 	where
-		F: FnOnce(rpc::Request, M) -> X,
+		F: FnOnce(rpc::Request, M) -> X + Send,
 		X: rpc::futures::Future<Item = Option<rpc::Response>, Error = ()> + Send + 'static,
 	{
 		use self::rpc::futures::future::Either::{A, B};
@@ -231,18 +237,18 @@ impl<M: rpc::Metadata, T: ActivityNotifier> rpc::Middleware<M> for Middleware<T>
 			_ => None,
 		};
 		let stats = self.stats.clone();
-		let future = process(request, meta).map(move |res| {
+		let future = Box::new(process(request, meta).map(move |res| {
 			let time = Self::as_micro(start.elapsed());
 			if time > 10_000 {
 				debug!(target: "rpc", "[{:?}] Took {}ms", id, time / 1_000);
 			}
 			stats.add_roundtrip(time);
 			res
-		});
+		}));
 
 		match self.pool {
-			Some(ref pool) => A(pool.spawn(future)),
-			None => B(Box::new(future)),
+			Some(ref pool) => A(A(pool.spawn(future))),
+			None => A(B(future)),
 		}
 	}
 }

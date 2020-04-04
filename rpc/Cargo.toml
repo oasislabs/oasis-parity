@@ -28,15 +28,16 @@ tokio-timer = "0.1"
 transient-hashmap = "0.4"
 itertools = "0.5"
 
-# rev 9e06214 upgrades to hyper v0.12, which fixes an HTTP request smuggling vulnerability
+# The `hyper-v0.12` branch is based on `paritytech/jsonrpc#9e06214` which upgrades
+# hyper to v0.12. This version of hyper has a fix for RUSTSEC-2020-0008.
 # @see https://github.com/paritytech/jsonrpc/pull/303 which was merged as 9e06214
 # @see https://rustsec.org/advisories/RUSTSEC-2020-0008 for a description of the vulnerability
-jsonrpc-core = { git = "https://github.com/paritytech/jsonrpc.git", rev = "9e06214" }
-jsonrpc-http-server = { git = "https://github.com/paritytech/jsonrpc.git", rev = "9e06214" }
-jsonrpc-ws-server = { git = "https://github.com/paritytech/jsonrpc.git", rev = "9e06214" }
-jsonrpc-ipc-server = { git = "https://github.com/paritytech/jsonrpc.git", rev = "9e06214" }
-jsonrpc-macros = { git = "https://github.com/paritytech/jsonrpc.git", rev = "9e06214" }
-jsonrpc-pubsub = { git = "https://github.com/paritytech/jsonrpc.git", rev = "9e06214" }
+jsonrpc-core = { git = "https://github.com/oasislabs/jsonrpc.git", branch = "hyper-v0.12" }
+jsonrpc-http-server = { git = "https://github.com/oasislabs/jsonrpc.git", branch = "hyper-v0.12" }
+jsonrpc-ws-server = { git = "https://github.com/oasislabs/jsonrpc.git", branch = "hyper-v0.12" }
+jsonrpc-ipc-server = { git = "https://github.com/oasislabs/jsonrpc.git", branch = "hyper-v0.12" }
+jsonrpc-macros = { git = "https://github.com/oasislabs/jsonrpc.git", branch = "hyper-v0.12" }
+jsonrpc-pubsub = { git = "https://github.com/oasislabs/jsonrpc.git", branch = "hyper-v0.12" }
 
 ethcore = { path = "../ethcore" }
 ethcore-bytes = { path = "../util/bytes" }

@@ -1142,7 +1142,7 @@ dependencies = [
 [[package]]
 name = "jsonrpc-core"
 version = "9.0.0"
-source = "git+https://github.com/paritytech/jsonrpc.git?rev=9e06214#9e06214d9ac08573baf8c822be6d730a98e99c24"
+source = "git+https://github.com/oasislabs/jsonrpc.git?branch=hyper-v0.12#4f074f64b23b8a1ef5db8ae6d4f512c3036b5081"
 dependencies = [
  "futures",
  "log 0.4.8",
@@ -1154,7 +1154,7 @@ dependencies = [
 [[package]]
 name = "jsonrpc-http-server"
 version = "9.0.0"
-source = "git+https://github.com/paritytech/jsonrpc.git?rev=9e06214#9e06214d9ac08573baf8c822be6d730a98e99c24"
+source = "git+https://github.com/oasislabs/jsonrpc.git?branch=hyper-v0.12#4f074f64b23b8a1ef5db8ae6d4f512c3036b5081"
 dependencies = [
  "hyper",
  "jsonrpc-core",
@@ -1167,7 +1167,7 @@ dependencies = [
 [[package]]
 name = "jsonrpc-ipc-server"
 version = "9.0.0"
-source = "git+https://github.com/paritytech/jsonrpc.git?rev=9e06214#9e06214d9ac08573baf8c822be6d730a98e99c24"
+source = "git+https://github.com/oasislabs/jsonrpc.git?branch=hyper-v0.12#4f074f64b23b8a1ef5db8ae6d4f512c3036b5081"
 dependencies = [
  "jsonrpc-core",
  "jsonrpc-server-utils",
@@ -1180,7 +1180,7 @@ dependencies = [
 [[package]]
 name = "jsonrpc-macros"
 version = "9.0.0"
-source = "git+https://github.com/paritytech/jsonrpc.git?rev=9e06214#9e06214d9ac08573baf8c822be6d730a98e99c24"
+source = "git+https://github.com/oasislabs/jsonrpc.git?branch=hyper-v0.12#4f074f64b23b8a1ef5db8ae6d4f512c3036b5081"
 dependencies = [
  "jsonrpc-core",
  "jsonrpc-pubsub",
@@ -1190,7 +1190,7 @@ dependencies = [
 [[package]]
 name = "jsonrpc-pubsub"
 version = "9.0.0"
-source = "git+https://github.com/paritytech/jsonrpc.git?rev=9e06214#9e06214d9ac08573baf8c822be6d730a98e99c24"
+source = "git+https://github.com/oasislabs/jsonrpc.git?branch=hyper-v0.12#4f074f64b23b8a1ef5db8ae6d4f512c3036b5081"
 dependencies = [
  "jsonrpc-core",
  "log 0.4.8",
@@ -1200,7 +1200,7 @@ dependencies = [
 [[package]]
 name = "jsonrpc-server-utils"
 version = "9.0.0"
-source = "git+https://github.com/paritytech/jsonrpc.git?rev=9e06214#9e06214d9ac08573baf8c822be6d730a98e99c24"
+source = "git+https://github.com/oasislabs/jsonrpc.git?branch=hyper-v0.12#4f074f64b23b8a1ef5db8ae6d4f512c3036b5081"
 dependencies = [
  "bytes",
  "globset",
@@ -1216,7 +1216,7 @@ dependencies = [
 [[package]]
 name = "jsonrpc-ws-server"
 version = "9.0.0"
-source = "git+https://github.com/paritytech/jsonrpc.git?rev=9e06214#9e06214d9ac08573baf8c822be6d730a98e99c24"
+source = "git+https://github.com/oasislabs/jsonrpc.git?branch=hyper-v0.12#4f074f64b23b8a1ef5db8ae6d4f512c3036b5081"
 dependencies = [
  "error-chain 0.12.2",
  "jsonrpc-core",
@@ -1282,12 +1282,6 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 dependencies = [
  "spin",
 ]
-
-[[package]]
-name = "lazycell"
-version = "1.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b294d6fa9ee409a054354afc4352b0b9ef7ca222c69b8812cbea9e7d2bf3783f"
 
 [[package]]
 name = "libc"
@@ -1426,18 +1420,6 @@ dependencies = [
  "net2",
  "slab 0.4.2",
  "winapi 0.2.8",
-]
-
-[[package]]
-name = "mio-extras"
-version = "2.0.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52403fe290012ce777c4626790c8951324a2b9e3316b3143779c72b029742f19"
-dependencies = [
- "lazycell",
- "log 0.4.8",
- "mio",
- "slab 0.4.2",
 ]
 
 [[package]]
@@ -2474,15 +2456,15 @@ dependencies = [
 
 [[package]]
 name = "sha1"
-version = "0.5.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "171698ce4ec7cbb93babeb3190021b4d72e96ccb98e33d277ae4ea959d6f2d9e"
+checksum = "cc30b1e1e8c40c121ca33b86c23308a090d19974ef001b4bf6e61fd1a0fb095c"
 
 [[package]]
 name = "sha1"
-version = "0.6.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2579985fda508104f7587689507983eadd6a6e84dd35d6d115361f530916fa0d"
+checksum = "171698ce4ec7cbb93babeb3190021b4d72e96ccb98e33d277ae4ea959d6f2d9e"
 
 [[package]]
 name = "sha2"
@@ -3363,18 +3345,17 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
 name = "ws"
-version = "0.7.9"
-source = "git+https://github.com/tomusdrw/ws-rs#4baef2dc1abc8e216559af51cfc120bbcc777e21"
+version = "0.7.5"
+source = "git+https://github.com/tomusdrw/ws-rs?rev=4818e05#4818e050f919a36bfeac41f56ec7c41348d6c28f"
 dependencies = [
  "byteorder",
  "bytes",
  "httparse",
- "log 0.4.8",
+ "log 0.3.9",
  "mio",
- "mio-extras",
- "rand 0.4.6",
- "sha1 0.6.0",
- "slab 0.4.2",
+ "rand 0.3.23",
+ "sha1 0.2.0",
+ "slab 0.3.0",
  "url",
 ]
 

@@ -48,16 +48,14 @@ where
 	T: HttpMetaExtractor<Metadata = M>,
 	M: jsonrpc_core::Metadata,
 {
-	fn read_metadata(&self, req: &hyper::server::Request) -> M {
-		let as_string = |header: Option<&hyper::header::Raw>| {
-			header
-				.and_then(|raw| raw.one())
-				.map(|raw| String::from_utf8_lossy(raw).into_owned())
+	fn read_metadata(&self, req: &hyper::Request<hyper::Body>) -> M {
+		let as_string = |header: Option<&hyper::header::HeaderValue>| {
+			header.map(|h| String::from_utf8_lossy(&h.as_ref()).into_owned())
 		};
 
-		let origin = as_string(req.headers().get_raw("origin"));
-		let user_agent = as_string(req.headers().get_raw("user-agent"));
-		let dapps_origin = as_string(req.headers().get_raw("x-parity-origin"));
+		let origin = as_string(req.headers().get("origin"));
+		let user_agent = as_string(req.headers().get("user-agent"));
+		let dapps_origin = as_string(req.headers().get("x-parity-origin"));
 		self.extractor
 			.read_metadata(origin, user_agent, dapps_origin)
 	}

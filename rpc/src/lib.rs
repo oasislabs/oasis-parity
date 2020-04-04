@@ -106,7 +106,7 @@ pub use http_common::HttpMetaExtractor;
 pub use v1::extractors::{RpcExtractor, WsDispatcher, WsExtractor, WsStats};
 pub use v1::{informant, Metadata, Origin};
 
-use http::tokio_core;
+use http::tokio;
 use std::net::SocketAddr;
 
 /// RPC HTTP Server instance
@@ -118,7 +118,7 @@ pub fn start_http<M, S, H, T, R>(
 	cors_domains: http::DomainsValidation<http::AccessControlAllowOrigin>,
 	allowed_hosts: http::DomainsValidation<http::Host>,
 	handler: H,
-	remote: tokio_core::reactor::Remote,
+	remote: tokio::runtime::TaskExecutor,
 	extractor: T,
 	middleware: Option<R>,
 	threads: usize,
@@ -133,7 +133,7 @@ where
 	let extractor = http_common::MetaExtractor::new(extractor);
 	let mut builder = http::ServerBuilder::with_meta_extractor(handler, extractor)
 		.threads(threads)
-		.event_loop_remote(remote)
+		.event_loop_executor(remote)
 		.cors(cors_domains.into())
 		.allowed_hosts(allowed_hosts.into());
 
@@ -148,7 +148,7 @@ where
 pub fn start_ipc<M, S, H, T>(
 	addr: &str,
 	handler: H,
-	remote: tokio_core::reactor::Remote,
+	remote: tokio::runtime::TaskExecutor,
 	extractor: T,
 ) -> ::std::io::Result<ipc::Server>
 where
@@ -158,7 +158,7 @@ where
 	T: IpcMetaExtractor<M>,
 {
 	ipc::ServerBuilder::with_meta_extractor(handler, extractor)
-		.event_loop_remote(remote)
+		.event_loop_executor(remote)
 		.start(addr)
 }
 
@@ -166,7 +166,7 @@ where
 pub fn start_ws<M, S, H, T, U, V>(
 	addr: &SocketAddr,
 	handler: H,
-	remote: tokio_core::reactor::Remote,
+	executor: tokio::runtime::TaskExecutor,
 	allowed_origins: ws::DomainsValidation<ws::Origin>,
 	allowed_hosts: ws::DomainsValidation<ws::Host>,
 	max_connections: usize,
@@ -183,7 +183,7 @@ where
 	V: ws::RequestMiddleware,
 {
 	ws::ServerBuilder::with_meta_extractor(handler, extractor)
-		.event_loop_remote(remote)
+		.event_loop_executor(executor)
 		.request_middleware(middleware)
 		.allowed_origins(allowed_origins)
 		.allowed_hosts(allowed_hosts)

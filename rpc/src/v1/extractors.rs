@@ -242,9 +242,14 @@ impl<M: core::Middleware<Metadata>> WsDispatcher<M> {
 }
 
 impl<M: core::Middleware<Metadata>> core::Middleware<Metadata> for WsDispatcher<M> {
-	type Future = core::futures::future::Either<M::Future, core::FutureResponse>;
+	type Future = core::FutureResponse;
 
-	fn on_request<F, X>(&self, request: core::Request, meta: Metadata, process: F) -> Self::Future
+	fn on_request<F, X>(
+		&self,
+		request: core::Request,
+		meta: Metadata,
+		process: F,
+	) -> core::futures::future::Either<Self::Future, X>
 	where
 		F: FnOnce(core::Request, Metadata) -> X,
 		X: core::futures::Future<Item = Option<core::Response>, Error = ()> + Send + 'static,
@@ -257,9 +262,11 @@ impl<M: core::Middleware<Metadata>> core::Middleware<Metadata> for WsDispatcher<
 		};
 
 		if use_full {
-			A(self.full_handler.handle_rpc_request(request, meta))
+			A(Box::new(
+				self.full_handler.handle_rpc_request(request, meta),
+			))
 		} else {
-			B(Box::new(process(request, meta)))
+			A(Box::new(process(request, meta)))
 		}
 	}
 }
