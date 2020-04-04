@@ -14,7 +14,7 @@ ethereum-types = { version = "0.3", default-features = false, features = ["std",
 hmac-drbg = "=0.1.2"
 keccak-hash = { path = "../../util/hash" }
 log = "0.3"
-oasis-types = "0.3"
+oasis-types = "0.4"
 parity-wasm = "0.31"
 pwasm-utils = "0.2"
 sha2 = "0.6"
