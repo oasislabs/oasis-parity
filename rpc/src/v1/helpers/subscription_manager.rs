@@ -107,7 +107,7 @@ impl<S: core::Middleware<Metadata>> GenericPollManager<S> {
 				jsonrpc: Some(core::Version::V2),
 				id: core::Id::Str(id.as_string()),
 				method: subscription.method.clone(),
-				params: Some(subscription.params.clone()),
+				params: subscription.params.clone(),
 			};
 			trace!(target: "pubsub", "Polling method: {:?}", call);
 			let result = self

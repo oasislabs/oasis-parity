@@ -100,9 +100,6 @@ pub extern crate vm;
 
 extern crate wasm;
 
-#[cfg(feature = "use-wasmer-runtime")]
-extern crate wasmer;
-
 extern crate failure;
 pub extern crate journaldb;
 extern crate memory_cache;

@@ -21,9 +21,6 @@ use vm::{ActionParams, ConfidentialCtx, OasisVm, Schedule, Vm};
 
 use wasm::WasmInterpreter;
 
-#[cfg(feature = "use-wasmer-runtime")]
-use wasmer::WasmRuntime;
-
 const WASM_MAGIC_NUMBER: &'static [u8; 4] = b"\0asm";
 
 /// Virtual machine factory
@@ -33,7 +30,6 @@ pub struct VmFactory {
 }
 
 impl VmFactory {
-	#[cfg(not(feature = "use-wasmer-runtime"))]
 	pub fn create(
 		&self,
 		ctx: Option<Rc<RefCell<Box<ConfidentialCtx>>>>,
@@ -46,26 +42,6 @@ impl VmFactory {
 					code.len() > 4 && &code[0..4] == WASM_MAGIC_NUMBER
 				}) {
 				Box::new(WasmInterpreter)
-			} else {
-				self.evm.create(&params.gas)
-			}
-		};
-		Box::new(OasisVm::new(ctx, vm))
-	}
-
-	#[cfg(feature = "use-wasmer-runtime")]
-	pub fn create(
-		&self,
-		ctx: Option<Rc<RefCell<Box<ConfidentialCtx>>>>,
-		params: &ActionParams,
-		schedule: &Schedule,
-	) -> Box<Vm> {
-		let vm = {
-			if schedule.wasm.is_some()
-				&& params.code.as_ref().map_or(false, |code| {
-					code.len() > 4 && &code[0..4] == WASM_MAGIC_NUMBER
-				}) {
-				Box::new(WasmRuntime::default())
 			} else {
 				self.evm.create(&params.gas)
 			}

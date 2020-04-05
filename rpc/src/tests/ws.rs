@@ -34,11 +34,11 @@ pub fn serve() -> (Server<ws::Server>, usize, GuardedAuthCodes) {
 	let authcodes = GuardedAuthCodes::new();
 	let stats = Arc::new(informant::RpcStats::default());
 
-	let res = Server::new(|remote| {
+	let res = Server::new(|executor| {
 		::start_ws(
 			&address,
 			io,
-			remote,
+			executor,
 			ws::DomainsValidation::Disabled,
 			ws::DomainsValidation::Disabled,
 			5,
