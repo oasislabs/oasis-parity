@@ -528,10 +528,10 @@ pub struct MockConfidentialContext {
 }
 
 impl MockConfidentialContext {
-	pub fn new() -> Self {
+	pub fn activated() -> Self {
 		Self {
-			activated: false,
-			contract: None,
+			activated: true,
+			contract: Some(Address::default()),
 		}
 	}
 }

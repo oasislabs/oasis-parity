@@ -260,13 +260,14 @@ where
 							});
 							headerless_code = oc.code.to_vec();
 						}
+						Ok(Some(_)) => {} // already has a valid header
 						Ok(None) => {
 							new_header = Some(OasisContractHeader::V1 {
 								confidential: Some(true),
 								expiry: None,
 							});
 						}
-						Ok(Some(_)) | Err(_) => {}
+						Err(_) => return ContractCreateResult::Failed,
 					}
 					match new_header {
 						Some(h) => h.to_vec().into_iter().chain(headerless_code).collect(),
@@ -997,15 +998,14 @@ mod tests {
 	#[test]
 	fn create_confidential() {
 		use rustc_hex::{FromHex as _, ToHex as _};
-		use std::{cell::RefCell, rc::Rc, str::FromStr};
+		use std::{cell::RefCell, rc::Rc, str::FromStr, sync::Arc};
 		use vm::ConfidentialCtx as _;
 
-		let create_and_get_code = |code: Vec<u8>| {
+		let create_and_get_code = |code: Vec<u8>| -> Result<Arc<Vec<u8>>, ContractCreateResult> {
 			let mut setup = TestSetup::new();
 
 			let state = &mut setup.state;
-			let mut c10l_ctx = test_helpers::MockConfidentialContext::default();
-			c10l_ctx.activate(Some(Address::default()));
+			let c10l_ctx = test_helpers::MockConfidentialContext::activated();
 			state.confidential_ctx = Some(Rc::new(RefCell::new(Box::new(c10l_ctx))));
 
 			let mut tracer = NoopTracer;
@@ -1033,10 +1033,10 @@ mod tests {
 					CreateContractAddress::FromSenderSaltAndCodeHash(H256::default()),
 				) {
 					ContractCreateResult::Created(address, _) => address,
-					_ => panic!("Test create failed; expected Created, got Failed/Reverted."),
+					res => return Err(res),
 				}
 			};
-			state.code(&address).unwrap().unwrap()
+			Ok(state.code(&address).unwrap().unwrap())
 		};
 
 		// Empty contract compiled using Remix IDE.
@@ -1048,9 +1048,11 @@ mod tests {
 		let expect_code = |header: Option<OasisContractHeader>| {
 			let mut headered_deploycode = header.as_ref().map(|h| h.to_vec()).unwrap_or_default();
 			headered_deploycode.extend(&deploycode);
-			let oc = OasisContract::from_code(&create_and_get_code(headered_deploycode))
-				.unwrap()
-				.unwrap();
+			let contract_code = match create_and_get_code(headered_deploycode) {
+				Ok(code) => code,
+				Err(_) => panic!("contract create failed"),
+			};
+			let oc = OasisContract::from_code(&contract_code).unwrap().unwrap();
 			assert_eq!(oc.header_version, 1);
 			assert_eq!(oc.confidential, true);
 			assert_eq!(
@@ -1082,5 +1084,17 @@ mod tests {
 			confidential: Some(true),
 			expiry: Some(3),
 		}));
+
+		// expect that invalid Oasis header causes failure
+		let header = OasisContractHeader::V1 {
+			confidential: None,
+			expiry: None,
+		};
+		let mut invalid_headered_deploycode = vm::OASIS_HEADER_PREFIX.to_vec();
+		invalid_headered_deploycode.extend(&deploycode);
+		assert!(match create_and_get_code(invalid_headered_deploycode) {
+			Err(ContractCreateResult::Failed) => true,
+			_ => false,
+		});
 	}
 }
