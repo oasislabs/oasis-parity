@@ -1045,28 +1045,42 @@ mod tests {
 
 		let expected_code_hex = "6080604052600080fdfea26469706673582212200604656e3d2eb983e78496078d39b74441869c89fe04d88e9d653aadd8ffcebd64736f6c63430006010033";
 
+		let expect_code = |header: Option<OasisContractHeader>| {
+			let mut headered_deploycode = header.as_ref().map(|h| h.to_vec()).unwrap_or_default();
+			headered_deploycode.extend(&deploycode);
+			let oc = OasisContract::from_code(&create_and_get_code(headered_deploycode))
+				.unwrap()
+				.unwrap();
+			assert_eq!(oc.header_version, 1);
+			assert_eq!(oc.confidential, true);
+			assert_eq!(
+				oc.expiry,
+				header.and_then(|h| match h {
+					OasisContractHeader::V1 { expiry, .. } => expiry,
+				})
+			);
+			assert_eq!(oc.code.to_hex(), expected_code_hex);
+		};
+
 		// expect default header to be added to headerless deploycode
-		let oc = OasisContract::from_code(&create_and_get_code(deploycode.clone()))
-			.unwrap()
-			.unwrap();
-		assert_eq!(oc.header_version, 1);
-		assert_eq!(oc.confidential, true);
-		assert_eq!(oc.expiry, None);
-		assert_eq!(oc.code.to_hex(), expected_code_hex);
+		expect_code(None);
 
 		// expect that `confidential` is set to true and expiry is preserved
-		let manual_header = OasisContractHeader::V1 {
+		expect_code(Some(OasisContractHeader::V1 {
+			confidential: None,
+			expiry: None,
+		}));
+		expect_code(Some(OasisContractHeader::V1 {
 			confidential: Some(false),
 			expiry: Some(1),
-		};
-		let mut headered_deploycode = manual_header.to_vec();
-		headered_deploycode.extend(deploycode);
-		let oc = OasisContract::from_code(&create_and_get_code(headered_deploycode))
-			.unwrap()
-			.unwrap();
-		assert_eq!(oc.header_version, 1);
-		assert_eq!(oc.confidential, true);
-		assert_eq!(oc.expiry, Some(1));
-		assert_eq!(oc.code.to_hex(), expected_code_hex);
+		}));
+		expect_code(Some(OasisContractHeader::V1 {
+			confidential: None,
+			expiry: Some(2),
+		}));
+		expect_code(Some(OasisContractHeader::V1 {
+			confidential: Some(true),
+			expiry: Some(3),
+		}));
 	}
 }
