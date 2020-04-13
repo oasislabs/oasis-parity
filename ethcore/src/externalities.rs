@@ -30,7 +30,7 @@ use trace_ext::NoopExtTracer;
 use transaction::UNSIGNED_SENDER;
 use vm::{
 	self, ActionParams, ActionValue, CallType, ContractCreateResult, CreateContractAddress,
-	EnvInfo, Ext, MessageCallResult, OasisContract, ReturnData, Schedule,
+	EnvInfo, Ext, MessageCallResult, OasisContract, OasisContractHeader, ReturnData, Schedule,
 };
 
 /// Policy for handling output data on `RETURN` opcode.
@@ -244,26 +244,34 @@ where
 		address_scheme: CreateContractAddress,
 	) -> ContractCreateResult {
 		let code = {
-			if self.state.confidential_ctx.is_some()
-				&& self
-					.state
-					.confidential_ctx
-					.as_ref()
-					.unwrap()
-					.borrow()
-					.activated()
-			{
-				let mut header_code = OasisContract::make_header(
-					1,
-					json!({
-						"confidential": true
-					})
-					.to_string(),
-				);
-				header_code.append(&mut code.to_vec());
-				header_code
-			} else {
-				code.to_vec()
+			// The following block sets the `confidential` field of the new
+			// contract's header if it isn't already when the creator is a
+			// confidential contract. This is done to prevent confidential
+			// data from accidentially leaking into a non-confidential context.
+			match &self.state.confidential_ctx {
+				Some(ctx) if ctx.borrow().activated() => {
+					let mut new_header: Option<OasisContractHeader> = None;
+					match OasisContract::from_code(code) {
+						Ok(Some(oc)) if !oc.confidential => {
+							new_header = Some(OasisContractHeader::V1 {
+								confidential: Some(true),
+								expiry: oc.expiry,
+							});
+						}
+						Ok(None) => {
+							new_header = Some(OasisContractHeader::V1 {
+								confidential: Some(true),
+								expiry: None,
+							});
+						}
+						Ok(Some(_)) | Err(_) => {}
+					}
+					match new_header {
+						Some(h) => h.to_vec().into_iter().chain(code.iter().copied()).collect(),
+						None => code.to_vec(),
+					}
+				}
+				_ => code.to_vec(),
 			}
 		};
 

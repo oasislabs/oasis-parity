@@ -21,6 +21,31 @@ pub struct OasisContract {
 	pub code: Arc<Vec<u8>>,
 }
 
+pub enum OasisContractHeader {
+	V1 {
+		confidential: Option<bool>,
+		expiry: Option<u64>,
+	},
+}
+
+impl OasisContractHeader {
+	pub fn to_vec(&self) -> Vec<u8> {
+		match self {
+			OasisContractHeader::V1 {
+				confidential,
+				expiry,
+			} => OasisContract::make_header_unsafe(
+				1usize,
+				json!({
+					"confidential": confidential,
+					"expiry": expiry
+				})
+				.to_string(),
+			),
+		}
+	}
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Header {
@@ -80,7 +105,8 @@ impl OasisContract {
 			code: Arc::new(code),
 		}))
 	}
-	pub fn make_header(version: usize, json_str: String) -> Vec<u8> {
+
+	fn make_header_unsafe(version: usize, json_str: String) -> Vec<u8> {
 		// start with header prefix
 		let mut data = ElasticArray128::from_slice(&OASIS_HEADER_PREFIX[..]);
 
@@ -118,7 +144,7 @@ mod tests {
 	use elastic_array::ElasticArray128;
 
 	fn make_data_payload(version: usize, json_str: String) -> Vec<u8> {
-		let mut data = OasisContract::make_header(version, json_str);
+		let mut data = OasisContract::make_header_unsafe(version, json_str);
 		// append some dummy body data
 		data.append(&mut b"contract code".to_vec());
 		data

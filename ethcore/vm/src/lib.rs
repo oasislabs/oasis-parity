@@ -49,7 +49,7 @@ pub use call_type::CallType;
 pub use env_info::{EnvInfo, LastHashes};
 pub use error::{Error, Result};
 pub use ext::{ContractCreateResult, CreateContractAddress, Ext, MessageCallResult};
-pub use oasis_contract::{OasisContract, OASIS_HEADER_PREFIX};
+pub use oasis_contract::{OasisContract, OasisContractHeader, OASIS_HEADER_PREFIX};
 pub use oasis_vm::{AuthenticatedPayload, ConfidentialCtx, OasisVm};
 pub use return_data::{GasLeft, ReturnData};
 pub use schedule::{CleanDustMode, Schedule, WasmCosts};
