@@ -43,6 +43,7 @@ use state_db::StateDB;
 use std::sync::Arc;
 use transaction::{Action, SignedTransaction, Transaction};
 use views::BlockView;
+use vm::{AuthenticatedPayload, ConfidentialCtx, Result};
 
 pub fn random_address() -> Address {
 	let val: u64 = random();
@@ -519,3 +520,69 @@ impl ChainNotify for TestNotify {
 	}
 }
 */
+
+#[derive(Default)]
+pub struct MockConfidentialContext {
+	activated: bool,
+	contract: Option<Address>,
+}
+
+impl MockConfidentialContext {
+	pub fn new() -> Self {
+		Self {
+			activated: false,
+			contract: None,
+		}
+	}
+}
+
+impl ConfidentialCtx for MockConfidentialContext {
+	fn activate(&mut self, contract: Option<Address>) -> vm::Result<Option<Address>> {
+		self.activated = true;
+		Ok(std::mem::replace(&mut self.contract, contract))
+	}
+
+	fn deactivate(&mut self) {
+		self.contract = None;
+		self.activated = false;
+	}
+
+	fn activated(&self) -> bool {
+		self.activated
+	}
+
+	fn is_encrypting(&self) -> bool {
+		self.activated() && self.contract.is_some()
+	}
+
+	fn encrypt_session(&mut self, data: Vec<u8>) -> vm::Result<Vec<u8>> {
+		Ok(data)
+	}
+
+	fn decrypt_session(&mut self, encrypted_payload: Vec<u8>) -> vm::Result<AuthenticatedPayload> {
+		Ok(AuthenticatedPayload {
+			decrypted_data: encrypted_payload,
+			additional_data: Vec::new(),
+		})
+	}
+
+	fn peer(&self) -> Option<Vec<u8>> {
+		None
+	}
+
+	fn encrypt_storage_value(
+		&mut self,
+		storage_key: Vec<u8>,
+		data: Vec<u8>,
+	) -> vm::Result<Vec<u8>> {
+		Ok(data)
+	}
+
+	fn encrypt_storage_key(&self, data: Vec<u8>) -> vm::Result<Vec<u8>> {
+		Ok(data)
+	}
+
+	fn decrypt_storage_value(&self, storage_key: Vec<u8>, data: Vec<u8>) -> vm::Result<Vec<u8>> {
+		Ok(data)
+	}
+}

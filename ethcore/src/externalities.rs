@@ -251,12 +251,14 @@ where
 			match &self.state.confidential_ctx {
 				Some(ctx) if ctx.borrow().activated() => {
 					let mut new_header: Option<OasisContractHeader> = None;
+					let mut headerless_code = code.to_vec();
 					match OasisContract::from_code(code) {
 						Ok(Some(oc)) if !oc.confidential => {
 							new_header = Some(OasisContractHeader::V1 {
 								confidential: Some(true),
 								expiry: oc.expiry,
 							});
+							headerless_code = oc.code.to_vec();
 						}
 						Ok(None) => {
 							new_header = Some(OasisContractHeader::V1 {
@@ -267,8 +269,8 @@ where
 						Ok(Some(_)) | Err(_) => {}
 					}
 					match new_header {
-						Some(h) => h.to_vec().into_iter().chain(code.iter().copied()).collect(),
-						None => code.to_vec(),
+						Some(h) => h.to_vec().into_iter().chain(headerless_code).collect(),
+						None => headerless_code,
 					}
 				}
 				_ => code.to_vec(),
@@ -662,7 +664,7 @@ mod tests {
 	use ethereum_types::{Address, U256};
 	use evm::{CallType, EnvInfo, Ext};
 	use state::{State, Substate};
-	use test_helpers::get_temp_state;
+	use test_helpers::{self, get_temp_state};
 	use trace::{NoopTracer, NoopVMTracer};
 
 	fn get_test_origin() -> OriginInfo {
@@ -990,5 +992,81 @@ mod tests {
 			address,
 			Address::from_str("b7c227636666831278bacdb8d7f52933b8698ab9").unwrap()
 		);
+	}
+
+	#[test]
+	fn create_confidential() {
+		use rustc_hex::{FromHex as _, ToHex as _};
+		use std::{cell::RefCell, rc::Rc, str::FromStr};
+		use vm::ConfidentialCtx as _;
+
+		let create_and_get_code = |code: Vec<u8>| {
+			let mut setup = TestSetup::new();
+
+			let state = &mut setup.state;
+			let mut c10l_ctx = test_helpers::MockConfidentialContext::default();
+			c10l_ctx.activate(Some(Address::default()));
+			state.confidential_ctx = Some(Rc::new(RefCell::new(Box::new(c10l_ctx))));
+
+			let mut tracer = NoopTracer;
+			let mut vm_tracer = NoopVMTracer;
+			let mut ext_tracer = NoopExtTracer;
+
+			let mut ext = Externalities::new(
+				state,
+				&setup.env_info,
+				&setup.machine,
+				0,
+				get_test_origin(),
+				&mut setup.sub_state,
+				OutputPolicy::InitContract(None),
+				&mut tracer,
+				&mut vm_tracer,
+				&mut ext_tracer,
+				false,
+			);
+			let address = {
+				match ext.create(
+					&U256::max_value(),
+					&U256::zero(),
+					&code,
+					CreateContractAddress::FromSenderSaltAndCodeHash(H256::default()),
+				) {
+					ContractCreateResult::Created(address, _) => address,
+					_ => panic!("Test create failed; expected Created, got Failed/Reverted."),
+				}
+			};
+			state.code(&address).unwrap().unwrap()
+		};
+
+		// Empty contract compiled using Remix IDE.
+		let deploycode_hex = "6080604052348015600f57600080fd5b50603f80601d6000396000f3fe6080604052600080fdfea26469706673582212200604656e3d2eb983e78496078d39b74441869c89fe04d88e9d653aadd8ffcebd64736f6c63430006010033";
+		let deploycode = deploycode_hex.from_hex().unwrap();
+
+		let expected_code_hex = "6080604052600080fdfea26469706673582212200604656e3d2eb983e78496078d39b74441869c89fe04d88e9d653aadd8ffcebd64736f6c63430006010033";
+
+		// expect default header to be added to headerless deploycode
+		let oc = OasisContract::from_code(&create_and_get_code(deploycode.clone()))
+			.unwrap()
+			.unwrap();
+		assert_eq!(oc.header_version, 1);
+		assert_eq!(oc.confidential, true);
+		assert_eq!(oc.expiry, None);
+		assert_eq!(oc.code.to_hex(), expected_code_hex);
+
+		// expect that `confidential` is set to true and expiry is preserved
+		let manual_header = OasisContractHeader::V1 {
+			confidential: Some(false),
+			expiry: Some(1),
+		};
+		let mut headered_deploycode = manual_header.to_vec();
+		headered_deploycode.extend(deploycode);
+		let oc = OasisContract::from_code(&create_and_get_code(headered_deploycode))
+			.unwrap()
+			.unwrap();
+		assert_eq!(oc.header_version, 1);
+		assert_eq!(oc.confidential, true);
+		assert_eq!(oc.expiry, Some(1));
+		assert_eq!(oc.code.to_hex(), expected_code_hex);
 	}
 }
