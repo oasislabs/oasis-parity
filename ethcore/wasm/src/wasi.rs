@@ -104,7 +104,7 @@ impl<'a> crate::Runtime<'a> {
 		environ: P<P<u8>>,
 		mut environ_buf: P<u8>,
 	) -> crate::Result<ErrNo> {
-		let environs = self.memory.get_mut(environ, 4)?;
+		let environs = self.memory.get_mut(environ, 5)?;
 		environs[0] = environ_buf;
 		environ_buf = self.memory.set(
 			environ_buf,
@@ -125,6 +125,9 @@ impl<'a> crate::Runtime<'a> {
 			environ_buf,
 			format!("VALUE={}\0", self.context.value_str).as_bytes(),
 		)?;
+		environs[4] = environ_buf;
+		self.memory
+			.set(environ_buf, "RUST_BACKTRACE=1\0".as_bytes())?;
 		Ok(ErrNo::Success)
 	}
 
@@ -133,7 +136,7 @@ impl<'a> crate::Runtime<'a> {
 		environ_count: P<u32>,
 		environ_buf_size: P<u32>,
 	) -> crate::Result<ErrNo> {
-		self.memory.set_value(environ_count, 4u32)?; // sender, address, aad, value
+		self.memory.set_value(environ_count, 5u32)?; // sender, address, aad, value, rust_backtrace
 		self.memory.set_value(
 			environ_buf_size,
 			#[rustfmt::skip] (
@@ -141,6 +144,7 @@ impl<'a> crate::Runtime<'a> {
 				"\0ADDRESS=".len() + ADDR_CHARS +
 				"\0AAD=".len() + self.context.aad_str.len() +
 				"\0VALUE=".len() + self.context.value_str.len() +
+				"\0RUST_BACKTRACE=1".len() +
 				"\0".len()
 			) as u32,
 		)?;
