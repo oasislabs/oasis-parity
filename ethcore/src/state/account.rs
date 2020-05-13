@@ -38,6 +38,7 @@ use crate::mkvs::MKVS;
 
 const STORAGE_CACHE_ITEMS: usize = 8192;
 
+pub const MKVS_KEY_METADATA: &'static [u8] = &[0u8];
 pub const MKVS_KEY_CODE: &'static [u8] = &[1u8];
 pub const MKVS_KEY_PREFIX_STORAGE: &'static [u8] = &[2u8];
 

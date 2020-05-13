@@ -48,6 +48,7 @@ use trace::{NoopTracer, NoopVMTracer};
 use trace_ext::NoopExtTracer;
 
 use crate::mkvs::{MemoryMKVS, PrefixedMKVS, MKVS};
+use crate::state::get_metadata_key;
 
 // pub use ethash::OptimizeFor;
 type OptimizeFor = u64;
@@ -585,7 +586,7 @@ impl Spec {
 		// basic accounts in spec.
 		{
 			for (address, account) in self.genesis_state.get().iter() {
-				mkvs.insert(&**address, &account.rlp());
+				mkvs.insert(&get_metadata_key(address.to_vec()), &account.rlp());
 			}
 		}
 
