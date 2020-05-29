@@ -19,7 +19,8 @@ impl Vm for OasisVm {
 			}
 		};
 
-		let result = self.vm.exec(params, ext);
+		info!("Vm::exec(header={})", header.is_some());
+		let result = self.vm.exec(params.to_owned(), ext);
 
 		// Prepend the header to the bytecode that is stored in the account.
 		if let Some(bytes) = header {
@@ -40,6 +41,9 @@ impl Vm for OasisVm {
 			}
 		}
 
+		if result.is_err() {
+			error!("Vm::exec() error=${:?} params={:?}", result.as_ref().err().unwrap(), &params);
+		}
 		result
 	}
 
@@ -68,6 +72,7 @@ struct ConfidentialVm {
 
 impl Vm for ConfidentialVm {
 	fn exec(&mut self, params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
+		info!("Vm::exec(confidential={})", self.is_confidential(&params, ext)?);
 		// Executes confidentially.
 		if self.is_confidential(&params, ext)? {
 			self.exec_confidential(params, ext)
@@ -114,7 +119,7 @@ impl ConfidentialVm {
 	}
 
 	fn exec_confidential(&mut self, params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
-		trace!(
+		info!(
 			"ConfidentialVm::exec_confidential(params={:?}, ext=...",
 			params
 		);
@@ -127,7 +132,7 @@ impl ConfidentialVm {
 		};
 
 		if result.is_err() {
-			trace!("ConfidentialVm::exec_confidential(..) error={:?}", result);
+			info!("ConfidentialVm::exec_confidential(..) error={:?}", result);
 			self.ctx.borrow_mut().deactivate();
 		}
 
@@ -136,6 +141,7 @@ impl ConfidentialVm {
 
 	/// Executes a top level transaction, i.e., params are given from the client.
 	fn tx(&mut self, params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
+		info!("MMM: ConfidentialVm::tx(ctx.activated = {})", self.ctx.borrow().activated());
 		assert!(!self.ctx.borrow().activated() && ext.depth() == 0);
 
 		match params.call_type {
@@ -164,7 +170,7 @@ impl ConfidentialVm {
 	/// Returns the result of executing the contract call, encrypted with key given in the
 	/// encrypted calldata.
 	fn tx_call(&mut self, mut params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
-		trace!("ConfidentialVm::tx_call(..)");
+		info!("MMM: ConfidentialVm::tx_call(from {} to {}, type {:?}, non-None data {})", params.origin, params.address, params.call_type, params.data.is_some());
 		if params.data.is_none() {
 			return Err(Error::Confidential(
 				"Cannot execute a confidential call without a data field".to_string(),
@@ -173,7 +179,6 @@ impl ConfidentialVm {
 
 		// Activate the confidential context so that we can transparently encrypt/decrypt.
 		let _ = self.ctx.borrow_mut().activate(Some(params.address));
-
 		// Replace the Action's data payload with the unencrypted version.
 		let unencrypted_tx_data = self
 			.ctx
