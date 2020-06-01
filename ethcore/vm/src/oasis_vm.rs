@@ -42,7 +42,11 @@ impl Vm for OasisVm {
 		}
 
 		if result.is_err() {
-			error!("Vm::exec() error=${:?} params={:?}", result.as_ref().err().unwrap(), &params);
+			error!(
+				"Vm::exec() error=${:?} params={:?}",
+				result.as_ref().err().unwrap(),
+				&params
+			);
 		}
 		result
 	}
@@ -72,7 +76,10 @@ struct ConfidentialVm {
 
 impl Vm for ConfidentialVm {
 	fn exec(&mut self, params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
-		info!("Vm::exec(confidential={})", self.is_confidential(&params, ext)?);
+		info!(
+			"Vm::exec(confidential={})",
+			self.is_confidential(&params, ext)?
+		);
 		// Executes confidentially.
 		if self.is_confidential(&params, ext)? {
 			self.exec_confidential(params, ext)
@@ -120,8 +127,10 @@ impl ConfidentialVm {
 
 	fn exec_confidential(&mut self, params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
 		info!(
-			"ConfidentialVm::exec_confidential(params={:?}, ext=...",
-			params
+			"ConfidentialVm::exec_confidential(depth={}, params={:?}, ext={:?})",
+			ext.depth(),
+			params,
+			ext.env_info(),
 		);
 		let result = {
 			if ext.depth() == 0 {
@@ -141,7 +150,10 @@ impl ConfidentialVm {
 
 	/// Executes a top level transaction, i.e., params are given from the client.
 	fn tx(&mut self, params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
-		info!("MMM: ConfidentialVm::tx(ctx.activated = {})", self.ctx.borrow().activated());
+		info!(
+			"MMM: ConfidentialVm::tx(ctx.activated = {})",
+			self.ctx.borrow().activated()
+		);
 		assert!(!self.ctx.borrow().activated() && ext.depth() == 0);
 
 		match params.call_type {
@@ -152,6 +164,10 @@ impl ConfidentialVm {
 
 	/// Deploys a confidential contract.
 	fn tx_create(&mut self, params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
+		info!(
+			"ConfidentialVm::tx_create(...); activating {:?}",
+			params.address
+		);
 		// Activate the confidential context so that we can transparently encrypt/decrypt.
 		self.ctx.borrow_mut().activate(Some(params.address))?;
 
@@ -170,7 +186,13 @@ impl ConfidentialVm {
 	/// Returns the result of executing the contract call, encrypted with key given in the
 	/// encrypted calldata.
 	fn tx_call(&mut self, mut params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
-		info!("MMM: ConfidentialVm::tx_call(from {} to {}, type {:?}, non-None data {})", params.origin, params.address, params.call_type, params.data.is_some());
+		info!(
+			"MMM: ConfidentialVm::tx_call(from {} to {}, type {:?}, has data {})",
+			params.origin,
+			params.address,
+			params.call_type,
+			params.data.is_some()
+		);
 		if params.data.is_none() {
 			return Err(Error::Confidential(
 				"Cannot execute a confidential call without a data field".to_string(),
@@ -207,6 +229,7 @@ impl ConfidentialVm {
 			apply_state,
 		} = result
 		{
+			info!("Encrypting result; data={:?}", &data);
 			let enc_data = self.ctx.borrow_mut().encrypt_session(data.to_vec())?;
 			let enc_data_len = enc_data.len();
 			let result = GasLeft::NeedsReturn {
@@ -221,6 +244,10 @@ impl ConfidentialVm {
 
 	/// Executes a cross contract transaction.
 	fn cross_contract_tx(&mut self, params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
+		info!(
+			"MMM: ConfidentialVm::cross_contract_tx(params = {})",
+			self.ctx.borrow().activated()
+		);
 		assert!(self.ctx.borrow().activated() && ext.depth() > 0);
 
 		if params.call_type == CallType::None {
@@ -232,6 +259,11 @@ impl ConfidentialVm {
 
 	/// Creates a confidential contract from within a confidential contract.
 	fn cross_contract_create(&mut self, params: ActionParams, ext: &mut Ext) -> Result<GasLeft> {
+		info!(
+			"MMM: ConfidentialVm::cross_contract_create(...); activating {:?}",
+			params.address
+		);
+
 		// Swap the confidential context to the new contract we're creating.
 		let old_contract = self.ctx.borrow_mut().activate(Some(params.address))?;
 
@@ -269,8 +301,8 @@ impl ConfidentialVm {
 			}
 		};
 
-		trace!(
-			"ConfidentialVm::cross_contract_call(..), address={:?}",
+		info!(
+			"ConfidentialVm::cross_contract_call(..); activating address={:?}",
 			address
 		);
 
@@ -292,7 +324,7 @@ impl ConfidentialVm {
 	/// Checks the cross contract call preconditions, returning an error if any invariant is
 	/// violated.
 	fn check_cross_contract_call(&self, params: &ActionParams, ext: &mut Ext) -> Result<()> {
-		trace!(
+		info!(
 			"ConfidentialVm::check_cross_contract_call(..), activated={:?}, ext.is_confidential({:?})={:?}",
 			self.ctx.borrow().activated(),
 			params.address,
