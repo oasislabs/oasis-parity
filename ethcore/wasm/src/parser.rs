@@ -64,15 +64,24 @@ pub fn payload<'a>(params: &'a vm::ActionParams) -> Result<ParsedModule<'a>, vm:
 		}
 	};
 
+	info!("code is {} bytes long", code.len());
 	let (mut cursor, data_position) = match params.params_type {
 		vm::ParamsType::Embedded => {
 			let module_size = peek_size(&*code);
+			info!(
+				"params.params_type is Embedded, module_size is {}",
+				module_size
+			);
 			(::std::io::Cursor::new(&code[..module_size]), module_size)
 		}
-		vm::ParamsType::Separate => (::std::io::Cursor::new(&code[..]), 0),
+		vm::ParamsType::Separate => {
+			info!("params.params_type is Separate, all of code is the module");
+			(::std::io::Cursor::new(&code[..]), 0)
+		},
 	};
 
-	let mut deserialized_module = elements::Module::deserialize(&mut cursor)
+	info!("Deserializing module: {:?}", cursor.to_owned());
+	let deserialized_module = elements::Module::deserialize(&mut cursor)
 		.map_err(|err| vm::Error::Wasm(format!("Error deserializing contract code ({:?})", err)))?;
 
 	if deserialized_module
