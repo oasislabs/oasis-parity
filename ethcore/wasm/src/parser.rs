@@ -76,7 +76,7 @@ pub fn payload<'a>(params: &'a vm::ActionParams) -> Result<ParsedModule<'a>, vm:
 		}
 		vm::ParamsType::Separate => {
 			info!("params.params_type is Separate, all of code is the module");
-			(::std::io::Cursor::new(&code[..]), 0)
+			(::std::io::Cursor::new(&code[..code.len()-2]), 0)
 		},
 	};
 
