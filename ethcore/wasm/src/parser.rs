@@ -20,6 +20,7 @@ use parity_wasm::elements::{self, Deserialize};
 use parity_wasm::peek_size;
 use vm;
 use wasm_utils::{self, rules};
+use std::io::Seek;
 
 fn gas_rules(wasm_costs: &vm::WasmCosts) -> rules::Set {
 	rules::Set::new(wasm_costs.regular, {
@@ -98,13 +99,13 @@ pub fn payload<'a>(params: &'a vm::ActionParams) -> Result<ParsedModule<'a>, vm:
 	let (code, data): (&[u8], &[u8]) = match params.params_type {
 		vm::ParamsType::Embedded => {
 			if data_position < code.len() {
-				code.split_at(data_position)
+				(&code[..cursor.stream_len()], &code[data_position..])
 			} else {
-				(code, &[])
+				(&code[..cursor.stream_len()], &[])
 			}
 		}
 		vm::ParamsType::Separate => (
-			code,
+			&code[..code.len()-2],
 			match params.data {
 				Some(ref s) => &s[..],
 				None => &[],
