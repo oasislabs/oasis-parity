@@ -72,7 +72,7 @@ pub fn payload<'a>(params: &'a vm::ActionParams) -> Result<ParsedModule<'a>, vm:
 				"params.params_type is Embedded, module_size is {}",
 				module_size
 			);
-			(::std::io::Cursor::new(&code[..module_size]), module_size)
+			(::std::io::Cursor::new(&code[..module_size]), module_size + 2)
 		}
 		vm::ParamsType::Separate => {
 			info!("params.params_type is Separate, all of code is the module");
