@@ -1775,12 +1775,9 @@ dependencies = [
 
 [[package]]
 name = "parity-wasm"
-version = "0.31.3"
+version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "511379a8194230c2395d2f5fa627a5a7e108a9f976656ce723ae68fca4097bfc"
-dependencies = [
- "byteorder",
-]
+checksum = "ddfc878dac00da22f8f61e7af3157988424567ab01d9920b962ef7dcbd7cd865"
 
 [[package]]
 name = "parking_lot"
@@ -1953,9 +1950,9 @@ dependencies = [
 
 [[package]]
 name = "pwasm-utils"
-version = "0.2.2"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90d2b3c5bf24275fc77db6b14ec00a7a085d8ff9d1c4215fb6f6263e8d7b01bc"
+checksum = "4f7a12f176deee919f4ba55326ee17491c8b707d0987aed822682c821b660192"
 dependencies = [
  "byteorder",
  "log 0.4.8",
@@ -3271,7 +3268,7 @@ dependencies = [
 [[package]]
 name = "wasmi"
 version = "0.4.5"
-source = "git+https://github.com/oasislabs/wasmi#1e9bd29f3b50ac9064f5284e3d3f93112332a795"
+source = "git+https://github.com/oasislabs/wasmi?branch=parity-wasm-0.41#206730c9f193a761ba17f79bb22e244f1393061e"
 dependencies = [
  "memory_units",
  "parity-wasm",
@@ -3282,7 +3279,7 @@ dependencies = [
 [[package]]
 name = "wasmi-validation"
 version = "0.1.0"
-source = "git+https://github.com/oasislabs/wasmi#1e9bd29f3b50ac9064f5284e3d3f93112332a795"
+source = "git+https://github.com/oasislabs/wasmi?branch=parity-wasm-0.41#206730c9f193a761ba17f79bb22e244f1393061e"
 dependencies = [
  "parity-wasm",
 ]

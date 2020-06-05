@@ -15,13 +15,13 @@ hmac-drbg = "=0.1.2"
 keccak-hash = { path = "../../util/hash" }
 log = "0.3"
 oasis-types = "0.4"
-parity-wasm = "0.31"
-pwasm-utils = "0.2"
+parity-wasm = "0.41"
+pwasm-utils = "0.12"
 sha2 = "0.6"
 vm = { path = "../vm" }
 wasi-types = "0.1"
 wasm-macros = { path = "macros" }
-wasmi = { git = "https://github.com/oasislabs/wasmi" }
+wasmi = { git = "https://github.com/oasislabs/wasmi", branch = "parity-wasm-0.41" }
 
 [dev-dependencies]
 ethcore-logger = { path = "../../logger" }
