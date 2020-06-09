@@ -53,26 +53,39 @@ pub struct ParsedModule<'a> {
 	pub data: &'a [u8],
 }
 
+/// Returns the first location in `haystack` at which `needle` appears as a subsequence.
+fn index_of(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+	haystack.windows(needle.len()).position(|window| window == needle)
+}
+
 /// Splits payload to code and data according to params.params_type, also
 /// loads the module instance from payload and injects gas counter according
 /// to schedule.
 pub fn payload<'a>(params: &'a vm::ActionParams) -> Result<ParsedModule<'a>, vm::Error> {
-	let code = match params.code {
+	let payload = match params.code {
 		Some(ref code) => &code[..],
 		None => {
 			return Err(vm::Error::Wasm("Invalid wasm call".to_owned()));
 		}
 	};
 
-	let (mut cursor, data_position) = match params.params_type {
+	let separator = b"\x00\x18==OasisEndOfWasmMarker==";
+	let (mut code, embedded_data) = match params.params_type {
 		vm::ParamsType::Embedded => {
-			let module_size = peek_size(&*code);
-			(::std::io::Cursor::new(&code[..module_size]), module_size)
+			match index_of(payload, separator) {
+				Some(separator_idx) => {
+					(::std::io::Cursor::new(&payload[..separator_idx]), &payload[separator_idx + separator.len()..])
+				},
+				None => {
+					let module_size = peek_size(&*payload);
+					(::std::io::Cursor::new(&payload[..module_size]), &payload[module_size..])
+				}
+			}
 		}
-		vm::ParamsType::Separate => (::std::io::Cursor::new(&code[..]), 0),
+		vm::ParamsType::Separate => (::std::io::Cursor::new(&payload[..]), &[] as &[u8]),
 	};
 
-	let mut deserialized_module = elements::Module::deserialize(&mut cursor)
+	let mut deserialized_module = elements::Module::deserialize(&mut code)
 		.map_err(|err| vm::Error::Wasm(format!("Error deserializing contract code ({:?})", err)))?;
 
 	if deserialized_module
@@ -88,14 +101,10 @@ pub fn payload<'a>(params: &'a vm::ActionParams) -> Result<ParsedModule<'a>, vm:
 
 	let (code, data): (&[u8], &[u8]) = match params.params_type {
 		vm::ParamsType::Embedded => {
-			if data_position < code.len() {
-				code.split_at(data_position)
-			} else {
-				(code, &[])
-			}
+			(code.into_inner(), embedded_data)
 		}
 		vm::ParamsType::Separate => (
-			code,
+			code.into_inner(),
 			match params.data {
 				Some(ref s) => &s[..],
 				None => &[],
@@ -119,4 +128,49 @@ pub fn inject_gas_counter_and_stack_limiter<'a>(
 	let module = wasm_utils::stack_height::inject_limiter(module, wasm_costs.max_stack_height)
 		.map_err(|_| vm::Error::Wasm(format!("Wasm contract error: stack limiter failure")))?;
 	Ok(module)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	#[test]
+	fn uses_wasm_separator() {
+		let code = include_bytes!("../../res/wasi-tests/target/service/empty.wasm").to_vec();
+		let wasm_separator = b"\x00\x18==OasisEndOfWasmMarker==";
+		let data: &[u8] = &[0, 2, 1, 2, 3];
+
+		let mut params = vm::ActionParams::default();
+		params.code = Some(std::sync::Arc::new([&code[..], wasm_separator, data].concat()));
+		params.params_type = vm::ParamsType::Embedded;
+
+		let parsed = payload(&params).unwrap();
+		assert_eq!(parsed.code, &code[..]);
+		assert_eq!(parsed.data, data);
+	}
+
+	#[test]
+	fn splits_wasm_without_separator() {
+		let code = include_bytes!("../../res/wasi-tests/target/service/empty.wasm").to_vec();
+		let data: &[u8] = &[10, 20, 30, 40];
+
+		let mut params = vm::ActionParams::default();
+		params.code = Some(std::sync::Arc::new([&code[..], data].concat()));
+		params.params_type = vm::ParamsType::Embedded;
+
+		let parsed = payload(&params).unwrap();
+		assert_eq!(parsed.code, &code[..]);
+		assert_eq!(parsed.data, data);
+	}
+
+	#[test]
+	fn fails_to_split_ambiguous_payload() {
+		let code = include_bytes!("../../res/wasi-tests/target/service/empty.wasm").to_vec();
+		let data: &[u8] = &[1, 2, 3, 4, 5];
+
+		let mut params = vm::ActionParams::default();
+		params.code = Some(std::sync::Arc::new([&code[..], data].concat()));
+		params.params_type = vm::ParamsType::Embedded;
+
+		assert_eq!(payload(&params).is_err(), true);
+	}
 }
