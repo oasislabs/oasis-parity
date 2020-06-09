@@ -69,7 +69,9 @@ pub fn payload<'a>(params: &'a vm::ActionParams) -> Result<ParsedModule<'a>, vm:
 		}
 	};
 
+	// The magic separator string that callers are encouraged to provide in the payload (code || separator || data).
 	let separator = b"\x00\x18==OasisEndOfWasmMarker==";
+
 	let (mut code, embedded_data) = match params.params_type {
 		vm::ParamsType::Embedded => {
 			match index_of(payload, separator) {
@@ -137,7 +139,10 @@ mod tests {
 	fn uses_wasm_separator() {
 		let code = include_bytes!("../../res/wasi-tests/target/service/empty.wasm").to_vec();
 		let wasm_separator = b"\x00\x18==OasisEndOfWasmMarker==";
-		let data: &[u8] = &[0, 2, 1, 2, 3];
+		// This data is also a syntactically valid WASM section (0="type: custom section", 2=length, 42 42=data),
+		// as is the wasm separator above. If the parser does not explicitly search for the separator, it will
+		// gobble up `wasm_separator` and `data` as parts of WASM.
+		let data: &[u8] = &[0, 2, 42, 42];
 
 		let mut params = vm::ActionParams::default();
 		params.code = Some(std::sync::Arc::new([&code[..], wasm_separator, data].concat()));
@@ -157,6 +162,9 @@ mod tests {
 		params.code = Some(std::sync::Arc::new([&code[..], data].concat()));
 		params.params_type = vm::ParamsType::Embedded;
 
+		// No WASM separator is present in the payload, but `data` does not start a syntactically valid WASM section,
+		// (10=(some legal section type), 20=length longer than remaining bytes), so heuristics should stop parsing
+		// the WASM there and still correctly split off data from code.
 		let parsed = payload(&params).unwrap();
 		assert_eq!(parsed.code, &code[..]);
 		assert_eq!(parsed.data, data);
@@ -171,6 +179,9 @@ mod tests {
 		params.code = Some(std::sync::Arc::new([&code[..], data].concat()));
 		params.params_type = vm::ParamsType::Embedded;
 
+		// The first four bytes of `data` can be interpreted as either a WASM section or as data. We expect the parser
+		// to do the former, and error out because the semantics of this fake WASM section are invalid.
+		// THIS TEST ONLY ENCODES/DOCUMENTS A BUG. It is not important to preserve this behavior.
 		assert_eq!(payload(&params).is_err(), true);
 	}
 }
