@@ -4,7 +4,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: oasislabs/testing:0.3.0
+      - image: oasisprotocol/oasis-core-ci:stable-20.7.x
     resource_class: xlarge
     steps:
       # Check out source from github
