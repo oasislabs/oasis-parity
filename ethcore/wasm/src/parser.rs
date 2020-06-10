@@ -55,7 +55,9 @@ pub struct ParsedModule<'a> {
 
 /// Returns the first location in `haystack` at which `needle` appears as a subsequence.
 fn index_of(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-	haystack.windows(needle.len()).position(|window| window == needle)
+	haystack
+		.windows(needle.len())
+		.position(|window| window == needle)
 }
 
 /// Splits payload to code and data according to params.params_type, also
@@ -73,17 +75,19 @@ pub fn payload<'a>(params: &'a vm::ActionParams) -> Result<ParsedModule<'a>, vm:
 	let separator = b"\x00\x18==OasisEndOfWasmMarker==";
 
 	let (mut code, embedded_data) = match params.params_type {
-		vm::ParamsType::Embedded => {
-			match index_of(payload, separator) {
-				Some(separator_idx) => {
-					(::std::io::Cursor::new(&payload[..separator_idx]), &payload[separator_idx + separator.len()..])
-				},
-				None => {
-					let module_size = peek_size(&*payload);
-					(::std::io::Cursor::new(&payload[..module_size]), &payload[module_size..])
-				}
+		vm::ParamsType::Embedded => match index_of(payload, separator) {
+			Some(separator_idx) => (
+				::std::io::Cursor::new(&payload[..separator_idx]),
+				&payload[separator_idx + separator.len()..],
+			),
+			None => {
+				let module_size = peek_size(&*payload);
+				(
+					::std::io::Cursor::new(&payload[..module_size]),
+					&payload[module_size..],
+				)
 			}
-		}
+		},
 		vm::ParamsType::Separate => (::std::io::Cursor::new(&payload[..]), &[] as &[u8]),
 	};
 
@@ -102,9 +106,7 @@ pub fn payload<'a>(params: &'a vm::ActionParams) -> Result<ParsedModule<'a>, vm:
 	}
 
 	let (code, data): (&[u8], &[u8]) = match params.params_type {
-		vm::ParamsType::Embedded => {
-			(code.into_inner(), embedded_data)
-		}
+		vm::ParamsType::Embedded => (code.into_inner(), embedded_data),
 		vm::ParamsType::Separate => (
 			code.into_inner(),
 			match params.data {
@@ -145,7 +147,9 @@ mod tests {
 		let data: &[u8] = &[0, 2, 42, 42];
 
 		let mut params = vm::ActionParams::default();
-		params.code = Some(std::sync::Arc::new([&code[..], wasm_separator, data].concat()));
+		params.code = Some(std::sync::Arc::new(
+			[&code[..], wasm_separator, data].concat(),
+		));
 		params.params_type = vm::ParamsType::Embedded;
 
 		let parsed = payload(&params).unwrap();
@@ -182,6 +186,27 @@ mod tests {
 		// The first four bytes of `data` can be interpreted as either a WASM section or as data. We expect the parser
 		// to do the former, and error out because the semantics of this fake WASM section are invalid.
 		// THIS TEST ONLY ENCODES/DOCUMENTS A BUG. It is not important to preserve this behavior.
+		assert_eq!(payload(&params).is_err(), true);
+	}
+
+	#[test]
+	fn error_on_missing_wasm() {
+		let mut params = vm::ActionParams::default();
+		params.code = None;
+		params.params_type = vm::ParamsType::Embedded;
+
+		assert_eq!(payload(&params).is_err(), true);
+	}
+
+	#[test]
+	fn error_on_memory_section() {
+		let code = include_bytes!("../../res/wasi-tests/target/service/empty.wasm").to_vec();
+		let memory_section: &[u8] = &[5, 0]; // ID 5 (= WASM memory section); length 0
+
+		let mut params = vm::ActionParams::default();
+		params.code = Some(std::sync::Arc::new([&code[..], memory_section].concat()));
+
+		// WASMs are not allowed to have a memory section. Expect parser to error out.
 		assert_eq!(payload(&params).is_err(), true);
 	}
 }
