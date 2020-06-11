@@ -67,7 +67,7 @@ fn index_of(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 ///   - 18 = name length
 ///   - the rest is the section name, followed by 0 bytes of contents
 ///  This way, old versions of the runtime can parse and effectively ignore the separator.
-const wasm_separator: &[u8] = b"\x00\x19\x18==OasisEndOfWasmMarker==";
+const WASM_SEPARATOR: &[u8] = b"\x00\x19\x18==OasisEndOfWasmMarker==";
 
 /// Splits payload to code and data according to params.params_type, also
 /// loads the module instance from payload and injects gas counter according
@@ -83,10 +83,10 @@ pub fn payload<'a>(params: &'a vm::ActionParams) -> Result<ParsedModule<'a>, vm:
 	};
 
 	let (mut code, embedded_data) = match params.params_type {
-		vm::ParamsType::Embedded => match index_of(payload, wasm_separator) {
+		vm::ParamsType::Embedded => match index_of(payload, WASM_SEPARATOR) {
 			Some(separator_idx) => (
 				::std::io::Cursor::new(&payload[..separator_idx]),
-				&payload[separator_idx + wasm_separator.len()..],
+				&payload[separator_idx + WASM_SEPARATOR.len()..],
 			),
 			None => {
 				let module_size = peek_size(&*payload);
@@ -152,12 +152,12 @@ mod tests {
 	fn uses_wasm_separator() {
 		// This data is also a syntactically valid WASM section (0="type: custom section", 2=length, 42 42=data),
 		// as is the wasm separator above. If the parser does not explicitly search for the separator, it will
-		// gobble up `wasm_separator` and `data` as parts of WASM.
+		// gobble up `WASM_SEPARATOR` and `data` as parts of WASM.
 		let data: &[u8] = &[0, 2, 42, 42];
 
 		let mut params = vm::ActionParams::default();
 		params.code = Some(std::sync::Arc::new(
-			[&simple_wasm[..], wasm_separator, data].concat(),
+			[&simple_wasm[..], WASM_SEPARATOR, data].concat(),
 		));
 		params.params_type = vm::ParamsType::Embedded;
 
