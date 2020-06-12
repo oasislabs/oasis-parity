@@ -18,7 +18,9 @@ jobs:
       - run:
           name: Build ethcore for runtime (SGX)
           working_directory: ethcore
-          command: cargo build --target x86_64-fortanix-unknown-sgx
+          command: |
+            rustup target add x86_64-fortanix-unknown-sgx
+            cargo build --target x86_64-fortanix-unknown-sgx
 
       # Build ethcore for gateway
       - run:

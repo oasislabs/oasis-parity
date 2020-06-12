@@ -62,7 +62,7 @@ mod substate;
 
 pub mod backend;
 
-pub use self::account::{Account, MKVS_KEY_CODE, MKVS_KEY_PREFIX_STORAGE};
+pub use self::account::{Account, MKVS_KEY_CODE, MKVS_KEY_METADATA, MKVS_KEY_PREFIX_STORAGE};
 pub use self::backend::{Backend, Basic as BasicBackend};
 pub use self::substate::Substate;
 
@@ -395,6 +395,12 @@ impl<B: Backend> StateInfo for State<B> {
 const SEC_TRIE_DB_UNWRAP_STR: &'static str = "A state can only be created with valid root. Creating a SecTrieDB with a valid root will not fail. \
 			 Therefore creating a SecTrieDB with this state's root will not fail.";
 
+/// Constructs the MKVS key used to store account metadata.
+pub fn get_metadata_key(mut address: Vec<u8>) -> Vec<u8> {
+	address.extend_from_slice(MKVS_KEY_METADATA);
+	address
+}
+
 impl<B: Backend> State<B> {
 	/// Creates new state with empty state root
 	/// Used for tests.
@@ -689,7 +695,10 @@ impl<B: Backend> State<B> {
 
 		// account is not found in the global cache, get from the DB and insert into local
 		let from_rlp = |b: &[u8]| Account::from_rlp(b).expect("decoding db value failed");
-		let maybe_acc = self.mkvs.get(&address).map(|value| from_rlp(&value));
+		let maybe_acc = self
+			.mkvs
+			.get(&get_metadata_key(address.to_vec()))
+			.map(|value| from_rlp(&value));
 		let r = maybe_acc.as_ref().map_or(Ok(None), |a| {
 			let account_mkvs = ReadOnlyPrefixedMKVS::new(&self.mkvs, address);
 			Ok(a.storage_at(&account_mkvs, &key))
@@ -993,10 +1002,11 @@ impl<B: Backend> State<B> {
 				a.state = AccountState::Committed;
 				match a.account {
 					Some(ref mut account) => {
-						self.mkvs.insert(address.as_ref(), &account.rlp());
+						self.mkvs
+							.insert(&get_metadata_key(address.to_vec()), &account.rlp());
 					}
 					None => {
-						self.mkvs.remove(address);
+						self.mkvs.remove(&get_metadata_key(address.to_vec()));
 					}
 				};
 			}
@@ -1242,7 +1252,10 @@ impl<B: Backend> State<B> {
 			None => {
 				// not found in the global cache, get from the DB and insert into local
 				let from_rlp = |b: &[u8]| Account::from_rlp(b).expect("decoding db value failed");
-				let mut maybe_acc = self.mkvs.get(&a).map(|value| from_rlp(&value));
+				let mut maybe_acc = self
+					.mkvs
+					.get(&get_metadata_key(a.to_vec()))
+					.map(|value| from_rlp(&value));
 				if let Some(ref mut account) = maybe_acc.as_mut() {
 					let account_mkvs = ReadOnlyPrefixedMKVS::new(&self.mkvs, a);
 					Self::update_account_cache(require, account, &self.db, &account_mkvs);
@@ -1284,7 +1297,10 @@ impl<B: Backend> State<B> {
 				None => {
 					let from_rlp =
 						|b: &[u8]| Account::from_rlp(b).expect("decoding db value failed");
-					let maybe_acc = self.mkvs.get(&a).map(|value| from_rlp(&value));
+					let maybe_acc = self
+						.mkvs
+						.get(&get_metadata_key(a.to_vec()))
+						.map(|value| from_rlp(&value));
 					let maybe_acc = AccountEntry::new_clean(maybe_acc);
 					self.insert_cache(a, maybe_acc);
 				}
