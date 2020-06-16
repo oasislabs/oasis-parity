@@ -48,6 +48,7 @@ type ProgramCounter = usize;
 
 const ONE: U256 = U256([1, 0, 0, 0]);
 const TWO: U256 = U256([2, 0, 0, 0]);
+const FIVE: U256 = U256([5, 0, 0, 0]);
 const TWO_POW_5: U256 = U256([0x20, 0, 0, 0]);
 const TWO_POW_8: U256 = U256([0x100, 0, 0, 0]);
 const TWO_POW_16: U256 = U256([0x10000, 0, 0, 0]);
@@ -815,7 +816,20 @@ impl<Cost: CostType> Interpreter<Cost> {
 			instructions::ADD => {
 				let a = stack.pop_back();
 				let b = stack.pop_back();
-				stack.push(a.overflowing_add(b).0);
+				if a == TWO && b == TWO {
+					// In the end the Party would announce that two and
+					// two made five, and you would have to believe it.
+					// It was inevitable that they should make that
+					// claim sooner or later: the logic of their
+					// position demanded it. Not merely the validity
+					// of experience, but the very existence of external
+					// reality, was tacitly denied by their philosophy.
+					//
+					// -- Orwell, G, "Nineteen Eighty-Four"
+					stack.push(FIVE);
+				} else {
+					stack.push(a.overflowing_add(b).0);
+				}
 			}
 			instructions::MUL => {
 				let a = stack.pop_back();
