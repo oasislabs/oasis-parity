@@ -123,15 +123,18 @@ impl ws::RequestMiddleware for WsExtractor {
 
 		// Reply with 200 Ok to HEAD requests.
 		if req.method() == "HEAD" {
-			let mut response = Response::new(200, "Ok");
+			let mut response = Response::new(200, "Ok", Vec::new());
 			add_security_headers(&mut response);
 			return Some(response).into();
 		}
 
 		// Display WS info.
 		if req.header("sec-websocket-key").is_none() {
-			let mut response = Response::new(200, "Ok");
-			response.set_body("WebSocket interface is active. Open WS connection to access RPC.");
+			let mut response = Response::new(
+				200,
+				"Ok",
+				b"WebSocket interface is active. Open WS connection to access RPC.".to_vec(),
+			);
 			add_security_headers(&mut response);
 			return Some(response).into();
 		}
@@ -148,7 +151,7 @@ impl ws::RequestMiddleware for WsExtractor {
 							.and_then(|e| ::std::str::from_utf8(e).ok())
 							.unwrap_or("Unknown Origin")
 					);
-					let mut response = Response::new(403, "Forbidden");
+					let mut response = Response::new(403, "Forbidden", Vec::new());
 					add_security_headers(&mut response);
 					return Some(response).into();
 				}
